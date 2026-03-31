@@ -189,8 +189,8 @@ function setupDotTrigger(view: EditorView): void {
               .toLowerCase()
               .indexOf(textToFind.toLowerCase());
             if (idx !== -1) {
-              docFrom = pos;
-              docTo = pos + textToFind.length;
+              docFrom = pos + idx;
+              docTo = docFrom + textToFind.length;
             }
           }
           return docFrom === -1;
@@ -418,56 +418,38 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  const documentText = getEditorContent(editorViewRef);
-
-  let textToReplace = suggestion.original;
-  let replaceIndex = documentText.indexOf(textToReplace);
-
-  if (replaceIndex === -1) {
-    textToReplace = suggestion.suggested || suggestion.original;
-    replaceIndex = documentText.indexOf(textToReplace);
-  }
-
-  if (replaceIndex === -1) {
-    log(`ACCEPT ERROR: Text not found in document`);
-    slot.docFrom = -1;
-    slot.docTo = -1;
-    slot.state = "accepted";
-    suggestion.isAccepted = true;
-    suggestion.isExpanded = false;
-    renderSuggestions();
+  if (slot.docFrom === -1 || slot.docTo === -1) {
+    log(
+      `ACCEPT ERROR: Position for slot ${id} is invalid. The text may have been edited.`,
+    );
     return;
   }
 
-  let finalSuggested = suggestion.suggested || suggestion.original;
-
-  const textBefore = documentText.slice(0, replaceIndex);
-  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
-
-  if (!hasLeadingSpace) {
-    finalSuggested = " " + finalSuggested;
+  const currentTextInDoc = editorViewRef.state.doc.textBetween(
+    slot.docFrom,
+    slot.docTo,
+  );
+  if (currentTextInDoc.toLowerCase() !== suggestion.original.toLowerCase()) {
+    log(
+      `ACCEPT ERROR: Original text at position ${slot.docFrom}-${slot.docTo} has changed. Aborting.`,
+    );
+    slot.docFrom = -1;
+    slot.docTo = -1;
+    return;
   }
 
-  const originalTrimmed = suggestion.original.trim();
-  const suggestedTrimmed = finalSuggested.trim();
-  const originalLastChar = originalTrimmed.slice(-1);
-  const suggestedLastChar = suggestedTrimmed.slice(-1);
-  if (
-    originalLastChar === suggestedLastChar &&
-    /[.!?:;,]$/.test(originalLastChar)
-  ) {
-    finalSuggested = suggestedTrimmed.slice(0, -1);
-  }
+  const from = slot.docFrom;
+  const to = slot.docTo;
+  const finalSuggested = suggestion.suggested || suggestion.original;
 
   const tr = editorViewRef.state.tr.replaceWith(
-    replaceIndex,
-    replaceIndex + textToReplace.length,
+    from,
+    to,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
   editorViewRef.dispatch(tr);
 
-  slot.suggestion = finalSuggested;
   slot.docFrom = -1;
   slot.docTo = -1;
   slot.state = "accepted";
@@ -509,45 +491,41 @@ export function switchSuggestion(id: string): void {
     return;
   }
 
-  const documentText = getEditorContent(editorViewRef);
-
-  const isShowingOriginal = suggestion.showingOriginal;
-  let textToReplace = isShowingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
-  let newText = isShowingOriginal
-    ? suggestion.suggested || suggestion.original
-    : suggestion.original;
-
-  let replaceIndex = documentText.indexOf(textToReplace);
-
-  if (replaceIndex === -1) {
-    log(`SWITCH ERROR: Text not found in document: "${textToReplace}"`);
+  if (slot.docFrom === -1 || slot.docTo === -1) {
+    log(`SWITCH ERROR: Position for slot ${id} is invalid.`);
     return;
   }
 
-  const textBefore = documentText.slice(0, replaceIndex);
-  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
+  const isShowingOriginal = suggestion.showingOriginal;
+  const textToReplace = isShowingOriginal
+    ? suggestion.original
+    : suggestion.suggested || suggestion.original;
+  const newText = isShowingOriginal
+    ? suggestion.original
+    : suggestion.suggested || suggestion.original;
 
-  if (!hasLeadingSpace) {
-    newText = " " + newText;
+  const currentTextInDoc = editorViewRef.state.doc.textBetween(
+    slot.docFrom,
+    slot.docTo,
+  );
+  if (currentTextInDoc.toLowerCase() !== textToReplace.toLowerCase()) {
+    log(`SWITCH ERROR: Text at stored position has changed unexpectedly.`);
+    log(`Expected: "${textToReplace}", Found: "${currentTextInDoc}"`);
+    return;
   }
 
-  const textTrimmed = textToReplace.trim();
-  const newTextTrimmed = newText.trim();
-  const textLastChar = textTrimmed.slice(-1);
-  const newTextLastChar = newTextTrimmed.slice(-1);
-  if (textLastChar === newTextLastChar && /[.!?:;,]$/.test(textLastChar)) {
-    newText = newTextTrimmed.slice(0, -1);
-  }
+  const from = slot.docFrom;
+  const to = slot.docTo;
 
   const tr = editorViewRef.state.tr.replaceWith(
-    replaceIndex,
-    replaceIndex + textToReplace.length,
+    from,
+    to,
     editorViewRef.state.schema.text(newText),
   );
 
   editorViewRef.dispatch(tr);
+
+  slot.docTo = from + newText.length;
 
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
