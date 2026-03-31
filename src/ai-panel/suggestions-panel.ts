@@ -45,6 +45,10 @@ let editorViewRef: EditorView | null = null;
 let contextUnderstood: string = "";
 let acceptedOriginals: Map<string, string> = new Map();
 let closedSentences: Set<string> = new Set();
+let slotPositions: Map<
+  string,
+  { from: number; to: number; original: string; suggested: string }
+> = new Map();
 let isCurrentlyProcessing: boolean = false;
 let currentProcessingSlotId: string | null = null;
 
@@ -70,6 +74,25 @@ function updateDebugLog(): void {
       .join("");
     logEl.scrollTop = logEl.scrollHeight;
   }
+}
+
+function updatePositionsAfterChange(
+  modifiedSlotId: string,
+  modifiedFrom: number,
+  oldLen: number,
+  newLen: number,
+): void {
+  const diff = newLen - oldLen;
+  if (diff === 0) return;
+
+  slotPositions.forEach((pos, id) => {
+    if (id === modifiedSlotId) return;
+    if (pos.from >= modifiedFrom) {
+      pos.from += diff;
+      pos.to += diff;
+      log(`POSITION: Slot ${id} updated: ${pos.from - diff} -> ${pos.from}`);
+    }
+  });
 }
 
 const PREFERENCES_KEY = "aurawrite-preferences";
@@ -149,18 +172,18 @@ function setupDotTrigger(view: EditorView): void {
       const fullText = doc.textContent;
 
       const sentenceRegex = /[^.!?:]+[.!?:]+\s*/g;
-      const sentences: string[] = [];
+      const sentences: { text: string; index: number }[] = [];
       let match;
 
       while ((match = sentenceRegex.exec(fullText)) !== null) {
         const rawSentence = match[0];
         const sentence = rawSentence.replace(/\s+/g, " ").trim();
         if (sentence.length >= 10) {
-          sentences.push(sentence);
+          sentences.push({ text: sentence, index: match.index });
         }
       }
 
-      for (const sentence of sentences) {
+      for (const { text: sentence, index: sentenceIndex } of sentences) {
         const normalized = sentence.toLowerCase();
 
         if (closedSentences.has(normalized)) continue;
@@ -183,8 +206,17 @@ function setupDotTrigger(view: EditorView): void {
           reason: null,
         };
 
+        slotPositions.set(slot.id, {
+          from: sentenceIndex,
+          to: sentenceIndex + sentence.length,
+          original: sentence,
+          suggested: "",
+        });
+
         slots.push(slot);
-        log(`SLOT: Created slot ${slot.id} for "${sentence.slice(0, 30)}..."`);
+        log(
+          `SLOT: Created slot ${slot.id} at pos ${sentenceIndex}-${sentenceIndex + sentence.length} for "${sentence.slice(0, 30)}..."`,
+        );
       }
 
       createBoxesFromSlots();
@@ -385,57 +417,26 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  const documentText = getEditorContent(editorViewRef);
-
-  let textToReplace = suggestion.original;
-  let replaceIndex = documentText.indexOf(textToReplace);
-
-  if (replaceIndex === -1) {
-    textToReplace = suggestion.suggested || suggestion.original;
-    replaceIndex = documentText.indexOf(textToReplace);
-  }
-
-  if (replaceIndex === -1) {
-    log(`ACCEPT ERROR: Text not found`);
-    slot.state = "accepted";
-    suggestion.isAccepted = true;
-    suggestion.isExpanded = false;
-    renderSuggestions();
+  const pos = slotPositions.get(id);
+  if (!pos) {
+    log(`ACCEPT ERROR: No position saved for slot ${id}`);
     return;
   }
 
-  let finalSuggested = suggestion.suggested || suggestion.original;
-
-  // Check if there's a space BEFORE the text in the document
-  const textBefore = documentText.slice(0, replaceIndex);
-  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
-
-  // If there's a space BEFORE, INCLUDE it in the replacement
-  let actualFrom = replaceIndex;
-  if (hasLeadingSpace) {
-    actualFrom = replaceIndex - 1; // Include the space
-  }
-
-  const originalTrimmed = suggestion.original.trim();
-  const suggestedTrimmed = finalSuggested.trim();
-  const originalLastChar = originalTrimmed.slice(-1);
-  const suggestedLastChar = suggestedTrimmed.slice(-1);
-  if (
-    originalLastChar === suggestedLastChar &&
-    /[.!?:;,]$/.test(originalLastChar)
-  ) {
-    finalSuggested = suggestedTrimmed.slice(0, -1);
-  }
+  const finalSuggested = suggestion.suggested || suggestion.original;
+  const oldLen = pos.to - pos.from;
 
   const tr = editorViewRef.state.tr.replaceWith(
-    actualFrom,
-    replaceIndex + textToReplace.length,
+    pos.from,
+    pos.to,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
   editorViewRef.dispatch(tr);
 
-  acceptedOriginals.set(id, suggestion.original);
+  const newLen = finalSuggested.length;
+  updatePositionsAfterChange(id, pos.from, oldLen, newLen);
+
   slot.state = "accepted";
   suggestion.isAccepted = true;
   suggestion.isExpanded = false;
@@ -468,52 +469,36 @@ export function rejectSuggestion(id: string): void {
 export function switchSuggestion(id: string): void {
   log(`SWITCH: Switching suggestion for slot ${id}`);
 
+  const slot = slots.find((s) => s.id === id);
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!suggestion || !editorViewRef) {
-    log(`SWITCH ERROR: Suggestion not found`);
+  if (!slot || !suggestion || !editorViewRef) {
+    log(`SWITCH ERROR: Slot not found`);
     return;
   }
 
-  const documentText = getEditorContent(editorViewRef);
+  const pos = slotPositions.get(id);
+  if (!pos) {
+    log(`SWITCH ERROR: No position saved for slot ${id}`);
+    return;
+  }
 
   const isShowingOriginal = suggestion.showingOriginal;
-  let textToReplace = isShowingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
-  let newText = isShowingOriginal
+  const newText = isShowingOriginal
     ? suggestion.suggested || suggestion.original
     : suggestion.original;
 
-  let replaceIndex = documentText.indexOf(textToReplace);
-
-  if (replaceIndex === -1) {
-    log(`SWITCH ERROR: Text not found: "${textToReplace}"`);
-    return;
-  }
-
-  const textBefore = documentText.slice(0, replaceIndex);
-  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
-
-  let actualFrom = replaceIndex;
-  if (hasLeadingSpace) {
-    actualFrom = replaceIndex - 1;
-  }
-
-  const textTrimmed = textToReplace.trim();
-  const newTextTrimmed = newText.trim();
-  const textLastChar = textTrimmed.slice(-1);
-  const newTextLastChar = newTextTrimmed.slice(-1);
-  if (textLastChar === newTextLastChar && /[.!?:;,]$/.test(textLastChar)) {
-    newText = newTextTrimmed.slice(0, -1);
-  }
+  const oldLen = pos.to - pos.from;
 
   const tr = editorViewRef.state.tr.replaceWith(
-    actualFrom,
-    replaceIndex + textToReplace.length,
+    pos.from,
+    pos.to,
     editorViewRef.state.schema.text(newText),
   );
 
   editorViewRef.dispatch(tr);
+
+  const newLen = newText.length;
+  updatePositionsAfterChange(id, pos.from, oldLen, newLen);
 
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
