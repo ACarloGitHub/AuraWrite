@@ -74,17 +74,36 @@ interface SentenceSuggestion {
   isCollapsed: boolean; // UI collapsed state
 }
 
+interface SentenceSlot {
+  id: string;
+  text: string;
+  state: "pending" | "processing" | "suggested" | "discarded" | "accepted" | "closed";
+  suggestion: string | null;
+  reason: string | null;
+  docFrom: number; // ProseMirror document position START
+  docTo: number;   // ProseMirror document position END
+}
+
 // Tracked data
 acceptedOriginals: Map<id, original_text>; // Saved for Switch
-finalizedSentences: Set<lowercase>; // Closed/forgotten sentences
+closedSentences: Set<lowercase>; // Closed/forgotten sentences
 ```
+
+## Coordinate-Based Text Replacement
+
+Instead of using text search with `indexOf`, we use ProseMirror coordinates:
+
+1. When a slot is created, `docFrom` and `docTo` are calculated using `doc.descendants()`
+2. Accept/Switch use `replaceWith(slot.docFrom, slot.docTo, newText)` directly
+3. This preserves whitespace and surrounding text correctly
 
 ## Rules to Remember (MUST NOT FORGET)
 
 1. Accept does NOT close popup - stays open with badge
 2. Discard does NOT close popup - stays open, regenerates
 3. Switch does NOT close popup - stays open, toggles
-4. Close (X) ONLY action that closes/closes popup
+4. Close (X) ONLY action that closes popup
 5. Close (X) deletes all data and AI forgets forever
 6. AI is blocked after initial analysis - only Discard unblocks
 7. One box per sentence - no duplicates
+8. Use docFrom/docTo for text replacement - never indexOf
