@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AuraWrite</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="title-bar">
+        <span id="document-title">Untitled</span>
+        <span id="document-format"></span>
+      </div>
+      <header class="toolbar">
+        <button id="btn-save" class="toolbar__btn" title="Save (Ctrl+S)">
+          <span class="toolbar__btn-icon">💾</span>
+          <span class="toolbar__btn-text">Save</span>
+        </button>
+        <button id="btn-save-as" class="toolbar__btn" title="Save As">
+          <span class="toolbar__btn-icon">📄</span>
+          <span class="toolbar__btn-text">Save As</span>
+        </button>
+        <button id="btn-open" class="toolbar__btn" title="Open">
+          <span class="toolbar__btn-icon">📂</span>
+          <span class="toolbar__btn-text">Open</span>
+        </button>
+        <button id="btn-export" class="toolbar__btn" title="Export">
+          <span class="toolbar__btn-icon">📤</span>
+          <span class="toolbar__btn-text">Export</span>
+        </button>
+        <span class="toolbar-separator"></span>
+        <button id="btn-undo" class="toolbar__btn" title="Undo (Ctrl+Z)">
+          <span class="toolbar__btn-icon">↩️</span>
+          <span class="toolbar__btn-text">Undo</span>
+        </button>
+        <button id="btn-redo" class="toolbar__btn" title="Redo (Ctrl+Y)">
+          <span class="toolbar__btn-icon">↪️</span>
+          <span class="toolbar__btn-text">Redo</span>
+        </button>
+        <span class="toolbar-separator"></span>
+        <button id="btn-bold" class="toolbar__btn" title="Bold (Ctrl+B)">
+          <span class="toolbar__btn-icon"><strong>B</strong></span>
+          <span class="toolbar__btn-text">Bold</span>
+        </button>
+        <button id="btn-italic" class="toolbar__btn" title="Italic (Ctrl+I)">
+          <span class="toolbar__btn-icon"><em>I</em></span>
+          <span class="toolbar__btn-text">Italic</span>
+        </button>
+        <button id="btn-preferences" title="Preferences">⚙️</button>
+        <button id="btn-theme" class="theme-toggle" title="Toggle Theme">
+          🌙
+        </button>
+      </header>
+      <main class="editor-container">
+        <aside id="suggestions-panel" class="suggestions-panel hidden">
+          <div class="suggestions-panel__header">
+            <h3>Suggestions</h3>
+            <button id="suggestions-toggle" class="suggestions-panel__toggle">
+              −
+            </button>
+          </div>
+          <div class="suggestions-panel__content"></div>
+        </aside>
+        <div id="editor"></div>
+        <aside id="ai-panel" class="ai-panel hidden">
+          <div class="ai-panel__header">
+            <h3>AI Assistant</h3>
+            <button id="ai-close" class="ai-panel__close">&times;</button>
+          </div>
+          <div class="ai-panel__context" id="ai-context"></div>
+          <div class="ai-panel__history"></div>
+          <div class="ai-panel__input">
+            <textarea id="ai-input" placeholder="Ask Aura..."></textarea>
+            <button id="ai-send">Send</button>
+          </div>
+        </aside>
+      </main>
+      <footer class="status-bar">
+        <div class="footer-ai-controls">
+          <button
+            id="btn-suggestions"
+            class="footer-btn"
+            title="Suggestions (Proactive)"
+          >
+            💡 Suggestions
+          </button>
+          <button
+            id="btn-ai"
+            class="footer-btn"
+            title="AI Assistant (Reactive)"
+          >
+            ✨ AI
+          </button>
+        </div>
+        <div class="status-bar-spacer"></div>
+        <span id="word-count">Words: 0</span>
+        <span id="char-count">Characters: 0</span>
+        <div class="status-bar-spacer"></div>
+        <div class="zoom-controls">
+          <button id="btn-zoom-out" title="Zoom Out">−</button>
+          <span id="zoom-level">100%</span>
+          <button id="btn-zoom-in" title="Zoom In">+</button>
+        </div>
+      </footer>
+
+      <div id="preferences-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>Preferences</h2>
+            <button id="preferences-close" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="preference-group">
+              <label>Toolbar Display</label>
+              <select id="pref-toolbar-display">
+                <option value="icon">Icon Only</option>
+                <option value="text">Text Only</option>
+                <option value="both" selected>Icon + Text</option>
+              </select>
+            </div>
+            <div class="preference-group">
+              <label>Theme</label>
+              <select id="pref-theme">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="preference-group" id="custom-colors-group">
+              <label>Custom Colors (only for Custom theme)</label>
+              <div class="color-picker-row">
+                <span>Background:</span>
+                <input type="color" id="pref-custom-bg" value="#f0f0f0" />
+              </div>
+              <div class="color-picker-row">
+                <span>Toolbar:</span>
+                <input type="color" id="pref-custom-toolbar" value="#ffffff" />
+              </div>
+              <div class="color-picker-row">
+                <span>Paper:</span>
+                <input type="color" id="pref-custom-paper" value="#ffffff" />
+              </div>
+              <div class="color-picker-row">
+                <span>Editor Text:</span>
+                <input
+                  type="color"
+                  id="pref-custom-text-editor"
+                  value="#222222"
+                />
+              </div>
+              <div class="color-picker-row">
+                <span>Button Text:</span>
+                <input
+                  type="color"
+                  id="pref-custom-text-buttons"
+                  value="#222222"
+                />
+              </div>
+            </div>
+            <div class="preference-group">
+              <label>Incremental Save</label>
+              <div class="checkbox-row">
+                <input type="checkbox" id="pref-incremental-enabled" />
+                <span>Enable</span>
+              </div>
+            </div>
+            <div class="preference-group">
+              <label>Max Incremental Saves (0 = infinite)</label>
+              <input
+                type="number"
+                id="pref-incremental-max"
+                value="10"
+                min="0"
+              />
+            </div>
+            <hr />
+            <div class="preference-group">
+              <label>AI Suggestions Interval (seconds)</label>
+              <input
+                type="number"
+                id="pref-ai-suggestions-interval"
+                value="30"
+                min="5"
+                max="300"
+              />
+            </div>
+            <div class="preference-group">
+              <label>AI Context Update Interval (seconds)</label>
+              <input
+                type="number"
+                id="pref-ai-context-interval"
+                value="30"
+                min="5"
+                max="300"
+              />
+            </div>
+            <div class="preference-group">
+              <label>Suggestions Prompt</label>
+              <textarea
+                id="pref-suggestions-prompt"
+                rows="4"
+                placeholder="Prompt for Suggestions mode..."
+              ></textarea>
+            </div>
+            <div class="preference-group">
+              <label>AI Assistant Prompt</label>
+              <textarea
+                id="pref-ai-assistant-prompt"
+                rows="4"
+                placeholder="Prompt for AI Assistant mode..."
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

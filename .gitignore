@@ -1,0 +1,61 @@
+# Build outputs
+dist/
+src-tauri/target/
+
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OpenCode files
+.opencode/
+opencode.*
+
+# Documentation (local only - never on GitHub)
+documentation/
+memory/
+
+# Session files and logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database files (local only)
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS cache
+.cache/
+.npm/
+.eslintcache
+
+# TypeScript compilation info
+*.tsbuildinfo
+
+# Backup files
+*.bak
+*.backup
