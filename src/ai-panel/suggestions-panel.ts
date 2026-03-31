@@ -406,11 +406,14 @@ export function acceptSuggestion(id: string): void {
 
   let finalSuggested = suggestion.suggested || suggestion.original;
 
+  // Check if there's a space BEFORE the text in the document
   const textBefore = documentText.slice(0, replaceIndex);
   const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
 
-  if (!hasLeadingSpace) {
-    finalSuggested = " " + finalSuggested;
+  // If there's a space BEFORE, INCLUDE it in the replacement
+  let actualFrom = replaceIndex;
+  if (hasLeadingSpace) {
+    actualFrom = replaceIndex - 1; // Include the space
   }
 
   const originalTrimmed = suggestion.original.trim();
@@ -425,7 +428,7 @@ export function acceptSuggestion(id: string): void {
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    replaceIndex,
+    actualFrom,
     replaceIndex + textToReplace.length,
     editorViewRef.state.schema.text(finalSuggested),
   );
@@ -491,8 +494,9 @@ export function switchSuggestion(id: string): void {
   const textBefore = documentText.slice(0, replaceIndex);
   const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
 
-  if (!hasLeadingSpace) {
-    newText = " " + newText;
+  let actualFrom = replaceIndex;
+  if (hasLeadingSpace) {
+    actualFrom = replaceIndex - 1;
   }
 
   const textTrimmed = textToReplace.trim();
@@ -504,7 +508,7 @@ export function switchSuggestion(id: string): void {
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    replaceIndex,
+    actualFrom,
     replaceIndex + textToReplace.length,
     editorViewRef.state.schema.text(newText),
   );
