@@ -28,6 +28,7 @@ let editorViewRef: EditorView | null = null;
 let isAnalyzing: boolean = false;
 let contextUnderstood: string = "";
 let analyzedSentences: Set<string> = new Set();
+let acceptedOriginals: Map<string, string> = new Map();
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
@@ -101,36 +102,35 @@ function setupDotTrigger(view: EditorView): void {
 
     setTimeout(() => {
       const doc = view.state.doc;
-      const { from } = view.state.selection;
-      const textBefore = doc.textBetween(Math.max(0, from - 50), from, " ");
+      const fullText = doc.textContent;
 
-      const sentenceEnders = /[.!?:]/g;
-      const matches = [...textBefore.matchAll(sentenceEnders)];
-      if (matches.length === 0) return;
+      const sentenceRegex = /[^.!?:]+[.!?:]+\s*/g;
+      const sentences: string[] = [];
+      let match;
 
-      const lastMatch = matches[matches.length - 1];
-      const lastMatchIndex = lastMatch.index;
-      if (lastMatchIndex === undefined) return;
+      while ((match = sentenceRegex.exec(fullText)) !== null) {
+        const sentence = match[0].trim();
+        if (sentence.length >= 10) {
+          sentences.push(sentence);
+        }
+      }
 
-      const charAfter = textBefore.slice(lastMatchIndex + 1);
-      if (charAfter.trim() !== "") return;
-
-      const sentenceStart = Math.max(0, from - 50 + lastMatchIndex);
-      const sentenceText = doc.textBetween(sentenceStart, from + 1, " ").trim();
-
-      if (sentenceText.length < 10) return;
-
-      const normalizedSentence = sentenceText.toLowerCase();
-      if (analyzedSentences.has(normalizedSentence)) return;
-
-      analyzedSentences.add(normalizedSentence);
-      analyzeSentence(sentenceText);
+      for (const sentence of sentences) {
+        const normalized = sentence.toLowerCase();
+        if (!analyzedSentences.has(normalized)) {
+          analyzedSentences.add(normalized);
+          analyzeSentence(sentence);
+        }
+      }
     }, 10);
   });
 }
 
-async function analyzeSentence(sentence: string): Promise<void> {
-  if (isAnalyzing || !editorViewRef) return;
+async function analyzeSentence(
+  sentence: string,
+  previousSuggestion?: string | null,
+): Promise<void> {
+  if (!editorViewRef) return;
 
   const prefs = getPreferences();
   const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
@@ -138,7 +138,12 @@ async function analyzeSentence(sentence: string): Promise<void> {
   isAnalyzing = true;
   updateAnalysisStatus(`Analyzing: "${sentence.slice(0, 30)}..."`);
 
-  const prompt = `${promptText}
+  let retryInstruction = "";
+  if (previousSuggestion) {
+    retryInstruction = `\nIMPORTANT: Provide a DIFFERENT suggestion from: "${previousSuggestion}"`;
+  }
+
+  const prompt = `${promptText}${retryInstruction}
 
 SINGLE SENTENCE TO ANALYZE:
 "${sentence}"
@@ -164,7 +169,7 @@ Remember: Respond only with valid JSON in this exact format:
     if (response.error) {
       updateAnalysisStatus(`Error: ${response.error}`);
     } else {
-      processAIResponse(response.content);
+      processAIResponse(response.content, sentence);
     }
   } catch (error) {
     updateAnalysisStatus(
@@ -175,7 +180,7 @@ Remember: Respond only with valid JSON in this exact format:
   isAnalyzing = false;
 }
 
-function processAIResponse(content: string): void {
+function processAIResponse(content: string, originalSentence: string): void {
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -195,7 +200,7 @@ function processAIResponse(content: string): void {
         .map((s) => ({
           id: generateId(),
           sentenceTitle: s.sentence_title || truncateText(s.original, 30),
-          original: s.original,
+          original: originalSentence,
           suggested: s.suggested,
           reason: s.reason || null,
           timestamp: Date.now(),
@@ -228,6 +233,8 @@ function updateAnalysisStatus(status: string): void {
 export function acceptSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
   if (!suggestion || !editorViewRef) return;
+
+  acceptedOriginals.set(id, suggestion.original);
 
   const documentText = getEditorContent(editorViewRef);
   const originalIndex = documentText.indexOf(suggestion.original);
@@ -264,32 +271,49 @@ export function rejectSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
   if (!suggestion || !editorViewRef) return;
 
+  const previousSuggestion = suggestion.suggested;
   suggestion.isExpanded = true;
   renderSuggestions();
 
-  analyzeSentence(suggestion.original);
+  analyzeSentence(suggestion.original, previousSuggestion);
 }
 
 export function switchSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
   if (!suggestion || !editorViewRef) return;
 
+  const savedOriginal = acceptedOriginals.get(id);
+  const currentDocText = getEditorContent(editorViewRef);
+
+  let targetOriginal = suggestion.original;
+  let targetSuggested = suggestion.suggested || suggestion.original;
+
+  if (savedOriginal) {
+    const currentInDoc = currentDocText.includes(suggestion.suggested || "");
+    if (currentInDoc) {
+      targetSuggested = suggestion.original;
+      targetOriginal = suggestion.suggested || suggestion.original;
+    } else {
+      targetSuggested = suggestion.suggested || suggestion.original;
+      targetOriginal = savedOriginal;
+    }
+  }
+
   const newShowingOriginal = !suggestion.showingOriginal;
   suggestion.showingOriginal = newShowingOriginal;
 
-  const displayText = newShowingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
+  const displayText = newShowingOriginal ? targetOriginal : targetSuggested;
 
-  const documentText = getEditorContent(editorViewRef);
-  const originalIndex = documentText.indexOf(suggestion.original);
+  const displayIndex = currentDocText.indexOf(
+    newShowingOriginal ? targetOriginal : targetSuggested,
+  );
 
-  if (originalIndex === -1) {
+  if (displayIndex === -1) {
     return;
   }
 
   let finalText = displayText;
-  const originalEndsWithPunct = /[.!?]$/.test(suggestion.original.trim());
+  const originalEndsWithPunct = /[.!?]$/.test(targetOriginal.trim());
   const displayEndsWithPunct = /[.!?]$/.test(finalText.trim());
 
   if (originalEndsWithPunct && displayEndsWithPunct) {
@@ -297,8 +321,8 @@ export function switchSuggestion(id: string): void {
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    originalIndex,
-    originalIndex + suggestion.original.length,
+    displayIndex,
+    displayIndex + displayText.length,
     editorViewRef.state.schema.text(finalText),
   );
 
