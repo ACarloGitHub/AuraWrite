@@ -27,11 +27,12 @@ interface AISuggestionResponse {
 
 let suggestions: SentenceSuggestion[] = [];
 let editorViewRef: EditorView | null = null;
-let isAnalyzing: boolean = false;
 let contextUnderstood: string = "";
 let acceptedOriginals: Map<string, string> = new Map();
 let closedSentences: Set<string> = new Set();
 let currentInDocument: Map<string, string> = new Map();
+let sentenceQueue: string[] = [];
+let isCurrentlyProcessing: boolean = false;
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
@@ -92,7 +93,8 @@ function startSuggestionsMode(): void {
 }
 
 function stopSuggestionsMode(): void {
-  isAnalyzing = false;
+  sentenceQueue = [];
+  isCurrentlyProcessing = false;
 }
 
 function setupDotTrigger(view: EditorView): void {
@@ -126,22 +128,38 @@ function setupDotTrigger(view: EditorView): void {
         const existingBox = suggestions.find(
           (s) => s.original.toLowerCase() === normalized,
         );
-
         if (existingBox) continue;
 
-        analyzeSentence(sentence);
+        if (sentenceQueue.includes(sentence)) continue;
+
+        sentenceQueue.push(sentence);
       }
+
+      processQueue();
     }, 10);
   });
 }
 
-async function analyzeSentence(sentence: string): Promise<void> {
+async function processQueue(): Promise<void> {
+  if (isCurrentlyProcessing || sentenceQueue.length === 0) {
+    return;
+  }
+
+  const sentence = sentenceQueue.shift()!;
+  isCurrentlyProcessing = true;
+
+  await analyzeSentenceInQueue(sentence);
+
+  isCurrentlyProcessing = false;
+  processQueue();
+}
+
+async function analyzeSentenceInQueue(sentence: string): Promise<void> {
   if (!editorViewRef) return;
 
   const prefs = getPreferences();
   const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
 
-  isAnalyzing = true;
   updateAnalysisStatus(`Analyzing: "${sentence.slice(0, 30)}..."`);
 
   const prompt = `${promptText}
@@ -177,8 +195,6 @@ Remember: Respond only with valid JSON in this exact format:
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
-
-  isAnalyzing = false;
 }
 
 function processAIResponse(content: string, originalSentence: string): void {
@@ -215,7 +231,9 @@ function processAIResponse(content: string, originalSentence: string): void {
         suggestions = [...newSuggestions, ...suggestions];
         renderSuggestions();
       } else {
-        updateAnalysisStatus("No suggestions for this sentence");
+        if (sentenceQueue.length === 0) {
+          updateAnalysisStatus("Analysis complete");
+        }
       }
     }
   } catch (error) {
@@ -294,7 +312,7 @@ async function analyzeSentenceForReject(
   const prefs = getPreferences();
   const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
 
-  isAnalyzing = true;
+  updateAnalysisStatus(`Regenerating suggestion...`);
 
   const prompt = `${promptText}
 
@@ -331,8 +349,6 @@ Remember: Respond only with valid JSON in this exact format:
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
-
-  isAnalyzing = false;
 }
 
 function updateSuggestionResponse(content: string, suggestionId: string): void {
@@ -360,6 +376,10 @@ function updateSuggestionResponse(content: string, suggestionId: string): void {
           newSuggestion.sentence_title || truncateText(suggestion.original, 30);
         renderSuggestions();
       }
+    }
+
+    if (sentenceQueue.length === 0) {
+      updateAnalysisStatus("Analysis complete");
     }
   } catch (error) {
     console.error("Failed to parse AI response:", error);
@@ -581,6 +601,8 @@ export function clearSuggestions(): void {
   acceptedOriginals.clear();
   currentInDocument.clear();
   closedSentences.clear();
+  sentenceQueue = [];
+  isCurrentlyProcessing = false;
   renderSuggestions();
 }
 
