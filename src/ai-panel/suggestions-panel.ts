@@ -25,14 +25,29 @@ interface AISuggestionResponse {
   }[];
 }
 
+interface SentenceSlot {
+  id: string;
+  text: string;
+  state:
+    | "pending"
+    | "processing"
+    | "suggested"
+    | "discarded"
+    | "accepted"
+    | "closed";
+  suggestion: string | null;
+  reason: string | null;
+}
+
 let suggestions: SentenceSuggestion[] = [];
+let slots: SentenceSlot[] = [];
 let editorViewRef: EditorView | null = null;
 let contextUnderstood: string = "";
 let acceptedOriginals: Map<string, string> = new Map();
 let closedSentences: Set<string> = new Set();
 let currentInDocument: Map<string, string> = new Map();
-let sentenceQueue: string[] = [];
 let isCurrentlyProcessing: boolean = false;
+let currentProcessingSlotId: string | null = null;
 
 const DEBUG_LOG: string[] = [];
 
@@ -117,8 +132,9 @@ function startSuggestionsMode(): void {
 }
 
 function stopSuggestionsMode(): void {
-  sentenceQueue = [];
+  slots = [];
   isCurrentlyProcessing = false;
+  currentProcessingSlotId = null;
 }
 
 function setupDotTrigger(view: EditorView): void {
@@ -140,7 +156,6 @@ function setupDotTrigger(view: EditorView): void {
       while ((match = sentenceRegex.exec(fullText)) !== null) {
         const rawSentence = match[0];
         const sentence = rawSentence.replace(/\s+/g, " ").trim();
-
         if (sentence.length >= 10) {
           sentences.push(sentence);
         }
@@ -151,53 +166,115 @@ function setupDotTrigger(view: EditorView): void {
 
         if (closedSentences.has(normalized)) continue;
 
+        const existingSlot = slots.find(
+          (s) => s.text.toLowerCase() === normalized,
+        );
+        if (existingSlot) continue;
+
         const existingBox = suggestions.find(
           (s) => s.original.toLowerCase() === normalized,
         );
         if (existingBox) continue;
 
-        if (sentenceQueue.includes(sentence)) continue;
+        const slot: SentenceSlot = {
+          id: generateId(),
+          text: sentence,
+          state: "pending",
+          suggestion: null,
+          reason: null,
+        };
 
-        sentenceQueue.push(sentence);
+        slots.push(slot);
+        log(`SLOT: Created slot ${slot.id} for "${sentence.slice(0, 30)}..."`);
       }
 
-      processQueue();
+      createBoxesFromSlots();
+      processNextSlot();
     }, 10);
   });
 }
 
-async function processQueue(): Promise<void> {
-  if (isCurrentlyProcessing || sentenceQueue.length === 0) {
+function createBoxesFromSlots(): void {
+  const pendingSlots = slots.filter(
+    (s) => s.state === "pending" || s.state === "discarded",
+  );
+
+  const newSuggestions: SentenceSuggestion[] = [];
+
+  for (const slot of pendingSlots) {
+    const existingBox = suggestions.find(
+      (b) => b.original.toLowerCase() === slot.text.toLowerCase(),
+    );
+    if (existingBox) continue;
+
+    const suggestion: SentenceSuggestion = {
+      id: slot.id,
+      sentenceTitle: truncateText(slot.text, 30),
+      original: slot.text,
+      suggested: slot.suggestion,
+      reason: slot.reason,
+      timestamp: Date.now(),
+      isExpanded: true,
+      showingOriginal: false,
+      isAccepted: slot.state === "accepted",
+      isCollapsed: false,
+    };
+
+    newSuggestions.push(suggestion);
+  }
+
+  if (newSuggestions.length > 0) {
+    suggestions = [...suggestions, ...newSuggestions];
+    renderSuggestions();
+  }
+}
+
+async function processNextSlot(): Promise<void> {
+  if (isCurrentlyProcessing) {
+    log(`PROCESS: Already processing, waiting...`);
     return;
   }
 
-  const sentence = sentenceQueue.shift()!;
+  const slotIndex = slots.findIndex(
+    (s) => s.state === "pending" || s.state === "discarded",
+  );
+
+  if (slotIndex === -1) {
+    log(`PROCESS: No more slots to process`);
+    isCurrentlyProcessing = false;
+    currentProcessingSlotId = null;
+    updateAnalysisStatus("Analysis complete");
+    return;
+  }
+
+  const slot = slots[slotIndex];
+  const wasDiscarded = slot.state === "discarded";
+  slot.state = "processing";
+  currentProcessingSlotId = slot.id;
   isCurrentlyProcessing = true;
 
   log(
-    `QUEUE: Processing "${sentence.slice(0, 40)}..." (queue: ${sentenceQueue.length} remaining)`,
+    `PROCESS: Processing slot ${slot.id} - "${slot.text.slice(0, 30)}..." (wasDiscarded: ${wasDiscarded})`,
   );
-
-  await analyzeSentenceInQueue(sentence);
-
-  isCurrentlyProcessing = false;
-  log(`QUEUE: Done processing. Next in queue: ${sentenceQueue.length}`);
-  processQueue();
-}
-
-async function analyzeSentenceInQueue(sentence: string): Promise<void> {
-  if (!editorViewRef) return;
 
   const prefs = getPreferences();
   const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
 
-  updateAnalysisStatus(`Analyzing: "${sentence.slice(0, 30)}..."`);
-  log(`AI: Sending request for "${sentence.slice(0, 40)}..."`);
+  let previousSuggestion = "";
+  if (wasDiscarded && slot.suggestion) {
+    previousSuggestion = slot.suggestion;
+    log(
+      `DISCARD: Previous suggestion was "${previousSuggestion.slice(0, 30)}..."`,
+    );
+  }
+
+  updateAnalysisStatus(`Analyzing: "${slot.text.slice(0, 30)}..."`);
 
   const prompt = `${promptText}
+${previousSuggestion ? `\nIMPORTANT: Provide a DIFFERENT suggestion from: "${previousSuggestion}"` : ""}
 
 SINGLE SENTENCE TO ANALYZE:
-"${sentence}"
+"${slot.text}"
 
 Remember: Respond only with valid JSON in this exact format:
 {
@@ -213,7 +290,7 @@ Remember: Respond only with valid JSON in this exact format:
 }`;
 
   try {
-    log(`AI: Waiting for response...`);
+    log(`AI: Sending request...`);
     const response = await sendToAI(prompt, {
       documentTitle: document.title.replace(" - AuraWrite", ""),
     });
@@ -222,22 +299,32 @@ Remember: Respond only with valid JSON in this exact format:
     );
 
     if (response.error) {
+      log(`AI ERROR: ${response.error}`);
+      slot.state = slot.suggestion ? "suggested" : "pending";
       updateAnalysisStatus(`Error: ${response.error}`);
     } else {
-      processAIResponse(response.content, sentence);
+      processAIResponse(response.content, slot);
     }
   } catch (error) {
+    log(`AI EXCEPTION: ${error}`);
+    slot.state = slot.suggestion ? "suggested" : "pending";
     updateAnalysisStatus(
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
+
+  isCurrentlyProcessing = false;
+  currentProcessingSlotId = null;
+
+  setTimeout(() => processNextSlot(), 100);
 }
 
-function processAIResponse(content: string, originalSentence: string): void {
+function processAIResponse(content: string, slot: SentenceSlot): void {
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error("No JSON found in AI response");
+      log(`PARSE ERROR: No JSON found in AI response`);
+      slot.state = "suggested";
       return;
     }
 
@@ -248,45 +335,35 @@ function processAIResponse(content: string, originalSentence: string): void {
     }
 
     if (response.suggestions && Array.isArray(response.suggestions)) {
-      const newSuggestions = response.suggestions
-        .filter((s) => s.suggested && s.original)
-        .map((s) => ({
-          id: generateId(),
-          sentenceTitle: s.sentence_title || truncateText(s.original, 30),
-          original: originalSentence,
-          suggested: s.suggested,
-          reason: s.reason || null,
-          timestamp: Date.now(),
-          isExpanded: true,
-          showingOriginal: false,
-          isAccepted: false,
-          isCollapsed: false,
-        }));
+      const newSuggestion = response.suggestions.find(
+        (s) => s.suggested && s.original,
+      );
 
-      if (newSuggestions.length > 0) {
-        const existingIds = new Set(
-          suggestions.map((s) => s.original.toLowerCase()),
-        );
-        const trulyNew = newSuggestions.filter(
-          (s) => !existingIds.has(s.original.toLowerCase()),
-        );
+      if (newSuggestion) {
+        slot.suggestion = newSuggestion.suggested;
+        slot.reason = newSuggestion.reason || null;
+        slot.state = "suggested";
 
-        if (trulyNew.length > 0) {
-          suggestions = [...suggestions, ...trulyNew];
+        const existingBox = suggestions.find((b) => b.id === slot.id);
+        if (existingBox) {
+          existingBox.suggested = slot.suggestion;
+          existingBox.reason = slot.reason;
+          existingBox.sentenceTitle =
+            newSuggestion.sentence_title || truncateText(slot.text, 30);
           renderSuggestions();
         }
-      }
 
-      if (sentenceQueue.length === 0 && suggestions.length > 0) {
-        updateAnalysisStatus("Analysis complete");
-      } else if (sentenceQueue.length > 0) {
-        updateAnalysisStatus(
-          `Analyzing... (${sentenceQueue.length} remaining)`,
-        );
+        log(`SUGGESTION: Got suggestion for slot ${slot.id}`);
+      } else {
+        log(`SUGGESTION: No valid suggestion found`);
+        slot.state = "suggested";
       }
     }
+
+    updateAnalysisStatus("Analysis complete");
   } catch (error) {
-    console.error("Failed to parse AI response:", error);
+    log(`PARSE EXCEPTION: ${error}`);
+    slot.state = "suggested";
   }
 }
 
@@ -301,30 +378,27 @@ function updateAnalysisStatus(status: string): void {
 }
 
 export function acceptSuggestion(id: string): void {
+  log(`ACCEPT: Accepting suggestion for slot ${id}`);
+
+  const slot = slots.find((s) => s.id === id);
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!suggestion || !editorViewRef) {
-    log(`ACCEPT: Suggestion not found or editor not available`);
+  if (!slot || !suggestion || !editorViewRef) {
+    log(`ACCEPT ERROR: Slot or suggestion not found`);
     return;
   }
-
-  log(
-    `ACCEPT: Accepting suggestion for "${suggestion.original.slice(0, 40)}..."`,
-  );
 
   acceptedOriginals.set(id, suggestion.original);
   currentInDocument.set(id, suggestion.suggested || suggestion.original);
 
+  slot.state = "accepted";
+
   const documentText = getEditorContent(editorViewRef);
-  const textToReplace = suggestion.showingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
+  const textToReplace = suggestion.original;
 
   const replaceIndex = documentText.indexOf(textToReplace);
 
   if (replaceIndex === -1) {
-    log(
-      `ACCEPT: Text not found in document: "${textToReplace.slice(0, 40)}..."`,
-    );
+    log(`ACCEPT ERROR: Text not found in document: "${textToReplace}"`);
     return;
   }
 
@@ -348,111 +422,39 @@ export function acceptSuggestion(id: string): void {
   suggestion.isAccepted = true;
   suggestion.isExpanded = false;
   renderSuggestions();
+
+  log(`ACCEPT: Successfully accepted`);
 }
 
 export function rejectSuggestion(id: string): void {
+  log(`REJECT: Rejecting suggestion for slot ${id}`);
+
+  const slot = slots.find((s) => s.id === id);
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!suggestion || !editorViewRef) return;
-
-  const previousSuggestion = suggestion.suggested;
-  suggestion.isExpanded = true;
-  renderSuggestions();
-
-  analyzeSentenceForReject(suggestion.original, previousSuggestion, id);
-}
-
-async function analyzeSentenceForReject(
-  sentence: string,
-  previousSuggestion: string | null | undefined,
-  suggestionId: string,
-): Promise<void> {
-  if (!editorViewRef) return;
-
-  const prefs = getPreferences();
-  const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
-
-  updateAnalysisStatus(`Regenerating suggestion...`);
-
-  const prompt = `${promptText}
-
-IMPORTANT: Provide a DIFFERENT suggestion from: "${previousSuggestion}"
-
-SINGLE SENTENCE TO ANALYZE:
-"${sentence}"
-
-Remember: Respond only with valid JSON in this exact format:
-{
-  "context_understood": "brief summary of tone/style (1 sentence max)",
-  "suggestions": [
-    {
-      "sentence_title": "First 5 words...",
-      "original": "full original sentence",
-      "suggested": "improved version OR null if no change needed",
-      "reason": "why this improves the text OR null"
-    }
-  ]
-}`;
-
-  try {
-    log(`DISCARD: Requesting new suggestion for "${sentence.slice(0, 40)}..."`);
-    const response = await sendToAI(prompt, {
-      documentTitle: document.title.replace(" - AuraWrite", ""),
-    });
-    log(
-      `DISCARD: Response received: ${response.error ? "ERROR - " + response.error : "OK"}`,
-    );
-
-    if (response.error) {
-      updateAnalysisStatus(`Error: ${response.error}`);
-    } else {
-      updateSuggestionResponse(response.content, suggestionId);
-    }
-  } catch (error) {
-    log(`DISCARD: Exception - ${error}`);
-    updateAnalysisStatus(
-      `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
+  if (!slot) {
+    log(`REJECT ERROR: Slot not found`);
+    return;
   }
-}
 
-function updateSuggestionResponse(content: string, suggestionId: string): void {
-  try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("No JSON found in AI response");
-      return;
-    }
+  log(`REJECT: Marking slot ${id} as discarded`);
+  slot.state = "discarded";
 
-    const response: AISuggestionResponse = JSON.parse(jsonMatch[0]);
-
-    if (response.suggestions && Array.isArray(response.suggestions)) {
-      const suggestion = suggestions.find((s) => s.id === suggestionId);
-      if (!suggestion) return;
-
-      const newSuggestion = response.suggestions.find(
-        (s) => s.suggested && s.original,
-      );
-
-      if (newSuggestion) {
-        suggestion.suggested = newSuggestion.suggested;
-        suggestion.reason = newSuggestion.reason || null;
-        suggestion.sentenceTitle =
-          newSuggestion.sentence_title || truncateText(suggestion.original, 30);
-        renderSuggestions();
-      }
-    }
-
-    if (sentenceQueue.length === 0) {
-      updateAnalysisStatus("Analysis complete");
-    }
-  } catch (error) {
-    console.error("Failed to parse AI response:", error);
+  if (suggestion) {
+    suggestion.isExpanded = true;
+    renderSuggestions();
   }
+
+  processNextSlot();
 }
 
 export function switchSuggestion(id: string): void {
+  log(`SWITCH: Switching suggestion for slot ${id}`);
+
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!suggestion || !editorViewRef) return;
+  if (!suggestion || !editorViewRef) {
+    log(`SWITCH ERROR: Suggestion not found`);
+    return;
+  }
 
   const currentTextInDoc = currentInDocument.get(id);
   if (!currentTextInDoc) {
@@ -479,6 +481,7 @@ export function switchSuggestion(id: string): void {
   const replaceIndex = documentText.indexOf(textToReplace);
 
   if (replaceIndex === -1) {
+    log(`SWITCH ERROR: Text not found in document: "${textToReplace}"`);
     return;
   }
 
@@ -501,13 +504,25 @@ export function switchSuggestion(id: string): void {
   currentInDocument.set(id, finalNewText);
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
+
+  log(`SWITCH: Successfully switched to "${finalNewText.slice(0, 30)}..."`);
 }
 
 export function closeSuggestion(id: string): void {
+  log(`CLOSE: Closing slot ${id}`);
+
+  const slot = slots.find((s) => s.id === id);
   const suggestion = suggestions.find((s) => s.id === id);
+
+  if (slot) {
+    closedSentences.add(slot.text.toLowerCase());
+    slot.state = "closed";
+  }
+
   if (suggestion) {
     closedSentences.add(suggestion.original.toLowerCase());
   }
+
   acceptedOriginals.delete(id);
   currentInDocument.delete(id);
   removeSuggestion(id);
@@ -662,11 +677,12 @@ export function getSuggestions(): SentenceSuggestion[] {
 
 export function clearSuggestions(): void {
   suggestions = [];
+  slots = [];
   acceptedOriginals.clear();
   currentInDocument.clear();
   closedSentences.clear();
-  sentenceQueue = [];
   isCurrentlyProcessing = false;
+  currentProcessingSlotId = null;
   renderSuggestions();
 }
 
