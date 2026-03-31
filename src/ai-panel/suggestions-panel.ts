@@ -1,4 +1,5 @@
 import type { EditorView } from "prosemirror-view";
+import type { Transaction } from "prosemirror-state";
 import { sendToAI } from "./ai-manager";
 import { getEditorContent } from "../editor/editor";
 
@@ -72,6 +73,22 @@ function updateDebugLog(): void {
       .join("");
     logEl.scrollTop = logEl.scrollHeight;
   }
+}
+
+function updateSlotPositions(tr: Transaction): void {
+  const mapping = tr.mapping;
+  slots.forEach((slot) => {
+    if (slot.docFrom !== -1 && slot.docTo !== -1) {
+      const oldFrom = slot.docFrom;
+      slot.docFrom = mapping.map(slot.docFrom, 1);
+      slot.docTo = mapping.map(slot.docTo, -1);
+      if (oldFrom !== slot.docFrom) {
+        log(
+          `POSITION_UPDATE: Slot ${slot.id} updated from ${oldFrom} to ${slot.docFrom}`,
+        );
+      }
+    }
+  });
 }
 
 const PREFERENCES_KEY = "aurawrite-preferences";
@@ -450,6 +467,8 @@ export function acceptSuggestion(id: string): void {
 
   editorViewRef.dispatch(tr);
 
+  updateSlotPositions(tr);
+
   slot.docFrom = -1;
   slot.docTo = -1;
   slot.state = "accepted";
@@ -525,7 +544,7 @@ export function switchSuggestion(id: string): void {
 
   editorViewRef.dispatch(tr);
 
-  slot.docTo = from + newText.length;
+  updateSlotPositions(tr);
 
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
