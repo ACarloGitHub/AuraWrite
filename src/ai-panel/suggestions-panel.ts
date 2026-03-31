@@ -37,6 +37,8 @@ interface SentenceSlot {
     | "closed";
   suggestion: string | null;
   reason: string | null;
+  docFrom: number;
+  docTo: number;
 }
 
 let suggestions: SentenceSuggestion[] = [];
@@ -45,7 +47,6 @@ let editorViewRef: EditorView | null = null;
 let contextUnderstood: string = "";
 let acceptedOriginals: Map<string, string> = new Map();
 let closedSentences: Set<string> = new Set();
-let currentInDocument: Map<string, string> = new Map();
 let isCurrentlyProcessing: boolean = false;
 let currentProcessingSlotId: string | null = null;
 
@@ -176,16 +177,46 @@ function setupDotTrigger(view: EditorView): void {
         );
         if (existingBox) continue;
 
+        const doc = editorViewRef!.state.doc;
+        const textToFind = sentence;
+        let docFrom = -1;
+        let docTo = -1;
+
+        doc.descendants((node, pos) => {
+          if (node.isText && docFrom === -1) {
+            const textContent = node.text || "";
+            const idx = textContent
+              .toLowerCase()
+              .indexOf(textToFind.toLowerCase());
+            if (idx !== -1) {
+              docFrom = pos;
+              docTo = pos + textToFind.length;
+            }
+          }
+          return docFrom === -1;
+        });
+
+        if (docFrom === -1) {
+          log(
+            `SLOT: Could not find position for "${sentence.slice(0, 30)}..."`,
+          );
+          continue;
+        }
+
         const slot: SentenceSlot = {
           id: generateId(),
           text: sentence,
           state: "pending",
           suggestion: null,
           reason: null,
+          docFrom,
+          docTo,
         };
 
         slots.push(slot);
-        log(`SLOT: Created slot ${slot.id} for "${sentence.slice(0, 30)}..."`);
+        log(
+          `SLOT: Created slot ${slot.id} for "${sentence.slice(0, 30)}..." (pos: ${docFrom}-${docTo})`,
+        );
       }
 
       createBoxesFromSlots();
@@ -387,19 +418,8 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  const documentText = getEditorContent(editorViewRef);
-
-  const textToReplace = suggestion.original;
-  const replaceIndex = documentText.indexOf(textToReplace);
-
-  if (replaceIndex === -1) {
-    log(
-      `ACCEPT ERROR: Original text not found in document: "${textToReplace}"`,
-    );
-    currentInDocument.set(id, suggestion.suggested || suggestion.original);
-    suggestion.isAccepted = true;
-    suggestion.isExpanded = false;
-    renderSuggestions();
+  if (slot.docFrom === -1 || slot.docTo === -1) {
+    log(`ACCEPT ERROR: Slot has invalid document position`);
     return;
   }
 
@@ -419,13 +439,16 @@ export function acceptSuggestion(id: string): void {
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    replaceIndex,
-    replaceIndex + textToReplace.length,
+    slot.docFrom,
+    slot.docTo,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
   editorViewRef.dispatch(tr);
 
+  slot.suggestion = finalSuggested;
+  slot.docFrom = -1;
+  slot.docTo = -1;
   slot.state = "accepted";
   suggestion.isAccepted = true;
   suggestion.isExpanded = false;
@@ -458,75 +481,49 @@ export function rejectSuggestion(id: string): void {
 export function switchSuggestion(id: string): void {
   log(`SWITCH: Switching suggestion for slot ${id}`);
 
+  const slot = slots.find((s) => s.id === id);
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!suggestion || !editorViewRef) {
-    log(`SWITCH ERROR: Suggestion not found`);
+  if (!slot || !suggestion || !editorViewRef) {
+    log(`SWITCH ERROR: Slot or suggestion not found`);
     return;
   }
 
-  const currentTextInDoc = currentInDocument.get(id);
-  if (!currentTextInDoc) {
-    currentInDocument.set(
-      id,
-      suggestion.showingOriginal
-        ? suggestion.suggested || suggestion.original
-        : suggestion.original,
-    );
+  if (slot.docFrom === -1 || slot.docTo === -1) {
+    log(`SWITCH ERROR: Slot has invalid document position`);
+    return;
   }
 
-  const nowInDoc = currentInDocument.get(id) || "";
-  const isShowingOriginal = nowInDoc === suggestion.original;
-
+  const isShowingOriginal = suggestion.showingOriginal;
   const textToReplace = isShowingOriginal
     ? suggestion.original
     : suggestion.suggested || suggestion.original;
-
   const newText = isShowingOriginal
     ? suggestion.suggested || suggestion.original
     : suggestion.original;
 
-  const documentText = getEditorContent(editorViewRef);
-  const replaceIndex = documentText.indexOf(textToReplace);
-
-  if (replaceIndex === -1) {
-    log(`SWITCH ERROR: Text not found in document: "${textToReplace}"`);
-    return;
-  }
-
   let finalNewText = newText;
 
-  const textToReplaceTrimmed = textToReplace.trim();
+  const textTrimmed = textToReplace.trim();
   const newTextTrimmed = finalNewText.trim();
-  const textToReplaceEndsWithPunct = /[.!?:;,]$/.test(textToReplaceTrimmed);
+  const textEndsWithPunct = /[.!?:;,]$/.test(textTrimmed);
   const newTextEndsWithPunct = /[.!?:;,]$/.test(newTextTrimmed);
 
-  if (textToReplaceEndsWithPunct && newTextEndsWithPunct) {
-    const textToReplaceLastChar = textToReplaceTrimmed.slice(-1);
+  if (textEndsWithPunct && newTextEndsWithPunct) {
+    const textLastChar = textTrimmed.slice(-1);
     const newTextLastChar = newTextTrimmed.slice(-1);
-    if (textToReplaceLastChar === newTextLastChar) {
+    if (textLastChar === newTextLastChar) {
       finalNewText = newTextTrimmed.slice(0, -1);
     }
   }
 
-  const textLengthAfterReplace =
-    documentText.length - replaceIndex - textToReplace.length;
-  let textAfterOriginal = "";
-  if (textLengthAfterReplace > 0) {
-    textAfterOriginal = documentText.slice(
-      replaceIndex + textToReplace.length,
-      replaceIndex + textToReplace.length + 50,
-    );
-  }
-
   const tr = editorViewRef.state.tr.replaceWith(
-    replaceIndex,
-    replaceIndex + textToReplace.length,
+    slot.docFrom,
+    slot.docTo,
     editorViewRef.state.schema.text(finalNewText),
   );
 
   editorViewRef.dispatch(tr);
 
-  currentInDocument.set(id, finalNewText);
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
 
@@ -549,7 +546,6 @@ export function closeSuggestion(id: string): void {
   }
 
   acceptedOriginals.delete(id);
-  currentInDocument.delete(id);
   removeSuggestion(id);
 }
 
@@ -704,7 +700,6 @@ export function clearSuggestions(): void {
   suggestions = [];
   slots = [];
   acceptedOriginals.clear();
-  currentInDocument.clear();
   closedSentences.clear();
   isCurrentlyProcessing = false;
   currentProcessingSlotId = null;
