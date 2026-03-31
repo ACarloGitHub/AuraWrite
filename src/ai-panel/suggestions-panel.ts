@@ -436,22 +436,7 @@ export function acceptSuggestion(id: string): void {
   }
 
   if (slot.docFrom === -1 || slot.docTo === -1) {
-    log(
-      `ACCEPT ERROR: Position for slot ${id} is invalid. The text may have been edited.`,
-    );
-    return;
-  }
-
-  const currentTextInDoc = editorViewRef.state.doc.textBetween(
-    slot.docFrom,
-    slot.docTo,
-  );
-  if (currentTextInDoc.toLowerCase() !== suggestion.original.toLowerCase()) {
-    log(
-      `ACCEPT ERROR: Original text at position ${slot.docFrom}-${slot.docTo} has changed. Aborting.`,
-    );
-    slot.docFrom = -1;
-    slot.docTo = -1;
+    log(`ACCEPT ERROR: Position for slot ${id} is invalid.`);
     return;
   }
 
@@ -521,16 +506,6 @@ export function switchSuggestion(id: string): void {
   const newText = isShowingOriginal
     ? suggestion.original
     : suggestion.suggested || suggestion.original;
-
-  const currentTextInDoc = editorViewRef.state.doc.textBetween(
-    slot.docFrom,
-    slot.docTo,
-  );
-  if (currentTextInDoc.toLowerCase() !== textToReplace.toLowerCase()) {
-    log(`SWITCH ERROR: Text at stored position has changed unexpectedly.`);
-    log(`Expected: "${textToReplace}", Found: "${currentTextInDoc}"`);
-    return;
-  }
 
   const from = slot.docFrom;
   const to = slot.docTo;
