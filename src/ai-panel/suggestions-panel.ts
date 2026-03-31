@@ -47,6 +47,8 @@ function getPreferences(): {
   return { aiSuggestionsInterval: DEFAULT_INTERVAL, suggestionsPrompt: "" };
 }
 
+const DEFAULT_SUGGESTIONS_PROMPT = `You are a writing assistant. Analyze the sentence and suggest improvements for clarity, style, and grammar.`;
+
 export function setupSuggestionsPanel(view: EditorView): void {
   editorViewRef = view;
   setupPanelToggle();
@@ -97,24 +99,26 @@ function setupDotTrigger(view: EditorView): void {
     if (!suggestionsPanel || suggestionsPanel.classList.contains("hidden"))
       return;
 
-    const doc = view.state.doc;
-    const { from } = view.state.selection;
-    const textBefore = doc.textBetween(Math.max(0, from - 50), from, " ");
+    setTimeout(() => {
+      const doc = view.state.doc;
+      const { from } = view.state.selection;
+      const textBefore = doc.textBetween(Math.max(0, from - 50), from, " ");
 
-    const dotIndex = textBefore.lastIndexOf(".");
-    if (dotIndex === -1) return;
+      const dotIndex = textBefore.lastIndexOf(".");
+      if (dotIndex === -1) return;
 
-    const textAfterDot = textBefore.slice(dotIndex + 1);
-    if (textAfterDot.trim() !== "") return;
+      const textAfterDot = textBefore.slice(dotIndex + 1);
+      if (textAfterDot.trim() !== "") return;
 
-    const sentenceStart = Math.max(0, from - 50 + dotIndex);
-    const sentenceText = doc.textBetween(sentenceStart, from + 1, " ");
+      const sentenceStart = Math.max(0, from - 50 + dotIndex);
+      const sentenceText = doc.textBetween(sentenceStart, from + 1, " ");
 
-    if (sentenceText.length < 10) return;
-    if (sentenceText === lastAnalyzedSentence) return;
+      if (sentenceText.length < 10) return;
+      if (sentenceText === lastAnalyzedSentence) return;
 
-    lastAnalyzedSentence = sentenceText;
-    analyzeSentence(sentenceText.trim());
+      lastAnalyzedSentence = sentenceText;
+      analyzeSentence(sentenceText.trim());
+    }, 10);
   });
 }
 
@@ -122,12 +126,12 @@ async function analyzeSentence(sentence: string): Promise<void> {
   if (isAnalyzing || !editorViewRef) return;
 
   const prefs = getPreferences();
-  if (!prefs.suggestionsPrompt) return;
+  const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
 
   isAnalyzing = true;
   updateAnalysisStatus(`Analyzing: "${sentence.slice(0, 30)}..."`);
 
-  const prompt = `${prefs.suggestionsPrompt}
+  const prompt = `${promptText}
 
 SINGLE SENTENCE TO ANALYZE:
 "${sentence}"
