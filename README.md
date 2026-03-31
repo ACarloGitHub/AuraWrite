@@ -31,7 +31,21 @@
 
 ---
 
-<img src="assets/banner.png" alt="AuraWrite Banner" style="max-width: 100%; display: inline-block;">
+<img src="assets/banner_Aurawrite.png" alt="AuraWrite Banner" style="max-width: 100%; display: inline-block;">
+
+---
+
+## What is AuraWrite?
+
+AuraWrite is an open-source writing application designed to be a powerful, privacy-respecting alternative to mainstream word processors. It combines a professional rich-text editor with integrated AI assistance — all running locally on your machine.
+
+**For writers crafting novels:** Keep track of characters, locations, and plot threads with dedicated memory systems (database + semantic search).  
+**For professionals drafting documents:** Get style-appropriate suggestions, legal writing assistance, or business correspondence help.  
+**For anyone who writes:** Enjoy an AI companion that suggests sentence improvements, researches context, and helps overcome writer's block — without ever sending your words to the cloud.
+
+AuraWrite features two specialized memory systems: a precise database for names, places, and facts, plus a general semantic memory that understands themes and narrative flow. The AI can adopt specific roles (focused editor, creative assistant, research helper) or remain a free-form companion, adapting to your workflow rather than imposing its own.
+
+**The philosophy is simple:** Tools should liberate creativity, not constrain it. Every feature is designed to be helpful without being intrusive — empowering you to write better, not replacing your voice.
 
 ---
 
