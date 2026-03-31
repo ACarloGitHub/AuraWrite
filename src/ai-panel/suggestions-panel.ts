@@ -441,7 +441,12 @@ export function acceptSuggestion(id: string): void {
 
   let finalSuggested = suggestion.suggested || suggestion.original;
 
-  finalSuggested = " " + finalSuggested;
+  const textBefore = documentText.slice(0, replaceIndex);
+  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
+
+  if (!hasLeadingSpace) {
+    finalSuggested = " " + finalSuggested;
+  }
 
   const originalTrimmed = suggestion.original.trim();
   const suggestedTrimmed = finalSuggested.trim();
@@ -521,7 +526,12 @@ export function switchSuggestion(id: string): void {
     return;
   }
 
-  newText = " " + newText;
+  const textBefore = documentText.slice(0, replaceIndex);
+  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
+
+  if (!hasLeadingSpace) {
+    newText = " " + newText;
+  }
 
   const textTrimmed = textToReplace.trim();
   const newTextTrimmed = newText.trim();
