@@ -34,6 +34,30 @@ let currentInDocument: Map<string, string> = new Map();
 let sentenceQueue: string[] = [];
 let isCurrentlyProcessing: boolean = false;
 
+const DEBUG_LOG: string[] = [];
+
+function log(message: string): void {
+  const time = new Date().toLocaleTimeString("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const entry = `[${time}] ${message}`;
+  DEBUG_LOG.push(entry);
+  console.log(entry);
+  updateDebugLog();
+}
+
+function updateDebugLog(): void {
+  const logEl = document.getElementById("suggestions-debug-log");
+  if (logEl) {
+    logEl.innerHTML = DEBUG_LOG.slice(-20)
+      .map((e) => `<div class="debug-log-entry">${escapeHtml(e)}</div>`)
+      .join("");
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
 
@@ -150,9 +174,14 @@ async function processQueue(): Promise<void> {
   const sentence = sentenceQueue.shift()!;
   isCurrentlyProcessing = true;
 
+  log(
+    `QUEUE: Processing "${sentence.slice(0, 40)}..." (queue: ${sentenceQueue.length} remaining)`,
+  );
+
   await analyzeSentenceInQueue(sentence);
 
   isCurrentlyProcessing = false;
+  log(`QUEUE: Done processing. Next in queue: ${sentenceQueue.length}`);
   processQueue();
 }
 
@@ -163,6 +192,7 @@ async function analyzeSentenceInQueue(sentence: string): Promise<void> {
   const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
 
   updateAnalysisStatus(`Analyzing: "${sentence.slice(0, 30)}..."`);
+  log(`AI: Sending request for "${sentence.slice(0, 40)}..."`);
 
   const prompt = `${promptText}
 
@@ -183,9 +213,13 @@ Remember: Respond only with valid JSON in this exact format:
 }`;
 
   try {
+    log(`AI: Waiting for response...`);
     const response = await sendToAI(prompt, {
       documentTitle: document.title.replace(" - AuraWrite", ""),
     });
+    log(
+      `AI: Response received: ${response.error ? "ERROR - " + response.error : "OK"}`,
+    );
 
     if (response.error) {
       updateAnalysisStatus(`Error: ${response.error}`);
@@ -268,7 +302,14 @@ function updateAnalysisStatus(status: string): void {
 
 export function acceptSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!suggestion || !editorViewRef) return;
+  if (!suggestion || !editorViewRef) {
+    log(`ACCEPT: Suggestion not found or editor not available`);
+    return;
+  }
+
+  log(
+    `ACCEPT: Accepting suggestion for "${suggestion.original.slice(0, 40)}..."`,
+  );
 
   acceptedOriginals.set(id, suggestion.original);
   currentInDocument.set(id, suggestion.suggested || suggestion.original);
@@ -281,6 +322,9 @@ export function acceptSuggestion(id: string): void {
   const replaceIndex = documentText.indexOf(textToReplace);
 
   if (replaceIndex === -1) {
+    log(
+      `ACCEPT: Text not found in document: "${textToReplace.slice(0, 40)}..."`,
+    );
     return;
   }
 
@@ -350,9 +394,13 @@ Remember: Respond only with valid JSON in this exact format:
 }`;
 
   try {
+    log(`DISCARD: Requesting new suggestion for "${sentence.slice(0, 40)}..."`);
     const response = await sendToAI(prompt, {
       documentTitle: document.title.replace(" - AuraWrite", ""),
     });
+    log(
+      `DISCARD: Response received: ${response.error ? "ERROR - " + response.error : "OK"}`,
+    );
 
     if (response.error) {
       updateAnalysisStatus(`Error: ${response.error}`);
@@ -360,6 +408,7 @@ Remember: Respond only with valid JSON in this exact format:
       updateSuggestionResponse(response.content, suggestionId);
     }
   } catch (error) {
+    log(`DISCARD: Exception - ${error}`);
     updateAnalysisStatus(
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
