@@ -30,6 +30,8 @@ opencode.*
 # Documentation (local only - never on GitHub)
 documentation/
 memory/
+TODO.md
+SUGGESTIONS_SPEC.md
 
 # Session files and logs
 *.log

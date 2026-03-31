@@ -387,18 +387,19 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  acceptedOriginals.set(id, suggestion.original);
-  currentInDocument.set(id, suggestion.suggested || suggestion.original);
-
-  slot.state = "accepted";
-
   const documentText = getEditorContent(editorViewRef);
-  const textToReplace = suggestion.original;
 
+  const textToReplace = suggestion.original;
   const replaceIndex = documentText.indexOf(textToReplace);
 
   if (replaceIndex === -1) {
-    log(`ACCEPT ERROR: Text not found in document: "${textToReplace}"`);
+    log(
+      `ACCEPT ERROR: Original text not found in document: "${textToReplace}"`,
+    );
+    currentInDocument.set(id, suggestion.suggested || suggestion.original);
+    suggestion.isAccepted = true;
+    suggestion.isExpanded = false;
+    renderSuggestions();
     return;
   }
 
@@ -425,6 +426,7 @@ export function acceptSuggestion(id: string): void {
 
   editorViewRef.dispatch(tr);
 
+  slot.state = "accepted";
   suggestion.isAccepted = true;
   suggestion.isExpanded = false;
   renderSuggestions();
