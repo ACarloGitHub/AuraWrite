@@ -27,7 +27,7 @@ let suggestions: SentenceSuggestion[] = [];
 let editorViewRef: EditorView | null = null;
 let isAnalyzing: boolean = false;
 let contextUnderstood: string = "";
-let lastAnalyzedSentence: string = "";
+let analyzedSentences: Set<string> = new Set();
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
@@ -93,7 +93,7 @@ function stopSuggestionsMode(): void {
 
 function setupDotTrigger(view: EditorView): void {
   view.dom.addEventListener("keydown", (e: KeyboardEvent) => {
-    if (e.key !== ".") return;
+    if (![".", "!", "?", ":"].includes(e.key)) return;
 
     const suggestionsPanel = document.getElementById("suggestions-panel");
     if (!suggestionsPanel || suggestionsPanel.classList.contains("hidden"))
@@ -104,20 +104,27 @@ function setupDotTrigger(view: EditorView): void {
       const { from } = view.state.selection;
       const textBefore = doc.textBetween(Math.max(0, from - 50), from, " ");
 
-      const dotIndex = textBefore.lastIndexOf(".");
-      if (dotIndex === -1) return;
+      const sentenceEnders = /[.!?:]/g;
+      const matches = [...textBefore.matchAll(sentenceEnders)];
+      if (matches.length === 0) return;
 
-      const textAfterDot = textBefore.slice(dotIndex + 1);
-      if (textAfterDot.trim() !== "") return;
+      const lastMatch = matches[matches.length - 1];
+      const lastMatchIndex = lastMatch.index;
+      if (lastMatchIndex === undefined) return;
 
-      const sentenceStart = Math.max(0, from - 50 + dotIndex);
-      const sentenceText = doc.textBetween(sentenceStart, from + 1, " ");
+      const charAfter = textBefore.slice(lastMatchIndex + 1);
+      if (charAfter.trim() !== "") return;
+
+      const sentenceStart = Math.max(0, from - 50 + lastMatchIndex);
+      const sentenceText = doc.textBetween(sentenceStart, from + 1, " ").trim();
 
       if (sentenceText.length < 10) return;
-      if (sentenceText === lastAnalyzedSentence) return;
 
-      lastAnalyzedSentence = sentenceText;
-      analyzeSentence(sentenceText.trim());
+      const normalizedSentence = sentenceText.toLowerCase();
+      if (analyzedSentences.has(normalizedSentence)) return;
+
+      analyzedSentences.add(normalizedSentence);
+      analyzeSentence(sentenceText);
     }, 10);
   });
 }
@@ -257,33 +264,10 @@ export function rejectSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
   if (!suggestion || !editorViewRef) return;
 
-  let finalSuggested = suggestion.showingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
+  suggestion.isExpanded = true;
+  renderSuggestions();
 
-  const originalEndsWithPunct = /[.!?]$/.test(suggestion.original.trim());
-  const suggestedEndsWithPunct = /[.!?]$/.test(finalSuggested.trim());
-
-  if (originalEndsWithPunct && suggestedEndsWithPunct) {
-    finalSuggested = finalSuggested.trim().slice(0, -1);
-  }
-
-  const documentText = getEditorContent(editorViewRef);
-  const originalIndex = documentText.indexOf(suggestion.original);
-
-  if (originalIndex === -1) {
-    removeSuggestion(id);
-    return;
-  }
-
-  const tr = editorViewRef.state.tr.replaceWith(
-    originalIndex,
-    originalIndex + suggestion.original.length,
-    editorViewRef.state.schema.text(finalSuggested),
-  );
-
-  editorViewRef.dispatch(tr);
-  removeSuggestion(id);
+  analyzeSentence(suggestion.original);
 }
 
 export function switchSuggestion(id: string): void {
