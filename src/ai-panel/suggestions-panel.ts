@@ -418,29 +418,45 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  if (slot.docFrom === -1 || slot.docTo === -1) {
-    log(`ACCEPT ERROR: Slot has invalid document position`);
+  const documentText = getEditorContent(editorViewRef);
+
+  let textToReplace = suggestion.original;
+  let replaceIndex = documentText.indexOf(textToReplace);
+
+  if (replaceIndex === -1) {
+    textToReplace = suggestion.suggested || suggestion.original;
+    replaceIndex = documentText.indexOf(textToReplace);
+  }
+
+  if (replaceIndex === -1) {
+    log(`ACCEPT ERROR: Text not found in document`);
+    slot.docFrom = -1;
+    slot.docTo = -1;
+    slot.state = "accepted";
+    suggestion.isAccepted = true;
+    suggestion.isExpanded = false;
+    renderSuggestions();
     return;
   }
 
   let finalSuggested = suggestion.suggested || suggestion.original;
 
+  finalSuggested = " " + finalSuggested;
+
   const originalTrimmed = suggestion.original.trim();
   const suggestedTrimmed = finalSuggested.trim();
-  const originalEndsWithPunct = /[.!?:;,]$/.test(originalTrimmed);
-  const suggestedEndsWithPunct = /[.!?:;,]$/.test(suggestedTrimmed);
-
-  if (originalEndsWithPunct && suggestedEndsWithPunct) {
-    const originalLastChar = originalTrimmed.slice(-1);
-    const suggestedLastChar = suggestedTrimmed.slice(-1);
-    if (originalLastChar === suggestedLastChar) {
-      finalSuggested = suggestedTrimmed.slice(0, -1);
-    }
+  const originalLastChar = originalTrimmed.slice(-1);
+  const suggestedLastChar = suggestedTrimmed.slice(-1);
+  if (
+    originalLastChar === suggestedLastChar &&
+    /[.!?:;,]$/.test(originalLastChar)
+  ) {
+    finalSuggested = suggestedTrimmed.slice(0, -1);
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    slot.docFrom,
-    slot.docTo,
+    replaceIndex,
+    replaceIndex + textToReplace.length,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
@@ -488,38 +504,37 @@ export function switchSuggestion(id: string): void {
     return;
   }
 
-  if (slot.docFrom === -1 || slot.docTo === -1) {
-    log(`SWITCH ERROR: Slot has invalid document position`);
-    return;
-  }
+  const documentText = getEditorContent(editorViewRef);
 
   const isShowingOriginal = suggestion.showingOriginal;
-  const textToReplace = isShowingOriginal
+  let textToReplace = isShowingOriginal
     ? suggestion.original
     : suggestion.suggested || suggestion.original;
-  const newText = isShowingOriginal
+  let newText = isShowingOriginal
     ? suggestion.suggested || suggestion.original
     : suggestion.original;
 
-  let finalNewText = newText;
+  let replaceIndex = documentText.indexOf(textToReplace);
+
+  if (replaceIndex === -1) {
+    log(`SWITCH ERROR: Text not found in document: "${textToReplace}"`);
+    return;
+  }
+
+  newText = " " + newText;
 
   const textTrimmed = textToReplace.trim();
-  const newTextTrimmed = finalNewText.trim();
-  const textEndsWithPunct = /[.!?:;,]$/.test(textTrimmed);
-  const newTextEndsWithPunct = /[.!?:;,]$/.test(newTextTrimmed);
-
-  if (textEndsWithPunct && newTextEndsWithPunct) {
-    const textLastChar = textTrimmed.slice(-1);
-    const newTextLastChar = newTextTrimmed.slice(-1);
-    if (textLastChar === newTextLastChar) {
-      finalNewText = newTextTrimmed.slice(0, -1);
-    }
+  const newTextTrimmed = newText.trim();
+  const textLastChar = textTrimmed.slice(-1);
+  const newTextLastChar = newTextTrimmed.slice(-1);
+  if (textLastChar === newTextLastChar && /[.!?:;,]$/.test(textLastChar)) {
+    newText = newTextTrimmed.slice(0, -1);
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    slot.docFrom,
-    slot.docTo,
-    editorViewRef.state.schema.text(finalNewText),
+    replaceIndex,
+    replaceIndex + textToReplace.length,
+    editorViewRef.state.schema.text(newText),
   );
 
   editorViewRef.dispatch(tr);
@@ -527,7 +542,7 @@ export function switchSuggestion(id: string): void {
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
 
-  log(`SWITCH: Successfully switched to "${finalNewText.slice(0, 30)}..."`);
+  log(`SWITCH: Successfully switched to "${newText.slice(0, 30)}..."`);
 }
 
 export function closeSuggestion(id: string): void {
