@@ -49,6 +49,16 @@ AuraWrite features two specialized memory systems: a precise database for names,
 
 ---
 
+## 🚧 Development Status
+
+**AuraWrite is actively developed.** We're working on it full-time, with love and dedication.
+
+Some features are already available today; others will be added in the coming days and weeks. This is a living project that grows with every commit. We believe in releasing early, iterating often, and building together with our community.
+
+**Stay tuned — the best is yet to come.**
+
+---
+
 ## 🌙 Why AuraWrite?
 
 **AuraWrite channels lightning.**
