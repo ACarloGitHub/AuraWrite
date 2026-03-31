@@ -469,10 +469,9 @@ export function acceptSuggestion(id: string): void {
 
   updateSlotPositions(tr);
 
-  slot.docFrom = -1;
-  slot.docTo = -1;
   slot.state = "accepted";
   suggestion.isAccepted = true;
+  suggestion.showingOriginal = false;
   suggestion.isExpanded = false;
   renderSuggestions();
 
@@ -547,6 +546,11 @@ export function switchSuggestion(id: string): void {
   updateSlotPositions(tr);
 
   suggestion.showingOriginal = !isShowingOriginal;
+
+  if (suggestion.showingOriginal) {
+    suggestion.isAccepted = false;
+  }
+
   renderSuggestions();
 
   log(`SWITCH: Successfully switched to "${newText.slice(0, 30)}..."`);
