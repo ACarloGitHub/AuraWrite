@@ -114,7 +114,9 @@ function setupDotTrigger(view: EditorView): void {
       let match;
 
       while ((match = sentenceRegex.exec(fullText)) !== null) {
-        const sentence = match[0].trim();
+        const rawSentence = match[0];
+        const sentence = rawSentence.replace(/\s+/g, " ").trim();
+
         if (sentence.length >= 10) {
           sentences.push(sentence);
         }
@@ -228,12 +230,25 @@ function processAIResponse(content: string, originalSentence: string): void {
         }));
 
       if (newSuggestions.length > 0) {
-        suggestions = [...newSuggestions, ...suggestions];
-        renderSuggestions();
-      } else {
-        if (sentenceQueue.length === 0) {
-          updateAnalysisStatus("Analysis complete");
+        const existingIds = new Set(
+          suggestions.map((s) => s.original.toLowerCase()),
+        );
+        const trulyNew = newSuggestions.filter(
+          (s) => !existingIds.has(s.original.toLowerCase()),
+        );
+
+        if (trulyNew.length > 0) {
+          suggestions = [...suggestions, ...trulyNew];
+          renderSuggestions();
         }
+      }
+
+      if (sentenceQueue.length === 0 && suggestions.length > 0) {
+        updateAnalysisStatus("Analysis complete");
+      } else if (sentenceQueue.length > 0) {
+        updateAnalysisStatus(
+          `Analyzing... (${sentenceQueue.length} remaining)`,
+        );
       }
     }
   } catch (error) {
