@@ -29,9 +29,9 @@ let suggestions: SentenceSuggestion[] = [];
 let editorViewRef: EditorView | null = null;
 let isAnalyzing: boolean = false;
 let contextUnderstood: string = "";
-let analyzedSentences: Set<string> = new Set();
 let acceptedOriginals: Map<string, string> = new Map();
-let finalizedSentences: Set<string> = new Set();
+let closedSentences: Set<string> = new Set();
+let currentInDocument: Map<string, string> = new Map();
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
@@ -120,19 +120,22 @@ function setupDotTrigger(view: EditorView): void {
 
       for (const sentence of sentences) {
         const normalized = sentence.toLowerCase();
-        if (analyzedSentences.has(normalized)) continue;
-        if (finalizedSentences.has(normalized)) continue;
-        analyzedSentences.add(normalized);
+
+        if (closedSentences.has(normalized)) continue;
+
+        const existingBox = suggestions.find(
+          (s) => s.original.toLowerCase() === normalized,
+        );
+
+        if (existingBox) continue;
+
         analyzeSentence(sentence);
       }
     }, 10);
   });
 }
 
-async function analyzeSentence(
-  sentence: string,
-  previousSuggestion?: string | null,
-): Promise<void> {
+async function analyzeSentence(sentence: string): Promise<void> {
   if (!editorViewRef) return;
 
   const prefs = getPreferences();
@@ -141,12 +144,7 @@ async function analyzeSentence(
   isAnalyzing = true;
   updateAnalysisStatus(`Analyzing: "${sentence.slice(0, 30)}..."`);
 
-  let retryInstruction = "";
-  if (previousSuggestion) {
-    retryInstruction = `\nIMPORTANT: Provide a DIFFERENT suggestion from: "${previousSuggestion}"`;
-  }
-
-  const prompt = `${promptText}${retryInstruction}
+  const prompt = `${promptText}
 
 SINGLE SENTENCE TO ANALYZE:
 "${sentence}"
@@ -240,19 +238,20 @@ export function acceptSuggestion(id: string): void {
   if (!suggestion || !editorViewRef) return;
 
   acceptedOriginals.set(id, suggestion.original);
-  finalizedSentences.add(suggestion.original.toLowerCase());
+  currentInDocument.set(id, suggestion.suggested || suggestion.original);
 
   const documentText = getEditorContent(editorViewRef);
-  const originalIndex = documentText.indexOf(suggestion.original);
+  const textToReplace = suggestion.showingOriginal
+    ? suggestion.original
+    : suggestion.suggested || suggestion.original;
 
-  if (originalIndex === -1) {
-    console.error("Original text not found in document");
+  const replaceIndex = documentText.indexOf(textToReplace);
+
+  if (replaceIndex === -1) {
     return;
   }
 
-  let finalSuggested = suggestion.showingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
+  let finalSuggested = suggestion.suggested || suggestion.original;
 
   const originalEndsWithPunct = /[.!?]$/.test(suggestion.original.trim());
   const suggestedEndsWithPunct = /[.!?]$/.test(finalSuggested.trim());
@@ -262,8 +261,8 @@ export function acceptSuggestion(id: string): void {
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    originalIndex,
-    originalIndex + suggestion.original.length,
+    replaceIndex,
+    replaceIndex + textToReplace.length,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
@@ -282,63 +281,151 @@ export function rejectSuggestion(id: string): void {
   suggestion.isExpanded = true;
   renderSuggestions();
 
-  analyzeSentence(suggestion.original, previousSuggestion);
+  analyzeSentenceForReject(suggestion.original, previousSuggestion, id);
+}
+
+async function analyzeSentenceForReject(
+  sentence: string,
+  previousSuggestion: string | null | undefined,
+  suggestionId: string,
+): Promise<void> {
+  if (!editorViewRef) return;
+
+  const prefs = getPreferences();
+  const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
+
+  isAnalyzing = true;
+
+  const prompt = `${promptText}
+
+IMPORTANT: Provide a DIFFERENT suggestion from: "${previousSuggestion}"
+
+SINGLE SENTENCE TO ANALYZE:
+"${sentence}"
+
+Remember: Respond only with valid JSON in this exact format:
+{
+  "context_understood": "brief summary of tone/style (1 sentence max)",
+  "suggestions": [
+    {
+      "sentence_title": "First 5 words...",
+      "original": "full original sentence",
+      "suggested": "improved version OR null if no change needed",
+      "reason": "why this improves the text OR null"
+    }
+  ]
+}`;
+
+  try {
+    const response = await sendToAI(prompt, {
+      documentTitle: document.title.replace(" - AuraWrite", ""),
+    });
+
+    if (response.error) {
+      updateAnalysisStatus(`Error: ${response.error}`);
+    } else {
+      updateSuggestionResponse(response.content, suggestionId);
+    }
+  } catch (error) {
+    updateAnalysisStatus(
+      `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
+  }
+
+  isAnalyzing = false;
+}
+
+function updateSuggestionResponse(content: string, suggestionId: string): void {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("No JSON found in AI response");
+      return;
+    }
+
+    const response: AISuggestionResponse = JSON.parse(jsonMatch[0]);
+
+    if (response.suggestions && Array.isArray(response.suggestions)) {
+      const suggestion = suggestions.find((s) => s.id === suggestionId);
+      if (!suggestion) return;
+
+      const newSuggestion = response.suggestions.find(
+        (s) => s.suggested && s.original,
+      );
+
+      if (newSuggestion) {
+        suggestion.suggested = newSuggestion.suggested;
+        suggestion.reason = newSuggestion.reason || null;
+        suggestion.sentenceTitle =
+          newSuggestion.sentence_title || truncateText(suggestion.original, 30);
+        renderSuggestions();
+      }
+    }
+  } catch (error) {
+    console.error("Failed to parse AI response:", error);
+  }
 }
 
 export function switchSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
   if (!suggestion || !editorViewRef) return;
 
-  const savedOriginal = acceptedOriginals.get(id);
-  const currentDocText = getEditorContent(editorViewRef);
-
-  let targetOriginal = suggestion.original;
-  let targetSuggested = suggestion.suggested || suggestion.original;
-
-  if (savedOriginal) {
-    const currentInDoc = currentDocText.includes(suggestion.suggested || "");
-    if (currentInDoc) {
-      targetSuggested = suggestion.original;
-      targetOriginal = suggestion.suggested || suggestion.original;
-    } else {
-      targetSuggested = suggestion.suggested || suggestion.original;
-      targetOriginal = savedOriginal;
-    }
+  const currentTextInDoc = currentInDocument.get(id);
+  if (!currentTextInDoc) {
+    currentInDocument.set(
+      id,
+      suggestion.showingOriginal
+        ? suggestion.suggested || suggestion.original
+        : suggestion.original,
+    );
   }
 
-  const newShowingOriginal = !suggestion.showingOriginal;
-  suggestion.showingOriginal = newShowingOriginal;
+  const nowInDoc = currentInDocument.get(id) || "";
+  const isShowingOriginal = nowInDoc === suggestion.original;
 
-  const displayText = newShowingOriginal ? targetOriginal : targetSuggested;
+  const textToReplace = isShowingOriginal
+    ? suggestion.original
+    : suggestion.suggested || suggestion.original;
 
-  const displayIndex = currentDocText.indexOf(
-    newShowingOriginal ? targetOriginal : targetSuggested,
-  );
+  const newText = isShowingOriginal
+    ? suggestion.suggested || suggestion.original
+    : suggestion.original;
 
-  if (displayIndex === -1) {
+  const documentText = getEditorContent(editorViewRef);
+  const replaceIndex = documentText.indexOf(textToReplace);
+
+  if (replaceIndex === -1) {
     return;
   }
 
-  let finalText = displayText;
-  const originalEndsWithPunct = /[.!?]$/.test(targetOriginal.trim());
-  const displayEndsWithPunct = /[.!?]$/.test(finalText.trim());
+  let finalNewText = newText;
+  const endsWithPunct = /[.!?]$/.test(textToReplace.trim());
+  const newEndsWithPunct = /[.!?]$/.test(finalNewText.trim());
 
-  if (originalEndsWithPunct && displayEndsWithPunct) {
-    finalText = finalText.trim().slice(0, -1);
+  if (endsWithPunct && newEndsWithPunct) {
+    finalNewText = finalNewText.trim().slice(0, -1);
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    displayIndex,
-    displayIndex + displayText.length,
-    editorViewRef.state.schema.text(finalText),
+    replaceIndex,
+    replaceIndex + textToReplace.length,
+    editorViewRef.state.schema.text(finalNewText),
   );
 
   editorViewRef.dispatch(tr);
+
+  currentInDocument.set(id, finalNewText);
+  suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();
 }
 
 export function closeSuggestion(id: string): void {
+  const suggestion = suggestions.find((s) => s.id === id);
+  if (suggestion) {
+    closedSentences.add(suggestion.original.toLowerCase());
+  }
   acceptedOriginals.delete(id);
+  currentInDocument.delete(id);
   removeSuggestion(id);
 }
 
@@ -391,7 +478,7 @@ function renderSuggestions(): void {
             ? `
         <div class="suggestion-item__actions">
           <button class="suggestion-item__accept" data-action="accept">Accept</button>
-          <button class="suggestion-item__reject" data-action="reject">Reject</button>
+          <button class="suggestion-item__reject" data-action="reject">Discard</button>
           <button class="suggestion-item__switch" data-action="switch">Switch</button>
         </div>
         `
@@ -424,7 +511,7 @@ function renderSuggestions(): void {
           }
           <div class="suggestion-item__actions">
             <button class="suggestion-item__accept" data-action="accept">Accept</button>
-            <button class="suggestion-item__reject" data-action="reject">Reject</button>
+            <button class="suggestion-item__reject" data-action="reject">Discard</button>
             <button class="suggestion-item__switch" data-action="switch">Switch</button>
           </div>
         </div>
@@ -491,5 +578,12 @@ export function getSuggestions(): SentenceSuggestion[] {
 
 export function clearSuggestions(): void {
   suggestions = [];
+  acceptedOriginals.clear();
+  currentInDocument.clear();
+  closedSentences.clear();
   renderSuggestions();
+}
+
+export function resetAnalysisState(): void {
+  closedSentences.clear();
 }
