@@ -369,6 +369,38 @@ AuraWrite/
 | Document chunking          | ✅ Implemented                   |
 | Chunk decorations          | ✅ Implemented                   |
 
+### AI Configuration (for developers)
+
+**Settings Storage**: `localStorage` as `aurawrite-ai-settings`
+
+**Default Settings** (`providers.ts`):
+
+```typescript
+{
+  enabled: true,
+  provider: "ollama",
+  model: "llama3",  // Default - commonly available
+  streamResponses: true,
+  autoIndexDocument: false,
+  privacyDisclaimerShown: false
+}
+```
+
+**Supported Providers**:
+| Provider | Endpoint | API Key Required |
+|------------|------------------------------------|------------------|
+| Ollama | `http://localhost:11434` (default) | No |
+| OpenAI | `https://api.openai.com/v1` | Yes |
+| Anthropic | `https://api.anthropic.com/v1` | Yes |
+
+**Common Ollama Models**:
+
+- `llama3` - General purpose, good balance (default)
+- `llama3.1` - Longer context
+- `mistral` - Fast and efficient
+- `qwen2.5` - Good for creative writing
+- `phi3` - Smaller, faster
+
 ### ✅ Import/Export Formats
 
 | Format           | Import | Export |
