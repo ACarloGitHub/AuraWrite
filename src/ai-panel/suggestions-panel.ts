@@ -271,7 +271,7 @@ async function processNextSlot(): Promise<void> {
   updateAnalysisStatus(`Analyzing: "${slot.text.slice(0, 30)}..."`);
 
   const prompt = `${promptText}
-${previousSuggestion ? `\nIMPORTANT: Provide a DIFFERENT suggestion from: "${previousSuggestion}"` : ""}
+${previousSuggestion ? `\nIMPORTANT: You must provide a COMPLETELY DIFFERENT suggestion. Do NOT suggest similar wording, synonyms of words used in: "${previousSuggestion}". Think of a completely different approach.` : ""}
 
 SINGLE SENTENCE TO ANALYZE:
 "${slot.text}"
@@ -404,11 +404,17 @@ export function acceptSuggestion(id: string): void {
 
   let finalSuggested = suggestion.suggested || suggestion.original;
 
-  const originalEndsWithPunct = /[.!?]$/.test(suggestion.original.trim());
-  const suggestedEndsWithPunct = /[.!?]$/.test(finalSuggested.trim());
+  const originalTrimmed = suggestion.original.trim();
+  const suggestedTrimmed = finalSuggested.trim();
+  const originalEndsWithPunct = /[.!?:;,]$/.test(originalTrimmed);
+  const suggestedEndsWithPunct = /[.!?:;,]$/.test(suggestedTrimmed);
 
   if (originalEndsWithPunct && suggestedEndsWithPunct) {
-    finalSuggested = finalSuggested.trim().slice(0, -1);
+    const originalLastChar = originalTrimmed.slice(-1);
+    const suggestedLastChar = suggestedTrimmed.slice(-1);
+    if (originalLastChar === suggestedLastChar) {
+      finalSuggested = suggestedTrimmed.slice(0, -1);
+    }
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
@@ -486,11 +492,28 @@ export function switchSuggestion(id: string): void {
   }
 
   let finalNewText = newText;
-  const endsWithPunct = /[.!?]$/.test(textToReplace.trim());
-  const newEndsWithPunct = /[.!?]$/.test(finalNewText.trim());
 
-  if (endsWithPunct && newEndsWithPunct) {
-    finalNewText = finalNewText.trim().slice(0, -1);
+  const textToReplaceTrimmed = textToReplace.trim();
+  const newTextTrimmed = finalNewText.trim();
+  const textToReplaceEndsWithPunct = /[.!?:;,]$/.test(textToReplaceTrimmed);
+  const newTextEndsWithPunct = /[.!?:;,]$/.test(newTextTrimmed);
+
+  if (textToReplaceEndsWithPunct && newTextEndsWithPunct) {
+    const textToReplaceLastChar = textToReplaceTrimmed.slice(-1);
+    const newTextLastChar = newTextTrimmed.slice(-1);
+    if (textToReplaceLastChar === newTextLastChar) {
+      finalNewText = newTextTrimmed.slice(0, -1);
+    }
+  }
+
+  const textLengthAfterReplace =
+    documentText.length - replaceIndex - textToReplace.length;
+  let textAfterOriginal = "";
+  if (textLengthAfterReplace > 0) {
+    textAfterOriginal = documentText.slice(
+      replaceIndex + textToReplace.length,
+      replaceIndex + textToReplace.length + 50,
+    );
   }
 
   const tr = editorViewRef.state.tr.replaceWith(
