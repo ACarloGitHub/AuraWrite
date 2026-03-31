@@ -11,6 +11,8 @@ interface SentenceSuggestion {
   timestamp: number;
   isExpanded: boolean;
   showingOriginal: boolean;
+  isAccepted: boolean;
+  isCollapsed: boolean;
 }
 
 interface AISuggestionResponse {
@@ -29,6 +31,7 @@ let isAnalyzing: boolean = false;
 let contextUnderstood: string = "";
 let analyzedSentences: Set<string> = new Set();
 let acceptedOriginals: Map<string, string> = new Map();
+let finalizedSentences: Set<string> = new Set();
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
@@ -117,10 +120,10 @@ function setupDotTrigger(view: EditorView): void {
 
       for (const sentence of sentences) {
         const normalized = sentence.toLowerCase();
-        if (!analyzedSentences.has(normalized)) {
-          analyzedSentences.add(normalized);
-          analyzeSentence(sentence);
-        }
+        if (analyzedSentences.has(normalized)) continue;
+        if (finalizedSentences.has(normalized)) continue;
+        analyzedSentences.add(normalized);
+        analyzeSentence(sentence);
       }
     }, 10);
   });
@@ -206,6 +209,8 @@ function processAIResponse(content: string, originalSentence: string): void {
           timestamp: Date.now(),
           isExpanded: true,
           showingOriginal: false,
+          isAccepted: false,
+          isCollapsed: false,
         }));
 
       if (newSuggestions.length > 0) {
@@ -235,6 +240,7 @@ export function acceptSuggestion(id: string): void {
   if (!suggestion || !editorViewRef) return;
 
   acceptedOriginals.set(id, suggestion.original);
+  finalizedSentences.add(suggestion.original.toLowerCase());
 
   const documentText = getEditorContent(editorViewRef);
   const originalIndex = documentText.indexOf(suggestion.original);
@@ -262,9 +268,10 @@ export function acceptSuggestion(id: string): void {
   );
 
   editorViewRef.dispatch(tr);
-  // TODO: DB - Save original sentence to database before replacing
-  // db.sentences.save({ original: suggestion.original, accepted: true, timestamp: Date.now() });
-  removeSuggestion(id);
+
+  suggestion.isAccepted = true;
+  suggestion.isExpanded = false;
+  renderSuggestions();
 }
 
 export function rejectSuggestion(id: string): void {
@@ -331,6 +338,7 @@ export function switchSuggestion(id: string): void {
 }
 
 export function closeSuggestion(id: string): void {
+  acceptedOriginals.delete(id);
   removeSuggestion(id);
 }
 
@@ -338,6 +346,13 @@ export function toggleExpandSuggestion(id: string): void {
   const suggestion = suggestions.find((s) => s.id === id);
   if (!suggestion) return;
   suggestion.isExpanded = !suggestion.isExpanded;
+  renderSuggestions();
+}
+
+export function toggleCollapseSuggestion(id: string): void {
+  const suggestion = suggestions.find((s) => s.id === id);
+  if (!suggestion) return;
+  suggestion.isCollapsed = !suggestion.isCollapsed;
   renderSuggestions();
 }
 
@@ -363,15 +378,25 @@ function renderSuggestions(): void {
     ${suggestions
       .map(
         (s) => `
-      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""}" data-id="${s.id}">
+      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""}" data-id="${s.id}">
         <div class="suggestion-item__header">
           <button class="suggestion-item__toggle" data-action="toggle">${s.isExpanded ? "▼" : "▶"}</button>
+          <button class="suggestion-item__collapse" data-action="collapse">${s.isCollapsed ? "»" : "«"}</button>
           <span class="suggestion-item__title">${escapeHtml(s.sentenceTitle)}</span>
+          ${s.isAccepted ? "<span class='suggestion-item__accepted-badge'>✓</span>" : ""}
           <button class="suggestion-item__close" data-action="close">✕</button>
         </div>
         ${
-          s.isExpanded
+          s.isCollapsed
             ? `
+        <div class="suggestion-item__actions">
+          <button class="suggestion-item__accept" data-action="accept">Accept</button>
+          <button class="suggestion-item__reject" data-action="reject">Reject</button>
+          <button class="suggestion-item__switch" data-action="switch">Switch</button>
+        </div>
+        `
+            : s.isExpanded
+              ? `
         <div class="suggestion-item__body">
           <div class="suggestion-item__original">
             <span class="suggestion-item__label">Original:</span>
@@ -404,7 +429,7 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-            : ""
+              : ""
         }
       </div>
     `,
@@ -436,6 +461,9 @@ function renderSuggestions(): void {
           break;
         case "toggle":
           toggleExpandSuggestion(itemId);
+          break;
+        case "collapse":
+          toggleCollapseSuggestion(itemId);
           break;
       }
     });
