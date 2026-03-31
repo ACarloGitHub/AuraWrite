@@ -1,5 +1,4 @@
 import type { EditorView } from "prosemirror-view";
-import type { Transaction } from "prosemirror-state";
 import { sendToAI } from "./ai-manager";
 import { getEditorContent } from "../editor/editor";
 
@@ -38,8 +37,6 @@ interface SentenceSlot {
     | "closed";
   suggestion: string | null;
   reason: string | null;
-  docFrom: number;
-  docTo: number;
 }
 
 let suggestions: SentenceSuggestion[] = [];
@@ -73,22 +70,6 @@ function updateDebugLog(): void {
       .join("");
     logEl.scrollTop = logEl.scrollHeight;
   }
-}
-
-function updateSlotPositions(tr: Transaction): void {
-  const mapping = tr.mapping;
-  slots.forEach((slot) => {
-    if (slot.docFrom !== -1 && slot.docTo !== -1) {
-      const oldFrom = slot.docFrom;
-      slot.docFrom = mapping.map(slot.docFrom, 1);
-      slot.docTo = mapping.map(slot.docTo, -1);
-      if (oldFrom !== slot.docFrom) {
-        log(
-          `POSITION_UPDATE: Slot ${slot.id} updated from ${oldFrom} to ${slot.docFrom}`,
-        );
-      }
-    }
-  });
 }
 
 const PREFERENCES_KEY = "aurawrite-preferences";
@@ -194,46 +175,16 @@ function setupDotTrigger(view: EditorView): void {
         );
         if (existingBox) continue;
 
-        const doc = editorViewRef!.state.doc;
-        const textToFind = sentence;
-        let docFrom = -1;
-        let docTo = -1;
-
-        doc.descendants((node, pos) => {
-          if (node.isText && docFrom === -1) {
-            const textContent = node.text || "";
-            const idx = textContent
-              .toLowerCase()
-              .indexOf(textToFind.toLowerCase());
-            if (idx !== -1) {
-              docFrom = pos + idx;
-              docTo = docFrom + textToFind.length;
-            }
-          }
-          return docFrom === -1;
-        });
-
-        if (docFrom === -1) {
-          log(
-            `SLOT: Could not find position for "${sentence.slice(0, 30)}..."`,
-          );
-          continue;
-        }
-
         const slot: SentenceSlot = {
           id: generateId(),
           text: sentence,
           state: "pending",
           suggestion: null,
           reason: null,
-          docFrom,
-          docTo,
         };
 
         slots.push(slot);
-        log(
-          `SLOT: Created slot ${slot.id} for "${sentence.slice(0, 30)}..." (pos: ${docFrom}-${docTo})`,
-        );
+        log(`SLOT: Created slot ${slot.id} for "${sentence.slice(0, 30)}..."`);
       }
 
       createBoxesFromSlots();
@@ -279,7 +230,6 @@ function createBoxesFromSlots(): void {
 
 async function processNextSlot(): Promise<void> {
   if (isCurrentlyProcessing) {
-    log(`PROCESS: Already processing, waiting...`);
     return;
   }
 
@@ -288,7 +238,6 @@ async function processNextSlot(): Promise<void> {
   );
 
   if (slotIndex === -1) {
-    log(`PROCESS: No more slots to process`);
     isCurrentlyProcessing = false;
     currentProcessingSlotId = null;
     updateAnalysisStatus("Analysis complete");
@@ -347,7 +296,6 @@ Remember: Respond only with valid JSON in this exact format:
     );
 
     if (response.error) {
-      log(`AI ERROR: ${response.error}`);
       slot.state = slot.suggestion ? "suggested" : "pending";
       updateAnalysisStatus(`Error: ${response.error}`);
     } else {
@@ -371,7 +319,7 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      log(`PARSE ERROR: No JSON found in AI response`);
+      log(`PARSE ERROR: No JSON found`);
       slot.state = "suggested";
       return;
     }
@@ -403,12 +351,14 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
 
         log(`SUGGESTION: Got suggestion for slot ${slot.id}`);
       } else {
-        log(`SUGGESTION: No valid suggestion found`);
+        log(`SUGGESTION: No valid suggestion`);
         slot.state = "suggested";
       }
     }
 
-    updateAnalysisStatus("Analysis complete");
+    if (slots.every((s) => s.state === "suggested" || s.state === "accepted")) {
+      updateAnalysisStatus("Analysis complete");
+    }
   } catch (error) {
     log(`PARSE EXCEPTION: ${error}`);
     slot.state = "suggested";
@@ -435,28 +385,56 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  if (slot.docFrom === -1 || slot.docTo === -1) {
-    log(`ACCEPT ERROR: Position for slot ${id} is invalid.`);
+  const documentText = getEditorContent(editorViewRef);
+
+  let textToReplace = suggestion.original;
+  let replaceIndex = documentText.indexOf(textToReplace);
+
+  if (replaceIndex === -1) {
+    textToReplace = suggestion.suggested || suggestion.original;
+    replaceIndex = documentText.indexOf(textToReplace);
+  }
+
+  if (replaceIndex === -1) {
+    log(`ACCEPT ERROR: Text not found`);
+    slot.state = "accepted";
+    suggestion.isAccepted = true;
+    suggestion.isExpanded = false;
+    renderSuggestions();
     return;
   }
 
-  const from = slot.docFrom;
-  const to = slot.docTo;
-  const finalSuggested = suggestion.suggested || suggestion.original;
+  let finalSuggested = suggestion.suggested || suggestion.original;
+
+  const textBefore = documentText.slice(0, replaceIndex);
+  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
+
+  if (!hasLeadingSpace) {
+    finalSuggested = " " + finalSuggested;
+  }
+
+  const originalTrimmed = suggestion.original.trim();
+  const suggestedTrimmed = finalSuggested.trim();
+  const originalLastChar = originalTrimmed.slice(-1);
+  const suggestedLastChar = suggestedTrimmed.slice(-1);
+  if (
+    originalLastChar === suggestedLastChar &&
+    /[.!?:;,]$/.test(originalLastChar)
+  ) {
+    finalSuggested = suggestedTrimmed.slice(0, -1);
+  }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    from,
-    to,
+    replaceIndex,
+    replaceIndex + textToReplace.length,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
   editorViewRef.dispatch(tr);
 
-  updateSlotPositions(tr);
-
+  acceptedOriginals.set(id, suggestion.original);
   slot.state = "accepted";
   suggestion.isAccepted = true;
-  suggestion.showingOriginal = false;
   suggestion.isExpanded = false;
   renderSuggestions();
 
@@ -487,45 +465,53 @@ export function rejectSuggestion(id: string): void {
 export function switchSuggestion(id: string): void {
   log(`SWITCH: Switching suggestion for slot ${id}`);
 
-  const slot = slots.find((s) => s.id === id);
   const suggestion = suggestions.find((s) => s.id === id);
-  if (!slot || !suggestion || !editorViewRef) {
-    log(`SWITCH ERROR: Slot or suggestion not found`);
+  if (!suggestion || !editorViewRef) {
+    log(`SWITCH ERROR: Suggestion not found`);
     return;
   }
 
-  if (slot.docFrom === -1 || slot.docTo === -1) {
-    log(`SWITCH ERROR: Position for slot ${id} is invalid.`);
-    return;
-  }
+  const documentText = getEditorContent(editorViewRef);
 
   const isShowingOriginal = suggestion.showingOriginal;
-  const textToReplace = isShowingOriginal
+  let textToReplace = isShowingOriginal
     ? suggestion.original
     : suggestion.suggested || suggestion.original;
-  const newText = isShowingOriginal
-    ? suggestion.original
-    : suggestion.suggested || suggestion.original;
+  let newText = isShowingOriginal
+    ? suggestion.suggested || suggestion.original
+    : suggestion.original;
 
-  const from = slot.docFrom;
-  const to = slot.docTo;
+  let replaceIndex = documentText.indexOf(textToReplace);
+
+  if (replaceIndex === -1) {
+    log(`SWITCH ERROR: Text not found: "${textToReplace}"`);
+    return;
+  }
+
+  const textBefore = documentText.slice(0, replaceIndex);
+  const hasLeadingSpace = /[ \t\n\r]$/.test(textBefore);
+
+  if (!hasLeadingSpace) {
+    newText = " " + newText;
+  }
+
+  const textTrimmed = textToReplace.trim();
+  const newTextTrimmed = newText.trim();
+  const textLastChar = textTrimmed.slice(-1);
+  const newTextLastChar = newTextTrimmed.slice(-1);
+  if (textLastChar === newTextLastChar && /[.!?:;,]$/.test(textLastChar)) {
+    newText = newTextTrimmed.slice(0, -1);
+  }
 
   const tr = editorViewRef.state.tr.replaceWith(
-    from,
-    to,
+    replaceIndex,
+    replaceIndex + textToReplace.length,
     editorViewRef.state.schema.text(newText),
   );
 
   editorViewRef.dispatch(tr);
 
-  updateSlotPositions(tr);
-
   suggestion.showingOriginal = !isShowingOriginal;
-
-  if (suggestion.showingOriginal) {
-    suggestion.isAccepted = false;
-  }
-
   renderSuggestions();
 
   log(`SWITCH: Successfully switched to "${newText.slice(0, 30)}..."`);
