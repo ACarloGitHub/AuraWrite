@@ -40,7 +40,7 @@ export interface AISettings {
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
   provider: "ollama",
-  model: "lfm2",
+  model: "ministral-3:14b-cloud",
   streamResponses: true,
   autoIndexDocument: false,
   privacyDisclaimerShown: false,
