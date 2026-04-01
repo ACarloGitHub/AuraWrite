@@ -1,12 +1,12 @@
-export type DocumentChange = {
+type DocumentChange = {
   from: number;
   oldLen: number;
   newLen: number;
 };
 
-export type Source = "suggestions" | "ai_assistant" | "external";
+type Source = "suggestions" | "ai_assistant" | "external";
 
-export type ChangeListener = (change: DocumentChange, source: Source) => void;
+type ChangeListener = (change: DocumentChange, source: Source) => void;
 
 const listeners: Map<string, ChangeListener> = new Map();
 
@@ -28,7 +28,7 @@ export function notifyDocumentChange(
   change: DocumentChange,
   source: Source,
 ): void {
-  listeners.forEach((listener, id) => {
+  listeners.forEach((listener) => {
     listener(change, source);
   });
 }
