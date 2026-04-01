@@ -13,8 +13,7 @@ import {
   clearChunkDecorations,
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
-import { findTextInDoc } from "../editor/text-utils";
-import { notifyDocumentChange } from "./modification-hub";
+import { applyAuraEdit } from "./edit-executor";
 
 /* global setTimeout */
 
@@ -292,75 +291,6 @@ function getSelectedChunkText(): string | null {
   return chunk?.content || null;
 }
 
-interface Modification {
-  original: string;
-  newText: string;
-}
-
-function parseModificationFromResponse(content: string): Modification | null {
-  const jsonMatch = content.match(/\{[\s\S]*"modification"[\s\S]*\}/);
-  if (!jsonMatch) return null;
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (
-      parsed.modification?.original &&
-      parsed.modification?.new !== undefined
-    ) {
-      return {
-        original: parsed.modification.original,
-        newText: parsed.modification.new,
-      };
-    }
-  } catch {
-    // Invalid JSON
-  }
-  return null;
-}
-
-function applyDocumentEdit(
-  original: string,
-  newText: string,
-): { success: boolean; error?: string } {
-  if (!editorViewRef) {
-    return { success: false, error: "Editor not available" };
-  }
-
-  let from: number;
-  let to: number;
-
-  if (currentSelection) {
-    from = currentSelection.from;
-    to = currentSelection.to;
-  } else {
-    const pos = findTextInDoc(editorViewRef, original);
-    if (!pos) {
-      return { success: false, error: `Text not found` };
-    }
-    from = pos.from;
-    to = pos.to;
-  }
-
-  const oldLen = to - from;
-  const tr = editorViewRef.state.tr.replaceWith(
-    from,
-    to,
-    editorViewRef.state.schema.text(newText),
-  );
-  editorViewRef.dispatch(tr);
-
-  notifyDocumentChange(
-    { from, oldLen, newLen: newText.length },
-    "ai_assistant",
-  );
-
-  if (currentSelection) {
-    currentSelection = null;
-    clearSelectionHighlight(editorViewRef);
-  }
-
-  return { success: true };
-}
-
 async function sendMessage(text: string): Promise<void> {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const historyEl = document.querySelector(".ai-panel__history");
@@ -398,17 +328,21 @@ async function sendMessage(text: string): Promise<void> {
         placeholder.textContent = `Error: ${response.error}`;
         placeholder.classList.add("ai-message--error");
       } else {
-        const modification = parseModificationFromResponse(response.content);
-        if (modification) {
-          const editResult = applyDocumentEdit(
-            modification.original,
-            modification.newText,
-          );
-          if (editResult.success) {
-            placeholder.textContent = `✓ Modifica applicata`;
-          } else {
-            placeholder.textContent = response.content;
+        const editResult = applyAuraEdit(
+          response.content,
+          editorViewRef!,
+          currentSelection,
+        );
+
+        if (editResult.operationsApplied > 0) {
+          placeholder.textContent = `✓ ${editResult.operationsApplied} modifica/e applicata/e`;
+          if (editResult.operationsFailed > 0) {
+            placeholder.textContent += `, ${editResult.operationsFailed} fallita/e`;
           }
+          currentSelection = null;
+          clearSelectionHighlight(editorViewRef!);
+        } else if (editResult.error) {
+          placeholder.textContent = response.content;
         } else {
           placeholder.textContent = response.content;
         }

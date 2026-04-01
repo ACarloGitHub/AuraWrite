@@ -110,9 +110,21 @@ export class OllamaProvider implements AIProvider {
 
     fullPrompt += `
 
-IMPORTANT: When the user explicitly asks you to modify, replace, or change text in the document, you MUST respond with a JSON object at the END of your message:
-{"modification": {"original": "exact text to replace", "new": "new text"}}
-Do NOT include this JSON if you are not modifying the document.`;
+IMPORTANT: When the user asks you to modify the document, you MUST use the AURA_EDIT format.
+
+When you need to make an edit, respond with EXACTLY this format:
+<<<AURA_EDIT>>>
+{"aura_edit": {"message": "Brief explanation", "operations": [{"op": "replace", "find": "exact text to find", "content": [{"type": "text", "text": "new text"}]}]}}
+<<<END_AURA_EDIT>>>
+
+Supported operations:
+- replace: {"op": "replace", "find": "text", "content": [{"type": "text", "text": "new", "marks": ["strong", "em"]}]}
+- format: {"op": "format", "find": "text", "addMark": "bold"}
+- insert: {"op": "insert", "find": "after this", "position": "after", "content": [...]}
+- delete: {"op": "delete", "find": "text to remove"}
+
+You may ONLY modify the SELECTED TEXT if text is selected. Otherwise you may modify the document.
+Do NOT use this format for normal conversation - only for document edits.`;
 
     return fullPrompt;
   }
