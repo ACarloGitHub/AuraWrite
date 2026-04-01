@@ -114,17 +114,6 @@ export class OpenAIProvider implements AIProvider {
       parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
     }
 
-    if (context?.selectedText) {
-      parts.push(
-        `\nSELECTED TEXT (you may ONLY modify this):\n"""\n${context.selectedText}\n"""`,
-      );
-    }
-
-    parts.push(`
-When the user explicitly asks you to modify, replace, or change text in the document, respond with a JSON object at the END of your message:
-{"modification": {"original": "exact text to replace", "new": "new text"}}
-Do NOT include this JSON if you are not modifying the document.`);
-
     return parts.join("\n");
   }
 }

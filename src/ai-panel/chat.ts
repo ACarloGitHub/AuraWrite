@@ -13,8 +13,6 @@ import {
   clearChunkDecorations,
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
-import { findTextInDoc } from "./suggestions-panel";
-import { subscribeToChanges, notifyDocumentChange } from "./modification-hub";
 
 /* global setTimeout */
 
@@ -38,39 +36,6 @@ let isPanelOpen: boolean = false;
 let chunks: Chunk[] = [];
 let selectedChunkId: string | null = null;
 let documentChunksComputed: boolean = false;
-
-const AI_ASSISTANT_DEBUG = false;
-const AI_DEBUG_LOG: string[] = [];
-
-function log(message: string): void {
-  if (!AI_ASSISTANT_DEBUG) return;
-  const time = new Date().toLocaleTimeString("it-IT", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const entry = `[${time}] ${message}`;
-  AI_DEBUG_LOG.push(entry);
-  console.log(entry);
-  updateDebugLog();
-}
-
-function updateDebugLog(): void {
-  if (!AI_ASSISTANT_DEBUG) return;
-  const logEl = document.getElementById("ai-debug-log");
-  if (logEl) {
-    logEl.innerHTML = AI_DEBUG_LOG.slice(-20)
-      .map((e) => `<div class="debug-log-entry">${escapeHtml(e)}</div>`)
-      .join("");
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_CONTEXT_INTERVAL = 30;
@@ -152,11 +117,6 @@ function setupPanelEvents(view: EditorView): void {
     if (selection) {
       currentSelection = selection;
       applySelectionHighlight(view, selection);
-      log(
-        `PANEL: Opened with selection "${truncateText(selection.text, 50)}" at ${selection.from}-${selection.to}`,
-      );
-    } else {
-      log(`PANEL: Opened without selection`);
     }
     aiPanel?.classList.remove("hidden");
     isPanelOpen = true;
@@ -172,7 +132,6 @@ function setupPanelEvents(view: EditorView): void {
   });
 
   aiClose?.addEventListener("click", () => {
-    log(`PANEL: Closed`);
     aiPanel?.classList.add("hidden");
     isPanelOpen = false;
     if (currentSelection && editorViewRef) {
@@ -331,89 +290,14 @@ function getSelectedChunkText(): string | null {
   return chunk?.content || null;
 }
 
-interface Modification {
-  original: string;
-  newText: string;
-}
-
-function parseModificationFromResponse(content: string): Modification | null {
-  const jsonMatch = content.match(/\{[\s\S]*"modification"[\s\S]*\}/);
-  if (!jsonMatch) return null;
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (
-      parsed.modification?.original &&
-      parsed.modification?.new !== undefined
-    ) {
-      return {
-        original: parsed.modification.original,
-        newText: parsed.modification.new,
-      };
-    }
-  } catch {
-    // Invalid JSON
-  }
-  return null;
-}
-
-function applyDocumentEdit(
-  original: string,
-  newText: string,
-): { success: boolean; error?: string } {
-  if (!editorViewRef) {
-    return { success: false, error: "Editor not available" };
-  }
-
-  let from: number;
-  let to: number;
-
-  if (currentSelection) {
-    from = currentSelection.from;
-    to = currentSelection.to;
-    log(`EDIT: Using selection range ${from}-${to}`);
-  } else {
-    const pos = findTextInDoc(editorViewRef, original);
-    if (!pos) {
-      return {
-        success: false,
-        error: `Text not found: "${truncateText(original, 50)}"`,
-      };
-    }
-    from = pos.from;
-    to = pos.to;
-    log(`EDIT: Found text at ${from}-${to}`);
-  }
-
-  const oldLen = to - from;
-  const tr = editorViewRef.state.tr.replaceWith(
-    from,
-    to,
-    editorViewRef.state.schema.text(newText),
-  );
-  editorViewRef.dispatch(tr);
-
-  const change = { from, oldLen, newLen: newText.length };
-  notifyDocumentChange(change, "ai_assistant");
-  log(`EDIT: Applied change ${oldLen} -> ${newText.length} chars`);
-
-  if (currentSelection) {
-    currentSelection = null;
-    clearSelectionHighlight(editorViewRef);
-  }
-
-  return { success: true };
-}
-
 async function sendMessage(text: string): Promise<void> {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const historyEl = document.querySelector(".ai-panel__history");
 
   if (isAIProcessing()) {
-    log(`SEND: AI is still processing, ignoring`);
     return;
   }
 
-  log(`SEND: User message "${truncateText(text, 100)}"`);
   appendMessage("user", text);
   if (aiInput) aiInput.value = "";
 
@@ -424,10 +308,9 @@ async function sendMessage(text: string): Promise<void> {
   const chunkText = getSelectedChunkText();
   const documentText = getDocumentText();
 
-  log(
-    `SEND: Context - selectedText: ${currentSelection ? `"${truncateText(currentSelection.text, 50)}"` : "none"}, chunk: ${selectedChunkId || "none"}`,
-  );
-
+  // TODO: Vector DB - When we implement vector database, we can do semantic search
+  // to find relevant document chunks based on the user's query.
+  // For now, we pass either the selected chunk or full document text.
   const context = {
     selectedText: currentSelection?.text || undefined,
     documentTitle: document.title.replace(" - AuraWrite", ""),
@@ -443,32 +326,14 @@ async function sendMessage(text: string): Promise<void> {
       if (response.error) {
         placeholder.textContent = `Error: ${response.error}`;
         placeholder.classList.add("ai-message--error");
-        log(`RECV: Error - ${response.error}`);
       } else {
-        const modification = parseModificationFromResponse(response.content);
-        if (modification) {
-          const editResult = applyDocumentEdit(
-            modification.original,
-            modification.newText,
-          );
-          if (editResult.success) {
-            placeholder.textContent = `✓ Modifica applicata: "${truncateText(modification.original, 30)}" → "${truncateText(modification.newText, 30)}"`;
-          } else {
-            placeholder.textContent = response.content;
-          }
-        } else {
-          placeholder.textContent = response.content;
-        }
-        log(`RECV: Response "${truncateText(response.content, 100)}"`);
+        placeholder.textContent = response.content;
       }
     }
   } catch (error) {
     if (placeholder) {
       placeholder.textContent = `Error: ${error instanceof Error ? error.message : "Unknown error"}`;
       placeholder.classList.add("ai-message--error");
-      log(
-        `RECV: Exception - ${error instanceof Error ? error.message : "Unknown"}`,
-      );
     }
   }
 

@@ -1,13 +1,6 @@
 import type { EditorView } from "prosemirror-view";
 import { sendToAI } from "./ai-manager";
 import { getEditorContent } from "../editor/editor";
-import {
-  subscribeToChanges,
-  unsubscribe,
-  notifyDocumentChange,
-  type DocumentChange,
-  type Source,
-} from "./modification-hub";
 
 interface SentenceSuggestion {
   id: string;
@@ -60,10 +53,8 @@ let isCurrentlyProcessing: boolean = false;
 let currentProcessingSlotId: string | null = null;
 
 const DEBUG_LOG: string[] = [];
-const SUGGESTIONS_DEBUG = false; // Set true for debugging
 
 function log(message: string): void {
-  if (!SUGGESTIONS_DEBUG) return;
   const time = new Date().toLocaleTimeString("it-IT", {
     hour: "2-digit",
     minute: "2-digit",
@@ -76,7 +67,6 @@ function log(message: string): void {
 }
 
 function updateDebugLog(): void {
-  if (!SUGGESTIONS_DEBUG) return;
   const logEl = document.getElementById("suggestions-debug-log");
   if (logEl) {
     logEl.innerHTML = DEBUG_LOG.slice(-20)
@@ -86,7 +76,7 @@ function updateDebugLog(): void {
   }
 }
 
-export function findTextInDoc(
+function findTextInDoc(
   view: EditorView,
   text: string,
 ): { from: number; to: number } | null {
@@ -186,38 +176,11 @@ function getPreferences(): {
 
 const DEFAULT_SUGGESTIONS_PROMPT = `You are a writing assistant. Analyze the sentence and suggest improvements for clarity, style, and grammar.`;
 
-let hubUnsubscribe: (() => void) | null = null;
-
-function handleExternalDocumentChange(
-  change: DocumentChange,
-  source: Source,
-): void {
-  if (source === "suggestions") return;
-
-  const diff = change.newLen - change.oldLen;
-  if (diff === 0) return;
-
-  slotPositions.forEach((pos, id) => {
-    if (pos.from >= change.from) {
-      pos.from += diff;
-      pos.to += diff;
-      log(
-        `HUB_SYNC: Slot ${id} updated from external change: ${pos.from - diff} -> ${pos.from}`,
-      );
-    }
-  });
-}
-
 export function setupSuggestionsPanel(view: EditorView): void {
   editorViewRef = view;
   setupPanelToggle();
   setupToolbarButton();
   setupDotTrigger(view);
-
-  hubUnsubscribe = subscribeToChanges(
-    "suggestions",
-    handleExternalDocumentChange,
-  );
 }
 
 function setupToolbarButton(): void {
@@ -255,10 +218,6 @@ function stopSuggestionsMode(): void {
   slots = [];
   isCurrentlyProcessing = false;
   currentProcessingSlotId = null;
-  if (hubUnsubscribe) {
-    hubUnsubscribe();
-    hubUnsubscribe = null;
-  }
 }
 
 function setupDotTrigger(view: EditorView): void {
@@ -558,8 +517,6 @@ export function acceptSuggestion(id: string): void {
 
   updatePositionsAfterChange(id, pos.from, oldLen, newLen);
 
-  notifyDocumentChange({ from: pos.from, oldLen, newLen }, "suggestions");
-
   slot.state = "accepted";
   suggestion.isAccepted = true;
   suggestion.isExpanded = false;
@@ -638,8 +595,6 @@ export function switchSuggestion(id: string): void {
   }
 
   updatePositionsAfterChange(id, pos.from, oldLen, newLen);
-
-  notifyDocumentChange({ from: pos.from, oldLen, newLen }, "suggestions");
 
   suggestion.showingOriginal = !isShowingOriginal;
   renderSuggestions();

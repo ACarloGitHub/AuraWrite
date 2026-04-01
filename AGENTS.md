@@ -565,15 +565,6 @@ After every operation that changes code, state, or decisions, update documentati
 4. **documentation/RESUME_MEMO.md**: Update before ending session with current progress
 5. **Other docs**: Update relevant documentation files in `/documentation/`
 
-**PLANS**: Before starting implementation, ALWAYS write the plan in `documentation/06-roadmap/STATO.md` under a "Current Sprint" or "Piano di Lavoro" section. The plan must include:
-
-- What needs to be done
-- Why it needs to be done
-- Technical approach (which files, which functions, which patterns)
-- Expected behavior
-
-**LESSONS_LEARNED.md**: When a bug is discovered and fixed, write the lesson in `documentation/LESSONS_LEARNED.md` so future sessions avoid repeating the same mistakes.
-
 Key principle: The documentation must allow a future session (or another agent) to understand:
 
 - What was done
