@@ -327,6 +327,31 @@ body {
   display: none;
 }
 
+.ai-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-panel__header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ai-panel__toggle {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0;
+  width: auto;
+}
+
 .suggestions-panel {
   width: var(--ai-panel-width);
   min-height: 400px;
@@ -383,6 +408,17 @@ body {
   padding: var(--spacing-sm);
   background: #1a1a2e;
   color: #0f0;
+  font-family: monospace;
+  font-size: 11px;
+  border-top: 1px solid #333;
+}
+
+.ai-debug-log {
+  height: 100px;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+  background: #1a1a2e;
+  color: #0ff;
   font-family: monospace;
   font-size: 11px;
   border-top: 1px solid #333;
@@ -517,8 +553,8 @@ body {
 }
 
 .chunk-marker {
-  font-size: 10px;
-  padding: 2px 6px;
+  font-size: 12px;
+  padding: 4px 8px;
   background: var(--color-secondary, #6c757d);
   color: white;
   border-radius: 3px;
