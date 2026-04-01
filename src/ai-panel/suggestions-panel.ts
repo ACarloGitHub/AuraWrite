@@ -76,6 +76,67 @@ function updateDebugLog(): void {
   }
 }
 
+function findTextInDoc(
+  view: EditorView,
+  text: string,
+): { from: number; to: number } | null {
+  let result: { from: number; to: number } | null = null;
+  view.state.doc.nodesBetween(0, view.state.doc.content.size, (node, pos) => {
+    if (result) return false;
+    if (node.isText && node.text) {
+      const idx = node.text.indexOf(text);
+      if (idx !== -1) {
+        result = { from: pos + idx, to: pos + idx + text.length };
+        return false;
+      }
+    }
+  });
+  return result;
+}
+
+function findProseMirrorPosition(
+  view: EditorView,
+  text: string,
+  fallbackIndex: number,
+): number {
+  let foundPos = -1;
+  view.state.doc.nodesBetween(0, view.state.doc.content.size, (node, pos) => {
+    if (node.isText && node.text) {
+      const idx = node.text.indexOf(text);
+      if (idx !== -1) {
+        foundPos = pos + idx;
+        return false;
+      }
+    }
+  });
+  if (foundPos !== -1) return foundPos;
+
+  const docText = view.state.doc.textContent;
+  const textIndex = docText.indexOf(text, fallbackIndex);
+  if (textIndex !== -1) {
+    return textIndex;
+  }
+  return fallbackIndex;
+}
+
+function validatePosition(id: string): boolean {
+  const pos = slotPositions.get(id);
+  if (!pos || !editorViewRef) return false;
+
+  const doc = editorViewRef.state.doc;
+  const actualText = doc.textBetween(pos.from, pos.to, " ");
+
+  const expectedTexts = [pos.original, pos.suggested].filter(Boolean);
+  const isValid = expectedTexts.includes(actualText);
+
+  if (!isValid) {
+    log(
+      `VALIDATE ERROR: Slot ${id} position mismatch. Expected one of ${JSON.stringify(expectedTexts)}, got "${actualText}"`,
+    );
+  }
+  return isValid;
+}
+
 function updatePositionsAfterChange(
   modifiedSlotId: string,
   modifiedFrom: number,
@@ -198,6 +259,14 @@ function setupDotTrigger(view: EditorView): void {
         );
         if (existingBox) continue;
 
+        const pmFrom = findProseMirrorPosition(view, sentence, sentenceIndex);
+        if (pmFrom === -1) {
+          log(
+            `SLOT: Could not find position for "${sentence.slice(0, 30)}..."`,
+          );
+          continue;
+        }
+
         const slot: SentenceSlot = {
           id: generateId(),
           text: sentence,
@@ -207,15 +276,15 @@ function setupDotTrigger(view: EditorView): void {
         };
 
         slotPositions.set(slot.id, {
-          from: sentenceIndex,
-          to: sentenceIndex + sentence.length,
+          from: pmFrom,
+          to: pmFrom + sentence.length,
           original: sentence,
           suggested: "",
         });
 
         slots.push(slot);
         log(
-          `SLOT: Created slot ${slot.id} at pos ${sentenceIndex}-${sentenceIndex + sentence.length} for "${sentence.slice(0, 30)}..."`,
+          `SLOT: Created slot ${slot.id} at PM pos ${pmFrom}-${pmFrom + sentence.length} for "${sentence.slice(0, 30)}..."`,
         );
       }
 
@@ -426,6 +495,14 @@ export function acceptSuggestion(id: string): void {
   const finalSuggested = suggestion.suggested || suggestion.original;
   const oldLen = pos.to - pos.from;
 
+  if (!validatePosition(id)) {
+    const livePos = findTextInDoc(editorViewRef, finalSuggested);
+    if (livePos) {
+      pos.from = livePos.from;
+      pos.to = livePos.to;
+    }
+  }
+
   const tr = editorViewRef.state.tr.replaceWith(
     pos.from,
     pos.to,
@@ -435,6 +512,9 @@ export function acceptSuggestion(id: string): void {
   editorViewRef.dispatch(tr);
 
   const newLen = finalSuggested.length;
+  pos.to = pos.from + newLen;
+  pos.original = finalSuggested;
+
   updatePositionsAfterChange(id, pos.from, oldLen, newLen);
 
   slot.state = "accepted";
@@ -489,6 +569,17 @@ export function switchSuggestion(id: string): void {
 
   const oldLen = pos.to - pos.from;
 
+  if (!validatePosition(id)) {
+    const textToFind = isShowingOriginal
+      ? suggestion.suggested || suggestion.original
+      : suggestion.original;
+    const livePos = findTextInDoc(editorViewRef, textToFind);
+    if (livePos) {
+      pos.from = livePos.from;
+      pos.to = livePos.to;
+    }
+  }
+
   const tr = editorViewRef.state.tr.replaceWith(
     pos.from,
     pos.to,
@@ -498,6 +589,11 @@ export function switchSuggestion(id: string): void {
   editorViewRef.dispatch(tr);
 
   const newLen = newText.length;
+  pos.to = pos.from + newLen;
+  if (!isShowingOriginal) {
+    pos.original = newText;
+  }
+
   updatePositionsAfterChange(id, pos.from, oldLen, newLen);
 
   suggestion.showingOriginal = !isShowingOriginal;
