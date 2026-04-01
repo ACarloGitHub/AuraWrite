@@ -90,7 +90,9 @@ export class OllamaProvider implements AIProvider {
       }
 
       if (context.selectedText) {
-        parts.push(`SELECTED TEXT:\n"${context.selectedText}"`);
+        parts.push(
+          `SELECTED TEXT:\n"${context.selectedText}" (you may ONLY modify this)`,
+        );
       }
 
       if (context.documentTitle) {
@@ -105,6 +107,12 @@ export class OllamaProvider implements AIProvider {
         fullPrompt = `[Context]\n${parts.join("\n\n")}\n\n[User Request]\n${prompt}`;
       }
     }
+
+    fullPrompt += `
+
+IMPORTANT: When the user explicitly asks you to modify, replace, or change text in the document, you MUST respond with a JSON object at the END of your message:
+{"modification": {"original": "exact text to replace", "new": "new text"}}
+Do NOT include this JSON if you are not modifying the document.`;
 
     return fullPrompt;
   }
