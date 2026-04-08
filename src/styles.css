@@ -8,6 +8,7 @@
   --color-background: #f0f0f0;
   --color-toolbar: #ffffff;
   --color-surface: #ffffff;
+  --color-paper: #ffffff;
   --color-border: #cccccc;
   --color-text: #222222;
   --color-text-muted: #666666;
@@ -34,6 +35,7 @@
   --color-background: #121212;
   --color-toolbar: #1e1e1e;
   --color-surface: #252525;
+  --color-paper: #2a2a2a;
   --color-border: #444444;
   --color-text: #e0e0e0;
   --color-text-muted: #888888;
@@ -243,27 +245,22 @@ body {
   flex: 1;
   overflow: auto;
   padding: var(--spacing-xl);
-  display: flex;
-  justify-content: center;
+  background: var(--color-background);
 }
 
 .ProseMirror {
   width: 100%;
-  max-width: 720px;
+  max-width: 800px;
   min-height: 100%;
+  margin: 0 auto;
   background: var(--color-surface);
   padding: var(--spacing-xl);
-  box-shadow: var(--shadow-editor);
-  border-radius: 4px;
   font-family: var(--font-editor);
   font-size: 18px;
   line-height: 1.7;
   color: var(--color-text);
   white-space: pre-wrap;
   word-wrap: break-word;
-  transition:
-    background 0.3s,
-    box-shadow 0.3s;
 }
 
 .ProseMirror:focus {
@@ -936,3 +933,92 @@ body {
 .toolbar button[data-tooltip]::after {
   content: attr(data-tooltip);
 }
+
+/* Page break widget */
+.ProseMirror .page-break-widget {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin: 1rem 0;
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+}
+
+.ProseMirror .page-break-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.ProseMirror .page-break-remove {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.ProseMirror .page-break-remove:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+/* Hide the old CSS-only marker */
+.ProseMirror .page-break-before::before,
+.ProseMirror .page-break-before::after {
+  display: none;
+}
+
+/* Print styles */
+@media print {
+  .page-break-widget {
+    display: none;
+  }
+
+  .page-break-before {
+    break-before: page;
+  }
+}
+
+/* Auto page break — line + page number + small gap */
+.ProseMirror .auto-page-break {
+  width: 100%;
+  height: 40px;
+  margin: 8px 0;
+  position: relative;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ProseMirror .auto-page-break::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0;
+  border-top: 1px dashed var(--color-border, #ccc);
+}
+
+.ProseMirror .auto-page-break .auto-page-number {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  color: var(--color-text-muted, #666);
+  background: var(--color-surface, #ffffff);
+  padding: 2px 12px;
+  border-radius: 10px;
+  font-family: var(--font-family, sans-serif);
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+/* Pagination mode paged — same as continuous, only adds auto page breaks */
+/* No style overrides: both modes share the same editor appearance */

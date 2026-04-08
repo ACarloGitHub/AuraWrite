@@ -27,6 +27,9 @@ Desktop.ini
 .opencode/
 opencode.*
 
+# AGENTS.md - local memory for AI agents
+AGENTS.md
+
 # Documentation (local only - never on GitHub)
 documentation/
 memory/
@@ -49,6 +52,10 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# Test directories (local only)
+test-pagination/
+test-*/
 
 # OS cache
 .cache/

@@ -242,7 +242,15 @@ When opening issues:
 
 This represents Carlo's most solid and fulfilling development system to date — a human idea, amplified by AI, grounded in local-first principles.
 
-Special thanks to the open-source communities behind **Tauri**, **ProseMirror**, and **Rust**.
+### Core Libraries
+
+AuraWrite is built on the shoulders of exceptional open-source projects:
+
+- **[ProseMirror](https://prosemirror.net/)** (MIT License) — The foundation of our editor. Marijn Haverbeke created something remarkable: a toolkit that gives you complete control over the editing experience without imposing opinions. ProseMirror is elegant, extensible, and simply works. We're deeply grateful for this work.
+
+- **[prosemirror-pagination](https://github.com/todorstoev/prosemirror-pagination)** (ISC License) — By Todor Stoev. This plugin made it possible to implement page-based layout in AuraWrite. Pagination in a web editor is notoriously difficult, and this project tackles it head-on. Thank you for solving a problem many gave up on.
+
+Special thanks also to the open-source communities behind **Tauri** and **Rust**.
 
 ---
 

@@ -1,7 +1,7 @@
 import { undo, redo } from "prosemirror-history";
 import { toggleMark } from "prosemirror-commands";
 import type { EditorView } from "prosemirror-view";
-import { EditorState } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 
 import { toMarkdown, fromMarkdown } from "../formats/markdown";
@@ -9,6 +9,13 @@ import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { schema } from "./editor";
+import {
+  setPaginationEnabled,
+  getPaginationEnabled,
+  initPagination,
+  updateOnTextChange,
+  togglePagination,
+} from "./fake-pagination";
 
 let editorView: EditorView;
 
@@ -37,6 +44,7 @@ export function setupToolbar(view: EditorView): void {
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
+  initPagination(document.getElementById("editor")!, view);
 }
 
 function setupDirtyTracking(): void {
@@ -52,6 +60,7 @@ function setupDirtyTracking(): void {
           updateWindowTitle();
           updateDocumentTitleBar();
         }
+        updateOnTextChange(editorView);
       }
     },
   });
@@ -387,6 +396,7 @@ function setupUndoRedoButtons(): void {
 function setupFormattingButtons(): void {
   const btnBold = document.getElementById("btn-bold");
   const btnItalic = document.getElementById("btn-italic");
+  const btnPageBreak = document.getElementById("btn-page-break");
 
   btnBold?.addEventListener("click", () => {
     const markType = editorView.state.schema.marks.strong;
@@ -403,6 +413,66 @@ function setupFormattingButtons(): void {
       editorView.focus();
     }
   });
+
+  btnPageBreak?.addEventListener("click", () => {
+    togglePageBreak();
+    editorView.focus();
+  });
+
+  const btnAutoPagination = document.getElementById("btn-auto-pagination");
+  btnAutoPagination?.addEventListener("click", () => {
+    toggleAutoPagination();
+  });
+}
+
+function togglePageBreak(): void {
+  const { from } = editorView.state.selection;
+  const $pos = editorView.state.doc.resolve(from);
+
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    const node = $pos.node(depth);
+    if (node.type.name === "paragraph") {
+      const pos = $pos.before(depth);
+      const nodeAtPos = editorView.state.doc.nodeAt(pos);
+
+      if (!nodeAtPos) continue;
+
+      const tr = editorView.state.tr;
+
+      tr.setNodeMarkup(pos, undefined, {
+        ...nodeAtPos.attrs,
+        pageBreakBefore: true,
+      });
+
+      const endPos = pos + nodeAtPos.nodeSize;
+      const newParagraph = editorView.state.schema.nodes.paragraph.create();
+      tr.insert(endPos, newParagraph);
+
+      tr.setSelection(TextSelection.create(tr.doc, endPos + 1));
+
+      editorView.dispatch(tr);
+      return;
+    }
+  }
+}
+
+/**
+ * Toggle auto pagination on/off
+ */
+function toggleAutoPagination(): void {
+  const enabled = togglePagination(editorView);
+  updateAutoPaginationButtonText(enabled);
+  editorView.focus();
+}
+
+function updateAutoPaginationButtonText(enabled: boolean): void {
+  const btn = document.getElementById("btn-auto-pagination");
+  if (!btn) return;
+
+  const btnText = btn.querySelector(".toolbar__btn-text");
+  if (!btnText) return;
+
+  btnText.textContent = enabled ? "Cont" : "Auto";
 }
 
 export function getEditorView(): EditorView {

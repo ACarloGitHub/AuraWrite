@@ -1,12 +1,15 @@
+/* global setTimeout */
+
 import type { EditorView } from "prosemirror-view";
+import { Decoration } from "prosemirror-view";
 import { sendToAI } from "./ai-manager";
 import { getEditorContent } from "../editor/editor";
-import { findTextInDoc } from "../editor/text-utils";
+import { notifyDocumentChange } from "./modification-hub";
 import {
-  subscribeToChanges,
-  unsubscribe,
-  notifyDocumentChange,
-} from "./modification-hub";
+  suggestionsMarkerPluginKey,
+  getPositionForSlot,
+  createSuggestionDecoration,
+} from "../editor/suggestions-marker-plugin";
 
 interface SentenceSuggestion {
   id: string;
@@ -51,15 +54,10 @@ let editorViewRef: EditorView | null = null;
 let contextUnderstood: string = "";
 let acceptedOriginals: Map<string, string> = new Map();
 let closedSentences: Set<string> = new Set();
-let slotPositions: Map<
-  string,
-  { from: number; to: number; original: string; suggested: string }
-> = new Map();
 let isCurrentlyProcessing: boolean = false;
 let currentProcessingSlotId: string | null = null;
-let hubUnsubscribe: (() => void) | null = null;
 
-const SUGGESTIONS_DEBUG = false;
+let SUGGESTIONS_DEBUG = true;
 const DEBUG_LOG: string[] = [];
 
 function log(message: string): void {
@@ -91,6 +89,29 @@ function updateDebugLog(): void {
   }
 }
 
+function getSlotPositionFromDecoration(
+  id: string,
+): { from: number; to: number } | null {
+  if (!editorViewRef) return null;
+  return getPositionForSlot(editorViewRef.state, id);
+}
+
+function createDecorationForSlot(
+  slot: SentenceSlot,
+  from: number,
+  to: number,
+): void {
+  if (!editorViewRef) return;
+
+  const decoration = createSuggestionDecoration(slot.id, from, to);
+  const tr = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
+    add: [decoration],
+  });
+  editorViewRef.dispatch(tr);
+
+  log(`DECO: Created decoration for slot ${slot.id} at ${from}-${to}`);
+}
+
 function findProseMirrorPosition(
   view: EditorView,
   text: string,
@@ -116,43 +137,6 @@ function findProseMirrorPosition(
   return fallbackIndex;
 }
 
-function validatePosition(id: string): boolean {
-  const pos = slotPositions.get(id);
-  if (!pos || !editorViewRef) return false;
-
-  const doc = editorViewRef.state.doc;
-  const actualText = doc.textBetween(pos.from, pos.to, " ");
-
-  const expectedTexts = [pos.original, pos.suggested].filter(Boolean);
-  const isValid = expectedTexts.includes(actualText);
-
-  if (!isValid) {
-    log(
-      `VALIDATE ERROR: Slot ${id} position mismatch. Expected one of ${JSON.stringify(expectedTexts)}, got "${actualText}"`,
-    );
-  }
-  return isValid;
-}
-
-function updatePositionsAfterChange(
-  modifiedSlotId: string,
-  modifiedFrom: number,
-  oldLen: number,
-  newLen: number,
-): void {
-  const diff = newLen - oldLen;
-  if (diff === 0) return;
-
-  slotPositions.forEach((pos, id) => {
-    if (id === modifiedSlotId) return;
-    if (pos.from >= modifiedFrom) {
-      pos.from += diff;
-      pos.to += diff;
-      log(`POSITION: Slot ${id} updated: ${pos.from - diff} -> ${pos.from}`);
-    }
-  });
-}
-
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_INTERVAL = 30;
 
@@ -173,36 +157,11 @@ function getPreferences(): {
 
 const DEFAULT_SUGGESTIONS_PROMPT = `You are a writing assistant. Analyze the sentence and suggest improvements for clarity, style, and grammar.`;
 
-function handleExternalDocumentChange(
-  change: { from: number; oldLen: number; newLen: number },
-  source: string,
-): void {
-  if (source === "suggestions") return;
-
-  const diff = change.newLen - change.oldLen;
-  if (diff === 0) return;
-
-  slotPositions.forEach((pos, id) => {
-    if (pos.from >= change.from) {
-      pos.from += diff;
-      pos.to += diff;
-      log(
-        `HUB_SYNC: Slot ${id} updated from external change: ${pos.from - diff} -> ${pos.from}`,
-      );
-    }
-  });
-}
-
 export function setupSuggestionsPanel(view: EditorView): void {
   editorViewRef = view;
   setupPanelToggle();
   setupToolbarButton();
   setupDotTrigger(view);
-
-  hubUnsubscribe = subscribeToChanges(
-    "suggestions",
-    handleExternalDocumentChange,
-  );
 }
 
 function setupToolbarButton(): void {
@@ -240,10 +199,6 @@ function stopSuggestionsMode(): void {
   slots = [];
   isCurrentlyProcessing = false;
   currentProcessingSlotId = null;
-  if (hubUnsubscribe) {
-    hubUnsubscribe();
-    hubUnsubscribe = null;
-  }
 }
 
 function setupDotTrigger(view: EditorView): void {
@@ -301,12 +256,7 @@ function setupDotTrigger(view: EditorView): void {
           reason: null,
         };
 
-        slotPositions.set(slot.id, {
-          from: pmFrom,
-          to: pmFrom + sentence.length,
-          original: sentence,
-          suggested: "",
-        });
+        createDecorationForSlot(slot, pmFrom, pmFrom + sentence.length);
 
         slots.push(slot);
         log(
@@ -512,38 +462,47 @@ export function acceptSuggestion(id: string): void {
     return;
   }
 
-  const pos = slotPositions.get(id);
-  if (!pos) {
-    log(`ACCEPT ERROR: No position saved for slot ${id}`);
+  const currentPos = getSlotPositionFromDecoration(id);
+  if (!currentPos) {
+    log(`ACCEPT ERROR: Could not find decoration for slot ${id}`);
     return;
   }
 
   const finalSuggested = suggestion.suggested || suggestion.original;
-  const oldLen = pos.to - pos.from;
-
-  if (!validatePosition(id)) {
-    const livePos = findTextInDoc(editorViewRef, finalSuggested);
-    if (livePos) {
-      pos.from = livePos.from;
-      pos.to = livePos.to;
-    }
-  }
+  const oldLen = currentPos.to - currentPos.from;
 
   const tr = editorViewRef.state.tr.replaceWith(
-    pos.from,
-    pos.to,
+    currentPos.from,
+    currentPos.to,
     editorViewRef.state.schema.text(finalSuggested),
   );
 
   editorViewRef.dispatch(tr);
 
   const newLen = finalSuggested.length;
-  pos.to = pos.from + newLen;
-  pos.original = finalSuggested;
 
-  updatePositionsAfterChange(id, pos.from, oldLen, newLen);
+  const newDeco = createSuggestionDecoration(
+    id,
+    currentPos.from,
+    currentPos.from + newLen,
+  );
+  const tr2 = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
+    remove: [
+      Decoration.inline(
+        currentPos.from,
+        currentPos.to,
+        { class: "suggestion-marker", "data-slot-id": id },
+        { id },
+      ),
+    ],
+    add: [newDeco],
+  });
+  editorViewRef.dispatch(tr2);
 
-  notifyDocumentChange({ from: pos.from, oldLen, newLen }, "suggestions");
+  notifyDocumentChange(
+    { from: currentPos.from, oldLen, newLen },
+    "suggestions",
+  );
 
   slot.state = "accepted";
   suggestion.isAccepted = true;
@@ -584,9 +543,10 @@ export function switchSuggestion(id: string): void {
     return;
   }
 
-  const pos = slotPositions.get(id);
-  if (!pos) {
-    log(`SWITCH ERROR: No position saved for slot ${id}`);
+  const currentPos = getSlotPositionFromDecoration(id);
+  if (!currentPos) {
+    log(`SWITCH ERROR: Could not find decoration for slot ${id}`);
+    closeSuggestion(id);
     return;
   }
 
@@ -595,38 +555,45 @@ export function switchSuggestion(id: string): void {
     ? suggestion.suggested || suggestion.original
     : suggestion.original;
 
-  const oldLen = pos.to - pos.from;
-
-  if (!validatePosition(id)) {
-    const textToFind = isShowingOriginal
-      ? suggestion.suggested || suggestion.original
-      : suggestion.original;
-    const livePos = findTextInDoc(editorViewRef, textToFind);
-    if (livePos) {
-      pos.from = livePos.from;
-      pos.to = livePos.to;
-    }
-  }
+  const oldLen = currentPos.to - currentPos.from;
 
   const tr = editorViewRef.state.tr.replaceWith(
-    pos.from,
-    pos.to,
+    currentPos.from,
+    currentPos.to,
     editorViewRef.state.schema.text(newText),
   );
 
   editorViewRef.dispatch(tr);
 
   const newLen = newText.length;
-  pos.to = pos.from + newLen;
-  if (!isShowingOriginal) {
-    pos.original = newText;
-  }
 
-  updatePositionsAfterChange(id, pos.from, oldLen, newLen);
+  const newDeco = createSuggestionDecoration(
+    id,
+    currentPos.from,
+    currentPos.from + newLen,
+  );
+  const tr2 = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
+    remove: [
+      Decoration.inline(
+        currentPos.from,
+        currentPos.to,
+        { class: "suggestion-marker", "data-slot-id": id },
+        { id },
+      ),
+    ],
+    add: [newDeco],
+  });
+  editorViewRef.dispatch(tr2);
 
-  notifyDocumentChange({ from: pos.from, oldLen, newLen }, "suggestions");
+  notifyDocumentChange(
+    { from: currentPos.from, oldLen, newLen },
+    "suggestions",
+  );
 
   suggestion.showingOriginal = !isShowingOriginal;
+  if (!isShowingOriginal) {
+    suggestion.original = newText;
+  }
   renderSuggestions();
 
   log(`SWITCH: Successfully switched to "${newText.slice(0, 30)}..."`);
@@ -645,6 +612,24 @@ export function closeSuggestion(id: string): void {
 
   if (suggestion) {
     closedSentences.add(suggestion.original.toLowerCase());
+  }
+
+  if (editorViewRef) {
+    const currentPos = getSlotPositionFromDecoration(id);
+    if (currentPos) {
+      const tr = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
+        remove: [
+          Decoration.inline(
+            currentPos.from,
+            currentPos.to,
+            { class: "suggestion-marker", "data-slot-id": id },
+            { id },
+          ),
+        ],
+      });
+      editorViewRef.dispatch(tr);
+      log(`DECO: Removed decoration for slot ${id}`);
+    }
   }
 
   acceptedOriginals.delete(id);

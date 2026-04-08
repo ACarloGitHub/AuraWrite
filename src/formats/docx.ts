@@ -8,8 +8,19 @@ export async function fromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
 
 export function toDocx(doc: any): Document {
   const children: Paragraph[] = [];
-  
+
   doc.forEach((node: any) => {
+    // Check for page break before this paragraph
+    if (node.type.name === "paragraph" && node.attrs?.pageBreakBefore) {
+      // Insert a page break paragraph
+      children.push(
+        new Paragraph({
+          children: [],
+          pageBreakBefore: true,
+        }),
+      );
+    }
+
     const paragraph = nodeToParagraph(node);
     if (paragraph) {
       children.push(paragraph);
@@ -58,22 +69,28 @@ function nodeToParagraph(node: any): Paragraph | null {
       });
     case "bullet_list":
       return new Paragraph({
-        children: node.content?.flatMap((item: any) => nodeContentToRuns(item)) || [],
+        children:
+          node.content?.flatMap((item: any) => nodeContentToRuns(item)) || [],
         bullet: { level: 0 },
       });
     case "ordered_list":
       return new Paragraph({
-        children: node.content?.flatMap((item: any) => nodeContentToRuns(item)) || [],
+        children:
+          node.content?.flatMap((item: any) => nodeContentToRuns(item)) || [],
         numbering: { reference: "default-numbering", level: 0 },
       });
     case "horizontal_rule":
       return new Paragraph({
         children: [new TextRun("")],
-        border: { bottom: { color: "CCCCCC", size: 1, space: 1, style: "single" } },
+        border: {
+          bottom: { color: "CCCCCC", size: 1, space: 1, style: "single" },
+        },
       });
     default:
       if (node.isBlock) {
-        return new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] });
+        return new Paragraph({
+          children: [new TextRun({ text: getTextContent(node) })],
+        });
       }
       return null;
   }

@@ -1,10 +1,10 @@
 export function toHTML(doc: any): string {
   let html = "";
-  
+
   doc.forEach((node: any) => {
     html += nodeToHTML(node);
   });
-  
+
   return wrapInHTMLDocument(html);
 }
 
@@ -12,9 +12,16 @@ function nodeToHTML(node: any): string {
   switch (node.type.name) {
     case "paragraph":
       const content = node.content?.map(inlineToHTML).join("") || "";
-      return `<p>${content}</p>`;
+      const pageBreakAttr = node.attrs?.pageBreakBefore;
+      const pageBreakStyle = pageBreakAttr ? ' style="break-before: page"' : "";
+      const pageBreakClass = pageBreakAttr ? ' class="page-break-before"' : "";
+      return `<p${pageBreakClass}${pageBreakStyle}>${content}</p>`;
     case "heading":
-      return `<h${node.attrs.level}>${node.content?.map(inlineToHTML).join("") || ""}</h${node.attrs.level}>`;
+      const hContent = node.content?.map(inlineToHTML).join("") || "";
+      const hPageBreak = node.attrs?.pageBreakBefore;
+      const hStyle = hPageBreak ? ' style="break-before: page"' : "";
+      const hClass = hPageBreak ? ' class="page-break-before"' : "";
+      return `<h${node.attrs.level}${hClass}${hStyle}>${hContent}</h${node.attrs.level}>`;
     case "blockquote":
       return `<blockquote>${node.content?.map(nodeToHTML).join("") || ""}</blockquote>`;
     case "code_block":
@@ -111,6 +118,16 @@ function wrapInHTMLDocument(bodyContent: string): string {
     code {
       font-family: monospace;
       background: #f5f5f5;
+    }
+    .page-break-before {
+      page-break-before: always;
+      break-before: page;
+    }
+    @media print {
+      .page-break-before {
+        page-break-before: always;
+        break-before: page;
+      }
     }
   </style>
 </head>

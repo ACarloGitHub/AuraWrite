@@ -47,6 +47,20 @@
           <span class="toolbar__btn-icon"><em>I</em></span>
           <span class="toolbar__btn-text">Italic</span>
         </button>
+        <span class="toolbar-separator"></span>
+        <button id="btn-page-break" class="toolbar__btn" title="Page Break">
+          <span class="toolbar__btn-icon">⏎</span>
+          <span class="toolbar__btn-text">Page Break</span>
+        </button>
+        <button
+          id="btn-auto-pagination"
+          class="toolbar__btn"
+          title="Auto Pagination"
+        >
+          <span class="toolbar__btn-icon">📄</span>
+          <span class="toolbar__btn-text">Auto</span>
+        </button>
+        <span class="toolbar-separator"></span>
         <button id="btn-preferences" title="Preferences">⚙️</button>
         <button id="btn-theme" class="theme-toggle" title="Toggle Theme">
           🌙
@@ -63,6 +77,7 @@
           <div class="suggestions-panel__content"></div>
         </aside>
         <div id="editor"></div>
+        <div id="paginated-container" style="display: none"></div>
         <aside id="ai-panel" class="ai-panel hidden">
           <div class="ai-panel__header">
             <h3>AI Assistant</h3>
