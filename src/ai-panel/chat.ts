@@ -29,6 +29,12 @@ interface SelectionRange {
   text: string;
 }
 
+interface Preferences {
+  aiContextInterval: number;
+  aiAssistantPrompt: string;
+  deselectOnDocumentClick: boolean;
+}
+
 let messages: Message[] = [];
 let currentSelection: SelectionRange | null = null;
 let editorViewRef: EditorView | null = null;
@@ -41,19 +47,21 @@ let documentChunksComputed: boolean = false;
 const PREFERENCES_KEY = "aurawrite-preferences";
 const DEFAULT_CONTEXT_INTERVAL = 30;
 
-function getPreferences(): {
-  aiContextInterval: number;
-  aiAssistantPrompt: string;
-} {
+function getPreferences(): Preferences {
   const saved = localStorage.getItem(PREFERENCES_KEY);
   if (saved) {
     const prefs = JSON.parse(saved);
     return {
       aiContextInterval: prefs.aiContextInterval || DEFAULT_CONTEXT_INTERVAL,
       aiAssistantPrompt: prefs.aiAssistantPrompt || "",
+      deselectOnDocumentClick: prefs.deselectOnDocumentClick ?? true, // default true
     };
   }
-  return { aiContextInterval: DEFAULT_CONTEXT_INTERVAL, aiAssistantPrompt: "" };
+  return {
+    aiContextInterval: DEFAULT_CONTEXT_INTERVAL,
+    aiAssistantPrompt: "",
+    deselectOnDocumentClick: true,
+  };
 }
 
 export function setupAIPanel(view: EditorView): void {
@@ -64,13 +72,19 @@ export function setupAIPanel(view: EditorView): void {
 }
 
 function setupEditorClickListener(view: EditorView): void {
+  // Deselection on document click is now controlled by preference
   const editorEl = view.dom;
   editorEl.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     if (target.closest(".ProseMirror")) {
-      const selection = getSelectionRange(view);
-      if (!selection && highlighted) {
-        clearSelectionHighlight(view);
+      const prefs = getPreferences();
+      if (prefs.deselectOnDocumentClick && highlighted) {
+        const selection = getSelectionRange(view);
+        if (!selection) {
+          clearSelectionHighlight(view);
+          currentSelection = null;
+          updateContextDisplay();
+        }
       }
     }
   });
@@ -139,23 +153,6 @@ function setupPanelEvents(view: EditorView): void {
     if (selection) {
       currentSelection = selection;
       applySelectionHighlight(editorViewRef, selection);
-      updateContextDisplay();
-    }
-  });
-
-  // Aggiorna la selezione quando l'utente seleziona testo mentre il pannello è aperto
-  view.dom.addEventListener("mouseup", () => {
-    if (!isPanelOpen) return;
-    if (!editorViewRef) return;
-    const selection = getSelectionRange(editorViewRef);
-    if (selection) {
-      currentSelection = selection;
-      applySelectionHighlight(editorViewRef, selection);
-      updateContextDisplay();
-    } else if (currentSelection) {
-      // Selezione deselezionata - pulisci
-      clearSelectionHighlight(editorViewRef);
-      currentSelection = null;
       updateContextDisplay();
     }
   });
@@ -282,8 +279,11 @@ function updateContextDisplay(): void {
   const parts: string[] = [];
 
   if (currentSelection) {
-    parts.push(`<div class="ai-panel__context-label">Selected:</div>
-      <div class="ai-panel__context-text">"${truncateText(currentSelection.text, 100)}"</div>`);
+    parts.push(`<div class="ai-panel__context-selection">
+      <div class="ai-panel__context-label">Selected:</div>
+      <div class="ai-panel__context-text">"${truncateText(currentSelection.text, 100)}"</div>
+      <button id="ai-clear-selection" class="ai-panel__clear-btn" title="Clear selection">✕</button>
+    </div>`);
   }
 
   if (selectedChunkId && chunks.length > 1) {
@@ -297,10 +297,24 @@ function updateContextDisplay(): void {
   if (parts.length > 0) {
     contextEl.classList.add("active");
     contextEl.innerHTML = parts.join("");
+
+    // Aggiungi listener al pulsante clear
+    const clearBtn = document.getElementById("ai-clear-selection");
+    clearBtn?.addEventListener("click", () => {
+      clearCurrentSelection();
+    });
   } else {
     contextEl.classList.remove("active");
     contextEl.innerHTML = "";
   }
+}
+
+function clearCurrentSelection(): void {
+  if (editorViewRef && highlighted) {
+    clearSelectionHighlight(editorViewRef);
+  }
+  currentSelection = null;
+  updateContextDisplay();
 }
 
 function truncateText(text: string, maxLength: number): string {
@@ -367,8 +381,7 @@ async function sendMessage(text: string): Promise<void> {
           if (editResult.operationsFailed > 0) {
             placeholder.textContent += `, ${editResult.operationsFailed} fallita/e`;
           }
-          currentSelection = null;
-          clearSelectionHighlight(editorViewRef!);
+          // Note: Selection is NOT cleared automatically - user can iterate on same selection
         } else if (editResult.error) {
           placeholder.textContent = response.content;
         } else {

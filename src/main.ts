@@ -24,6 +24,7 @@ interface Preferences {
   aiContextInterval: number;
   suggestionsPrompt: string;
   aiAssistantPrompt: string;
+  deselectOnDocumentClick: boolean;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -83,6 +84,7 @@ const defaultPreferences: Preferences = {
   aiContextInterval: 30,
   suggestionsPrompt: defaultSuggestionsPrompt,
   aiAssistantPrompt: defaultAIAssistantPrompt,
+  deselectOnDocumentClick: true,
 };
 
 let currentZoom = 100;
@@ -243,6 +245,9 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-ai-assistant-prompt") as HTMLTextAreaElement
   ).value = prefs.aiAssistantPrompt;
+  (
+    document.getElementById("pref-deselect-on-click") as HTMLInputElement
+  ).checked = prefs.deselectOnDocumentClick;
 
   updateCustomColorsVisibility();
 
@@ -302,6 +307,9 @@ function savePreferencesFromModal(): void {
     aiAssistantPrompt: (
       document.getElementById("pref-ai-assistant-prompt") as HTMLTextAreaElement
     ).value,
+    deselectOnDocumentClick: (
+      document.getElementById("pref-deselect-on-click") as HTMLInputElement
+    ).checked,
   };
 
   savePreferences(prefs);
@@ -347,7 +355,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document
     .querySelectorAll(
-      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-suggestions-prompt, #pref-ai-assistant-prompt",
+      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-deselect-on-click",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);

@@ -584,6 +584,30 @@ body {
   white-space: nowrap;
 }
 
+.ai-panel__context-selection {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  position: relative;
+}
+
+.ai-panel__clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ai-panel__clear-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
 .ai-panel__history {
   flex: 1;
   overflow-y: auto;
