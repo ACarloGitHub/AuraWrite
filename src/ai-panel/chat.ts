@@ -132,6 +132,34 @@ function setupPanelEvents(view: EditorView): void {
     aiInput?.focus();
   });
 
+  // Aggiorna la selezione quando l'utente clicca nell'input
+  aiInput?.addEventListener("focus", () => {
+    if (!editorViewRef) return;
+    const selection = getSelectionRange(editorViewRef);
+    if (selection) {
+      currentSelection = selection;
+      applySelectionHighlight(editorViewRef, selection);
+      updateContextDisplay();
+    }
+  });
+
+  // Aggiorna la selezione quando l'utente seleziona testo mentre il pannello è aperto
+  view.dom.addEventListener("mouseup", () => {
+    if (!isPanelOpen) return;
+    if (!editorViewRef) return;
+    const selection = getSelectionRange(editorViewRef);
+    if (selection) {
+      currentSelection = selection;
+      applySelectionHighlight(editorViewRef, selection);
+      updateContextDisplay();
+    } else if (currentSelection) {
+      // Selezione deselezionata - pulisci
+      clearSelectionHighlight(editorViewRef);
+      currentSelection = null;
+      updateContextDisplay();
+    }
+  });
+
   aiClose?.addEventListener("click", () => {
     aiPanel?.classList.add("hidden");
     isPanelOpen = false;
