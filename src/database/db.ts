@@ -1,0 +1,177 @@
+// ============================================================================
+// Database Client for AuraWrite
+// Tauri command invoker for SQLite operations
+// ============================================================================
+
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  Project,
+  Section,
+  Document,
+  Entity,
+  EntityType,
+} from "../types/database";
+
+// ============================================================================
+// PROJECTS
+// ============================================================================
+
+export async function createProject(project: Project): Promise<void> {
+  await invoke("db_create_project", { project });
+}
+
+export async function getProjects(): Promise<Project[]> {
+  return await invoke("db_get_projects");
+}
+
+export async function getProject(id: string): Promise<Project | null> {
+  return await invoke("db_get_project", { id });
+}
+
+export async function updateProject(project: Project): Promise<void> {
+  await invoke("db_update_project", { project });
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await invoke("db_delete_project", { id });
+}
+
+// ============================================================================
+// SECTIONS
+// ============================================================================
+
+export async function createSection(section: Section): Promise<void> {
+  await invoke("db_create_section", { section });
+}
+
+export async function getSections(projectId: string): Promise<Section[]> {
+  return await invoke("db_get_sections", { projectId });
+}
+
+export async function updateSection(section: Section): Promise<void> {
+  await invoke("db_update_section", { section });
+}
+
+export async function deleteSection(id: string): Promise<void> {
+  await invoke("db_delete_section", { id });
+}
+
+// ============================================================================
+// DOCUMENTS
+// ============================================================================
+
+export async function createDocument(document: Document): Promise<void> {
+  await invoke("db_create_document", { document });
+}
+
+export async function getDocuments(sectionId: string): Promise<Document[]> {
+  return await invoke("db_get_documents", { sectionId });
+}
+
+export async function getDocument(id: string): Promise<Document | null> {
+  return await invoke("db_get_document", { id });
+}
+
+export async function updateDocument(document: Document): Promise<void> {
+  await invoke("db_update_document", { document });
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  await invoke("db_delete_document", { id });
+}
+
+// ============================================================================
+// ENTITIES
+// ============================================================================
+
+export async function createEntity(entity: Entity): Promise<void> {
+  await invoke("db_create_entity", { entity });
+}
+
+export async function getEntities(projectId: string): Promise<Entity[]> {
+  return await invoke("db_get_entities", { projectId });
+}
+
+export async function updateEntity(entity: Entity): Promise<void> {
+  await invoke("db_update_entity", { entity });
+}
+
+export async function deleteEntity(id: string): Promise<void> {
+  await invoke("db_delete_entity", { id });
+}
+
+// ============================================================================
+// ENTITY TYPES
+// ============================================================================
+
+export async function createEntityType(entityType: EntityType): Promise<void> {
+  await invoke("db_create_entity_type", { entityType });
+}
+
+export async function getEntityTypes(projectId: string): Promise<EntityType[]> {
+  return await invoke("db_get_entity_types", { projectId });
+}
+
+export async function deleteEntityType(id: string): Promise<void> {
+  await invoke("db_delete_entity_type", { id });
+}
+
+// ============================================================================
+// CONVENIENCE HELPERS
+// ============================================================================
+
+import {
+  createProject as makeProject,
+  createSection as makeSection,
+  createDocument as makeDocument,
+  createEntity as makeEntity,
+  DEFAULT_ENTITY_TYPES,
+} from "../types/database";
+
+export async function createProjectWithDefaults(
+  name: string,
+  type: string = "novel",
+  description?: string
+): Promise<{ project: Project; sections: Section[]; entityTypes: EntityType[] }> {
+  // Create project
+  const project = makeProject(name, type as any, description);
+  await createProject(project);
+
+  // Create default sections (Book → Parts → Chapters structure placeholder)
+  const sections: Section[] = [];
+  // (Sections will be created by user later)
+
+  // Create default entity types for novels
+  const entityTypes: EntityType[] = [];
+  if (type === "novel") {
+    for (const et of DEFAULT_ENTITY_TYPES) {
+      const entityType = { ...et, project_id: project.id, id: undefined as any };
+      entityType.id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await createEntityType(entityType);
+      entityTypes.push(entityType);
+    }
+  }
+
+  return { project, sections, entityTypes };
+}
+
+export async function createSectionWithDocuments(
+  projectId: string,
+  sectionName: string,
+  documentTitle?: string,
+  parentId?: string
+): Promise<{ section: Section; documents: Document[] }> {
+  // Get next order index
+  const existingSections = await getSections(projectId);
+  const orderIndex = existingSections.length;
+
+  // Create section
+  const section = makeSection(projectId, sectionName, orderIndex, parentId);
+  await createSection(section);
+
+  // Create document
+  const document = makeDocument(section.id, documentTitle || "Untitled");
+  await createDocument(document);
+
+  return { section, documents: [document] };
+}

@@ -67,6 +67,21 @@
         </button>
       </header>
       <main class="editor-container">
+        <aside id="project-panel" class="project-panel">
+          <div class="project-panel__header">
+            <div class="project-panel__header-left">
+              <h3>Projects</h3>
+            </div>
+            <div class="project-panel__header-right">
+              <button id="btn-new-project" class="project-panel__btn-sm" title="New Project">+</button>
+              <button id="btn-open-project" class="project-panel__btn-sm" title="Open Project">Open</button>
+              <button id="btn-save-db" class="project-panel__btn-sm" title="Save to Database">💾</button>
+            </div>
+          </div>
+          <div class="project-panel__content">
+            <div id="projects-list" class="projects-list"></div>
+          </div>
+        </aside>
         <aside id="suggestions-panel" class="suggestions-panel hidden">
           <div class="suggestions-panel__header">
             <h3>Suggestions</h3>
@@ -93,6 +108,13 @@
       </main>
       <footer class="status-bar">
         <div class="footer-ai-controls">
+          <button
+            id="btn-projects"
+            class="footer-btn"
+            title="Toggle Projects Panel"
+          >
+            📁 Projects
+          </button>
           <button
             id="btn-suggestions"
             class="footer-btn"

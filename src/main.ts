@@ -2,6 +2,8 @@ import { createEditor } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
+import { initProjectPanel } from "./editor/project-panel";
+import { EditorState } from "prosemirror-state";
 import "./styles.css";
 
 const THEME_KEY = "aurawrite-theme";
@@ -336,6 +338,47 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAIPanel(editorView);
   setupSuggestionsPanel(editorView);
   updateWordCount(editorView);
+
+  // Listen for clear editor events
+  window.addEventListener("aurawrite:clear-editor", () => {
+    // Clear editor content
+    const tr = editorView.state.tr;
+    tr.delete(0, tr.doc.content.size);
+    editorView.dispatch(tr);
+    console.log("Editor cleared");
+  });
+
+  // Initialize project panel
+  initProjectPanel({
+    onDocumentSelect: (doc) => {
+      console.log("Document selected:", doc.title);
+      // Load document content into editor
+      if (doc.content_json) {
+        try {
+          const content = JSON.parse(doc.content_json);
+          // Clear current content and load new
+          const tr = editorView.state.tr;
+          tr.delete(0, tr.doc.content.size);
+          const newDoc = editorView.state.schema.nodeFromJSON(content);
+          const newState = EditorState.create({
+            schema: editorView.state.schema,
+            doc: newDoc,
+            plugins: editorView.state.plugins,
+          });
+          editorView.updateState(newState);
+          console.log("Loaded document content");
+        } catch (e) {
+          console.error("Failed to parse document content:", e);
+        }
+      }
+    },
+    onProjectChange: (project) => {
+      console.log("Project changed:", project?.name || "none");
+    },
+    getEditorContent: () => {
+      return JSON.stringify(editorView.state.doc.toJSON());
+    },
+  });
 
   const btnTheme = document.getElementById("btn-theme");
   btnTheme?.addEventListener("click", toggleTheme);
