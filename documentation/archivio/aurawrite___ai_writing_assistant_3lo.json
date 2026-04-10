@@ -1,0 +1,743 @@
+{
+  "_documentation": {
+    "format": "3LO Project Export v1.0",
+    "description": "Struttura JSON per importazione in 3LO",
+    "fields": {
+      "version": "Versione formato (stringa, es: '1.0')",
+      "project": {
+        "id": "ID univoco progetto (stringa)",
+        "name": "Nome visualizzato (stringa)",
+        "created": "Timestamp creazione (numero, epoch ms)"
+      },
+      "board": "Array colonne, ognuna con {id, title, cards: [{id, text}]}",
+      "cards": "Oggetto metadata card (può essere vuoto {})",
+      "exportedAt": "ISO 8601 timestamp export"
+    },
+    "regole": [
+      "board è array: [{id, title, cards: [...]}]",
+      "cards dentro board ha solo {id, text}",
+      "cards (root) metadata: {cardId: {created, modified, note}}",
+      "id progetto univoco, senza spazi",
+      "text supporta emoji e unicode"
+    ]
+  },
+  "version": "1.0",
+  "project": {
+    "id": "aurawrite-brainstorming-2026-03-12",
+    "name": "AuraWrite - AI Writing Assistant",
+    "created": 1741820400000,
+    "created_by": null,
+    "is_visible": true,
+    "is_locked": false
+  },
+  "board": [
+    {
+      "id": "found",
+      "title": "🏗️ FONDAMENTA",
+      "cards": [
+        {
+          "id": "found-1",
+          "text": "Decidere stack tecnologico: LibreOffice plugin vs Tauri app vs Obsidian plugin"
+        },
+        {
+          "id": "found-2",
+          "text": "Definire architettura AI: locale vs cloud vs ibrido"
+        },
+        {
+          "id": "found-3",
+          "text": "Setup repository GitHub open source"
+        },
+        {
+          "id": "found-4",
+          "text": "Scegliere licenza open source (MIT? GPL?)"
+        },
+        {
+          "id": "found-5",
+          "text": "Documentazione README con visione progetto"
+        }
+      ]
+    },
+    {
+      "id": "editor",
+      "title": "📝 EDITOR CON AI",
+      "cards": [
+        {
+          "id": "ed-1",
+          "text": "Editor documento principale (WYSIWYG)"
+        },
+        {
+          "id": "ed-2",
+          "text": "Panel AI laterale (chat + suggerimenti)"
+        },
+        {
+          "id": "ed-3",
+          "text": "Sistema \"nastro adesivo\" per confronto testo mio vs AI"
+        },
+        {
+          "id": "ed-4",
+          "text": "Pulsanti: Approva, Rifiuta, Confronta (split view)"
+        },
+        {
+          "id": "ed-5",
+          "text": "Toggle: Testo → Riassunto, Riassunto → Espanso"
+        },
+        {
+          "id": "ed-6",
+          "text": "Ricerca web integrata (suggerimento link/immagini)"
+        }
+      ]
+    },
+    {
+      "id": "traccia",
+      "title": "🎭 TRACCIA (Personaggi/Luoghi)",
+      "cards": [
+        {
+          "id": "tr-1",
+          "text": "Schede personaggi: Nome, età, descrizione, motivazioni"
+        },
+        {
+          "id": "tr-2",
+          "text": "Arco narrativo personaggio: Da X a Y (trasformazione)"
+        },
+        {
+          "id": "tr-3",
+          "text": "Relazioni tra personaggi (mappa)"
+        },
+        {
+          "id": "tr-4",
+          "text": "Schede luoghi: Descrizioni, mappe, cosa succede lì"
+        },
+        {
+          "id": "tr-5",
+          "text": "Categorie personalizzabili (es. Fazioni, Pianeti)"
+        },
+        {
+          "id": "tr-6",
+          "text": "Stato elementi (Bozza, Completato) con indicatore colore"
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "📅 TIMELINE & COERENZA",
+      "cards": [
+        {
+          "id": "tl-1",
+          "text": "Timeline eventi in ordine cronologico"
+        },
+        {
+          "id": "tl-2",
+          "text": "AI: Rileva contraddizioni temporali (età, stagioni, eventi)"
+        },
+        {
+          "id": "tl-3",
+          "text": "AI: 'Qui piove, 3 pagine dopo c'è il sole - vuoi controllare?'"
+        },
+        {
+          "id": "tl-4",
+          "text": "Vista giorno-per-giorno della storia"
+        }
+      ]
+    },
+    {
+      "id": "note",
+      "title": "📌 NOTE & TEMI",
+      "cards": [
+        {
+          "id": "nt-1",
+          "text": "Temi principali del libro"
+        },
+        {
+          "id": "nt-2",
+          "text": "Messaggi che vuole comunicare"
+        },
+        {
+          "id": "nt-3",
+          "text": "Idee sparse (non collegate a scene)"
+        },
+        {
+          "id": "nt-4",
+          "text": "Riferimenti e ricerche"
+        }
+      ]
+    },
+    {
+      "id": "analisi",
+      "title": "📊 ANALISI AI",
+      "cards": [
+        {
+          "id": "an-1",
+          "text": "Analisi ritmo: 'I primi 3 capitoli sono lenti, vuoi accelerare?'"
+        },
+        {
+          "id": "an-2",
+          "text": "Analisi conflitto: 'Il tuo protagonista ha conflitto interno ed esterno?'"
+        },
+        {
+          "id": "an-3",
+          "text": "Analisi POV: 'Hai cambiato POV 4 volte in un capitolo, confonde?'"
+        },
+        {
+          "id": "an-4",
+          "text": "Analisi arco narrativo: 'Il tuo protagonista come è cambiato?'"
+        },
+        {
+          "id": "an-5",
+          "text": "Punti deboli e suggerimenti automatici"
+        }
+      ]
+    },
+    {
+      "id": "coach",
+      "title": "🗣️ COACH CONVERSAZIONALE",
+      "cards": [
+        {
+          "id": "co-1",
+          "text": "AI fa domande: 'Perché questo personaggio fa quella scelta?'"
+        },
+        {
+          "id": "co-2",
+          "text": "AI fa domande: 'Cosa vuoi dimostrare con questa scena?'"
+        },
+        {
+          "id": "co-3",
+          "text": "AI fa domande: 'Quale emozione vuoi far provare al lettore?'"
+        },
+        {
+          "id": "co-4",
+          "text": "Suggerimenti sviluppo storia (non solo correzioni)"
+        }
+      ]
+    },
+    {
+      "id": "mercato",
+      "title": "📈 ANALISI MERCATO",
+      "cards": [
+        {
+          "id": "mk-1",
+          "text": "AI: 'Il tuo libro è un thriller. Ecco i tropi comuni del genere'"
+        },
+        {
+          "id": "mk-2",
+          "text": "AI: 'I thriller best seller hanno mediamente X capitoli, tu sei a Y'"
+        },
+        {
+          "id": "mk-3",
+          "text": "Generazione automatica sinossi"
+        },
+        {
+          "id": "mk-4",
+          "text": "Generazione automatica blurb quarta di copertina"
+        },
+        {
+          "id": "mk-5",
+          "text": "Generazione automatica query letter per agenti"
+        }
+      ]
+    },
+    {
+      "id": "esporta",
+      "title": "📤 ESPORTA",
+      "cards": [
+        {
+          "id": "ex-1",
+          "text": "EPUB 2/3"
+        },
+        {
+          "id": "ex-2",
+          "text": "MOBI (Kindle)"
+        },
+        {
+          "id": "ex-3",
+          "text": "PDF professionale con layout"
+        },
+        {
+          "id": "ex-4",
+          "text": "ODT (LibreOffice)"
+        },
+        {
+          "id": "ex-5",
+          "text": "HTML per pubblicazione web"
+        }
+      ]
+    },
+    {
+      "id": "pianifica",
+      "title": "🎯 PIANIFICA",
+      "cards": [
+        {
+          "id": "pl-1",
+          "text": "Obiettivo conteggio parole"
+        },
+        {
+          "id": "pl-2",
+          "text": "Scadenza completamento"
+        },
+        {
+          "id": "pl-3",
+          "text": "Grafico progresso giornaliero"
+        },
+        {
+          "id": "pl-4",
+          "text": "Previsione AI: 'A questo ritmo finirai il X'"
+        }
+      ]
+    },
+    {
+      "id": "tecnica",
+      "title": "📚 INSEGNA LA TECNICA",
+      "cards": [
+        {
+          "id": "te-1",
+          "text": "Mini-lezioni sulla scrittura creativa integrate"
+        },
+        {
+          "id": "te-2",
+          "text": "Spiegazione conflitti (interno, esterno, interpersonale)"
+        },
+        {
+          "id": "te-3",
+          "text": "Spiegazione arco narrativo"
+        },
+        {
+          "id": "te-4",
+          "text": "Spiegazione show don't tell"
+        },
+        {
+          "id": "te-5",
+          "text": "Spiegazione dialoghi efficaci"
+        },
+        {
+          "id": "te-6",
+          "text": "Template per tipi di romanzo (thriller, romance, fantasy)"
+        }
+      ]
+    },
+    {
+      "id": "docchi",
+      "title": "📄 MODALITÀ DOCUMENTI",
+      "cards": [
+        {
+          "id": "doc-1",
+          "text": "Lettere formali (es. avvocato, amministrazione)"
+        },
+        {
+          "id": "doc-2",
+          "text": "Email professionali"
+        },
+        {
+          "id": "doc-3",
+          "text": "Report e relazioni"
+        },
+        {
+          "id": "doc-4",
+          "text": "Template documenti ricorrenti"
+        },
+        {
+          "id": "doc-5",
+          "text": "AI: 'Vuoi un tono più formale o più colloquiale?'"
+        }
+      ]
+    },
+    {
+      "id": "tecnico",
+      "title": "⚙️ TECNICO",
+      "cards": [
+        {
+          "id": "tech-1",
+          "text": "Scegliere: LibreOffice UNO plugin vs Tauri app fresca"
+        },
+        {
+          "id": "tech-2",
+          "text": "Database: SQLite per progetti/personaggi/luoghi"
+        },
+        {
+          "id": "tech-3",
+          "text": "Storage: File MD per sommari + DB per metadata"
+        },
+        {
+          "id": "tech-4",
+          "text": "AI Integration: Ollama locale vs API esterna vs OpenClaw"
+        },
+        {
+          "id": "tech-5",
+          "text": "Backup: Locale + cloud opzionale"
+        }
+      ]
+    },
+    {
+      "id": "futuro",
+      "title": "🚀 FUTURO (v2+)",
+      "cards": [
+        {
+          "id": "fu-1",
+          "text": "Collaborazione multi-utente"
+        },
+        {
+          "id": "fu-2",
+          "text": "Sincronizzazione cloud"
+        },
+        {
+          "id": "fu-3",
+          "text": "Mobile app companion"
+        },
+        {
+          "id": "fu-4",
+          "text": "AI training su stile personale"
+        },
+        {
+          "id": "fu-5",
+          "text": "Integrazione con piattaforme pubbliche (Amazon KDP)"
+        }
+      ]
+    }
+  ],
+  "cards": {
+    "found-1": {
+      "created": 1741820400000,
+      "modified": 1741820400000,
+      "note": "SCELTA CRITICA:\n\nLibreOffice plugin:\n+ Già abbiamo UNO socket\n+ Base matura, formattazione pronta\n+ Export già funzionante\n- Limitato da LibreOffice\n- UX meno moderna\n\nTauri app:\n+ UX moderna, flex\n+ Controllo totale\n- Ricostruire editor da zero (ENORME)\n- Formattazione complessa da zero\n\nObsidian plugin:\n+ Già esistono MD, plugin\n- Meno controllo\n- Non è word processor\n\nRACCOMANDAZIONE: LibreOffice per MVP veloce, Tauri per v2"
+    },
+    "ed-3": {
+      "created": 1741820400000,
+      "modified": 1741820400000,
+      "note": "DIFFERENTIATOR CHIAVE:\n\nIl 'nastro adesivo' è l'idea forte.\nL'utente vede:\n- Testo originale (sfondo bianco)\n- Suggerimento AI sovrapposto (sfondo colorato)\n- Pulsante per switchare tra i due\n- Approva = sostituisce\n- Rifiuta = rimuove suggerimento"
+    },
+    "tr-6": {
+      "created": 1741820400000,
+      "modified": 1741820400000,
+      "note": "Preso da Novelist:\n\nCerchio colore stato:\n- 🟡 Giallo = Bozza\n- 🟢 Verde = Completato\n- Rosso = Da rivedere"
+    },
+    "an-1": {
+      "created": 1741820400000,
+      "modified": 1741820400000,
+      "note": "Ritmo = velocità della narrazione.\n\nL'AI analizza:\n- Lunghezza frasi\n- Dialoghi vs narrazione\n- Azione vs riflessione\n- Cliffhanger a fine capitolo"
+    },
+    "tech-4": {
+      "created": 1741820400000,
+      "modified": 1741820400000,
+      "note": "ARCHITETTURA AI:\n\nLocale (Ollama):\n- Privacy totale\n- Funziona offline\n- Modelli più piccoli\n\nAPI (OpenAI/Anthropic):\n- Modelli potenti\n- Costo per chiamata\n- Dipendenza esterna\n\nOpenClaw:\n- Infrastruttura pronta\n- Può usare modelli vari\n- Richiede server\n\nIBRIDO:\n- L'utente sceglie nelle impostazioni\n- 'Voglio privacy' → Locale\n- 'Voglio potenza' → API con sua key"
+    },
+    "found-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "found-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "found-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "found-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ed-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ed-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ed-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ed-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ed-6": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tr-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tr-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tr-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tr-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tr-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tl-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tl-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tl-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tl-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "nt-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "nt-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "nt-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "nt-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "an-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "an-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "an-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "an-5": {
+      "created": 1774884333632,
+      "modified": 1774884350898,
+      "note": ""
+    },
+    "co-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "co-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "co-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "co-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "mk-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "mk-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "mk-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "mk-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "mk-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ex-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ex-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ex-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ex-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "ex-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "pl-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "pl-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "pl-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "pl-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "te-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "te-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "te-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "te-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "te-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "te-6": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "doc-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "doc-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "doc-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "doc-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "doc-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tech-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tech-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tech-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "tech-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "fu-1": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "fu-2": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "fu-3": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "fu-4": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    },
+    "fu-5": {
+      "created": 1774884333632,
+      "modified": 1774884333632,
+      "note": ""
+    }
+  },
+  "exportedAt": "2026-03-30T15:26:09.924Z"
+}
