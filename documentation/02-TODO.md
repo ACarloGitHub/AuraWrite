@@ -35,7 +35,8 @@
 - [x] **"Could not save document"** — `version_number` overflowava `i32` (fixato 2026-04-11) ✅
 - [x] **Click tra documenti senza check modifiche** — ora usa `handleCloseDocument()` ✅
 - [x] **Auto-salvataggio non chiamato** — ora connesso tramite evento `aurawrite:content-changed` ✅
-- [ ] **Auto-salvataggio da testare** — verificare che salva davvero dopo 12s
+- [x] **UI freeze dopo 12s** — flag globale `__aurawrite_loading` coordinato tra moduli ✅
+- [ ] **Auto-salvataggio da testare** — verificare che l'evento venga emesso/ricevuto
 - [ ] Discard lento: dipende dal modello AI (reasoning). Considerare modelli senza reasoning per Suggestions.
 
 ---
