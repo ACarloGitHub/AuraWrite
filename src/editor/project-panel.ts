@@ -82,6 +82,11 @@ export function initProjectPanel(
   const btnProjects = document.getElementById("btn-projects");
   btnProjects?.addEventListener("click", toggleProjectPanel);
 
+  // Ascolta evento di modifica contenuto per auto-salvataggio
+  window.addEventListener("aurawrite:content-changed", () => {
+    scheduleAutoSave();
+  });
+
   loadProjects();
 }
 

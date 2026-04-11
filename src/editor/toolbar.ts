@@ -59,6 +59,11 @@ function setupDirtyTracking(): void {
           documentState.isDirty = true;
           updateWindowTitle();
           updateDocumentTitleBar();
+          
+          // Emetti evento per auto-salvataggio
+          window.dispatchEvent(new CustomEvent("aurawrite:content-changed", {
+            detail: { content: newContent }
+          }));
         }
         updateOnTextChange(editorView);
       }
