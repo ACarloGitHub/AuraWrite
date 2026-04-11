@@ -70,6 +70,19 @@ pub struct EntityType {
     pub created_at: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DocumentVersion {
+    pub id: String,
+    pub document_id: String,
+    pub version_number: i32,
+    pub backup_path: String,
+    pub content_json: Option<String>,
+    pub word_count: Option<i32>,
+    pub note: Option<String>,
+    pub size_bytes: Option<i32>,
+    pub created_at: i64,
+}
+
 /// Get the database path for AuraWrite
 pub fn get_database_path() -> PathBuf {
     let config_dir = dirs::config_dir()
@@ -660,6 +673,91 @@ pub fn get_entity_types_by_project(conn: &Connection, project_id: &str) -> Sqlit
 
 pub fn delete_entity_type(conn: &Connection, id: &str) -> SqliteResult<()> {
     conn.execute("DELETE FROM entity_types WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+// ============================================================================
+// CRUD OPERATIONS - DOCUMENT VERSIONS
+// ============================================================================
+
+/// Create a new version snapshot (chiamato solo al salvataggio MANUALE)
+pub fn create_document_version(conn: &Connection, version: &DocumentVersion) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO versions (id, document_id, version_number, backup_path, content_json, word_count, note, size_bytes, created_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            version.id,
+            version.document_id,
+            version.version_number,
+            version.backup_path,
+            version.content_json,
+            version.word_count,
+            version.note,
+            version.size_bytes,
+            version.created_at
+        ],
+    )?;
+    Ok(())
+}
+
+/// Get the latest version for a document
+pub fn get_latest_version(conn: &Connection, document_id: &str) -> SqliteResult<Option<DocumentVersion>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, document_id, version_number, backup_path, content_json, word_count, note, size_bytes, created_at 
+         FROM versions WHERE document_id = ?1 ORDER BY created_at DESC LIMIT 1"
+    )?;
+    
+    let mut rows = stmt.query(params![document_id])?;
+    
+    if let Some(row) = rows.next()? {
+        Ok(Some(DocumentVersion {
+            id: row.get(0)?,
+            document_id: row.get(1)?,
+            version_number: row.get(2)?,
+            backup_path: row.get(3)?,
+            content_json: row.get(4)?,
+            word_count: row.get(5)?,
+            note: row.get(6)?,
+            size_bytes: row.get(7)?,
+            created_at: row.get(8)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Get all versions for a document
+pub fn get_versions_by_document(conn: &Connection, document_id: &str) -> SqliteResult<Vec<DocumentVersion>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, document_id, version_number, backup_path, content_json, word_count, note, size_bytes, created_at 
+         FROM versions WHERE document_id = ?1 ORDER BY created_at DESC"
+    )?;
+    
+    let versions = stmt.query_map(params![document_id], |row| {
+        Ok(DocumentVersion {
+            id: row.get(0)?,
+            document_id: row.get(1)?,
+            version_number: row.get(2)?,
+            backup_path: row.get(3)?,
+            content_json: row.get(4)?,
+            word_count: row.get(5)?,
+            note: row.get(6)?,
+            size_bytes: row.get(7)?,
+            created_at: row.get(8)?,
+        })
+    })?;
+    
+    versions.collect()
+}
+
+/// Delete old versions (keep only the last N)
+pub fn cleanup_old_versions(conn: &Connection, document_id: &str, keep_count: i32) -> SqliteResult<()> {
+    conn.execute(
+        "DELETE FROM versions WHERE document_id = ?1 AND id NOT IN (
+            SELECT id FROM versions WHERE document_id = ?1 ORDER BY created_at DESC LIMIT ?2
+        )",
+        params![document_id, keep_count]
+    )?;
     Ok(())
 }
 // Debug function to list all projects

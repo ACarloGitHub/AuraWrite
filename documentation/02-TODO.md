@@ -32,11 +32,19 @@
 
 ## Priority 1: Bugs
 
+- [x] **"Could not save document"** — `version_number` overflowava `i32` (fixato 2026-04-11) ✅
+- [x] **Click tra documenti senza check modifiche** — ora usa `handleCloseDocument()` ✅
+- [ ] **Auto-salvataggio non salva** — da investigare (12s debounce ma non salva)
 - [ ] Discard lento: dipende dal modello AI (reasoning). Considerare modelli senza reasoning per Suggestions.
 
 ---
 
 ## Priority 2: Features (aggiornato post-SQLite Phase A)
+
+### UI: Drag and Drop [TODO NUOVO]
+- [ ] Trascinare documenti/sezioni per riordinarli
+- [ ] Spostare documenti tra sezioni
+- [ ] Aggiornare `order_index` nel database dopo drag
 
 ### Database SQLite — Phase A.2 UI Integration [IN CORSO]
 

@@ -181,15 +181,53 @@ AuraWrite/
 
 ## Git Conventions
 
-**Commit Messages:** English, imperative mood
+**Regola: una feature alla volta, main sempre stabile.**
 
+1. Aggiorna main:
+   ```bash
+   git switch main && git pull origin main
+   ```
+
+2. Crea branch per il task:
+   ```bash
+   git switch -c tipo/nome-chiaro
+   ```
+   Prefissi: `feat/` `fix/` `refactor/` `docs/` `chore/`
+
+3. Sviluppa e committa solo su quel branch.
+
+4. A task completato e testato, unisci a main:
+   ```bash
+   git switch main
+   git merge --no-ff tipo/nome-chiaro
+   git push origin main
+   git branch -d tipo/nome-chiaro
+   ```
+
+5. Per abbandonare un branch senza merge:
+   ```bash
+   git switch main && git branch -D tipo/nome-chiaro
+   ```
+
+6. Se main remoto cambia mentre sei su un feature branch:
+   ```bash
+   git switch main && git pull origin main
+   git switch tipo/nome-chiaro && git rebase main
+   ```
+
+7. **Milestone:** Push su GitHub ogni volta che si raggiunge un traguardo significativo.
+
+**Divieti:**
+- No commit diretti su main
+- No due feature branch aperti insieme
+- No nuovo branch finché il precedente non è mergiato e pushato
+
+**Commit Messages:** English, imperative mood
 ```
 feat: add tooltip plugin for text selection
 fix: resolve selection coordinate calculation
 docs: update ProseMirror plugin documentation
 ```
-
-**Branch Naming:** `feature/`, `fix/`, `docs/` prefixes
 
 ---
 

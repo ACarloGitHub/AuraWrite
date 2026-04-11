@@ -160,6 +160,34 @@ fn db_delete_entity_type(state: State<AppState>, id: String) -> Result<(), Strin
 }
 
 // ============================================================================
+// DOCUMENT VERSION COMMANDS
+// ============================================================================
+
+#[tauri::command]
+fn db_create_document_version(state: State<AppState>, version: DocumentVersion) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    create_document_version(&*conn, &version).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_get_latest_version(state: State<AppState>, document_id: String) -> Result<Option<DocumentVersion>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_latest_version(&*conn, &document_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_get_versions(state: State<AppState>, document_id: String) -> Result<Vec<DocumentVersion>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_versions_by_document(&*conn, &document_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_cleanup_old_versions(state: State<AppState>, document_id: String, keep_count: i32) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    cleanup_old_versions(&*conn, &document_id, keep_count).map_err(|e| e.to_string())
+}
+
+// ============================================================================
 // FILE COMMANDS (existing)
 // ============================================================================
 
@@ -279,6 +307,11 @@ pub fn run() {
             db_get_document,
             db_update_document,
             db_delete_document,
+            // Document version commands
+            db_create_document_version,
+            db_get_latest_version,
+            db_get_versions,
+            db_cleanup_old_versions,
             // Entity commands
             db_create_entity,
             db_get_entities,
