@@ -2,7 +2,7 @@ import { createEditor } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
-import { initProjectPanel } from "./editor/project-panel";
+import { initProjectPanel, triggerSaveStatusCheck } from "./editor/project-panel";
 import { EditorState } from "prosemirror-state";
 import "./styles.css";
 
@@ -333,6 +333,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const editorView = createEditor(editorElement);
+  let isLoadingDocument = false;
+
+  // Track document changes
+  const originalDispatch = editorView.dispatch.bind(editorView);
+  editorView.dispatch = (tr) => {
+    if (tr.docChanged && !isLoadingDocument) {
+      triggerSaveStatusCheck();
+    }
+    return originalDispatch(tr);
+  };
 
   setupToolbar(editorView);
   setupAIPanel(editorView);
@@ -355,6 +365,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Load document content into editor
       if (doc.content_json) {
         try {
+          isLoadingDocument = true; // Non tracciare modifiche durante caricamento
           const content = JSON.parse(doc.content_json);
           // Clear current content and load new
           const tr = editorView.state.tr;
@@ -367,8 +378,13 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           editorView.updateState(newState);
           console.log("Loaded document content");
+          // Aspetta un tick per assicurarti che lo stato sia stabile
+          setTimeout(() => {
+            isLoadingDocument = false;
+          }, 0);
         } catch (e) {
           console.error("Failed to parse document content:", e);
+          isLoadingDocument = false;
         }
       }
     },

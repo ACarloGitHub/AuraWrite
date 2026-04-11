@@ -15,6 +15,8 @@ import {
   deleteSection,
   updateDocument,
   deleteDocument,
+  saveDocumentVersion,
+  getLatestVersion,
 } from "../database/db";
 import type { Project, Section, Document } from "../types/database";
 
@@ -25,7 +27,7 @@ let currentDocument: Document | null = null;
 let projects: Project[] = [];
 let sections: Section[] = [];
 let documents: Document[] = [];
-let hasUnsavedChanges = false;
+let lastSavedContent: string | null = null; // Contenuto salvato nel DB (per confronto)
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let showingProjectList = false; // Se true, mostra lista progetti invece del progetto attivo
 
@@ -59,12 +61,19 @@ export function initProjectPanel(
   btnNewProject?.addEventListener("click", handleNewProject);
 
   const btnOpenProject = document.getElementById("btn-open-project");
-  btnOpenProject?.addEventListener("click", () => {
-    showingProjectList = true;
-    currentProject = null;
-    currentSection = null;
-    currentDocument = null;
-    renderProjectsList();
+  btnOpenProject?.addEventListener("click", async () => {
+    const action = await handleCloseDocument();
+    if (action === 'proceed') {
+      // Nessuna modifica o utente ha gestito, apri lista progetti
+      showingProjectList = true;
+      currentProject = null;
+      currentSection = null;
+      currentDocument = null;
+      lastSavedContent = null;
+      clearEditor();
+      renderProjectsList();
+    }
+    // Se 'cancel', non fare nulla - rimani sul documento
   });
 
   const btnSaveDb = document.getElementById("btn-save-db");
@@ -89,22 +98,128 @@ function toggleProjectPanel(): void {
 // SAVE STATUS
 // ============================================================================
 
-function markUnsavedChanges(): void {
-  hasUnsavedChanges = true;
-  updateSaveStatus();
-  scheduleAutoSave();
+/**
+ * Mostra dialog per chiedere se salvare le modifiche
+ * @returns 'save' | 'dont-save' | 'cancel'
+ */
+function showSaveDialog(): Promise<'save' | 'dont-save' | 'cancel'> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'save-dialog-overlay';
+    
+    overlay.innerHTML = `
+      <div class="save-dialog">
+        <h3>Save changes?</h3>
+        <p>You have unsaved changes. What would you like to do?</p>
+        <div class="save-dialog-buttons">
+          <button class="save-dialog-btn" data-action="cancel">Cancel</button>
+          <button class="save-dialog-btn danger" data-action="dont-save">Don't Save</button>
+          <button class="save-dialog-btn primary" data-action="save">Save</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Handle button clicks
+    overlay.querySelectorAll('.save-dialog-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action') as 'save' | 'dont-save' | 'cancel';
+        overlay.remove();
+        resolve(action);
+      });
+    });
+    
+    // Handle overlay click (cancel)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve('cancel');
+      }
+    });
+  });
 }
 
-function markSaved(): void {
-  hasUnsavedChanges = false;
+/**
+ * Mostra dialog di conferma per "Don't Save"
+ * @returns true se conferma, false altrimenti
+ */
+function showDiscardConfirmDialog(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'save-dialog-overlay';
+    
+    overlay.innerHTML = `
+      <div class="save-dialog">
+        <h3>Discard changes?</h3>
+        <p>The document will revert to its last saved state. All changes since then will be lost.</p>
+        <div class="save-dialog-buttons">
+          <button class="save-dialog-btn" data-action="back">Go Back</button>
+          <button class="save-dialog-btn danger" data-action="confirm">Yes, Discard Changes</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Handle button clicks
+    overlay.querySelectorAll('.save-dialog-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action');
+        overlay.remove();
+        resolve(action === 'confirm');
+      });
+    });
+    
+    // Handle overlay click (back)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve(false);
+      }
+    });
+  });
+}
+
+function checkUnsavedChanges(): boolean {
+  // Confronta il contenuto attuale con quello salvato
+  if (!currentDocument) return false;
+  const currentContent = getEditorContent ? getEditorContent() : null;
+  if (!currentContent) return false;
+  
+  // Se non abbiamo un lastSavedContent, controlla se l'editor ha contenuto
+  if (lastSavedContent === null) {
+    // Controlla se l'editor ha contenuto reale
+    try {
+      const parsed = JSON.parse(currentContent);
+      // ProseMirror doc ha sempre almeno un nodo paragrafo vuoto
+      // Controlliamo se c'è testo reale
+      if (parsed.content && parsed.content.length > 0) {
+        const hasText = parsed.content.some((node: any) => 
+          node.content && node.content.some((child: any) => child.text && child.text.length > 0)
+        );
+        return hasText;
+      }
+      return false;
+    } catch {
+      return currentContent !== "";
+    }
+  }
+  
+  return currentContent !== lastSavedContent;
+}
+
+function markContentSaved(content: string): void {
+  lastSavedContent = content;
   updateSaveStatus();
 }
 
 function updateSaveStatus(): void {
+  const hasUnsaved = checkUnsavedChanges();
   const statusEl = document.getElementById("save-status");
   if (statusEl) {
-    statusEl.textContent = hasUnsavedChanges ? "Unsaved..." : "Saved ✓";
-    statusEl.className = hasUnsavedChanges ? "save-status unsaved" : "save-status saved";
+    statusEl.textContent = hasUnsaved ? "Unsaved..." : "Saved ✓";
+    statusEl.className = hasUnsaved ? "save-status unsaved" : "save-status saved";
   }
 }
 
@@ -112,15 +227,25 @@ function scheduleAutoSave(): void {
   if (saveTimeout) {
     clearTimeout(saveTimeout);
   }
-  saveTimeout = setTimeout(() => {
-    if (hasUnsavedChanges && currentDocument) {
+  saveTimeout = setTimeout(async () => {
+    if (checkUnsavedChanges() && currentDocument) {
       console.log("Auto-saving document...");
+      const content = getEditorContent ? getEditorContent() : null;
+      if (content) {
+        // Auto-salvataggio: salva senza creare versione
+        await saveCurrentDocument(content, false);
+      }
     }
   }, SAVE_DEBOUNCE_MS);
 }
 
-async function saveCurrentDocument(content: string): Promise<void> {
-  if (!currentDocument) return;
+/**
+ * Salva il documento nel database
+ * @param content Il contenuto JSON da salvare
+ * @param createVersion Se true, crea una versione (salvataggio manuale)
+ */
+async function saveCurrentDocument(content: string, createVersion: boolean = false): Promise<boolean> {
+  if (!currentDocument) return false;
 
   try {
     const updatedDoc: Document = {
@@ -128,13 +253,21 @@ async function saveCurrentDocument(content: string): Promise<void> {
       content_json: content,
       updated_at: Date.now(),
     };
+    
+    // Se è salvataggio manuale, crea prima una versione
+    if (createVersion) {
+      await saveDocumentVersion(updatedDoc);
+    }
+    
     await updateDocument(updatedDoc);
     currentDocument = updatedDoc;
-    markSaved();
-    console.log("Document saved to database");
+    markContentSaved(content);
+    console.log(createVersion ? "Document saved (with version)" : "Document auto-saved");
+    return true;
   } catch (error) {
     console.error("Failed to save document:", error);
     showError("Could not save document");
+    return false;
   }
 }
 
@@ -153,8 +286,11 @@ async function handleSaveToDatabase(): Promise<void> {
     return;
   }
 
-  await saveCurrentDocument(content);
-  showNotification("Document saved!", "success");
+  // Salvataggio manuale: crea versione
+  const saved = await saveCurrentDocument(content, true);
+  if (saved) {
+    showNotification("Document saved!", "success");
+  }
 }
 
 function showNotification(message: string, type: "success" | "error" = "success"): void {
@@ -179,6 +315,71 @@ function showNotification(message: string, type: "success" | "error" = "success"
 function clearEditor(): void {
   const event = new CustomEvent("aurawrite:clear-editor");
   window.dispatchEvent(event);
+}
+
+/**
+ * Gestisce la chiusura di un documento con modifiche non salvate
+ * Mostra i dialog e gestisce le azioni
+ * @returns 'proceed' se si può procedere, 'cancel' se l'utente annulla
+ */
+async function handleCloseDocument(): Promise<'proceed' | 'cancel'> {
+  const hasUnsaved = checkUnsavedChanges();
+  
+  if (!hasUnsaved) {
+    return 'proceed';
+  }
+  
+  // Mostra primo dialog
+  const choice = await showSaveDialog();
+  
+  if (choice === 'cancel') {
+    return 'cancel';
+  }
+  
+  if (choice === 'save') {
+    // Salva con versione
+    const content = getEditorContent ? getEditorContent() : null;
+    if (content && currentDocument) {
+      const saved = await saveCurrentDocument(content, true);
+      if (!saved) {
+        return 'cancel'; // Salvataggio fallito
+      }
+    }
+    return 'proceed';
+  }
+  
+  if (choice === 'dont-save') {
+    // Mostra secondo dialog di conferma
+    const confirmed = await showDiscardConfirmDialog();
+    
+    if (!confirmed) {
+      return 'cancel'; // Utente ha cliccato Go Back
+    }
+    
+    // Carica l'ultima versione dal database
+    if (currentDocument) {
+      try {
+        const latestVersion = await getLatestVersion(currentDocument.id);
+        if (latestVersion && latestVersion.content_json) {
+          // Ripristina il contenuto dal DB
+          currentDocument.content_json = latestVersion.content_json;
+          // Aggiorna il documento nel DB
+          await updateDocument(currentDocument);
+          console.log("Document reverted to last saved version");
+        } else {
+          // Nessuna versione salvata, documento vuoto
+          currentDocument.content_json = "";
+          await updateDocument(currentDocument);
+        }
+      } catch (error) {
+        console.error("Failed to revert document:", error);
+        return 'cancel';
+      }
+    }
+    return 'proceed';
+  }
+  
+  return 'cancel';
 }
 
 // ============================================================================
@@ -218,20 +419,12 @@ async function loadDocuments(sectionId: string): Promise<void> {
 }
 
 async function handleNewProject(): Promise<void> {
-  // Chiedi conferma se ci sono modifiche non salvate
-  if (hasUnsavedChanges) {
-    const save = confirm("Hai modifiche non salvate. Vuoi salvare prima di creare un nuovo progetto?");
-    if (save) {
-      const content = getEditorContent ? getEditorContent() : null;
-      if (content && currentDocument) {
-        await saveCurrentDocument(content);
-      }
-    }
+  const action = await handleCloseDocument();
+  if (action === 'cancel') {
+    return; // Utente ha annullato
   }
   
-  // Pulisci l'editor
-  clearEditor();
-  
+  // Chiedi nome progetto
   const name = prompt("Project name:");
   if (!name) return;
 
@@ -245,7 +438,8 @@ async function handleNewProject(): Promise<void> {
     currentDocument = null;
     sections = result.sections || [];
     documents = [];
-    hasUnsavedChanges = false;
+    lastSavedContent = null;
+    clearEditor();
     renderProjectsList();
 
     if (onProjectChange) {
@@ -376,6 +570,7 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 
 function selectDocument(doc: Document): void {
   currentDocument = doc;
+  lastSavedContent = doc.content_json || null; // Salva il contenuto caricato per confronto
   if (onDocumentSelect) {
     onDocumentSelect(doc);
   }
@@ -407,6 +602,14 @@ function renderProjectsList(): void {
 
   // Se nessun progetto selezionato, mostra lista
   if (!currentProject) {
+    // Header con titolo
+    const header = document.createElement("div");
+    header.className = "project-panel__list-header";
+    header.innerHTML = `
+      <span class="project-panel__list-title">Select a project:</span>
+    `;
+    container.appendChild(header);
+
     projects.forEach((project) => {
       const projectEl = createProjectElement(project);
       container.appendChild(projectEl);
@@ -434,6 +637,25 @@ function createActiveProjectElement(project: Project): HTMLElement {
   // Container per azioni inline
   const actionsEl = document.createElement("div");
   actionsEl.className = "item-actions";
+
+  // Pulsante ← (torna alla lista)
+  const backBtn = document.createElement("button");
+  backBtn.className = "item-action-btn";
+  backBtn.textContent = "←";
+  backBtn.title = "Back to project list";
+  backBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const action = await handleCloseDocument();
+    if (action === 'proceed') {
+      showingProjectList = true;
+      currentProject = null;
+      currentSection = null;
+      currentDocument = null;
+      lastSavedContent = null;
+      renderProjectsList();
+    }
+  });
+  actionsEl.appendChild(backBtn);
 
   // Pulsante + Section
   const addSectionBtn = document.createElement("button");
@@ -476,9 +698,6 @@ function createProjectElement(project: Project): HTMLElement {
   // Usato solo per la lista di selezione (quando nessun progetto è attivo)
   const div = document.createElement("div");
   div.className = "project-item";
-  if (currentProject?.id === project.id) {
-    div.classList.add("active");
-  }
 
   const header = document.createElement("div");
   header.className = "item-header";
@@ -515,10 +734,17 @@ function createProjectElement(project: Project): HTMLElement {
 
   header.appendChild(nameEl);
   header.appendChild(actionsEl);
-  header.addEventListener("click", () => selectProject(project));
+  
+  // Click sul progetto chiede conferma se ci sono modifiche
+  header.addEventListener("click", async () => {
+    const action = await handleCloseDocument();
+    if (action === 'proceed') {
+      selectProject(project);
+    }
+  });
+  
   div.appendChild(header);
 
-  // Non mostrare sections qui - solo nella vista progetto attivo
   return div;
 }
 
@@ -611,9 +837,16 @@ function createDocumentElement(doc: Document): HTMLElement {
 
   header.appendChild(nameEl);
   header.appendChild(actionsEl);
-  header.addEventListener("click", (e) => {
+  header.addEventListener("click", async (e) => {
     e.stopPropagation();
-    selectDocument(doc);
+    // Se è già il documento corrente, non fare nulla
+    if (currentDocument?.id === doc.id) return;
+    
+    // Controlla se ci sono modifiche non salvate
+    const action = await handleCloseDocument();
+    if (action === 'proceed') {
+      selectDocument(doc);
+    }
   });
   div.appendChild(header);
 
@@ -628,6 +861,7 @@ function selectProject(project: Project): void {
   currentProject = project;
   currentSection = null;
   currentDocument = null;
+  lastSavedContent = null; // Reset per nuovo progetto
 
   loadSections(project.id);
 
@@ -670,6 +904,11 @@ function showError(message: string): void {
 // EXPORTS
 // ============================================================================
 
+function triggerSaveStatusCheck(): void {
+  // Chiamato quando l'editor cambia — aggiorna solo lo stato visivo
+  updateSaveStatus();
+}
+
 export {
   currentProject,
   currentSection,
@@ -677,4 +916,5 @@ export {
   projects,
   sections,
   documents,
+  triggerSaveStatusCheck,
 };

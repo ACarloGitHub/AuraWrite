@@ -57,6 +57,18 @@ export interface EntityType {
   created_at: number;
 }
 
+export interface DocumentVersion {
+  id: string;
+  document_id: string;
+  version_number: number;
+  backup_path: string;
+  content_json?: string;
+  word_count?: number;
+  note?: string;
+  size_bytes?: number;
+  created_at: number;
+}
+
 // ============================================================================
 // Enums
 // ============================================================================

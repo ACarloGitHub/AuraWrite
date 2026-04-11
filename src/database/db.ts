@@ -10,6 +10,7 @@ import type {
   Document,
   Entity,
   EntityType,
+  DocumentVersion,
 } from "../types/database";
 
 // ============================================================================
@@ -174,4 +175,51 @@ export async function createSectionWithDocuments(
   await createDocument(document);
 
   return { section, documents: [document] };
+}
+
+// ============================================================================
+// DOCUMENT VERSIONS
+// ============================================================================
+
+export async function createDocumentVersion(version: DocumentVersion): Promise<void> {
+  await invoke("db_create_document_version", { version });
+}
+
+export async function getLatestVersion(documentId: string): Promise<DocumentVersion | null> {
+  return await invoke("db_get_latest_version", { documentId });
+}
+
+export async function getVersions(documentId: string): Promise<DocumentVersion[]> {
+  return await invoke("db_get_versions", { documentId });
+}
+
+export async function cleanupOldVersions(documentId: string, keepCount: number): Promise<void> {
+  await invoke("db_cleanup_old_versions", { documentId, keepCount });
+}
+
+/**
+ * Crea una versione del documento (chiamato solo al salvataggio MANUALE)
+ */
+export async function saveDocumentVersion(document: Document): Promise<void> {
+  // Ottieni il numero versione successivo
+  const existingVersions = await getVersions(document.id);
+  const nextVersionNumber = existingVersions.length > 0 
+    ? Math.max(...existingVersions.map(v => v.version_number)) + 1 
+    : 1;
+
+  const version: DocumentVersion = {
+    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    document_id: document.id,
+    version_number: nextVersionNumber,
+    backup_path: "",
+    content_json: document.content_json,
+    word_count: document.word_count,
+    note: undefined,
+    size_bytes: document.content_json.length,
+    created_at: Date.now(),
+  };
+  await createDocumentVersion(version);
+  
+  // Mantieni solo le ultime 10 versioni
+  await cleanupOldVersions(document.id, 10);
 }
