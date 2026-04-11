@@ -54,16 +54,20 @@ function setupDirtyTracking(): void {
       editorView.updateState(newState);
 
       if (transaction.docChanged) {
+        // Non emettere eventi se stiamo caricando un documento
+        const isLoading = (window as any).__aurawrite_loading === true;
         const newContent = JSON.stringify(newState.doc.toJSON());
         if (documentState.lastSavedContent !== newContent) {
           documentState.isDirty = true;
           updateWindowTitle();
           updateDocumentTitleBar();
           
-          // Emetti evento per auto-salvataggio
-          window.dispatchEvent(new CustomEvent("aurawrite:content-changed", {
-            detail: { content: newContent }
-          }));
+          if (!isLoading) {
+            // Emetti evento per auto-salvataggio
+            window.dispatchEvent(new CustomEvent("aurawrite:content-changed", {
+              detail: { content: newContent }
+            }));
+          }
         }
         updateOnTextChange(editorView);
       }

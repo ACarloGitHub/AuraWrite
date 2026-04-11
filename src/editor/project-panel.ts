@@ -574,6 +574,7 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 }
 
 function selectDocument(doc: Document): void {
+  (window as any).__aurawrite_loading = true;
   currentDocument = doc;
   lastSavedContent = doc.content_json || null; // Salva il contenuto caricato per confronto
   if (onDocumentSelect) {
@@ -583,6 +584,10 @@ function selectDocument(doc: Document): void {
   if (titleEl && currentProject && currentSection) {
     titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${doc.title}`;
   }
+  // Reset flag dopo un breve delay per permettere a ProseMirror di elaborare
+  setTimeout(() => {
+    (window as any).__aurawrite_loading = false;
+  }, 100);
 }
 
 // ============================================================================

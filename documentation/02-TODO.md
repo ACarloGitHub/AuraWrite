@@ -34,12 +34,19 @@
 
 - [x] **"Could not save document"** — `version_number` overflowava `i32` (fixato 2026-04-11) ✅
 - [x] **Click tra documenti senza check modifiche** — ora usa `handleCloseDocument()` ✅
-- [ ] **Auto-salvataggio non salva** — da investigare (12s debounce ma non salva)
+- [x] **Auto-salvataggio non chiamato** — ora connesso tramite evento `aurawrite:content-changed` ✅
+- [ ] **Auto-salvataggio da testare** — verificare che salva davvero dopo 12s
 - [ ] Discard lento: dipende dal modello AI (reasoning). Considerare modelli senza reasoning per Suggestions.
 
 ---
 
 ## Priority 2: Features (aggiornato post-SQLite Phase A)
+
+### AI Assistant + Database [TODO NUOVO]
+- [ ] AI Assistant (pannello dx) può interrogare il database
+- [ ] Tool calling per: search_characters, find_scenes, get_chapter_summary
+- [ ] Inserimento dati di test: capitoli, sezioni, personaggi, luoghi
+- [ ] Debug tool per Aura: visualizzare/modificare database durante test
 
 ### UI: Drag and Drop [TODO NUOVO]
 - [ ] Trascinare documenti/sezioni per riordinarli

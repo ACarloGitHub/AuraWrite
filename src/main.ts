@@ -335,37 +335,30 @@ document.addEventListener("DOMContentLoaded", () => {
   const editorView = createEditor(editorElement);
   let isLoadingDocument = false;
 
-  // Track document changes
-  const originalDispatch = editorView.dispatch.bind(editorView);
-  editorView.dispatch = (tr) => {
-    if (tr.docChanged && !isLoadingDocument) {
-      triggerSaveStatusCheck();
-    }
-    return originalDispatch(tr);
-  };
-
-  setupToolbar(editorView);
-  setupAIPanel(editorView);
-  setupSuggestionsPanel(editorView);
-  updateWordCount(editorView);
+  // Esponi flag globale per toolbar.ts
+  (window as any).__aurawrite_loading = false;
+  function setLoading(val: boolean) {
+    isLoadingDocument = val;
+    (window as any).__aurawrite_loading = val;
+  }
 
   // Listen for clear editor events
   window.addEventListener("aurawrite:clear-editor", () => {
-    // Clear editor content
+    setLoading(true);
     const tr = editorView.state.tr;
     tr.delete(0, tr.doc.content.size);
     editorView.dispatch(tr);
     console.log("Editor cleared");
+    setTimeout(() => setLoading(false), 50);
   });
 
   // Initialize project panel
   initProjectPanel({
     onDocumentSelect: (doc) => {
       console.log("Document selected:", doc.title);
-      // Load document content into editor
       if (doc.content_json) {
         try {
-          isLoadingDocument = true; // Non tracciare modifiche durante caricamento
+          setLoading(true);
           const content = JSON.parse(doc.content_json);
           // Clear current content and load new
           const tr = editorView.state.tr;
@@ -378,13 +371,11 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           editorView.updateState(newState);
           console.log("Loaded document content");
-          // Aspetta un tick per assicurarti che lo stato sia stabile
-          setTimeout(() => {
-            isLoadingDocument = false;
-          }, 0);
+          // Aspetta che tutti gli eventi siano processati
+          setTimeout(() => setLoading(false), 50);
         } catch (e) {
           console.error("Failed to parse document content:", e);
-          isLoadingDocument = false;
+          setLoading(false);
         }
       }
     },
