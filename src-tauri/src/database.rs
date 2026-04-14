@@ -1,7 +1,7 @@
 // Database module for AuraWrite
 // SQLite schema and operations
 
-use rusqlite::{Connection, Result as SqliteResult, params};
+use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -88,10 +88,10 @@ pub fn get_database_path() -> PathBuf {
     let config_dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("aurawrite");
-    
+
     // Ensure directory exists
     let _ = std::fs::create_dir_all(&config_dir);
-    
+
     config_dir.join("aurawrite.db")
 }
 
@@ -99,13 +99,13 @@ pub fn get_database_path() -> PathBuf {
 pub fn init_database() -> SqliteResult<Connection> {
     let db_path = get_database_path();
     let conn = Connection::open(&db_path)?;
-    
+
     // Enable foreign keys
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    
+
     // Create schema
     conn.execute_batch(&get_schema())?;
-    
+
     Ok(conn)
 }
 
@@ -292,7 +292,8 @@ fn get_schema() -> String {
     CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
     CREATE INDEX IF NOT EXISTS idx_search_project ON search_index(project_id);
     CREATE INDEX IF NOT EXISTS idx_search_entity ON search_index(entity_type, entity_id);
-    "#.to_string()
+    "#
+    .to_string()
 }
 
 #[cfg(test)]
@@ -304,7 +305,7 @@ mod tests {
         // Use in-memory database for testing
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(&get_schema()).unwrap();
-        
+
         // Verify tables exist
         let tables: Vec<String> = conn
             .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -313,7 +314,7 @@ mod tests {
             .unwrap()
             .filter_map(|r| r.ok())
             .collect();
-        
+
         assert!(tables.contains(&"projects".to_string()));
         assert!(tables.contains(&"sections".to_string()));
         assert!(tables.contains(&"documents".to_string()));
@@ -345,7 +346,7 @@ pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, type, description, created_at, updated_at FROM projects ORDER BY updated_at DESC"
     )?;
-    
+
     let projects = stmt.query_map([], |row| {
         Ok(Project {
             id: row.get(0)?,
@@ -356,17 +357,17 @@ pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
             updated_at: row.get(5)?,
         })
     })?;
-    
+
     projects.collect()
 }
 
 pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, type, description, created_at, updated_at FROM projects WHERE id = ?1"
+        "SELECT id, name, type, description, created_at, updated_at FROM projects WHERE id = ?1",
     )?;
-    
+
     let mut rows = stmt.query(params![id])?;
-    
+
     if let Some(row) = rows.next()? {
         Ok(Some(Project {
             id: row.get(0)?,
@@ -428,7 +429,7 @@ pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteRes
         "SELECT id, project_id, parent_id, name, order_index, color, section_type, created_at, updated_at 
          FROM sections WHERE project_id = ?1 ORDER BY order_index, created_at"
     )?;
-    
+
     let sections = stmt.query_map(params![project_id], |row| {
         Ok(Section {
             id: row.get(0)?,
@@ -442,7 +443,7 @@ pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteRes
             updated_at: row.get(8)?,
         })
     })?;
-    
+
     sections.collect()
 }
 
@@ -491,12 +492,15 @@ pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<(
     Ok(())
 }
 
-pub fn get_documents_by_section(conn: &Connection, section_id: &str) -> SqliteResult<Vec<Document>> {
+pub fn get_documents_by_section(
+    conn: &Connection,
+    section_id: &str,
+) -> SqliteResult<Vec<Document>> {
     let mut stmt = conn.prepare(
         "SELECT id, section_id, title, content_json, status, word_count, tags, created_at, updated_at 
          FROM documents WHERE section_id = ?1 ORDER BY updated_at DESC"
     )?;
-    
+
     let documents = stmt.query_map(params![section_id], |row| {
         Ok(Document {
             id: row.get(0)?,
@@ -510,7 +514,7 @@ pub fn get_documents_by_section(conn: &Connection, section_id: &str) -> SqliteRe
             updated_at: row.get(8)?,
         })
     })?;
-    
+
     documents.collect()
 }
 
@@ -519,9 +523,9 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
         "SELECT id, section_id, title, content_json, status, word_count, tags, created_at, updated_at 
          FROM documents WHERE id = ?1"
     )?;
-    
+
     let mut rows = stmt.query(params![id])?;
-    
+
     if let Some(row) = rows.next()? {
         Ok(Some(Document {
             id: row.get(0)?,
@@ -589,7 +593,7 @@ pub fn get_entities_by_project(conn: &Connection, project_id: &str) -> SqliteRes
         "SELECT id, project_id, entity_type_id, name, description, image_path, metadata_json, created_at, updated_at 
          FROM entities WHERE project_id = ?1 ORDER BY name"
     )?;
-    
+
     let entities = stmt.query_map(params![project_id], |row| {
         Ok(Entity {
             id: row.get(0)?,
@@ -603,7 +607,7 @@ pub fn get_entities_by_project(conn: &Connection, project_id: &str) -> SqliteRes
             updated_at: row.get(8)?,
         })
     })?;
-    
+
     entities.collect()
 }
 
@@ -650,12 +654,15 @@ pub fn create_entity_type(conn: &Connection, entity_type: &EntityType) -> Sqlite
     Ok(())
 }
 
-pub fn get_entity_types_by_project(conn: &Connection, project_id: &str) -> SqliteResult<Vec<EntityType>> {
+pub fn get_entity_types_by_project(
+    conn: &Connection,
+    project_id: &str,
+) -> SqliteResult<Vec<EntityType>> {
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, icon, color, fields_json, created_at 
-         FROM entity_types WHERE project_id = ?1 ORDER BY name"
+         FROM entity_types WHERE project_id = ?1 ORDER BY name",
     )?;
-    
+
     let types = stmt.query_map(params![project_id], |row| {
         Ok(EntityType {
             id: row.get(0)?,
@@ -667,7 +674,7 @@ pub fn get_entity_types_by_project(conn: &Connection, project_id: &str) -> Sqlit
             created_at: row.get(6)?,
         })
     })?;
-    
+
     types.collect()
 }
 
@@ -701,14 +708,17 @@ pub fn create_document_version(conn: &Connection, version: &DocumentVersion) -> 
 }
 
 /// Get the latest version for a document
-pub fn get_latest_version(conn: &Connection, document_id: &str) -> SqliteResult<Option<DocumentVersion>> {
+pub fn get_latest_version(
+    conn: &Connection,
+    document_id: &str,
+) -> SqliteResult<Option<DocumentVersion>> {
     let mut stmt = conn.prepare(
         "SELECT id, document_id, version_number, backup_path, content_json, word_count, note, size_bytes, created_at 
          FROM versions WHERE document_id = ?1 ORDER BY created_at DESC LIMIT 1"
     )?;
-    
+
     let mut rows = stmt.query(params![document_id])?;
-    
+
     if let Some(row) = rows.next()? {
         Ok(Some(DocumentVersion {
             id: row.get(0)?,
@@ -727,12 +737,15 @@ pub fn get_latest_version(conn: &Connection, document_id: &str) -> SqliteResult<
 }
 
 /// Get all versions for a document
-pub fn get_versions_by_document(conn: &Connection, document_id: &str) -> SqliteResult<Vec<DocumentVersion>> {
+pub fn get_versions_by_document(
+    conn: &Connection,
+    document_id: &str,
+) -> SqliteResult<Vec<DocumentVersion>> {
     let mut stmt = conn.prepare(
         "SELECT id, document_id, version_number, backup_path, content_json, word_count, note, size_bytes, created_at 
          FROM versions WHERE document_id = ?1 ORDER BY created_at DESC"
     )?;
-    
+
     let versions = stmt.query_map(params![document_id], |row| {
         Ok(DocumentVersion {
             id: row.get(0)?,
@@ -746,51 +759,21 @@ pub fn get_versions_by_document(conn: &Connection, document_id: &str) -> SqliteR
             created_at: row.get(8)?,
         })
     })?;
-    
+
     versions.collect()
 }
 
 /// Delete old versions (keep only the last N)
-pub fn cleanup_old_versions(conn: &Connection, document_id: &str, keep_count: i32) -> SqliteResult<()> {
+pub fn cleanup_old_versions(
+    conn: &Connection,
+    document_id: &str,
+    keep_count: i32,
+) -> SqliteResult<()> {
     conn.execute(
         "DELETE FROM versions WHERE document_id = ?1 AND id NOT IN (
             SELECT id FROM versions WHERE document_id = ?1 ORDER BY created_at DESC LIMIT ?2
         )",
-        params![document_id, keep_count]
+        params![document_id, keep_count],
     )?;
     Ok(())
-}
-// Debug function to list all projects
-pub fn debug_list_projects(conn: &Connection) -> Result<Vec<Project>, rusqlite::Error> {
-    let mut stmt = conn.prepare("SELECT id, name, type, description, created_at, updated_at FROM projects")?;
-    let projects = stmt.query_map([], |row| {
-        Ok(Project {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            project_type: row.get(2)?,
-            description: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-    Ok(projects)
-}
-
-// Debug function to list all sections
-pub fn debug_list_sections(conn: &Connection) -> Result<Vec<Section>, rusqlite::Error> {
-    let mut stmt = conn.prepare("SELECT id, project_id, parent_id, name, order_index, color, section_type, created_at, updated_at FROM sections")?;
-    let sections = stmt.query_map([], |row| {
-        Ok(Section {
-            id: row.get(0)?,
-            project_id: row.get(1)?,
-            parent_id: row.get(2)?,
-            name: row.get(3)?,
-            order_index: row.get(4)?,
-            color: row.get(5)?,
-            section_type: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
-        })
-    })?.collect::<Result<Vec<_>, _>>()?;
-    Ok(sections)
 }

@@ -356,13 +356,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initProjectPanel({
     onDocumentSelect: (doc) => {
       console.log("Document selected:", doc.title);
-      if (doc.content_json) {
-        try {
-          setLoading(true);
+      setLoading(true);
+      try {
+        if (doc.content_json && doc.content_json.trim() !== "") {
           const content = JSON.parse(doc.content_json);
-          // Clear current content and load new
-          const tr = editorView.state.tr;
-          tr.delete(0, tr.doc.content.size);
           const newDoc = editorView.state.schema.nodeFromJSON(content);
           const newState = EditorState.create({
             schema: editorView.state.schema,
@@ -371,13 +368,21 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           editorView.updateState(newState);
           console.log("Loaded document content");
-          // Aspetta che tutti gli eventi siano processati
-          setTimeout(() => setLoading(false), 50);
-        } catch (e) {
-          console.error("Failed to parse document content:", e);
-          setLoading(false);
+        } else {
+          // Document is empty — clear the editor
+          const tr = editorView.state.tr;
+          tr.delete(0, tr.doc.content.size);
+          editorView.dispatch(tr);
+          console.log("Loaded empty document");
         }
+      } catch (e) {
+        console.error("Failed to parse document content:", e);
+        // Fallback: clear editor on parse error
+        const tr = editorView.state.tr;
+        tr.delete(0, tr.doc.content.size);
+        editorView.dispatch(tr);
       }
+      setTimeout(() => setLoading(false), 50);
     },
     onProjectChange: (project) => {
       console.log("Project changed:", project?.name || "none");

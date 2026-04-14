@@ -6,6 +6,7 @@ import {
   getProjects,
   getSections,
   getDocuments,
+  getDocument,
   createProjectWithDefaults,
   createSection,
   createDocument,
@@ -59,6 +60,20 @@ export function initProjectPanel(
 
   const btnNewProject = document.getElementById("btn-new-project");
   btnNewProject?.addEventListener("click", handleNewProject);
+
+  const btnBackProjects = document.getElementById("btn-back-projects");
+  btnBackProjects?.addEventListener("click", async () => {
+    const action = await handleCloseDocument();
+    if (action === 'proceed') {
+      showingProjectList = true;
+      currentProject = null;
+      currentSection = null;
+      currentDocument = null;
+      lastSavedContent = null;
+      clearEditor();
+      renderProjectsList();
+    }
+  });
 
   const btnOpenProject = document.getElementById("btn-open-project");
   btnOpenProject?.addEventListener("click", async () => {
@@ -187,18 +202,13 @@ function showDiscardConfirmDialog(): Promise<boolean> {
 }
 
 function checkUnsavedChanges(): boolean {
-  // Confronta il contenuto attuale con quello salvato
   if (!currentDocument) return false;
   const currentContent = getEditorContent ? getEditorContent() : null;
   if (!currentContent) return false;
   
-  // Se non abbiamo un lastSavedContent, controlla se l'editor ha contenuto
   if (lastSavedContent === null) {
-    // Controlla se l'editor ha contenuto reale
     try {
       const parsed = JSON.parse(currentContent);
-      // ProseMirror doc ha sempre almeno un nodo paragrafo vuoto
-      // Controlliamo se c'è testo reale
       if (parsed.content && parsed.content.length > 0) {
         const hasText = parsed.content.some((node: any) => 
           node.content && node.content.some((child: any) => child.text && child.text.length > 0)
@@ -277,25 +287,73 @@ async function saveCurrentDocument(content: string, createVersion: boolean = fal
 }
 
 async function handleSaveToDatabase(): Promise<void> {
-  if (!currentDocument) {
-    console.warn("No document selected");
-    showError("No document selected");
+  if (!currentProject) {
+    console.warn("No project selected");
+    showError("No project selected");
     return;
   }
 
-  // Ottieni contenuto dall'editor
-  const content = getEditorContent ? getEditorContent() : null;
-  if (!content) {
-    console.warn("No content from editor");
-    showError("No content to save");
+  let savedCount = 0;
+
+  // Save current document content from editor first
+  if (currentDocument && getEditorContent) {
+    const content = getEditorContent();
+    if (content) {
+      const updatedDoc: Document = {
+        ...currentDocument,
+        content_json: content,
+        updated_at: Date.now(),
+      };
+      try {
+        await saveDocumentVersion(updatedDoc);
+        await updateDocument(updatedDoc);
+        currentDocument = updatedDoc;
+        markContentSaved(content);
+        savedCount++;
+      } catch (error) {
+        console.error("Failed to save current document:", error);
+      }
+    }
+  }
+
+  // Save all documents that have content in the DB
+  for (const section of sections) {
+    const sectionDocs = await getDocuments(section.id);
+    for (const doc of sectionDocs) {
+      // Skip current doc — already saved above
+      if (currentDocument && doc.id === currentDocument.id) continue;
+      // Only save docs that have content
+      if (doc.content_json && doc.content_json.trim() !== "") {
+        try {
+          await updateDocument(doc);
+          savedCount++;
+        } catch (error) {
+          console.error("Failed to save document:", doc.title, error);
+        }
+      }
+    }
+  }
+
+  if (savedCount > 0) {
+    showNotification(`Project saved (${savedCount} document${savedCount !== 1 ? "s" : ""})`, "success");
+  } else {
+    showNotification("Nothing to save", "error");
+  }
+}
+
+async function handleSaveDocument(doc: Document): Promise<void> {
+  // Se il documento è quello corrente, salva il contenuto attuale dell'editor
+  if (currentDocument?.id === doc.id) {
+    await handleSaveToDatabase();
     return;
   }
 
-  // Salvataggio manuale: crea versione
-  const saved = await saveCurrentDocument(content, true);
-  if (saved) {
-    showNotification("Document saved!", "success");
-  }
+  // Altrimenti, seleziona il documento prima di salvarlo
+  await selectDocument(doc);
+  // Piccolo delay per permettere a ProseMirror di caricare
+  setTimeout(async () => {
+    await handleSaveToDatabase();
+  }, 150);
 }
 
 function showNotification(message: string, type: "success" | "error" = "success"): void {
@@ -563,7 +621,6 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 
     await createDocument(document);
     documents.push(document);
-    selectDocument(document);
     renderProjectsList();
 
     console.log("Created document:", document.title);
@@ -573,18 +630,29 @@ async function handleNewDocument(sectionId: string): Promise<void> {
   }
 }
 
-function selectDocument(doc: Document): void {
+async function selectDocument(doc: Document): Promise<void> {
   (window as any).__aurawrite_loading = true;
   currentDocument = doc;
-  lastSavedContent = doc.content_json || null; // Salva il contenuto caricato per confronto
+  // Read fresh document from DB to get latest content
+  try {
+    const freshDoc = await getDocument(doc.id);
+    if (freshDoc) {
+      currentDocument = freshDoc;
+      lastSavedContent = freshDoc.content_json || null;
+    } else {
+      lastSavedContent = doc.content_json || null;
+    }
+  } catch (error) {
+    console.error("Failed to load document from DB:", error);
+    lastSavedContent = doc.content_json || null;
+  }
   if (onDocumentSelect) {
-    onDocumentSelect(doc);
+    onDocumentSelect(currentDocument!);
   }
   const titleEl = document.getElementById("document-title");
   if (titleEl && currentProject && currentSection) {
-    titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${doc.title}`;
+    titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${currentDocument!.title}`;
   }
-  // Reset flag dopo un breve delay per permettere a ProseMirror di elaborare
   setTimeout(() => {
     (window as any).__aurawrite_loading = false;
   }, 100);
@@ -597,6 +665,11 @@ function selectDocument(doc: Document): void {
 function renderProjectsList(): void {
   const container = document.getElementById("projects-list");
   if (!container) return;
+
+  const btnBackProjects = document.getElementById("btn-back-projects");
+  if (btnBackProjects) {
+    btnBackProjects.style.display = currentProject ? "inline-flex" : "none";
+  }
 
   container.innerHTML = "";
 
@@ -647,25 +720,6 @@ function createActiveProjectElement(project: Project): HTMLElement {
   // Container per azioni inline
   const actionsEl = document.createElement("div");
   actionsEl.className = "item-actions";
-
-  // Pulsante ← (torna alla lista)
-  const backBtn = document.createElement("button");
-  backBtn.className = "item-action-btn";
-  backBtn.textContent = "←";
-  backBtn.title = "Back to project list";
-  backBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const action = await handleCloseDocument();
-    if (action === 'proceed') {
-      showingProjectList = true;
-      currentProject = null;
-      currentSection = null;
-      currentDocument = null;
-      lastSavedContent = null;
-      renderProjectsList();
-    }
-  });
-  actionsEl.appendChild(backBtn);
 
   // Pulsante + Section
   const addSectionBtn = document.createElement("button");
@@ -831,9 +885,19 @@ function createDocumentElement(doc: Document): HTMLElement {
   nameEl.className = "item-name";
   nameEl.textContent = doc.title;
 
-  // Container per azioni inline (solo delete per document)
+  // Container per azioni inline (save + delete per document)
   const actionsEl = document.createElement("div");
   actionsEl.className = "item-actions";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "item-action-btn";
+  saveBtn.textContent = "💾";
+  saveBtn.title = "Save document";
+  saveBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await handleSaveDocument(doc);
+  });
+  actionsEl.appendChild(saveBtn);
 
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "delete-btn";
@@ -855,7 +919,7 @@ function createDocumentElement(doc: Document): HTMLElement {
     // Controlla se ci sono modifiche non salvate
     const action = await handleCloseDocument();
     if (action === 'proceed') {
-      selectDocument(doc);
+      await selectDocument(doc);
     }
   });
   div.appendChild(header);

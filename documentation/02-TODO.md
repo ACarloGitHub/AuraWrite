@@ -1,6 +1,6 @@
 # AuraWrite — TODO List
 
-**Ultimo aggiornamento:** 2026-04-08
+**Ultimo aggiornamento:** 2026-04-14
 
 ---
 
@@ -37,7 +37,48 @@
 - [x] **Auto-salvataggio non chiamato** — ora connesso tramite evento `aurawrite:content-changed` ✅
 - [x] **UI freeze dopo 12s** — flag globale `__aurawrite_loading` coordinato tra moduli ✅
 - [ ] **Auto-salvataggio da testare** — verificare che l'evento venga emesso/ricevuto
+- [ ] **Document switch bug** — when clicking Doc 2, shows Doc 1 content (2026-04-14) — IN VERIFICA
 - [ ] Discard lento: dipende dal modello AI (reasoning). Considerare modelli senza reasoning per Suggestions.
+
+---
+
+## Saving System Architecture (2026-04-14)
+
+**Discussion with Carlo:**
+The current saving system conflates multiple concepts that need to be separated:
+
+### Current Issues
+- Auto-save vs manual save confusion
+- Document save vs Project save confusion  
+- No per-document save button
+- User cannot promote draft to version
+
+### Concepts to Separate
+
+| Concept | Storage | Trigger | Description |
+|---------|---------|---------|-------------|
+| **Draft** | `documents.content_json` | Auto-save (debounce) | Working copy, overwritten on each auto-save |
+| **Version** | `versions` table | Manual save (Ctrl+S or Save button) | Named snapshot, kept for history |
+| **File Export** | File system (.json/.md/.txt) | File → Save As | External backup |
+
+### Key Decisions
+1. **Per-document Save button** — each document in ProjectPanel has its own Save button
+2. **No auto-select on create** — new documents are NOT automatically opened
+3. **Save creates Version** — manual save always creates a versioned snapshot
+4. **Auto-save updates Draft only** — does NOT create versions
+
+### Future Features (Phase B)
+- **Save with name** — for named project backups
+- **Duplicate** project/section/document
+- **Rename inline** — click to edit names
+- **Drag & drop** — reorder sections and documents
+- **Copy sections between projects**
+
+---
+
+### Rust Warning Cleanup (2026-04-14)
+- [ ] Remove `package.private` from `src-tauri/Cargo.toml`
+- [ ] Remove or use `debug_list_projects` and `debug_list_sections` in `src-tauri/src/database.rs`
 
 ---
 
@@ -53,6 +94,18 @@
 - [ ] Trascinare documenti/sezioni per riordinarli
 - [ ] Spostare documenti tra sezioni
 - [ ] Aggiornare `order_index` nel database dopo drag
+
+### Project Categorization (2026-04-14)
+
+**Current state:** `window.prompt()` asks "Project type (novel/script/article)" — arbitrary, not visible after creation, not editable.
+
+**Decision (Carlo):** Replace with dropdown menu including "Custom" option.
+- Dropdown with preset categories: Novel, Script, Article, Notes, Legal, Software
+- "Custom" option allows user to define their own category name
+- Category must be visible and editable after project creation (inline edit or project settings)
+- UI labels and titles in English
+
+---
 
 ### Database SQLite — Phase A.2 UI Integration [IN CORSO]
 
