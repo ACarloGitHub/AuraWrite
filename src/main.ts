@@ -392,6 +392,9 @@ document.addEventListener("DOMContentLoaded", () => {
     },
   });
 
+  setupAIPanel(editorView);
+  setupSuggestionsPanel(editorView);
+
   const btnTheme = document.getElementById("btn-theme");
   btnTheme?.addEventListener("click", toggleTheme);
 
