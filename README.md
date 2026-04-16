@@ -135,7 +135,7 @@ npm run tauri:build    # Production build
 | **🎨 Custom Themes** | Light, Dark, and fully customizable colors | ✅ Ready |
 | **🔒 Privacy-First** | Works offline, no telemetry, no tracking | ✅ Ready |
 | **📊 Incremental Save** | Versioning system with database | 📅 Roadmap |
-| **🗄️ Vector DB** | Semantic search across documents | 📅 Roadmap |
+| **🗄️ Vector DB** | Semantic search across documents | ✅ Ready |
 | **🤖 Internal AI Agent** | Character/world memory, continuation | 📅 Future |
 
 **Tech Stack:**
@@ -144,6 +144,7 @@ npm run tauri:build    # Production build
 - **Backend:** Rust (Tauri)
 - **UI:** Plain CSS, HTML5
 - **AI Integration:** Ollama API, OpenAI API, Anthropic API
+- **Vector Search:** SQLite with custom cosine similarity (nomic-embed-text-v2-moe via Ollama)
 
 ---
 
@@ -151,13 +152,30 @@ npm run tauri:build    # Production build
 
 AuraWrite supports multiple AI providers. Configure in the app's settings panel (⚙️).
 
-### Ollama (Local)
+### Ollama (Local) - Required for Semantic Search
+
 For local models running on your machine:
+
+**For text generation (chat, suggestions):**
 1. Install [Ollama](https://ollama.ai/)
 2. Pull a model: `ollama pull llama3`
 3. In AuraWrite settings:
    - **Provider:** Ollama
    - **Model:** `llama3` (or your preferred model)
+
+**For semantic search (embeddings):**
+1. Ensure Ollama is running
+2. Pull the embedding model:
+   ```bash
+   ollama pull nomic-embed-text-v2-moe
+   ```
+3. The app will automatically use this model for semantic search
+
+**Why nomic-embed-text-v2-moe?**
+- 768-dimensional embeddings
+- Supports 100+ languages
+- State-of-the-art multilingual performance
+- Mixture of Experts (MoE) architecture for efficiency
 
 **Common Ollama models:**
 - `llama3` — General purpose, good balance
@@ -165,6 +183,8 @@ For local models running on your machine:
 - `mistral` — Fast and efficient
 - `qwen2.5` — Good for creative writing
 - `phi3` — Smaller, faster model
+
+**Note:** If Ollama is not installed, semantic search features will be disabled, but all other app features continue to work normally.
 
 ### Ollama (Cloud / Custom Endpoint)
 For remote Ollama instances:
@@ -212,8 +232,8 @@ macOS:   ~/Library/Application Support/aurawrite/
 | Phase | Feature | Status |
 |-------|---------|--------|
 | ✅ **v0.1** | Editor, AI panels, File operations | Complete |
-| 🚧 **v0.2** | SQLite + Vector DB, Incremental save | In Progress |
-| 📅 **v0.3** | Tooltip plugin, Synonyms, Continuation | Planned |
+| ✅ **v0.2** | SQLite + Vector DB (semantic search), Project system | Complete |
+| 🚧 **v0.3** | Tooltip plugin, Synonyms, Continuation, Tool Calling | In Progress |
 | 📅 **v0.4** | Character/place memory, Internet search | Planned |
 | 🎁 **v1.0** | Plugin system, Polish | Future |
 

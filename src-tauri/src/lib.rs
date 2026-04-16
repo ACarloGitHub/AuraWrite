@@ -4,9 +4,11 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 use tauri::State;
 
-// Import database module
+// Import modules
 mod database;
+mod embeddings;
 use database::*;
+use embeddings::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -267,6 +269,135 @@ fn base64_encode(data: &[u8]) -> String {
 }
 
 // ============================================================================
+// EMBEDDING COMMANDS
+// ============================================================================
+
+#[tauri::command]
+async fn embedding_check_ollama() -> Result<bool, String> {
+    embeddings::check_ollama_available().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn embedding_generate(text: String, is_query: Option<bool>) -> Result<Vec<f32>, String> {
+    embeddings::generate_embedding(&text, is_query.unwrap_or(false)).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_save_document(
+    state: State<AppState>,
+    project_id: String,
+    document_id: String,
+    content_text: String,
+    chunk_size: i32,
+    chunk_overlap: i32,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+
+    // Delete existing embeddings for this document
+    embeddings::delete_embeddings_for_entity(&*conn, "document", &document_id)
+        .map_err(|e| e.to_string())?;
+
+    // Chunk the content
+    let chunks = embeddings::chunk_text(&content_text, chunk_size as usize, chunk_overlap as usize);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Generate embeddings and save (blocking for now - could be async)
+    // For now, we'll need to generate embeddings asynchronously from frontend
+    // and save them individually
+
+    // Save placeholders - actual embeddings will be added via embedding_save_chunk
+    for (i, chunk) in chunks.iter().enumerate() {
+        let embedding_id = embeddings::generate_embedding_id("document", &document_id, Some(i as i32));
+        let embedding = embeddings::Embedding {
+            id: embedding_id,
+            project_id: project_id.clone(),
+            entity_type: "document".to_string(),
+            entity_id: document_id.clone(),
+            chunk_index: Some(i as i32),
+            content_text: chunk.clone(),
+            created_at: now,
+        };
+
+        // Save with zero vector initially
+        let zero_vector = vec![0.0f32; 768];
+        embeddings::save_embedding(&*conn, &embedding, &zero_vector)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn embedding_save_chunk(
+    state: State<AppState>,
+    project_id: String,
+    entity_type: String,
+    entity_id: String,
+    chunk_index: Option<i32>,
+    content_text: String,
+    embedding_vector: Vec<f32>,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let embedding_id = embeddings::generate_embedding_id(&entity_type, &entity_id, chunk_index);
+    let embedding = embeddings::Embedding {
+        id: embedding_id,
+        project_id,
+        entity_type,
+        entity_id,
+        chunk_index,
+        content_text,
+        created_at: now,
+    };
+
+    embeddings::save_embedding(&*conn, &embedding, &embedding_vector)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_search(
+    state: State<AppState>,
+    project_id: String,
+    query_vector: Vec<f32>,
+    limit: i32,
+) -> Result<Vec<embeddings::SearchResult>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::search_similar(&*conn, &project_id, &query_vector, limit)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_search_documents(
+    state: State<AppState>,
+    project_id: String,
+    query_vector: Vec<f32>,
+    limit: i32,
+) -> Result<Vec<embeddings::SearchResult>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::search_similar_documents(&*conn, &project_id, &query_vector, limit)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_delete_for_entity(
+    state: State<AppState>,
+    entity_type: String,
+    entity_id: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_embeddings_for_entity(&*conn, &entity_type, &entity_id)
+        .map_err(|e| e.to_string())
+}
+
+// ============================================================================
 // APP SETUP
 // ============================================================================
 
@@ -274,7 +405,10 @@ fn base64_encode(data: &[u8]) -> String {
 pub fn run() {
     // Initialize database connection
     let conn = init_database().expect("Failed to initialize database");
-    
+
+    // Initialize embeddings table
+    embeddings::init_embeddings_table(&conn).expect("Failed to initialize embeddings table");
+
     let app_state = AppState {
         db: Mutex::new(conn),
     };
@@ -321,6 +455,14 @@ pub fn run() {
             db_create_entity_type,
             db_get_entity_types,
             db_delete_entity_type,
+            // Embedding commands
+            embedding_check_ollama,
+            embedding_generate,
+            embedding_save_document,
+            embedding_save_chunk,
+            embedding_search,
+            embedding_search_documents,
+            embedding_delete_for_entity,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

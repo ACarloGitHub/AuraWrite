@@ -486,39 +486,208 @@ async function handleNewProject(): Promise<void> {
   if (action === 'cancel') {
     return; // Utente ha annullato
   }
-  
-  // Chiedi nome progetto
-  const name = prompt("Project name:");
-  if (!name) return;
 
-  const type = prompt("Project type (novel/script/article):", "novel") || "novel";
+  // Show project type dialog with dropdown
+  const result = await showProjectTypeDialog();
+  if (!result) return;
 
   try {
-    const result = await createProjectWithDefaults(name, type);
-    projects.push(result.project);
-    currentProject = result.project;
+    const projectResult = await createProjectWithDefaults(result.name, result.type);
+    projects.push(projectResult.project);
+    currentProject = projectResult.project;
     currentSection = null;
     currentDocument = null;
-    sections = result.sections || [];
+    sections = projectResult.sections || [];
     documents = [];
     lastSavedContent = null;
     clearEditor();
     renderProjectsList();
 
     if (onProjectChange) {
-      onProjectChange(result.project);
+      onProjectChange(projectResult.project);
     }
 
-    showNotification(`Project "${result.project.name}" created!`, "success");
+    showNotification(`Project "${projectResult.project.name}" created!`, "success");
   } catch (error) {
     console.error("Failed to create project:", error);
     showNotification("Could not create project", "error");
   }
 }
 
+interface ProjectTypeResult {
+  name: string;
+  type: string;
+}
+
+function showProjectTypeDialog(): Promise<ProjectTypeResult | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'project-type-dialog-overlay';
+
+    overlay.innerHTML = `
+      <div class="project-type-dialog">
+        <h3>Create New Project</h3>
+        <div class="form-group">
+          <label for="project-name">Project Name</label>
+          <input type="text" id="project-name" placeholder="My Project" autofocus>
+        </div>
+        <div class="form-group">
+          <label for="project-type">Project Type</label>
+          <select id="project-type">
+            <option value="novel">Novel</option>
+            <option value="script">Script</option>
+            <option value="article">Article</option>
+            <option value="notes">Notes</option>
+            <option value="legal">Legal</option>
+            <option value="research">Research</option>
+            <option value="custom">Custom...</option>
+          </select>
+        </div>
+        <div class="form-group custom-type-input" id="custom-type-container">
+          <label for="custom-type">Custom Type Name</label>
+          <input type="text" id="custom-type" placeholder="e.g., Blog, Thesis">
+        </div>
+        <div class="project-type-dialog-buttons">
+          <button class="save-dialog-btn" data-action="cancel">Cancel</button>
+          <button class="save-dialog-btn primary" data-action="create">Create</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const nameInput = overlay.querySelector('#project-name') as HTMLInputElement;
+    const typeSelect = overlay.querySelector('#project-type') as HTMLSelectElement;
+    const customContainer = overlay.querySelector('#custom-type-container') as HTMLDivElement;
+    const customInput = overlay.querySelector('#custom-type') as HTMLInputElement;
+
+    // Focus name input
+    setTimeout(() => nameInput?.focus(), 10);
+
+    // Show/hide custom type input
+    typeSelect.addEventListener('change', () => {
+      if (typeSelect.value === 'custom') {
+        customContainer.classList.add('visible');
+        customInput?.focus();
+      } else {
+        customContainer.classList.remove('visible');
+      }
+    });
+
+    // Handle Enter key on name input
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (typeSelect.value === 'custom') {
+          customInput?.focus();
+        } else {
+          overlay.querySelector('[data-action="create"]')?.dispatchEvent(new Event('click'));
+        }
+      }
+    });
+
+    // Handle Enter key on custom type input
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        overlay.querySelector('[data-action="create"]')?.dispatchEvent(new Event('click'));
+      }
+    });
+
+    // Handle button clicks
+    overlay.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action');
+
+        if (action === 'cancel') {
+          overlay.remove();
+          resolve(null);
+        } else if (action === 'create') {
+          const name = nameInput?.value.trim();
+          if (!name) {
+            nameInput?.focus();
+            return;
+          }
+
+          let type = typeSelect?.value;
+          if (type === 'custom') {
+            type = customInput?.value.trim().toLowerCase() || 'custom';
+          }
+
+          overlay.remove();
+          resolve({ name, type });
+        }
+      });
+    });
+
+    // Handle overlay click (cancel)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve(null);
+      }
+    });
+  });
+}
+
+/**
+ * Show a custom confirmation dialog
+ * @returns true if confirmed, false otherwise
+ */
+function showConfirmDialog(title: string, message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'save-dialog-overlay';
+
+    overlay.innerHTML = `
+      <div class="save-dialog">
+        <h3>${title}</h3>
+        <p>${message}</p>
+        <div class="save-dialog-buttons">
+          <button class="save-dialog-btn" data-action="cancel">Cancel</button>
+          <button class="save-dialog-btn danger" data-action="confirm">Delete</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Handle button clicks
+    overlay.querySelectorAll('.save-dialog-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action');
+        overlay.remove();
+        resolve(action === 'confirm');
+      });
+    });
+
+    // Handle overlay click (cancel)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve(false);
+      }
+    });
+
+    // Handle Escape key
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        overlay.remove();
+        resolve(false);
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  });
+}
+
 async function handleDeleteProject(project: Project): Promise<void> {
-  const confirmMsg = `Delete project "${project.name}" and all its sections?`;
-  if (!confirm(confirmMsg)) return;
+  const confirmed = await showConfirmDialog(
+    `Delete project "${project.name}"?`,
+    "This will delete the project and all its sections, documents, and data. This action cannot be undone."
+  );
+
+  if (!confirmed) return;
 
   try {
     await deleteProject(project.id);
@@ -533,6 +702,53 @@ async function handleDeleteProject(project: Project): Promise<void> {
   } catch (error) {
     console.error("Failed to delete project:", error);
     showError("Could not delete project");
+  }
+}
+
+async function handleDeleteSection(section: Section): Promise<void> {
+  const confirmed = await showConfirmDialog(
+    `Delete section "${section.name}"?`,
+    "This will delete the section and all its documents. This action cannot be undone."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteSection(section.id);
+    sections = sections.filter(s => s.id !== section.id);
+    documents = documents.filter(d => d.section_id !== section.id);
+    if (currentSection?.id === section.id) {
+      currentSection = null;
+      currentDocument = null;
+    }
+    renderProjectsList();
+    console.log("Deleted section:", section.name);
+  } catch (error) {
+    console.error("Failed to delete section:", error);
+    showError("Could not delete section");
+  }
+}
+
+async function handleDeleteDocument(doc: Document): Promise<void> {
+  const confirmed = await showConfirmDialog(
+    `Delete document "${doc.title}"?`,
+    "This document will be permanently deleted. This action cannot be undone."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteDocument(doc.id);
+    documents = documents.filter(d => d.id !== doc.id);
+    if (currentDocument?.id === doc.id) {
+      currentDocument = null;
+      clearEditor();
+    }
+    renderProjectsList();
+    console.log("Deleted document:", doc.title);
+  } catch (error) {
+    console.error("Failed to delete document:", error);
+    showError("Could not delete document");
   }
 }
 
@@ -562,43 +778,6 @@ async function handleNewSection(projectId: string): Promise<void> {
   } catch (error) {
     console.error("Failed to create section:", error);
     showError("Could not create section");
-  }
-}
-
-async function handleDeleteSection(section: Section): Promise<void> {
-  const confirmMsg = `Delete section "${section.name}" and all its documents?`;
-  if (!confirm(confirmMsg)) return;
-
-  try {
-    await deleteSection(section.id);
-    sections = sections.filter(s => s.id !== section.id);
-    if (currentSection?.id === section.id) {
-      currentSection = null;
-      currentDocument = null;
-    }
-    renderProjectsList();
-    console.log("Deleted section:", section.name);
-  } catch (error) {
-    console.error("Failed to delete section:", error);
-    showError("Could not delete section");
-  }
-}
-
-async function handleDeleteDocument(doc: Document): Promise<void> {
-  const confirmMsg = `Delete document "${doc.title}"?`;
-  if (!confirm(confirmMsg)) return;
-
-  try {
-    await deleteDocument(doc.id);
-    documents = documents.filter(d => d.id !== doc.id);
-    if (currentDocument?.id === doc.id) {
-      currentDocument = null;
-    }
-    renderProjectsList();
-    console.log("Deleted document:", doc.title);
-  } catch (error) {
-    console.error("Failed to delete document:", error);
-    showError("Could not delete document");
   }
 }
 
@@ -633,11 +812,14 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 async function selectDocument(doc: Document): Promise<void> {
   (window as any).__aurawrite_loading = true;
   currentDocument = doc;
+  // Espone globalmente per debug
+  (window as any).auraDocument = doc;
   // Read fresh document from DB to get latest content
   try {
     const freshDoc = await getDocument(doc.id);
     if (freshDoc) {
       currentDocument = freshDoc;
+      (window as any).auraDocument = freshDoc;
       lastSavedContent = freshDoc.content_json || null;
     } else {
       lastSavedContent = doc.content_json || null;
@@ -936,6 +1118,10 @@ function selectProject(project: Project): void {
   currentSection = null;
   currentDocument = null;
   lastSavedContent = null; // Reset per nuovo progetto
+  // Espone globalmente per debug
+  (window as any).auraProject = project;
+  (window as any).auraSection = null;
+  (window as any).auraDocument = null;
 
   loadSections(project.id);
 

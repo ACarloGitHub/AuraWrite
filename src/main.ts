@@ -4,6 +4,7 @@ import { setupAIPanel } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, triggerSaveStatusCheck } from "./editor/project-panel";
 import { EditorState } from "prosemirror-state";
+import { invoke } from "@tauri-apps/api/core";
 import "./styles.css";
 
 const THEME_KEY = "aurawrite-theme";
@@ -439,6 +440,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
   document.addEventListener("keydown", handleKeyDown);
+
+  // Expose test functions globally for development
+  (window as any).auraTest = {
+    checkOllama: () => invoke('embedding_check_ollama'),
+    generateEmbedding: (text: string, isQuery = false) => 
+      invoke('embedding_generate', { text, isQuery }),
+    saveEmbedding: (projectId: string, documentId: string, contentText: string) =>
+      invoke('embedding_save_document', { projectId, documentId, contentText, chunkSize: 100, chunkOverlap: 20 }),
+    searchSimilar: async (projectId: string, query: string, limit = 5) => {
+      const queryVector = await invoke('embedding_generate', { text: query, isQuery: true });
+      return invoke('embedding_search_documents', { projectId, queryVector, limit });
+    },
+    // Espone i dati correnti per debug
+    getCurrentState: () => ({
+      project: (window as any).auraProject,
+      section: (window as any).auraSection, 
+      document: (window as any).auraDocument
+    })
+  };
 });
 
 function updateWordCount(view: any): void {
