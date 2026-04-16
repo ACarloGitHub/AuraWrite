@@ -212,6 +212,13 @@ AI settings are stored in browser's `localStorage` as `aurawrite-ai-settings`. T
 ### Chunk Size
 For long documents, AuraWrite automatically splits text into chunks based on the model's context limit. Default: 8,000 tokens per chunk. Adjustable in AI Assistant panel settings.
 
+### Semantic Search Settings
+Configure semantic search behavior in the app's settings panel:
+
+- **Enable semantic search indexing** — Default: ON. When enabled, AuraWrite automatically indexes document content for semantic search using nomic-embed-text-v2-moe via Ollama. If disabled, documents are saved without indexing, and semantic search features will not be available.
+
+**Note:** Indexing occurs automatically when saving documents. It is optional and can be disabled if you prefer not to use Ollama or semantic search.
+
 ---
 
 ## 💾 Data Storage
