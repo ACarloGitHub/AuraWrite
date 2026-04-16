@@ -16,17 +16,19 @@
 
 ---
 
-## Future Architecture Decisions (Post Phase A Testing)
+## Future Architecture Decisions — DECISIONE CONFERMATA
 
-**Alternativa valutata:** sqlite-vec per VectorDB integrato in SQLite
-**Fonte:** https://whoisryosuke.com/blog/2025/offline-vector-database-with-tauri
-**Stato:** Da decidere dopo test completo del database SQL strutturato
+**DECISIONE CONFERMATA (2026-04-14): sqlite-vec per VectorDB**
+- Approccio scelto: sqlite-vec integrato nel database SQLite esistente
+- Un solo file `.db` per dati strutturati E embedding vettoriali
+- Riferimento: https://whoisryosuke.com/blog/2025/offline-vector-database-with-tauri
+- Ollama è installato e attivo sul sistema
+- Modello embedding: `nomic-embed-text`
+- Documentazione tecnica: `REFERENZA-Tauri-SQLite-VectorDB.md`
 
-**Alternativa valutata:** Approccio Karpathy (Markdown + link ipertestuali)
-**Fonte:** https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-**Stato:** Da decidere dopo test completo del database SQL strutturato
-
-**Nota:** Entrambe le alternative sono state documentate in `03-SQLITE-STATUS.md`.
+**Alternativa scartata:** Approccio Karpathy (Markdown + link ipertestuali)
+- Fonte: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+- Motivo: sqlite-vec offre ricerca semantica nativa, più potente del linking manuale
 
 ---
 
@@ -37,7 +39,9 @@
 - [x] **Auto-salvataggio non chiamato** — ora connesso tramite evento `aurawrite:content-changed` ✅
 - [x] **UI freeze dopo 12s** — flag globale `__aurawrite_loading` coordinato tra moduli ✅
 - [ ] **Auto-salvataggio da testare** — verificare che l'evento venga emesso/ricevuto
-- [ ] **Document switch bug** — when clicking Doc 2, shows Doc 1 content (2026-04-14) — IN VERIFICA
+- [x] **Document switch bug** — selectDocument ora legge contenuto fresco dal DB (2026-04-14) ✅
+- [x] **Empty document switch** — documenti vuoti ora svuotano l'editor (2026-04-14) ✅
+- [x] **AI panels non si aprono** — setupAIPanel/setupSuggestionsPanel rimossi accidentalmente (2026-04-14) ✅
 - [ ] Discard lento: dipende dal modello AI (reasoning). Considerare modelli senza reasoning per Suggestions.
 
 ---
@@ -77,14 +81,135 @@ The current saving system conflates multiple concepts that need to be separated:
 ---
 
 ### Rust Warning Cleanup (2026-04-14)
-- [ ] Remove `package.private` from `src-tauri/Cargo.toml`
-- [ ] Remove or use `debug_list_projects` and `debug_list_sections` in `src-tauri/src/database.rs`
+- [x] Remove `package.private` from `src-tauri/Cargo.toml` ✅
+- [x] Remove `debug_list_projects` and `debug_list_sections` from `src-tauri/src/database.rs` ✅
+
+---
+
+## AI + Database Architecture (2026-04-14)
+
+**CONFIRMED DECISIONS:**
+
+### Database Choice: sqlite-vec
+- Single SQLite database for structured data AND vector embeddings
+- No separate vector database needed
+- Requires Ollama with `nomic-embed-text` for embedding generation
+- Fallback: FTS5 for full-text search when Ollama unavailable
+
+### AI Panel — What Exists (MUST PRESERVE)
+- **Chat Panel** (`chat.ts`): context display, chunk selector, AURA_EDIT edits
+- **Suggestions Panel** (`suggestions-panel.ts`): sentence suggestions, Accept/Reject/Switch
+- **AI Manager** (`ai-manager.ts`): multi-provider (Ollama, OpenAI, Anthropic)
+- **Edit Executor** (`edit-executor.ts`): AURA_EDIT format parsing → ProseMirror operations
+- **Chunking** (`chunks.ts`): sentence-based document splitting with configurable size
+- **Modification Hub** (`modification-hub.ts`): event bus for document changes
+
+### AI Panel — What's Missing (TO IMPLEMENT)
+
+#### Phase B.1: Tool Calling (Database Queries from AI)
+The AI Assistant must be able to query the project database:
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `search_entities` | `type, query` | Search characters/places by name |
+| `find_scenes` | `entity_id` | Find scenes containing an entity |
+| `get_chapter_summary` | `chapter_id` | Get summary of a chapter |
+| `list_entities` | `type` | List all entities of a type |
+| `count_occurrences` | `entity, range?` | Count entity mentions in text |
+
+#### Phase B.2: sqlite-vec Integration (Semantic Search)
+
+**Schema:**
+```sql
+-- Virtual table for vector embeddings
+CREATE VIRTUAL TABLE embeddings USING vec0(embedding float[768]);
+
+-- Metadata table linking embeddings to content
+CREATE TABLE embeddings_metadata (
+  id TEXT PRIMARY KEY,
+  embedding_rowid INTEGER,  -- links to vec0 virtual table
+  entity_id TEXT,             -- links to entities table
+  document_id TEXT,           -- links to documents table
+  chunk_index INTEGER,        -- which chunk of the document
+  chunk_text TEXT,            -- the actual text chunk
+  project_id TEXT,
+  created_at INTEGER
+);
+```
+
+**Embedding Pipeline:**
+1. Document text → `chunks.ts` splits into chunks
+2. Each chunk → Ollama `nomic-embed-text` → 768-dim vector
+3. Store vector in `embeddings` + metadata in `embeddings_metadata`
+4. Query: user question → embedding → cosine similarity → top-k results
+
+**Check before indexing:**
+- Verify Ollama is running (`ollama list`)
+- Verify `nomic-embed-text` model is available
+- Fallback to FTS5 if Ollama unavailable
+
+#### Phase B.3: Entity Types per Project Category
+
+| Category | Entity Types |
+|----------|-------------|
+| Novel | Character, Location, Object, Event |
+| Script | Character, Location, Object, Scene |
+| Article | Source, Topic, Note |
+| Legal | Client, Article, Communication, Evidence |
+| Research | Source, Topic, Note, Deepening |
+| Software | Module, API, Component, Dependency |
+| Custom | User-defined |
+
+Each entity type has custom fields stored as JSON in `entity_types.fields_json`.
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────┐
+│                 FRONTEND (TypeScript)             │
+│                                                   │
+│  ┌──────────┐  ┌──────────────┐  ┌────────────┐  │
+│  │ Chat     │  │ Suggestions  │  │ Project    │  │
+│  │ Panel    │  │ Panel        │  │ Panel      │  │
+│  └────┬─────┘  └──────┬───────┘  └─────┬──────┘  │
+│       │               │                │           │
+│  ┌────┴───────────────┴────────────────┴─────┐   │
+│  │              AI Manager                    │   │
+│  │    (provider selection, tool calling)       │   │
+│  └────┬───────────────┬───────────────────────┘   │
+│       │               │                           │
+│  ┌────┴────┐    ┌─────┴──────┐                   │
+│  │ Ollama  │    │ Tool       │                   │
+│  │ Provider│    │ Calling    │                   │
+│  └────┬────┘    └─────┬──────┘                   │
+│       │               │                           │
+└───────┼───────────────┼───────────────────────────┘
+        │               │
+        │         ┌─────┴──────┐
+        │         │ db.ts      │
+        │         │ (queries)  │
+        │         └─────┬──────┘
+        │               │
+┌───────┼───────────────┼───────────────────────────┐
+│       │     BACKEND (Rust / Tauri)                 │
+│  ┌────┴────┐    ┌─────┴──────────────┐             │
+│  │ Embed   │    │ SQLite             │             │
+│  │ Ollama  │    │ ├ projects         │             │
+│  │ API     │    │ ├ sections          │             │
+│  │ :11434  │    │ ├ documents         │             │
+│  └─────────┘    │ ├ entities          │             │
+│                  │ ├ entity_types      │             │
+│  ┌─────────┐     │ ├ versions          │             │
+│  │ sqlite  │     │ ├ search_index      │             │
+│  │ -vec    │     │ └ embeddings_meta  │             │
+│  │ (vec0)  │     │                     │             │
+│  └─────────┘     └─────────────────────┘             │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Priority 2: Features (aggiornato post-SQLite Phase A)
-
-### AI Assistant + Database [TODO NUOVO]
 - [ ] AI Assistant (pannello dx) può interrogare il database
 - [ ] Tool calling per: search_characters, find_scenes, get_chapter_summary
 - [ ] Inserimento dati di test: capitoli, sezioni, personaggi, luoghi

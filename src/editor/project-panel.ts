@@ -19,6 +19,7 @@ import {
   saveDocumentVersion,
   getLatestVersion,
 } from "../database/db";
+import { invoke } from "@tauri-apps/api/core";
 import type { Project, Section, Document } from "../types/database";
 
 // State
@@ -260,7 +261,7 @@ function scheduleAutoSave(): void {
  * @param createVersion Se true, crea una versione (salvataggio manuale)
  */
 async function saveCurrentDocument(content: string, createVersion: boolean = false): Promise<boolean> {
-  if (!currentDocument) return false;
+  if (!currentDocument || !currentProject) return false;
 
   try {
     const updatedDoc: Document = {
@@ -278,6 +279,10 @@ async function saveCurrentDocument(content: string, createVersion: boolean = fal
     currentDocument = updatedDoc;
     markContentSaved(content);
     console.log(createVersion ? "Document saved (with version)" : "Document auto-saved");
+    
+    // Index for semantic search
+    await indexDocumentForSearch(currentProject.id, updatedDoc.id, content);
+    
     return true;
   } catch (error) {
     console.error("Failed to save document:", error);
@@ -294,6 +299,7 @@ async function handleSaveToDatabase(): Promise<void> {
   }
 
   let savedCount = 0;
+  let indexedCount = 0;
 
   // Save current document content from editor first
   if (currentDocument && getEditorContent) {
@@ -310,6 +316,9 @@ async function handleSaveToDatabase(): Promise<void> {
         currentDocument = updatedDoc;
         markContentSaved(content);
         savedCount++;
+        // Index for semantic search
+        await indexDocumentForSearch(currentProject.id, updatedDoc.id, content);
+        indexedCount++;
       } catch (error) {
         console.error("Failed to save current document:", error);
       }
@@ -327,6 +336,9 @@ async function handleSaveToDatabase(): Promise<void> {
         try {
           await updateDocument(doc);
           savedCount++;
+          // Index for semantic search
+          await indexDocumentForSearch(currentProject.id, doc.id, doc.content_json);
+          indexedCount++;
         } catch (error) {
           console.error("Failed to save document:", doc.title, error);
         }
@@ -335,9 +347,62 @@ async function handleSaveToDatabase(): Promise<void> {
   }
 
   if (savedCount > 0) {
-    showNotification(`Project saved (${savedCount} document${savedCount !== 1 ? "s" : ""})`, "success");
+    showNotification(`Project saved (${savedCount} document${savedCount !== 1 ? "s" : ""}, ${indexedCount} indexed)`, "success");
   } else {
     showNotification("Nothing to save", "error");
+  }
+}
+
+/**
+ * Extract plain text from ProseMirror JSON content
+ */
+function extractTextFromContent(contentJson: string): string {
+  try {
+    const doc = JSON.parse(contentJson);
+    if (!doc.content) return "";
+    return extractTextFromNode(doc);
+  } catch {
+    return contentJson; // Fallback to raw text if parsing fails
+  }
+}
+
+function extractTextFromNode(node: any): string {
+  if (typeof node === "string") return node;
+  if (!node) return "";
+  
+  if (node.text) return node.text;
+  
+  if (node.content && Array.isArray(node.content)) {
+    return node.content.map(extractTextFromNode).join(" ");
+  }
+  
+  return "";
+}
+
+/**
+ * Index document content for semantic search
+ * Silently fails if Ollama is not available
+ */
+async function indexDocumentForSearch(
+  projectId: string,
+  documentId: string,
+  contentJson: string
+): Promise<void> {
+  try {
+    const text = extractTextFromContent(contentJson);
+    if (!text.trim()) return;
+    
+    await invoke("embedding_save_document", {
+      projectId,
+      documentId,
+      contentText: text,
+      chunkSize: 100,
+      chunkOverlap: 20,
+    });
+    console.log(`Document ${documentId} indexed for search`);
+  } catch (error) {
+    // Silently fail - embedding is optional
+    console.log(`Document ${documentId} not indexed (Ollama may not be available)`);
   }
 }
 
