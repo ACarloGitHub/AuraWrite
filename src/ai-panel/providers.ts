@@ -10,7 +10,9 @@ export interface AIContext {
   selectedText?: string;
   documentTitle?: string;
   projectType?: string;
-  documentText?: string; // Full document text for context (TODO: Vector DB - use chunking for large docs)
+  documentText?: string;
+  projectId?: string;
+  toolInstructions?: string;
 }
 
 export interface AIResponse {

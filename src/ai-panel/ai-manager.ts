@@ -1,17 +1,15 @@
-import type { EditorView } from "prosemirror-view";
-import type {
+import {
   AIProvider,
   AIContext,
   AISettings,
   AIResponse,
-} from "./providers";
-import { OllamaProvider } from "./ollama-provider";
-import { OpenAIProvider, AnthropicProvider } from "./remote-providers";
-import {
   loadAISettings,
   saveAISettings,
   DEFAULT_AI_SETTINGS,
 } from "./providers";
+import { OllamaProvider } from "./ollama-provider";
+import { OpenAIProvider, AnthropicProvider } from "./remote-providers";
+import { buildToolSystemPrompt } from "./tools";
 import { getEditorView } from "../editor/toolbar";
 
 let currentProvider: AIProvider | null = null;
@@ -86,6 +84,10 @@ export function isAIProcessing(): boolean {
   return isProcessing;
 }
 
+export function setProcessing(processing: boolean): void {
+  isProcessing = processing;
+}
+
 export async function getSynonyms(
   word: string,
   context?: AIContext,
@@ -110,7 +112,7 @@ Only include common, usable synonyms. If none found, return empty arrays.`;
       return [...(parsed.synonyms || []), ...(parsed.antonyms || [])];
     }
   } catch {
-    // Failed to parse JSON
+    // Failed to parse synonyms/antonyms
   }
 
   return [];
@@ -161,7 +163,7 @@ export async function suggestAlternatives(
       return parsed.alternatives || [];
     }
   } catch {
-    // Failed to parse JSON
+    // Failed to parse alternatives
   }
 
   return [];
@@ -169,4 +171,15 @@ export async function suggestAlternatives(
 
 export function getCurrentProvider(): AIProvider | null {
   return currentProvider;
+}
+
+export function buildContextWithTools(context: AIContext): AIContext {
+  if (context.projectId) {
+    const toolPrompt = buildToolSystemPrompt();
+    return {
+      ...context,
+      toolInstructions: toolPrompt,
+    };
+  }
+  return context;
 }

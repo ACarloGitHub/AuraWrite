@@ -1,86 +1,56 @@
 # AuraWrite — Stato Attuale
 
-**Ultimo aggiornamento:** 2026-04-08
+**Ultimo aggiornamento:** 2026-04-18
 
 ---
 
-## Funzionalità Completate
+## Funzionalita' Completate
 
 ### Core Editor
 - Editor ProseMirror funzionante
 - File operations: Save, Save As, Open, Export (JSON, MD, TXT, HTML, DOCX)
 - Title bar con nome documento e dirty indicator
-- Theme toggle (light/dark)
+- Theme toggle (light/dark/custom)
+- Preferences modal trascinabile con hint descrittivi
+
+### Database SQLite — Phase A + B
+- Backend Rust CRUD completo (projects, sections, documents, entities, entity_types, versions)
+- Frontend TypeScript client (`db.ts`)
+- ProjectPanel UI con gerarchia Project → Section → Document
+- Dirty tracking, save dialogs, auto-save (12s)
+- Per-document save, project save
+- Delete cascade: progetto → sezione → documento cancellano embeddings correlate
+- `embedding_delete_for_project` comando Tauri esposto
 
 ### AI Infrastructure
 - Provider interface: Ollama, OpenAI, Anthropic
 - AI Manager per gestire chiamate
-- Settings per privacy e provider
+- AURA_EDIT system per modifiche documento (replace, insert, delete, format)
+- Suggestions Panel (sinistra) con trigger su punteggiatura
+- AI Assistant Panel (destra) con chat e contesto documento
 
-### Suggestions Panel (SX)
-- Trigger su "." seguito da spazio
-- Logica trigger: solo se punto preceduto da lettera
-- UI espandibile/collassabile
-- Pulsanti: Accept, Reject, Switch, Close
-- Gestione punteggiatura (no duplicati)
-- **FIXATO**: Bug spazi mangiati con sistema `docFrom`/`docTo`
+### Semantic Search + Embeddings
+- nomic-embed-text-v2-moe via Ollama (768-dim, prefissi search_document/search_query)
+- SQLite + cosine similarity in Rust
+- Automatic embedding indexing on save (con delete before insert)
+- Semantic Search Toggle nelle preferenze
 
-### AI Assistant Panel (DX)
-- [x] Chat con AI
-- [x] Testo documento passato come contesto
-- [x] **Selezione testo dinamica**: evidenziata quando si clicca nell'input
-- [x] **Pulsante ✕ per deselezionare** manualmente
-- [x] **Opzione nelle preferenze**: "Clear selection on document click" (default: attivo)
-- [x] **NO deselezione automatica** dopo modifica AI (utente può iterare)
-- [ ] **Cronologia modifiche**: mark persistenti, database SQLite (post-DB)
-- Chunk system per documenti lunghi
-- AURA_EDIT system per modifiche documento
-- Formattazione supportata (bold, italic, liste)
-- **Tool Calling** (documentato in [[feature/database.md]])
-
-### Database SQLite — Phase A.2 COMPLETATO
-- [x] Backend Rust con rusqlite — CRUD completo
-- [x] Frontend TypeScript client (`db.ts`)
-- [x] Schema: projects, sections, documents, entities, entity_types
-- [x] **ProjectPanel UI** — sidebar con gerarchia Project → Section → Document
-- [x] **Salvataggio documento** — Save button collegato al database
-- [x] **Caricamento documento** — clicca documento, carica contenuto nell'editor
-- [x] **Dirty tracking** — `hasUnsavedChanges`, conferma cambio progetto
-- [x] **Notifiche** — toast "Document saved!" / "Failed to save"
-
-**File database:** `~/.config/aurawrite/aurawrite.db`
-
-**Commit:** `8c2b912` — ProjectPanel: UI fixes, save/load functionality, dirty tracking, notifications
-
-### AURA_EDIT System
-- Parser robusto con 3 strategie
-- Operazioni: replace, insert, delete, format
-- Supporta testo formattato
-- File: `operations.ts`, `edit-parser.ts`, `edit-executor.ts`
+### Tool Calling (DEFINITO, NON COLLEGATO)
+- `tools.ts`: 7 tools definiti con parser, esecuzione, system prompt
+- Tools: search_entities, get_entity_details, list_entities_by_type, search_documents, get_document_content, get_project_structure, semantic_search
+- **NON ancora integrato nel flusso chat** — vedi 02-TODO.md per il piano
 
 ---
 
 ## Bug Notevoli (Risolti)
-
-### Suggestions — Posizioni obsolete
-- **Problema**: `doc.textContent.indexOf()` dà posizioni sbagliate
-- **Soluzione**: Usare `nodesBetween` per posizioni ProseMirror
-- **File**: `suggestions-panel.ts`
-
-### AI Assistant — JSON insufficiente
-- **Problema**: Formato `{original, new}` limitato
-- **Soluzione**: Sistema AURA_EDIT con operazioni multiple
-
----
+- Selection positions: uso di nodesBetween, mai textContent.indexOf()
+- AURA_EDIT: parser con 3 strategie, supporto testo formattato
+- Semantic Search Toggle: bug ID duplicato HTML risolto
+- Embeddings orfani su delete: ora cancellati automaticamente
 
 ## Bug Aperti
-
-### Suggestions
-- [ ] Discard lento (dipende dal modello AI — non è bug del codice)
-
-### Title Bar
-- [ ] Estensione duplicata nel nome file
-- [ ] Font/stile da migliorare
+- [ ] Discard lento (dipende dal modello AI)
+- [ ] Dropdown select sfondo chiaro in dark mode (GTK/Linux)
 
 ---
 
@@ -89,9 +59,13 @@
 | Componente | Tecnologia |
 |------------|------------|
 | Editor | ProseMirror |
-| Desktop | Tauri |
-| Language | TypeScript |
+| Desktop | Tauri v2 |
+| Frontend | TypeScript, Vite, CSS puro |
+| Backend | Rust (tauri) |
+| Database | SQLite (rusqlite) |
 | AI Provider | Ollama, OpenAI, Anthropic |
+| Embeddings | nomic-embed-text-v2-moe via Ollama |
+| Vector Search | SQLite + cosine similarity in Rust |
 
 ---
 
@@ -100,39 +74,34 @@
 ```
 src/
 ├── editor/
-│   ├── editor.ts          # Editor principale
-│   ├── text-utils.ts      # Utility testo
-│   └── suggestions-marker-plugin.ts  # (da creare)
+│   ├── editor.ts              # Editor principale
+│   ├── toolbar.ts             # Toolbar e file operations
+│   └── project-panel.ts       # Sidebar, save, indexing
 ├── ai-panel/
-│   ├── chat.ts            # AI Assistant panel
-│   ├── suggestions-panel.ts  # Suggestions panel
-│   ├── operations.ts      # Tipi AURA_EDIT
-│   ├── edit-parser.ts     # Parser AURA_EDIT
-│   ├── edit-executor.ts   # Esecuzione operazioni
-│   └── modification-hub.ts # Bus sincronizzazione
-└── formats/               # Convertitori formato
+│   ├── chat.ts                # AI Assistant panel (destra)
+│   ├── suggestions-panel.ts   # Suggestions panel (sinistra)
+│   ├── operations.ts          # Tipi AURA_EDIT
+│   ├── edit-parser.ts         # Parser AURA_EDIT
+│   ├── edit-executor.ts       # Esecuzione operazioni AURA_EDIT
+│   ├── modification-hub.ts     # Bus sincronizzazione
+│   ├── ai-manager.ts          # Gestione provider AI
+│   ├── providers.ts           # Interface provider
+│   ├── ollama-provider.ts     # Provider locale
+│   ├── remote-providers.ts    # OpenAI, Anthropic
+│   ├── chunks.ts              # Document chunking per contesto
+│   └── tools.ts               # Tool calling per DB (NON COLLEGATO)
+├── formats/                   # Convertitori formato
+├── database/
+│   └── db.ts                  # SQLite operations (Tauri invoke)
+└── main.ts                    # Entry point, preferences, UI setup
+
+src-tauri/
+└── src/
+    ├── lib.rs                 # Tauri commands (con embedding cleanup)
+    ├── database.rs            # Rust DB operations
+    └── embeddings.rs          # Vector embeddings, semantic search
 ```
 
 ---
 
-## Modelli AI Testati
-
-| Modello | Velocità | Note |
-|---------|----------|------|
-| kimi-k2.5:cloud | Lento (reasoning) | 30-60s per frase, capisce AURA_EDIT |
-| glm-5:cloud | Veloce | Buono per chat |
-| Modelli locali Ollama | Variabile | Dipende dall'hardware |
-
----
-
-## Prossima Sessione
-
-1. Leggi [[02-TODO.md]] per task prioritari
-2. Per pagination: vedi [[feature/pagination.md]]
-3. Per bugs: vedi [[04-LEZIONI.md]] per pattern corretti
-
----
-
-*Aggiornato da Aura — 2026-04-10*
-
-**Ultimo commit:** `8c2b912` — ProjectPanel: UI fixes, save/load functionality, dirty tracking, notifications
+*Aggiornato 2026-04-18*

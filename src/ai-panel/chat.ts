@@ -1,5 +1,6 @@
 import type { EditorView } from "prosemirror-view";
-import { initAI, sendToAI, isAIProcessing } from "./ai-manager";
+import type { AIContext } from "./providers";
+import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools } from "./ai-manager";
 import { selectionHighlightPluginKey } from "../editor/selection-highlight";
 import {
   splitIntoChunks,
@@ -14,11 +15,15 @@ import {
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
 import { applyAuraEdit } from "./edit-executor";
+import { parseToolCalls, executeTool, type ToolResult } from "./tools";
+import { currentProject } from "../editor/project-panel";
 
 /* global setTimeout */
 
+const MAX_TOOL_ITERATIONS = 3;
+
 interface Message {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system" | "tool_result";
   content: string;
   timestamp: number;
 }
@@ -54,7 +59,7 @@ function getPreferences(): Preferences {
     return {
       aiContextInterval: prefs.aiContextInterval || DEFAULT_CONTEXT_INTERVAL,
       aiAssistantPrompt: prefs.aiAssistantPrompt || "",
-      deselectOnDocumentClick: prefs.deselectOnDocumentClick ?? true, // default true
+      deselectOnDocumentClick: prefs.deselectOnDocumentClick ?? true,
     };
   }
   return {
@@ -72,7 +77,6 @@ export function setupAIPanel(view: EditorView): void {
 }
 
 function setupEditorClickListener(view: EditorView): void {
-  // Deselection on document click is now controlled by preference
   const editorEl = view.dom;
   editorEl.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
@@ -146,7 +150,6 @@ function setupPanelEvents(view: EditorView): void {
     aiInput?.focus();
   });
 
-  // Aggiorna la selezione quando l'utente clicca nell'input
   aiInput?.addEventListener("focus", () => {
     if (!editorViewRef) return;
     const selection = getSelectionRange(editorViewRef);
@@ -294,11 +297,14 @@ function updateContextDisplay(): void {
     }
   }
 
+  if (currentProject && currentProject.id) {
+    parts.push(`<div class="ai-panel__context-label">Project: ${currentProject.name}</div>`);
+  }
+
   if (parts.length > 0) {
     contextEl.classList.add("active");
     contextEl.innerHTML = parts.join("");
 
-    // Aggiungi listener al pulsante clear
     const clearBtn = document.getElementById("ai-clear-selection");
     clearBtn?.addEventListener("click", () => {
       clearCurrentSelection();
@@ -333,6 +339,47 @@ function getSelectedChunkText(): string | null {
   return chunk?.content || null;
 }
 
+function showToolCallIndicator(): HTMLDivElement | null {
+  const historyEl = document.querySelector(".ai-panel__history");
+  if (!historyEl) return null;
+
+  const indicator = document.createElement("div");
+  indicator.className = "ai-message ai-message--tool-call";
+  indicator.innerHTML = `
+    <span class="tool-call-indicator">
+      <span class="tool-call-dots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </span>
+      Searching database...
+    </span>
+  `;
+  historyEl.appendChild(indicator);
+  historyEl.scrollTop = historyEl.scrollHeight;
+  return indicator;
+}
+
+function updateToolCallIndicator(
+  indicator: HTMLDivElement,
+  toolNames: string[],
+): void {
+  indicator.innerHTML = `
+    <span class="tool-call-indicator">
+      <span class="tool-call-dots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </span>
+      Querying: ${toolNames.join(", ")}
+    </span>
+  `;
+}
+
+function removeToolCallIndicator(indicator: HTMLDivElement): void {
+  indicator.remove();
+}
+
 async function sendMessage(text: string): Promise<void> {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const historyEl = document.querySelector(".ai-panel__history");
@@ -351,27 +398,103 @@ async function sendMessage(text: string): Promise<void> {
   const chunkText = getSelectedChunkText();
   const documentText = getDocumentText();
 
-  // TODO: Vector DB - When we implement vector database, we can do semantic search
-  // to find relevant document chunks based on the user's query.
-  // For now, we pass either the selected chunk or full document text.
-  const context = {
+  let context: AIContext = {
     selectedText: currentSelection?.text || undefined,
     documentTitle: document.title.replace(" - AuraWrite", ""),
     documentText: chunkText || documentText || undefined,
+    projectId: currentProject?.id || undefined,
   };
+
+  if (context.projectId) {
+    context = buildContextWithTools(context);
+  }
 
   const placeholder = appendMessage("assistant", "Thinking...");
 
   try {
+    setProcessing(true);
     const response = await sendToAI(text, context);
 
     if (placeholder) {
       if (response.error) {
         placeholder.textContent = `Error: ${response.error}`;
         placeholder.classList.add("ai-message--error");
-      } else {
+        setProcessing(false);
+        return;
+      }
+    }
+
+    let aiContent = response.content;
+
+    if (context.projectId && aiContent) {
+      let iteration = 0;
+
+      while (iteration < MAX_TOOL_ITERATIONS) {
+        const toolCalls = parseToolCalls(aiContent);
+
+        if (toolCalls.length === 0) {
+          break;
+        }
+
+        const toolNames = toolCalls.map((tc) => tc.name);
+        const indicator = showToolCallIndicator();
+        if (indicator) {
+          updateToolCallIndicator(indicator, toolNames);
+        }
+
+        const enrichedToolCalls = toolCalls.map((call) => ({
+          ...call,
+          arguments: {
+            project_id: context.projectId,
+            ...call.arguments,
+          },
+        }));
+
+        const toolResults: ToolResult[] = [];
+        for (const call of enrichedToolCalls) {
+          const result = await executeTool(call);
+          toolResults.push(result);
+        }
+
+        if (indicator) {
+          removeToolCallIndicator(indicator);
+        }
+
+        let toolResultsText = "";
+        for (const result of toolResults) {
+          if (result.error) {
+            toolResultsText += `\n[Error with ${result.tool}: ${result.error}]\n`;
+          } else {
+            toolResultsText += `\n[Result from ${result.tool}: ${JSON.stringify(result.result, null, 2)}]\n`;
+          }
+        }
+
+        const cleanResponse = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+
+        const followUpPrompt = `Here are the results from the database tools you requested:\n${toolResultsText}\n\nBased on these results, please provide your final response to the user. If the user asked you to modify the document, use the AURA_EDIT format. If they just asked for information, summarize it naturally.`;
+
+        iteration++;
+
+        const followUpContext = { ...context };
+        const followUpResponse = await sendToAI(followUpPrompt, followUpContext);
+
+        if (followUpResponse.error) {
+          if (placeholder) {
+            placeholder.textContent = `${cleanResponse}\n\n[Tool error: ${followUpResponse.error}]`;
+            placeholder.classList.add("ai-message--error");
+          }
+          setProcessing(false);
+          return;
+        }
+
+        aiContent = followUpResponse.content;
+      }
+    }
+
+    if (placeholder) {
+      if (aiContent) {
         const editResult = applyAuraEdit(
-          response.content,
+          aiContent,
           editorViewRef!,
           currentSelection,
         );
@@ -381,11 +504,11 @@ async function sendMessage(text: string): Promise<void> {
           if (editResult.operationsFailed > 0) {
             placeholder.textContent += `, ${editResult.operationsFailed} fallita/e`;
           }
-          // Note: Selection is NOT cleared automatically - user can iterate on same selection
         } else if (editResult.error) {
-          placeholder.textContent = response.content;
+          placeholder.textContent = aiContent;
         } else {
-          placeholder.textContent = response.content;
+          const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+          placeholder.textContent = cleanedContent || aiContent;
         }
       }
     }
@@ -394,6 +517,8 @@ async function sendMessage(text: string): Promise<void> {
       placeholder.textContent = `Error: ${error instanceof Error ? error.message : "Unknown error"}`;
       placeholder.classList.add("ai-message--error");
     }
+  } finally {
+    setProcessing(false);
   }
 
   if (historyEl) {
@@ -402,7 +527,7 @@ async function sendMessage(text: string): Promise<void> {
 }
 
 function appendMessage(
-  role: "user" | "assistant",
+  role: "user" | "assistant" | "system" | "tool_result",
   content: string,
 ): HTMLDivElement | null {
   const historyEl = document.querySelector(".ai-panel__history");
@@ -411,7 +536,7 @@ function appendMessage(
   messages.push({ role, content, timestamp: Date.now() });
 
   const msgEl = document.createElement("div");
-  msgEl.className = `ai-message ai-message--${role}`;
+  msgEl.className = `ai-message ai-message--${role === "tool_result" ? "system" : role}`;
   msgEl.textContent = content;
   historyEl.appendChild(msgEl);
 

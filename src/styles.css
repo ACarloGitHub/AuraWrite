@@ -713,6 +713,64 @@ body {
   align-self: flex-start;
 }
 
+.ai-message--tool-call {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  align-self: flex-start;
+  font-style: italic;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--color-border);
+}
+
+.ai-message--system {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  align-self: flex-start;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.tool-call-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-call-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.tool-call-dots .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: tool-call-bounce 1.2s infinite ease-in-out;
+}
+
+.tool-call-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.tool-call-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes tool-call-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .ai-panel__input {
   display: flex;
   gap: var(--spacing-sm);

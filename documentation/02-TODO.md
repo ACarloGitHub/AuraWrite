@@ -1,112 +1,123 @@
 # AuraWrite — TODO List
 
-**Ultimo aggiornamento:** 2026-04-17
+**Ultimo aggiornamento:** 2026-04-18
 
 ---
 
-## Sessione 2026-04-17 — Cosa e' stato fatto
+## Sessione 2026-04-18 — Cosa e' stato fatto
 
-1. **Semantic Search Toggle in Preferences** — PARZIALMENTE IMPLEMENTATO
-   - Aggiunto `semanticSearchEnabled` boolean in Preferences interface + default (true)
-   - Aggiunto checkbox UI in `index.html` con label "Automatically index documents when saving (requires Ollama)"
-   - Aggiunto `pref-semantic-search-enabled` in `savePreferencesFromModal()` e `openPreferencesModal()`
-   - **BUG RISOLTO**: mancava `pref-semantic-search-enabled` nella querySelectorList che attiva il salvataggio su change/input
-   - **BUG RISOLTO**: import circolare (`project-panel.ts` importava da `main.ts` che importa `project-panel.ts`). Sostituito con lettura diretta da localStorage
-   - **BUG NOTO**: il toggle NON funziona ancora. I documenti vengono indicizzati comunque. Possibili cause: Vite HMR non ricarica il modulo, oppure il valore letto da localStorage non e' corretto. **DA DEBUGGARE**
+1. **Embedding cleanup su delete** — IMPLEMENTATO
+   - `db_delete_project` → chiama `embeddings::delete_embeddings_for_project`
+   - `db_delete_section` → legge documenti della sezione e cancella le loro embeddings
+   - `db_delete_document` → chiama `embeddings::delete_embeddings_for_entity`
+   - Aggiunto comando Tauri `embedding_delete_for_project`
 
-2. **CSS Dark Mode fix per Preferences**
-   - Aggiunto `[data-theme="dark"]` rules per select, option, input[type=number], textarea
-   - Aggiunto `appearance: none` con SVG arrow per dropdown in dark mode
-   - **BUG NOTO**: dropdown chiuso ancora con sfondo chiaro. Il fix CSS potrebbe non funzionare per WebKit/GTK rendering dei select nativi. **DA VERIFICARE**
-
-3. **Scrollbar in Preferences modal**
-   - Aggiunto `overflow-y: auto; max-height: 70vh;` a `.modal-body`
-   - **DA VERIFICARE** se funziona
-
-4. **Labels Preferences** — migliorate:
-   - "Enable automatic indexing" → "Automatically index documents when saving (requires Ollama)"
-   - "Clear selection on document click" → "Automatically clear text selection when clicking in the editor"
-
----
-
-## DA FARE — Prossima Sessione (in ordine di priorita')
-
-### 1. [BUG] Semantic Search Toggle non funziona
-- I documenti vengono indicizzati anche quando il toggle e' disattivato
-- La funzione `indexDocumentForSearch` legge da localStorage ma non rispetta il valore
-- **Debug step**: aggiungere `console.log` prima del check per vedere cosa legge da localStorage
-- Verificare che la chiave sia corretta (`aurawrite-preferences`)
-- Verificare che il valore `semanticSearchEnabled` venga salvato come `false` (non stringa)
-
-### 2. [BUG] Dropdown select sfondo chiaro in dark mode
-- I select "Toolbar Display" e "Theme" hanno sfondo bianco in dark mode
-- Prova: usare `color-scheme: dark` sul root, oppure `<select>` custom con div/span
-- Oppure: forzare `background-color` con `!important`
-
-### 3. [FEATURE] Cancellazione embeddings quando si modifica/cancella contenuto
-
-**Quando salvo un documento aggiornato:**
-- `embedding_save_document` in Rust DEVE fare DELETE di tutti i vecchi chunk del documento PRIMA di inserire i nuovi
-- Se non lo fa gia', aggiungere la logica: `DELETE FROM embeddings WHERE project_id = ? AND entity_id = ?`
-- Poi INSERT dei nuovi chunk
-- Risultato: il DB riflette esattamente il documento corrente, niente di vecchio/orfano
-
-**Quando elimino un'entita':**
-- Eliminare progetto → DELETE tutti gli embedding del progetto (`delete_embeddings_for_project` esiste gia' in embeddings.rs ma non e' usato)
-- Eliminare sezione → DELETE tutti gli embedding dei documenti in quella sezione
-- Eliminare documento → DELETE tutti i suoi embedding ( verificare che `handleDeleteDocument` chiami delete )
-
-4. [FEATURE] Scrollbar Preferences — verificare se funziona, altrimenti sistemare
-
-5. [FEATURE] A4 Pagination — bloccante per layout stampa (vedi sezione dedicata sotto)
+2. **`embedding_save_document` DELETE before INSERT** — gia' risolto nella sessione precedente
 
 ---
 
 ## Completato (sessioni precedenti)
 
-### Phase A — SQLite CRUD (2026-04-11/14)
-- ✅ Backend Rust CRUD completo
-- ✅ Frontend TypeScript client completo
-- ✅ Schema database completo
-- ✅ ProjectPanel UI (Project → Section → Document)
-- ✅ Dirty tracking, notifications, save dialogs
-- ✅ Per-document save, project save, auto-save
+### Sessione 2026-04-17
+- Semantic Search Toggle — checkbox UI + lettura da localStorage + bug ID duplicato risolto
+- CSS Dark Mode per Preferences — select, option, input, textarea
+- Scrollbar Preferences — overflow-y auto + max-height 70vh
+- LabelsPreferences migliorate + preference-hint
+- Modal trascinabile e piu' largo (520px)
 
 ### Phase B — AI + Semantic Search (2026-04-16)
-- ✅ nomic-embed-text-v2-moe via Ollama
-- ✅ SQLite + cosine similarity (non sqlite-vec virtual table)
-- ✅ Automatic embedding indexing on save (3 punti: single doc, project, auto-save)
-- ✅ Tool Calling framework (7 tools)
-- ✅ Project type dropdown (custom dialog)
-- ✅ Delete confirmation dialogs (custom)
-- ✅ Text extraction from ProseMirror JSON
+- nomic-embed-text-v2-moe via Ollama
+- SQLite + cosine similarity
+- Automatic embedding indexing on save
+- Tool Calling framework (7 tools) — DEFINITO, NON COLLEGATO
+- Project type dropdown (custom dialog)
+- Delete confirmation dialogs
+- Text extraction from ProseMirror JSON
 
-### Decisioni confermate (2026-04-16)
-- NO soft-delete o versioning per embeddings (troppo complesso)
+### Phase A — SQLite CRUD (2026-04-11/14)
+- Backend Rust CRUD completo
+- Frontend TypeScript client completo
+- Schema database completo
+- ProjectPanel UI
+- Dirty tracking, notifications, save dialogs
+- Per-document save, project save, auto-save
+
+### Decisioni confermate
+- NO soft-delete o versioning per embeddings
 - SI': manual saves overwrite automatic saves
-- SI': Save aggiorna embeddings (deve fare delete + re-insert)
-- SI': Delete documento/progetto/sezione deve eliminare embeddings correlati
+- SI': Save aggiorna embeddings (delete + re-insert)
+- SI': Delete documento/progetto/sezione elimina embeddings correlati
+- SI': Tool calling prompt-based con XML `<tool>` (non API nativa)
+- SI': AURA_EDIT resta separato dai tools (non diventa un tool)
+- NO: tool calling nativo per ora (stesso costo in tokens, piu' complesso da mantenere)
 
 ---
 
-## Priority 1: Bugs
+## IN CORSO — Tool Calling Integration nel Chat Panel
 
-- [x] "Could not save document" — version_number overflow i32 ✅
-- [x] Click tra documenti senza check modifiche ✅
-- [x] Auto-salvataggio non chiamato ✅
-- [x] UI freeze dopo 12s ✅
-- [x] Document switch bug ✅
-- [x] Empty document switch ✅
-- [x] AI panels non si aprono ✅
+### Obiettivo
+Permettere all'AI Assistant di interrogare il database per rispondere a domande sul progetto (es. "scrivimi la scheda di tutti i personaggi").
+
+### Cosa ESISTE (già implementato, da collegare)
+- `tools.ts` — 7 tools con definizione, esecuzione via Tauri invoke, parser XML, system prompt builder, pipeline `processAIResponseWithTools`
+- `chat.ts` — pannello chat funzionante ma senza tools
+- 3 provider (Ollama, OpenAI, Anthropic) — senza supporto multi-turno né tools nel prompt
+- AURA_EDIT — funzionante, non si tocca
+
+### Cosa MANCA (gap da implementare)
+
+#### Step 1 — AIContext con projectId (`providers.ts`)
+- Aggiungere `projectId?: string` ad `AIContext`
+- Passare projectId nella catena chat → ai-manager → provider
+
+#### Step 2 — projectId nel flusso chat (`chat.ts`)
+- Importare `currentProject` da `project-panel.ts`
+- Passare `projectId` nel contesto quando si chiama `sendToAI()`
+
+#### Step 3 — System prompt con tools (`ai-manager.ts`)
+- Quando c'e' `projectId`, chiamare `buildToolSystemPrompt()` da `tools.ts`
+- Iniettare le istruzioni dei tools nel system prompt del provider
+- Tools appaiono solo quando un progetto e' aperto
+
+#### Step 4 — Provider accetta system prompt esteso
+- `ollama-provider.ts`: metodo `stream()` accetta system prompt con tools nel prompt
+- `remote-providers.ts`: OpenAI e Anthropic accettano system prompt con tools nel prompt
+- NON si riscrive l'architettura dei provider — si aggiunge solo il testo dei tools al system prompt esistente
+
+#### Step 5 — Loop tool calling in sendMessage (`chat.ts`)
+- Dopo che l'AI risponde, controllare se contiene `<tool>` tags
+- Se si: parsare con `parseToolCalls()`, eseguire con `executeTool()` per ogni call
+- Mostrare indicatore discreto "Searching database..." con pallini animati
+- Rimandare i risultati come contesto aggiuntivo all'AI
+- Ripetere max 3 volte
+- Quando l'AI risponde senza `<tool>`, mostrare la risposta + processare AURA_EDIT
+
+#### Step 6 — Indicatore visivo (`styles.css`)
+- Riga discreta nel flusso della chat: "🔍 Searching database..." con animazione pallini
+- Non un banner, non invasivo
+
+#### Step 7 — Message type aggiornato (`chat.ts`)
+- Aggiungere ruoli `"system"` e `"tool_result"` al tipo `Message`
+- Costruire message history per contesto multi-turno
+
+### Considerazioni per il futuro
+- Il system prompt dei tools occupa ~500-800 tokens ad ogni richiesta
+- Possibile ottimizzazione: includere i tools solo quando l'AI ha bisogno di dati dal DB
+- Futuro: il system prompt potrebbe includere anche il "ruolo" dell'agente (scrittore, revisore, avvocato, correttore di bozze)
+- Futuro: aggiungere tool calling nativo per OpenAI/Anthropic come ottimizzazione
+
+---
+
+## Priority 1: Bugs aperti
+
 - [ ] Discard lento (dipende dal modello AI)
-- [ ] Semantic Search Toggle non funziona (vedi sopra)
-- [ ] Dropdown select sfondo chiaro in dark mode (vedi sopra)
+- [ ] Dropdown select in dark mode (GTK) — minor, workaround CSS parziale
 
 ---
 
 ## Priority 2: Features
 
-- [ ] Tool Calling integration nel pannello AI chat
+- [x] Tool Calling integration nel pannello AI chat — IN CORSO
 - [ ] Hugging Face GGUF local models (rimuovere dipendenza Ollama)
 - [ ] Enhanced title bar (font/style)
 - [ ] Cronologia modifiche persistenti
@@ -135,8 +146,12 @@
 
 - Sistema Slot-based: `SentenceSlot` con `docFrom`/`docTo`, MAI `textContent.indexOf()`
 - Modelli con reasoning lenti (30-60s): considerare modelli senza reasoning
-- Embedding: `embedding_save_document` in `embeddings.rs` — verificare se fa DELETE prima di INSERT
-- Funzioni Rust non usate: `delete_embeddings_for_project`, `search_similar_entities`, `get_embeddings_for_entity` — da collegare o rimuovere
-- Circular import risolto: `project-panel.ts` non importa piu' da `main.ts`, legge localStorage direttamente
+- Embedding: `embedding_save_document` fa DELETE prima di INSERT
+- `embedding_delete_for_project` comando Tauri esposto al frontend
+- `search_similar_entities` e `get_embeddings_for_entity` ancora non usate (futuro: AI tool calling)
+- Circular import risolto: `project-panel.ts` legge localStorage direttamente
+- Delete progetto/sezione/documento cancella embeddings correlate
+- Tool calling: approccio prompt-based con XML `<tool>`, NON API nativa
+- AURA_EDIT resta separato dai tools (lettura DB = tools, scrittura documento = AURA_EDIT)
 
-*Aggiornato 2026-04-17*
+*Aggiornato 2026-04-18*

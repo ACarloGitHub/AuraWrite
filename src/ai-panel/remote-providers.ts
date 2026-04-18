@@ -100,6 +100,10 @@ export class OpenAIProvider implements AIProvider {
       "Help the user with writing, editing, and organizing their documents.",
     ];
 
+    if (context?.toolInstructions) {
+      parts.push(context.toolInstructions);
+    }
+
     if (context?.projectType) {
       parts.push(`The current project is of type: ${context.projectType}`);
     }
@@ -108,8 +112,6 @@ export class OpenAIProvider implements AIProvider {
       parts.push(`The current document is titled: ${context.documentTitle}`);
     }
 
-    // TODO: Vector DB - When we implement vector database, we can do semantic search
-    // to find relevant chunks. For now, we include the full document text.
     if (context?.documentText) {
       parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
     }
@@ -121,9 +123,11 @@ export class OpenAIProvider implements AIProvider {
     }
 
     parts.push(`
-When the user explicitly asks you to modify, replace, or change text in the document, respond with a JSON object at the END of your message:
-{"modification": {"original": "exact text to replace", "new": "new text"}}
-Do NOT include this JSON if you are not modifying the document.`);
+When the user explicitly asks you to modify, replace, or change text in the document, respond with the AURA_EDIT format:
+<<<AURA_EDIT>>>
+{"aura_edit": {"message": "Brief explanation", "operations": [{"op": "replace", "find": "exact text", "content": [{"type": "text", "text": "new text"}]}]}}
+<<<END_AURA_EDIT>>>
+Do NOT use AURA_EDIT for normal conversation - only for document edits.`);
 
     return parts.join("\n");
   }
@@ -230,6 +234,10 @@ export class AnthropicProvider implements AIProvider {
       "Help the user with writing, editing, and organizing their documents.",
     ];
 
+    if (context?.toolInstructions) {
+      parts.push(context.toolInstructions);
+    }
+
     if (context?.projectType) {
       parts.push(`The current project is of type: ${context.projectType}`);
     }
@@ -242,8 +250,6 @@ export class AnthropicProvider implements AIProvider {
   }
 
   private buildUserContent(prompt: string, context?: AIContext): string {
-    // TODO: Vector DB - When we implement vector database, we can do semantic search
-    // to find relevant chunks. For now, we include the full document text.
     if (context?.documentText) {
       return `DOCUMENT:\n"""\n${context.documentText}\n"""\n\nSELECTED TEXT: ${context.selectedText || "None"}\n\nUser request: ${prompt}`;
     }

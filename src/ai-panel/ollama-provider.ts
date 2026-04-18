@@ -80,7 +80,11 @@ export class OllamaProvider implements AIProvider {
   }
 
   private buildPrompt(prompt: string, context?: AIContext): string {
-    let fullPrompt = prompt;
+    let fullPrompt = "";
+
+    if (context?.toolInstructions) {
+      fullPrompt += context.toolInstructions + "\n\n";
+    }
 
     if (context) {
       const parts: string[] = [];
@@ -104,8 +108,12 @@ export class OllamaProvider implements AIProvider {
       }
 
       if (parts.length > 0) {
-        fullPrompt = `[Context]\n${parts.join("\n\n")}\n\n[User Request]\n${prompt}`;
+        fullPrompt += `[Context]\n${parts.join("\n\n")}\n\n[User Request]\n${prompt}`;
+      } else {
+        fullPrompt += prompt;
       }
+    } else {
+      fullPrompt += prompt;
     }
 
     fullPrompt += `
