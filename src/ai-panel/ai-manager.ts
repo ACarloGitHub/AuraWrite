@@ -55,21 +55,15 @@ export async function sendToAI(
     initAI();
   }
 
-  if (isProcessing) {
-    return {
-      content: "",
-      done: false,
-      error: "Already processing a request",
-    };
-  }
-
-  isProcessing = true;
-
   try {
     const response = await currentProvider!.stream(prompt, context);
     return response;
-  } finally {
-    isProcessing = false;
+  } catch (error) {
+    return {
+      content: "",
+      done: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 }
 
