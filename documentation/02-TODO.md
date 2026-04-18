@@ -197,6 +197,7 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 
 - [ ] Discard lento (dipende dal modello AI)
 - [ ] Dropdown select in dark mode (GTK) — minor
+- [ ] Toast "indexing" scompare senza essere sostituito da notifica di successo/fallimento
 
 ---
 
@@ -218,7 +219,24 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 
 ---
 
-## PRIORITY 3: Paginazione A4 (Future)
+## PRIORITY 3: Materiali Esterni e Import (Future)
+
+Spazio dedicato nel progetto per materiale esterno (fonti, siti, PDF, ePub, immagini). L'idea è poter importare e indicizzare contenuti non-narrativi affiancati ai documenti di scrittura.
+
+| Feature | Descrizione |
+|---------|-------------|
+| **Sezione "Risorse" nel progetto** | Area dedicata per materiale esterno, separata dalle sezioni narrative |
+| **Import documenti** | Importare PDF, ePub, TXT, MD nel progetto come risorse indicizzabili |
+| **Indicizzazione risorse** | Le risorse importate vengono indicizzate (embeddings + entity extraction) come i documenti |
+| **Immagini per modelli multimodali** | Importare immagini (mappe, personaggi, copertine) per l'AI multimodale |
+| **Riferimenti web** | Salvare URL con estrazione testo/cache per consultazione AI |
+| **Ricerca semantica estesa** | Ricerca semantica copre sia documenti che risorse importate |
+
+Nota: la tabella `attachments` già esiste nello schema DB (con `entity_id`, `document_id`, `file_path`, `file_type`) — può essere la base per questa feature.
+
+---
+
+## PRIORITY 4: Paginazione A4 (Future)
 
 **Stato:** Formato continuo con page break manuali.
 
