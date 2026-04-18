@@ -1025,6 +1025,15 @@ function createProjectElement(project: Project): HTMLElement {
   const nameEl = document.createElement("div");
   nameEl.className = "item-name";
   nameEl.textContent = project.name;
+  nameEl.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    startInlineRename(nameEl, project.name, async (newName) => {
+      project.name = newName;
+      project.updated_at = Date.now();
+      await updateProject(project);
+      renderProjectsList();
+    });
+  });
 
   // Container per azioni inline
   const actionsEl = document.createElement("div");
@@ -1081,6 +1090,15 @@ function createSectionElement(section: Section): HTMLElement {
   const nameEl = document.createElement("div");
   nameEl.className = "item-name";
   nameEl.textContent = section.name;
+  nameEl.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    startInlineRename(nameEl, section.name, async (newName) => {
+      section.name = newName;
+      section.updated_at = Date.now();
+      await updateSection(section);
+      renderProjectsList();
+    });
+  });
 
   // Container per azioni inline
   const actionsEl = document.createElement("div");
@@ -1141,6 +1159,15 @@ function createDocumentElement(doc: Document): HTMLElement {
   const nameEl = document.createElement("div");
   nameEl.className = "item-name";
   nameEl.textContent = doc.title;
+  nameEl.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    startInlineRename(nameEl, doc.title, async (newName) => {
+      doc.title = newName;
+      doc.updated_at = Date.now();
+      await updateDocument(doc);
+      renderProjectsList();
+    });
+  });
 
   // Container per azioni inline (save + delete per document)
   const actionsEl = document.createElement("div");
@@ -1182,6 +1209,51 @@ function createDocumentElement(doc: Document): HTMLElement {
   div.appendChild(header);
 
   return div;
+}
+
+// ============================================================================
+// INLINE RENAME
+// ============================================================================
+
+function startInlineRename(
+  el: HTMLElement,
+  currentName: string,
+  onSave: (newName: string) => Promise<void>,
+): void {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentName;
+  input.className = "inline-rename-input";
+
+  el.textContent = "";
+  el.appendChild(input);
+  input.focus();
+  input.select();
+
+  let saved = false;
+
+  const save = async () => {
+    if (saved) return;
+    saved = true;
+    const newName = input.value.trim();
+    if (newName && newName !== currentName) {
+      el.textContent = newName;
+      await onSave(newName);
+    } else {
+      el.textContent = currentName;
+    }
+  };
+
+  input.addEventListener("blur", () => save());
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === "Escape") {
+      saved = true;
+      el.textContent = currentName;
+    }
+  });
 }
 
 // ============================================================================

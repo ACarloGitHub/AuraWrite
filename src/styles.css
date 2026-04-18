@@ -1244,6 +1244,26 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text, #333333);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-rename-input {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 1px 4px;
+  border: 1px solid var(--color-primary, #007bff);
+  border-radius: 3px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #333);
+  outline: none;
+  box-sizing: border-box;
 }
 
 /* Project - spaziatura diversa ma stesso stile */
