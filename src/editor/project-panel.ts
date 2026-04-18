@@ -21,6 +21,11 @@ import {
 } from "../database/db";
 import { invoke } from "@tauri-apps/api/core";
 import type { Project, Section, Document } from "../types/database";
+import {
+  extractEntitiesFromDocument,
+  extractEntitiesFromSection,
+  extractEntitiesFromProject,
+} from "../ai-panel/entity-extraction";
 
 // State
 let currentProject: Project | null = null;
@@ -427,10 +432,15 @@ async function handleSaveDocument(doc: Document): Promise<void> {
   }, 150);
 }
 
-function showNotification(message: string, type: "success" | "error" = "success"): void {
+function showNotification(message: string, type: "success" | "error" | "indexing" = "success"): void {
   const toast = document.createElement("div");
   toast.className = `project-toast ${type}`;
   toast.textContent = message;
+  const bgMap = {
+    success: "#228822",
+    error: "#cc0000",
+    indexing: "#0066cc",
+  };
   toast.style.cssText = `
     position: fixed;
     bottom: 60px;
@@ -440,10 +450,18 @@ function showNotification(message: string, type: "success" | "error" = "success"
     border-radius: 4px;
     font-size: 13px;
     z-index: 1000;
-    ${type === "success" ? "background: #228822; color: white;" : "background: #cc0000; color: white;"}
+    background: ${bgMap[type] || bgMap.success};
+    color: white;
+    white-space: nowrap;
   `;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2000);
+
+  const existingToasts = document.querySelectorAll(`.project-toast:not([data-id="${message}"])`);
+  existingToasts.forEach((t) => t.remove());
+
+  toast.setAttribute("data-id", message);
+  const duration = type === "indexing" ? 5000 : 2000;
+  setTimeout(() => toast.remove(), duration);
 }
 
 function clearEditor(): void {
@@ -826,6 +844,71 @@ async function handleDeleteDocument(doc: Document): Promise<void> {
   }
 }
 
+// ============================================================================
+// ENTITY INDEXING
+// ============================================================================
+
+let isIndexing = false;
+
+async function handleIndexDocument(doc: Document): Promise<void> {
+  if (!currentProject || isIndexing) return;
+  isIndexing = true;
+
+  try {
+    showNotification("🗂 Indexing entities...", "indexing");
+    const result = await extractEntitiesFromDocument(
+      doc.id,
+      currentProject.id,
+      currentProject.type || "novel",
+      (msg) => showNotification(`🗂 ${msg}`, "indexing"),
+    );
+    showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
+  } catch (error) {
+    showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+  } finally {
+    isIndexing = false;
+  }
+}
+
+async function handleIndexSection(section: Section): Promise<void> {
+  if (!currentProject || isIndexing) return;
+  isIndexing = true;
+
+  try {
+    showNotification("🗂 Indexing section...", "indexing");
+    const result = await extractEntitiesFromSection(
+      section.id,
+      currentProject.id,
+      currentProject.type || "novel",
+      (msg) => showNotification(`🗂 ${msg}`, "indexing"),
+    );
+    showNotification(`✓ ${section.name}: ${result.created} created, ${result.updated} updated`, "success");
+  } catch (error) {
+    showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+  } finally {
+    isIndexing = false;
+  }
+}
+
+async function handleIndexProject(project: Project): Promise<void> {
+  if (isIndexing) return;
+  isIndexing = true;
+
+  try {
+    showNotification("🗂 Indexing project...", "indexing");
+    const result = await extractEntitiesFromProject(
+      project.id,
+      project.type || "novel",
+      (msg) => showNotification(`🗂 ${msg}`, "indexing"),
+    );
+    showNotification(`✓ Project indexed: ${result.created} created, ${result.updated} updated`, "success");
+  } catch (error) {
+    showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+  } finally {
+    isIndexing = false;
+  }
+}
+
 async function handleNewSection(projectId: string): Promise<void> {
   const name = prompt("Section name:");
   if (!name) return;
@@ -988,6 +1071,16 @@ function createActiveProjectElement(project: Project): HTMLElement {
   });
   actionsEl.appendChild(addSectionBtn);
 
+  const indexBtn = document.createElement("button");
+  indexBtn.className = "item-action-btn index-btn";
+  indexBtn.textContent = "🗂";
+  indexBtn.title = "Index all entities in project";
+  indexBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handleIndexProject(project);
+  });
+  actionsEl.appendChild(indexBtn);
+
   // Pulsante elimina
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "delete-btn";
@@ -1115,6 +1208,16 @@ function createSectionElement(section: Section): HTMLElement {
   });
   actionsEl.appendChild(addDocBtn);
 
+  const indexBtn = document.createElement("button");
+  indexBtn.className = "item-action-btn index-btn";
+  indexBtn.textContent = "🗂";
+  indexBtn.title = "Index entities in this section";
+  indexBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handleIndexSection(section);
+  });
+  actionsEl.appendChild(indexBtn);
+
   // Pulsante elimina
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "delete-btn";
@@ -1182,6 +1285,16 @@ function createDocumentElement(doc: Document): HTMLElement {
     await handleSaveDocument(doc);
   });
   actionsEl.appendChild(saveBtn);
+
+  const indexBtn = document.createElement("button");
+  indexBtn.className = "item-action-btn index-btn";
+  indexBtn.textContent = "🗂";
+  indexBtn.title = "Index entities in this document";
+  indexBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handleIndexDocument(doc);
+  });
+  actionsEl.appendChild(indexBtn);
 
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "delete-btn";

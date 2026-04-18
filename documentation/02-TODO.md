@@ -194,13 +194,12 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 ## PRIORITY 2: Features (in ordine)
 
 1. **Entity Extraction System** — vedi piano dettagliato sopra
-2. **Bug fix: documento creato sotto sezione sbagliata**
-3. **Titoli editabili** (doppioclick → inline edit → update DB)
-4. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
-5. **Enhanced title bar** (font/style)
-6. **Cronologia modifiche persistenti**
-7. **Writing stats, token counter, sentence counter**
-8. **Export PDF/ePub migliorato**
+2. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (future, non urgente)
+3. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
+4. **Enhanced title bar** (font/style)
+5. **Cronologia modifiche persistenti**
+6. **Writing stats, token counter, sentence counter**
+7. **Export PDF/ePub migliorato**
 
 ---
 
