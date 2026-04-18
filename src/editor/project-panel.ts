@@ -433,6 +433,8 @@ async function handleSaveDocument(doc: Document): Promise<void> {
 }
 
 function showNotification(message: string, type: "success" | "error" | "indexing" = "success"): void {
+  document.querySelectorAll(".project-toast").forEach((t) => t.remove());
+
   const toast = document.createElement("div");
   toast.className = `project-toast ${type}`;
   toast.textContent = message;
@@ -455,12 +457,7 @@ function showNotification(message: string, type: "success" | "error" | "indexing
     white-space: nowrap;
   `;
   document.body.appendChild(toast);
-
-  const existingToasts = document.querySelectorAll(`.project-toast:not([data-id="${message}"])`);
-  existingToasts.forEach((t) => t.remove());
-
-  toast.setAttribute("data-id", message);
-  const duration = type === "indexing" ? 5000 : 2000;
+  const duration = type === "indexing" ? 8000 : 2500;
   setTimeout(() => toast.remove(), duration);
 }
 
