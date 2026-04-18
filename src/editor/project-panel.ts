@@ -535,8 +535,11 @@ async function loadProjects(): Promise<void> {
 async function loadSections(projectId: string): Promise<void> {
   try {
     sections = await getSections(projectId);
-    console.log("Sections from DB:", sections);
-    console.log("Number of sections:", sections.length);
+    documents = [];
+    for (const section of sections) {
+      const sectionDocs = await getDocuments(section.id);
+      documents.push(...sectionDocs);
+    }
     renderProjectsList();
   } catch (error) {
     console.error("Failed to load sections:", error);
@@ -1113,9 +1116,10 @@ function createSectionElement(section: Section): HTMLElement {
   });
   div.appendChild(header);
 
-  // Mostra documents se la section è selezionata
-  if (currentSection?.id === section.id && documents.length > 0) {
-    documents.forEach((doc) => {
+  // Mostra documents appartenenti a questa sezione
+  const sectionDocs = documents.filter((doc) => doc.section_id === section.id);
+  if (currentSection?.id === section.id && sectionDocs.length > 0) {
+    sectionDocs.forEach((doc) => {
       const docEl = createDocumentElement(doc);
       div.appendChild(docEl);
     });
