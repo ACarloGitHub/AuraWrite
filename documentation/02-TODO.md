@@ -9,6 +9,12 @@
 1. **Embedding cleanup su delete** — `db_delete_project/section/document` ora cancellano embeddings correlate
 2. **Tool Calling integration** — chat.ts loop con parse `<tool>`, executeTool, indicatore visivo, max 3 iterazioni
 3. **Bug fix "Already processing"** — lock management spostato da sendToAI a chat.ts
+4. **Inline rename** — doppioclick per rinominare progetti, sezioni, documenti + update DB
+5. **Entity Extraction System** — `entity-extraction.ts` con AI extraction, dedup, upsert, pulsanti 🗂
+6. **Section expand/collapse** — pulsante ▶/▼, default tutte espanse
+7. **Modello default** — cambiato da `gemma4:31b-cloud` a `kimi-k2.5:cloud`
+8. **Fix notifiche** — indexing toast persistente, selector CSS rotto
+9. **Fix created_at** — mancava in db_update_entity
 
 ---
 
@@ -193,13 +199,19 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 
 ## PRIORITY 2: Features (in ordine)
 
-1. **Entity Extraction System** — vedi piano dettagliato sopra
+1. **Entity Extraction System** — implementato e funzionante
 2. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (future, non urgente)
-3. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
-4. **Enhanced title bar** (font/style)
-5. **Cronologia modifiche persistenti**
-6. **Writing stats, token counter, sentence counter**
-7. **Export PDF/ePub migliorato**
+3. **Provider/Model/API Key nelle Preferenze** — dropdown con provider (Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio), model selection, API key input
+4. **LM Studio support** — gia' funzionante via OpenAI provider con baseUrl http://localhost:1234/v1, aggiungere preset nelle preferenze
+5. **Tool calling nativo per provider che lo supportano** — OpenAI e Anthropic hanno API tools nativa, LM Studio supporta function calling. Per ora usiamo prompt-based XML per tutti. Futuro: aggiungere supporto nativo come opzione per provider compatibili
+6. **Migliorare system prompt per tool calling** — forzare AI a chiamare tools prima di rispondere "no entities found", aggiungere project_id esplicito, esempi più chiari
+7. **Show AI thinking** — opzione nel pannello AI Assistant (header) per mostrare/nascondere il thinking del modello. Solo per modelli che supportano reasoning (es. kimi-k2.5)
+8. **Preferences a schede** — ristrutturare il modal Preferenze con tab/schede (es. "General", "AI Settings", "Editor", "Indexing") invece di una lista unica
+9. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
+8. **Enhanced title bar** (font/style)
+9. **Cronologia modifiche persistenti**
+10. **Writing stats, token counter, sentence counter**
+11. **Export PDF/ePub migliorato**
 
 ---
 
