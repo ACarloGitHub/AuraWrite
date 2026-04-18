@@ -47,6 +47,24 @@ export interface Entity {
   updated_at: number;
 }
 
+export interface Link {
+  id: string;
+  source_type: string;
+  source_id: string;
+  target_type: string;
+  target_id: string;
+  link_type: string;
+  context_json?: string;
+  created_at: number;
+}
+
+export interface IndexStatus {
+  status: "red" | "yellow" | "green";
+  entity_count: number;
+  last_indexed: number | null;
+  target_updated_at: number | null;
+}
+
 export interface EntityType {
   id: string;
   project_id: string;

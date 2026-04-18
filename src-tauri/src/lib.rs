@@ -47,6 +47,7 @@ fn db_update_project(state: State<AppState>, project: Project) -> Result<(), Str
 fn db_delete_project(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     embeddings::delete_embeddings_for_project(&*conn, &id).map_err(|e| e.to_string())?;
+    delete_links_for_project(&*conn, &id).map_err(|e| e.to_string())?;
     delete_project(&*conn, &id).map_err(|e| e.to_string())
 }
 
@@ -78,6 +79,7 @@ fn db_delete_section(state: State<AppState>, id: String) -> Result<(), String> {
     let docs = get_documents_by_section(&*conn, &id).map_err(|e| e.to_string())?;
     for doc in &docs {
         embeddings::delete_embeddings_for_entity(&*conn, "document", &doc.id).map_err(|e| e.to_string())?;
+        delete_links_by_source(&*conn, "document", &doc.id).map_err(|e| e.to_string())?;
     }
     delete_section(&*conn, &id).map_err(|e| e.to_string())
 }
@@ -114,6 +116,7 @@ fn db_update_document(state: State<AppState>, document: Document) -> Result<(), 
 fn db_delete_document(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     embeddings::delete_embeddings_for_entity(&*conn, "document", &id).map_err(|e| e.to_string())?;
+    delete_links_by_source(&*conn, "document", &id).map_err(|e| e.to_string())?;
     delete_document(&*conn, &id).map_err(|e| e.to_string())
 }
 
@@ -193,6 +196,45 @@ fn db_get_versions(state: State<AppState>, document_id: String) -> Result<Vec<Do
 fn db_cleanup_old_versions(state: State<AppState>, document_id: String, keep_count: i32) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     cleanup_old_versions(&*conn, &document_id, keep_count).map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// LINK COMMANDS
+// ============================================================================
+
+#[tauri::command]
+fn db_create_link(state: State<AppState>, link: Link) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    create_link(&*conn, &link).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_get_links_by_source(state: State<AppState>, source_type: String, source_id: String) -> Result<Vec<Link>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_links_by_source(&*conn, &source_type, &source_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_get_links_by_target(state: State<AppState>, target_type: String, target_id: String) -> Result<Vec<Link>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_links_by_target(&*conn, &target_type, &target_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_delete_links_by_source(state: State<AppState>, source_type: String, source_id: String) -> Result<usize, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    delete_links_by_source(&*conn, &source_type, &source_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_get_entity_index_status(state: State<AppState>, target_type: String, target_id: String) -> Result<IndexStatus, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    match target_type.as_str() {
+        "document" => get_entity_index_status_for_document(&*conn, &target_id).map_err(|e| e.to_string()),
+        "section" => get_entity_index_status_for_section(&*conn, &target_id).map_err(|e| e.to_string()),
+        "project" => get_entity_index_status_for_project(&*conn, &target_id).map_err(|e| e.to_string()),
+        _ => Err("Invalid target_type. Use 'document', 'section', or 'project'.".to_string()),
+    }
 }
 
 // ============================================================================
@@ -471,6 +513,12 @@ pub fn run() {
             db_create_entity_type,
             db_get_entity_types,
             db_delete_entity_type,
+            // Link commands
+            db_create_link,
+            db_get_links_by_source,
+            db_get_links_by_target,
+            db_delete_links_by_source,
+            db_get_entity_index_status,
             // Embedding commands
             embedding_check_ollama,
             embedding_generate,

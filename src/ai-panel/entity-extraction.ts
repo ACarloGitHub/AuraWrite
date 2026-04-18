@@ -1,8 +1,8 @@
 import { sendToAI } from "./ai-manager";
 import type { AIContext } from "./providers";
 import { invoke } from "@tauri-apps/api/core";
-import { getEditorContent } from "../editor/editor";
-import type { EditorView } from "prosemirror-view";
+import { deleteLinksBySource, createLink } from "../database/db";
+import { generateId } from "../types/database";
 
 interface ExtractedEntity {
   name: string;
@@ -164,7 +164,7 @@ async function upsertEntity(
   projectId: string,
   extracted: ExtractedEntity,
   existingEntities: ExistingEntity[],
-): Promise<"created" | "updated"> {
+): Promise<{ result: "created" | "updated"; entityId: string }> {
   const existing = existingEntities.find(
     (e) => e.name.toLowerCase() === extracted.name.toLowerCase(),
   );
@@ -193,7 +193,7 @@ async function upsertEntity(
     if (idx >= 0) {
       existingEntities[idx].description = updatedDesc.substring(0, 150);
     }
-    return "updated";
+    return { result: "updated", entityId: existing.id };
   }
 
   const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -217,7 +217,7 @@ async function upsertEntity(
     description: extracted.description.substring(0, 150),
     created_at: Date.now(),
   });
-  return "created";
+  return { result: "created", entityId: newId };
 }
 
 export async function extractEntitiesFromDocument(
@@ -226,6 +226,12 @@ export async function extractEntitiesFromDocument(
   projectType: string,
   onProgress?: (message: string) => void,
 ): Promise<{ created: number; updated: number }> {
+  try {
+    await deleteLinksBySource("document", documentId);
+  } catch (err) {
+    console.warn("[EntityExtraction] Failed to delete old links (may be first extraction):", err);
+  }
+
   const doc = await invoke("db_get_document", { id: documentId }) as {
     id: string;
     content_json: string;
@@ -266,7 +272,21 @@ export async function extractEntitiesFromDocument(
     const extracted = parseExtractionResponse(response.content);
 
     for (const entity of extracted) {
-      const result = await upsertEntity(projectId, entity, existingEntities);
+      const { result, entityId } = await upsertEntity(projectId, entity, existingEntities);
+
+      await createLink({
+        id: generateId(),
+        source_type: "document",
+        source_id: documentId,
+        target_type: "entity",
+        target_id: entityId,
+        link_type: "extracted_from",
+        context_json: undefined,
+        created_at: Date.now(),
+      }).catch((err) => {
+        console.warn("[EntityExtraction] Failed to create document-entity link:", err);
+      });
+
       if (result === "created") created++;
       else updated++;
     }

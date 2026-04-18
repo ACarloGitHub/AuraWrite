@@ -35,10 +35,18 @@
 - Automatic embedding indexing on save (con delete before insert)
 - Semantic Search Toggle nelle preferenze
 
-### Tool Calling (DEFINITO, NON COLLEGATO)
-- `tools.ts`: 7 tools definiti con parser, esecuzione, system prompt
-- Tools: search_entities, get_entity_details, list_entities_by_type, search_documents, get_document_content, get_project_structure, semantic_search
-- **NON ancora integrato nel flusso chat** — vedi 02-TODO.md per il piano
+### Tool Calling (INTEGRATO)
+- `tools.ts`: 8 tools definiti con parser, esecuzione, system prompt
+- Tools: search_entities, get_entity_details, list_entities_by_type, search_documents, get_document_content, get_project_structure, semantic_search, entities_in_document
+- Integrato nel chat panel con loop prompt-based XML
+- Tool `entities_in_document` usa la tabella `links` per filtrare entities per documento
+
+### Document-Entity Links
+- Tabella `links` (già nello schema) ora usata per collegare entities ai documenti
+- `link_type='extracted_from'`: documento → entity estratte da quel documento
+- Delete cascade: progetto/sezione/documento cancellano anche i link correlati
+- Re-indicizzazione: cancella vecchi link del documento, poi ricrea
+- Indicatore semaforo: rosso (non indicizzato), giallo (outdated), verde (aggiornato)
 
 ---
 
@@ -51,6 +59,7 @@
 ## Bug Aperti
 - [ ] Discard lento (dipende dal modello AI)
 - [ ] Dropdown select sfondo chiaro in dark mode (GTK/Linux)
+- [ ] ESLint config: aggiungere `env: { browser: true }` per risolvere errori `setTimeout`, `HTMLButtonElement` etc.
 
 ---
 
@@ -89,7 +98,8 @@ src/
 │   ├── ollama-provider.ts     # Provider locale
 │   ├── remote-providers.ts    # OpenAI, Anthropic
 │   ├── chunks.ts              # Document chunking per contesto
-│   └── tools.ts               # Tool calling per DB (NON COLLEGATO)
+│   ├── tools.ts               # Tool calling per DB (8 tools, integrato)
+│   └── entity-extraction.ts   # Entity extraction con link document→entity
 ├── formats/                   # Convertitori formato
 ├── database/
 │   └── db.ts                  # SQLite operations (Tauri invoke)

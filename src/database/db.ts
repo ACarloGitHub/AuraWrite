@@ -11,6 +11,8 @@ import type {
   Entity,
   EntityType,
   DocumentVersion,
+  Link,
+  IndexStatus,
 } from "../types/database";
 
 // ============================================================================
@@ -115,6 +117,30 @@ export async function getEntityTypes(projectId: string): Promise<EntityType[]> {
 
 export async function deleteEntityType(id: string): Promise<void> {
   await invoke("db_delete_entity_type", { id });
+}
+
+// ============================================================================
+// LINKS
+// ============================================================================
+
+export async function createLink(link: Link): Promise<void> {
+  await invoke("db_create_link", { link });
+}
+
+export async function getLinksBySource(sourceType: string, sourceId: string): Promise<Link[]> {
+  return await invoke("db_get_links_by_source", { sourceType, sourceId });
+}
+
+export async function getLinksByTarget(targetType: string, targetId: string): Promise<Link[]> {
+  return await invoke("db_get_links_by_target", { targetType, targetId });
+}
+
+export async function deleteLinksBySource(sourceType: string, sourceId: string): Promise<number> {
+  return await invoke("db_delete_links_by_source", { sourceType, sourceId });
+}
+
+export async function getEntityIndexStatus(targetType: string, targetId: string): Promise<IndexStatus> {
+  return await invoke("db_get_entity_index_status", { targetType, targetId });
 }
 
 // ============================================================================

@@ -18,9 +18,10 @@ import {
   deleteDocument,
   saveDocumentVersion,
   getLatestVersion,
+  getEntityIndexStatus,
 } from "../database/db";
 import { invoke } from "@tauri-apps/api/core";
-import type { Project, Section, Document } from "../types/database";
+import type { Project, Section, Document, IndexStatus } from "../types/database";
 import {
   extractEntitiesFromDocument,
   extractEntitiesFromSection,
@@ -462,11 +463,12 @@ function showNotification(message: string, type: "success" | "error" | "indexing
     white-space: nowrap;
   `;
   document.body.appendChild(toast);
-  const duration = type === "indexing" ? 60000 : 4000;
-  const timer = setTimeout(() => toast.remove(), duration);
-  if (type === "indexing") {
-    toast.dataset.autoRemove = String(timer);
-  }
+  const duration = type === "indexing" ? 60000 : 5000;
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.remove();
+    }
+  }, duration);
 }
 
 function clearEditor(): void {
@@ -880,6 +882,7 @@ async function handleIndexDocument(doc: Document): Promise<void> {
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
+    updateIndexIndicators();
   }
 }
 
@@ -907,6 +910,7 @@ async function handleIndexSection(section: Section): Promise<void> {
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
+    updateIndexIndicators();
   }
 }
 
@@ -932,7 +936,48 @@ async function handleIndexProject(project: Project): Promise<void> {
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
+    updateIndexIndicators();
   }
+}
+
+async function updateIndexIndicators(): Promise<void> {
+  if (!currentProject) return;
+
+  try {
+    const projectStatus = await getEntityIndexStatus("project", currentProject.id);
+    const projectBtns = document.querySelectorAll<HTMLButtonElement>(".index-btn[data-target-type='project']");
+    projectBtns.forEach((btn) => {
+      btn.dataset.targetId = currentProject!.id;
+      applyIndexStatus(btn, projectStatus);
+    });
+
+    for (const section of sections) {
+      const sectionStatus = await getEntityIndexStatus("section", section.id);
+      const sectionBtns = document.querySelectorAll<HTMLButtonElement>(`.index-btn[data-target-type='section'][data-target-id='${section.id}']`);
+      sectionBtns.forEach((btn) => applyIndexStatus(btn, sectionStatus));
+
+      const sectionDocs = documents.filter((doc) => doc.section_id === section.id);
+      for (const doc of sectionDocs) {
+        const docStatus = await getEntityIndexStatus("document", doc.id);
+        const docBtns = document.querySelectorAll<HTMLButtonElement>(`.index-btn[data-target-type='document'][data-target-id='${doc.id}']`);
+        docBtns.forEach((btn) => applyIndexStatus(btn, docStatus));
+      }
+    }
+  } catch (error) {
+    console.error("[IndexStatus] Error:", error);
+  }
+}
+
+function applyIndexStatus(btn: HTMLButtonElement, status: IndexStatus): void {
+  btn.classList.remove("index-red", "index-yellow", "index-green");
+  btn.classList.add(`index-${status.status}`);
+
+  const tooltips: Record<string, string> = {
+    red: "Not indexed — click to extract entities",
+    yellow: "Outdated — document modified since last indexing",
+    green: `Indexed — ${status.entity_count} entities linked`,
+  };
+  btn.title = tooltips[status.status] || "Index entities";
 }
 
 async function handleNewSection(projectId: string): Promise<void> {
@@ -1068,6 +1113,8 @@ function renderProjectsList(): void {
   // Mostra solo il progetto attivo con la sua gerarchia
   const activeProjectEl = createActiveProjectElement(currentProject);
   container.appendChild(activeProjectEl);
+
+  updateIndexIndicators();
 }
 
 function createActiveProjectElement(project: Project): HTMLElement {
@@ -1101,6 +1148,8 @@ function createActiveProjectElement(project: Project): HTMLElement {
   indexBtn.className = "item-action-btn index-btn";
   indexBtn.textContent = "🗂";
   indexBtn.title = "Index all entities in project";
+  indexBtn.dataset.targetType = "project";
+  indexBtn.dataset.targetId = project.id;
   indexBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     handleIndexProject(project);
@@ -1253,6 +1302,8 @@ function createSectionElement(section: Section): HTMLElement {
   indexBtn.className = "item-action-btn index-btn";
   indexBtn.textContent = "🗂";
   indexBtn.title = "Index entities in this section";
+  indexBtn.dataset.targetType = "section";
+  indexBtn.dataset.targetId = section.id;
   indexBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     handleIndexSection(section);
@@ -1332,6 +1383,8 @@ function createDocumentElement(doc: Document): HTMLElement {
   indexBtn.className = "item-action-btn index-btn";
   indexBtn.textContent = "🗂";
   indexBtn.title = "Index entities in this document";
+  indexBtn.dataset.targetType = "document";
+  indexBtn.dataset.targetId = doc.id;
   indexBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     handleIndexDocument(doc);

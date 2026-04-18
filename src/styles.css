@@ -1432,6 +1432,80 @@ body {
   border-color: white;
 }
 
+.index-btn.index-red {
+  color: #cc3333 !important;
+  border-color: #cc3333 !important;
+}
+
+.index-btn.index-red:hover {
+  background: #cc3333 !important;
+  color: white !important;
+}
+
+.index-btn.index-yellow {
+  color: #cc9900 !important;
+  border-color: #cc9900 !important;
+}
+
+.index-btn.index-yellow:hover {
+  background: #cc9900 !important;
+  color: white !important;
+}
+
+.index-btn.index-green {
+  color: #33aa33 !important;
+  border-color: #33aa33 !important;
+}
+
+.index-btn.index-green:hover {
+  background: #33aa33 !important;
+  color: white !important;
+}
+
+[data-theme="dark"] .index-btn.index-red {
+  color: #ff5555 !important;
+  border-color: #ff5555 !important;
+}
+
+[data-theme="dark"] .index-btn.index-red:hover {
+  background: #ff5555 !important;
+}
+
+[data-theme="dark"] .index-btn.index-yellow {
+  color: #ffcc00 !important;
+  border-color: #ffcc00 !important;
+}
+
+[data-theme="dark"] .index-btn.index-yellow:hover {
+  background: #ffcc00 !important;
+  color: #1e1e1e !important;
+}
+
+[data-theme="dark"] .index-btn.index-green {
+  color: #55cc55 !important;
+  border-color: #55cc55 !important;
+}
+
+[data-theme="dark"] .index-btn.index-green:hover {
+  background: #55cc55 !important;
+  color: #1e1e1e !important;
+}
+
+.project-item.active .index-btn.index-red {
+  color: #ff5555 !important;
+  border-color: #ff5555 !important;
+}
+
+.project-item.active .index-btn.index-yellow {
+  color: #ffcc00 !important;
+  border-color: #ffcc00 !important;
+}
+
+.project-item.active .index-btn.index-green {
+  color: #55cc55 !important;
+  border-color: #55cc55 !important;
+}
+
 #btn-projects.active {
   background: var(--color-primary, #4a90d9);
   color: white;

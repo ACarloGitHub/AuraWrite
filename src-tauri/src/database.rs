@@ -83,6 +83,26 @@ pub struct DocumentVersion {
     pub created_at: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Link {
+    pub id: String,
+    pub source_type: String,
+    pub source_id: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub link_type: String,
+    pub context_json: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IndexStatus {
+    pub status: String,
+    pub entity_count: i64,
+    pub last_indexed: Option<i64>,
+    pub target_updated_at: Option<i64>,
+}
+
 /// Get the database path for AuraWrite
 pub fn get_database_path() -> PathBuf {
     let config_dir = dirs::config_dir()
@@ -776,4 +796,258 @@ pub fn cleanup_old_versions(
         params![document_id, keep_count],
     )?;
     Ok(())
+}
+
+// ============================================================================
+// CRUD OPERATIONS - LINKS
+// ============================================================================
+
+pub fn create_link(conn: &Connection, link: &Link) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO links (id, source_type, source_id, target_type, target_id, link_type, context_json, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            link.id,
+            link.source_type,
+            link.source_id,
+            link.target_type,
+            link.target_id,
+            link.link_type,
+            link.context_json,
+            link.created_at
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_links_by_source(conn: &Connection, source_type: &str, source_id: &str) -> SqliteResult<Vec<Link>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, source_type, source_id, target_type, target_id, link_type, context_json, created_at
+         FROM links WHERE source_type = ?1 AND source_id = ?2 ORDER BY created_at"
+    )?;
+    let links = stmt.query_map(params![source_type, source_id], |row| {
+        Ok(Link {
+            id: row.get(0)?,
+            source_type: row.get(1)?,
+            source_id: row.get(2)?,
+            target_type: row.get(3)?,
+            target_id: row.get(4)?,
+            link_type: row.get(5)?,
+            context_json: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    })?;
+    links.collect()
+}
+
+pub fn get_links_by_target(conn: &Connection, target_type: &str, target_id: &str) -> SqliteResult<Vec<Link>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, source_type, source_id, target_type, target_id, link_type, context_json, created_at
+         FROM links WHERE target_type = ?1 AND target_id = ?2 ORDER BY created_at"
+    )?;
+    let links = stmt.query_map(params![target_type, target_id], |row| {
+        Ok(Link {
+            id: row.get(0)?,
+            source_type: row.get(1)?,
+            source_id: row.get(2)?,
+            target_type: row.get(3)?,
+            target_id: row.get(4)?,
+            link_type: row.get(5)?,
+            context_json: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    })?;
+    links.collect()
+}
+
+pub fn delete_links_by_source(conn: &Connection, source_type: &str, source_id: &str) -> SqliteResult<usize> {
+    Ok(conn.execute(
+        "DELETE FROM links WHERE source_type = ?1 AND source_id = ?2",
+        params![source_type, source_id],
+    )?)
+}
+
+pub fn delete_links_for_project(conn: &Connection, project_id: &str) -> SqliteResult<usize> {
+    let section_ids: Vec<String> = conn.prepare(
+        "SELECT id FROM sections WHERE project_id = ?1"
+    )?
+    .query_map(params![project_id], |row| row.get(0))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    let mut total_deleted = 0usize;
+    for section_id in &section_ids {
+        let doc_ids: Vec<String> = conn.prepare(
+            "SELECT id FROM documents WHERE section_id = ?1"
+        )?
+        .query_map(params![section_id], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+        for doc_id in &doc_ids {
+            total_deleted += delete_links_by_source(conn, "document", doc_id)?;
+        }
+    }
+
+    Ok(total_deleted)
+}
+
+pub fn get_entity_index_status_for_document(
+    conn: &Connection,
+    document_id: &str,
+) -> SqliteResult<IndexStatus> {
+    let link_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM links WHERE source_type = 'document' AND source_id = ?1 AND link_type = 'extracted_from'",
+        params![document_id],
+        |row| row.get(0),
+    )?;
+
+    if link_count == 0 {
+        return Ok(IndexStatus {
+            status: "red".to_string(),
+            entity_count: 0,
+            last_indexed: None,
+            target_updated_at: None,
+        });
+    }
+
+    let last_indexed: Option<i64> = conn.query_row(
+        "SELECT MAX(created_at) FROM links WHERE source_type = 'document' AND source_id = ?1 AND link_type = 'extracted_from'",
+        params![document_id],
+        |row| row.get(0),
+    )?;
+
+    let doc_updated_at: Option<i64> = conn.query_row(
+        "SELECT updated_at FROM documents WHERE id = ?1",
+        params![document_id],
+        |row| row.get(0),
+    )?;
+
+    let status = if let (Some(li), Some(du)) = (last_indexed, doc_updated_at) {
+        if du > li { "yellow" } else { "green" }
+    } else {
+        "green"
+    };
+
+    Ok(IndexStatus {
+        status: status.to_string(),
+        entity_count: link_count,
+        last_indexed,
+        target_updated_at: doc_updated_at,
+    })
+}
+
+pub fn get_entity_index_status_for_section(
+    conn: &Connection,
+    section_id: &str,
+) -> SqliteResult<IndexStatus> {
+    let doc_ids: Vec<String> = conn.prepare(
+        "SELECT id FROM documents WHERE section_id = ?1"
+    )?
+    .query_map(params![section_id], |row| row.get(0))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    if doc_ids.is_empty() {
+        return Ok(IndexStatus {
+            status: "red".to_string(),
+            entity_count: 0,
+            last_indexed: None,
+            target_updated_at: None,
+        });
+    }
+
+    let mut total_entities: i64 = 0;
+    let mut max_last_indexed: Option<i64> = None;
+    let mut max_doc_updated: Option<i64> = None;
+    let mut has_any_link = false;
+
+    for doc_id in &doc_ids {
+        let doc_status = get_entity_index_status_for_document(conn, doc_id)?;
+        total_entities += doc_status.entity_count;
+        if doc_status.entity_count > 0 {
+            has_any_link = true;
+        }
+        if let Some(li) = doc_status.last_indexed {
+            max_last_indexed = Some(max_last_indexed.map_or(li, |m: i64| m.max(li)));
+        }
+        if let Some(du) = doc_status.target_updated_at {
+            max_doc_updated = Some(max_doc_updated.map_or(du, |m: i64| m.max(du)));
+        }
+    }
+
+    if !has_any_link {
+        return Ok(IndexStatus {
+            status: "red".to_string(),
+            entity_count: 0,
+            last_indexed: None,
+            target_updated_at: None,
+        });
+    }
+
+    let status = if let (Some(li), Some(du)) = (max_last_indexed, max_doc_updated) {
+        if du > li { "yellow" } else { "green" }
+    } else {
+        "green"
+    };
+
+    Ok(IndexStatus {
+        status: status.to_string(),
+        entity_count: total_entities,
+        last_indexed: max_last_indexed,
+        target_updated_at: max_doc_updated,
+    })
+}
+
+pub fn get_entity_index_status_for_project(
+    conn: &Connection,
+    project_id: &str,
+) -> SqliteResult<IndexStatus> {
+    let section_ids: Vec<String> = conn.prepare(
+        "SELECT id FROM sections WHERE project_id = ?1"
+    )?
+    .query_map(params![project_id], |row| row.get(0))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    let mut total_entities: i64 = 0;
+    let mut max_last_indexed: Option<i64> = None;
+    let mut max_doc_updated: Option<i64> = None;
+    let mut has_any_link = false;
+
+    for section_id in &section_ids {
+        let section_status = get_entity_index_status_for_section(conn, section_id)?;
+        total_entities += section_status.entity_count;
+        if section_status.entity_count > 0 {
+            has_any_link = true;
+        }
+        if let Some(li) = section_status.last_indexed {
+            max_last_indexed = Some(max_last_indexed.map_or(li, |m: i64| m.max(li)));
+        }
+        if let Some(du) = section_status.target_updated_at {
+            max_doc_updated = Some(max_doc_updated.map_or(du, |m: i64| m.max(du)));
+        }
+    }
+
+    if !has_any_link {
+        return Ok(IndexStatus {
+            status: "red".to_string(),
+            entity_count: 0,
+            last_indexed: None,
+            target_updated_at: None,
+        });
+    }
+
+    let status = if let (Some(li), Some(du)) = (max_last_indexed, max_doc_updated) {
+        if du > li { "yellow" } else { "green" }
+    } else {
+        "green"
+    };
+
+    Ok(IndexStatus {
+        status: status.to_string(),
+        entity_count: total_entities,
+        last_indexed: max_last_indexed,
+        target_updated_at: max_doc_updated,
+    })
 }

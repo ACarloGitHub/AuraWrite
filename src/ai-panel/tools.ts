@@ -146,6 +146,24 @@ export const AVAILABLE_TOOLS = [
       },
       required: ["project_id", "query"]
     }
+  },
+  {
+    name: "entities_in_document",
+    description: "Get all entities extracted from a specific document. Use this to find which characters, locations, etc. appear in a particular chapter or section.",
+    parameters: {
+      type: "object",
+      properties: {
+        document_id: {
+          type: "string",
+          description: "The document ID to get entities for"
+        },
+        project_id: {
+          type: "string",
+          description: "The project ID (needed to look up entities)"
+        }
+      },
+      required: ["document_id", "project_id"]
+    }
   }
 ];
 
@@ -372,6 +390,52 @@ async function semanticSearch(
   }
 }
 
+// Tool: entities_in_document
+async function entitiesInDocument(
+  documentId: string,
+  projectId: string
+): Promise<Array<{ entity_id: string; entity_name: string; entity_type: string; description: string }>> {
+  try {
+    const links = await invoke("db_get_links_by_source", {
+      sourceType: "document",
+      sourceId: documentId
+    }) as Array<{ target_id: string; target_type: string; link_type: string }>;
+
+    const entityLinks = links.filter((l) => l.link_type === "extracted_from" && l.target_type === "entity");
+
+    if (entityLinks.length === 0) {
+      return [];
+    }
+
+    const entityIds = entityLinks.map((l) => l.target_id);
+
+    const allEntities = await invoke("db_get_entities", { projectId }) as Array<{
+      id: string;
+      name: string;
+      entity_type_id?: string;
+      description?: string;
+    }>;
+
+    const allEntityTypes = await invoke("db_get_entity_types", { projectId }) as Array<{
+      id: string;
+      name: string;
+    }>;
+    const typeMap = new Map(allEntityTypes.map((t) => [t.id, t.name]));
+
+    return allEntities
+      .filter((e) => entityIds.includes(e.id))
+      .map((e) => ({
+        entity_id: e.id,
+        entity_name: e.name,
+        entity_type: e.entity_type_id ? (typeMap.get(e.entity_type_id) || "unknown") : "unknown",
+        description: e.description || "",
+      }));
+  } catch (error) {
+    console.error("entities_in_document failed:", error);
+    return [];
+  }
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -479,6 +543,13 @@ export async function executeTool(
         );
         break;
 
+      case "entities_in_document":
+        result = await entitiesInDocument(
+          args.document_id as string,
+          (args.project_id as string) || ""
+        );
+        break;
+
       default:
         return {
           tool: name,
@@ -551,6 +622,9 @@ You can use multiple tools in one response.
 
 Example: If the user asks "Who are the characters?", respond with:
 <tool name="search_entities">{"project_id": "${projectId || "PROJECT_ID"}", "query": "character"}</tool>
+
+Example: If the user asks "Which characters appear in chapter 1?", respond with:
+<tool name="entities_in_document">{"document_id": "DOCUMENT_ID"}</tool>
 
 After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.`;
 }

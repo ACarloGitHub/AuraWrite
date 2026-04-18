@@ -15,6 +15,11 @@
 7. **Modello default** — cambiato da `gemma4:31b-cloud` a `kimi-k2.5:cloud`
 8. **Fix notifiche** — indexing toast persistente, selector CSS rotto
 9. **Fix created_at** — mancava in db_update_entity
+10. **Fix documenti sotto sezione sbagliata** — filtro per section_id nel rendering
+11. **Document-Entity Links** — tabella `links` ora usata per collegare entities ai documenti
+12. **Indicatore semaforo icone 🗂** — rosso=non indicizzato, giallo=outdated, verde=aggiornato
+13. **Tool `entities_in_document`** — l'AI può ora chiedere quali entities sono in un documento specifico
+14. **Delete cascade per links** — cancellazione progetto/sezione/documento rimuove anche i link
 
 ---
 
@@ -190,28 +195,26 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 
 ## PRIORITY 1: Bugs aperti
 
-- [ ] Bug: "+ doc" crea documento sotto sezione sbagliata (assegna sempre section_id della prima sezione)
-- [ ] Feature: titoli di sezioni e documenti devono essere editabili (doppioclick per rinominare + update DB)
 - [ ] Discard lento (dipende dal modello AI)
 - [ ] Dropdown select in dark mode (GTK) — minor
 
 ---
 
-## PRIORITY 2: Features (in ordine)
+## PRIORITY 2: Features (in ordine di priorità)
 
-1. **Entity Extraction System** — implementato e funzionante
-2. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (future, non urgente)
-3. **Provider/Model/API Key nelle Preferenze** — dropdown con provider (Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio), model selection, API key input
-4. **LM Studio support** — gia' funzionante via OpenAI provider con baseUrl http://localhost:1234/v1, aggiungere preset nelle preferenze
-5. **Tool calling nativo per provider che lo supportano** — OpenAI e Anthropic hanno API tools nativa, LM Studio supporta function calling. Per ora usiamo prompt-based XML per tutti. Futuro: aggiungere supporto nativo come opzione per provider compatibili
-6. **Migliorare system prompt per tool calling** — forzare AI a chiamare tools prima di rispondere "no entities found", aggiungere project_id esplicito, esempi più chiari
-7. **Show AI thinking** — opzione nel pannello AI Assistant (header) per mostrare/nascondere il thinking del modello. Solo per modelli che supportano reasoning (es. kimi-k2.5)
-8. **Preferences a schede** — ristrutturare il modal Preferenze con tab/schede (es. "General", "AI Settings", "Editor", "Indexing") invece di una lista unica
+1. ~~**Indicatore stato indicizzazione sull'icona 🗂**~~ — ✅ Completato: rosso=non indicizzato, giallo=outdated, verde=aggiornato. Usa la tabella `links` con `link_type='extracted_from'`.
+2. **Provider/Model/API Key nelle Preferenze** — dropdown con provider (Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio), model selection, API key input
+3. **Show AI thinking** — opzione nel pannello AI Assistant (header) per mostrare/nascondere il thinking del modello. Solo per modelli che supportano reasoning (es. kimi-k2.5)
+4. **Migliorare system prompt per tool calling** — forzare AI a chiamare tools prima di rispondere "no entities found", aggiungere project_id esplicito, esempi più chiari
+5. **Preferences a schede** — ristrutturare il modal Preferenze con tab/schede (es. "General", "AI Settings", "Editor", "Indexing") invece di una lista unica
+6. **LM Studio preset** — gia' funzionante via OpenAI provider con baseUrl http://localhost:1234/v1, aggiungere preset nelle preferenze
+7. **Tool calling nativo per provider che lo supportano** — OpenAI e Anthropic hanno API tools nativa, LM Studio supporta function calling. Per ora usiamo prompt-based XML per tutti. Futuro: aggiungere supporto nativo come opzione per provider compatibili
+8. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (non urgente)
 9. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
-8. **Enhanced title bar** (font/style)
-9. **Cronologia modifiche persistenti**
-10. **Writing stats, token counter, sentence counter**
-11. **Export PDF/ePub migliorato**
+10. **Enhanced title bar** (font/style)
+11. **Cronologia modifiche persistenti**
+12. **Writing stats, token counter, sentence counter**
+13. **Export PDF/ePub migliorato**
 
 ---
 
