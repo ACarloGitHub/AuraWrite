@@ -28,6 +28,7 @@ interface Preferences {
   suggestionsPrompt: string;
   aiAssistantPrompt: string;
   deselectOnDocumentClick: boolean;
+  semanticSearchEnabled: boolean;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -88,6 +89,7 @@ const defaultPreferences: Preferences = {
   suggestionsPrompt: defaultSuggestionsPrompt,
   aiAssistantPrompt: defaultAIAssistantPrompt,
   deselectOnDocumentClick: true,
+  semanticSearchEnabled: true,
 };
 
 let currentZoom = 100;
@@ -251,8 +253,19 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-deselect-on-click") as HTMLInputElement
   ).checked = prefs.deselectOnDocumentClick;
+  (
+    document.getElementById("pref-semantic-search-enabled") as HTMLInputElement
+  ).checked = prefs.semanticSearchEnabled;
 
   updateCustomColorsVisibility();
+
+  const content = modal?.querySelector(".modal-content") as HTMLElement | null;
+  if (content) {
+    content.style.position = "";
+    content.style.left = "";
+    content.style.top = "";
+    content.style.transform = "";
+  }
 
   if (modal) modal.classList.remove("hidden");
 }
@@ -260,6 +273,44 @@ function openPreferencesModal(): void {
 function closePreferencesModal(): void {
   const modal = document.getElementById("preferences-modal");
   if (modal) modal.classList.add("hidden");
+}
+
+function makeModalDraggable(): void {
+  const modal = document.getElementById("preferences-modal");
+  const header = modal?.querySelector(".modal-header") as HTMLElement | null;
+  const content = modal?.querySelector(".modal-content") as HTMLElement | null;
+  if (!modal || !header || !content) return;
+
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initialLeft = 0;
+  let initialTop = 0;
+
+  header.addEventListener("mousedown", (e) => {
+    if ((e.target as HTMLElement).closest(".modal-close")) return;
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    const rect = content.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    content.style.position = "fixed";
+    content.style.left = `${initialLeft + dx}px`;
+    content.style.top = `${initialTop + dy}px`;
+    content.style.transform = "none";
+  });
+
+  document.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
 }
 
 function savePreferencesFromModal(): void {
@@ -312,6 +363,9 @@ function savePreferencesFromModal(): void {
     ).value,
     deselectOnDocumentClick: (
       document.getElementById("pref-deselect-on-click") as HTMLInputElement
+    ).checked,
+    semanticSearchEnabled: (
+      document.getElementById("pref-semantic-search-enabled") as HTMLInputElement
     ).checked,
   };
 
@@ -408,13 +462,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalOverlay = document.querySelector(".modal-overlay");
   modalOverlay?.addEventListener("click", closePreferencesModal);
 
+  makeModalDraggable();
+
   document.getElementById("pref-theme")?.addEventListener("change", () => {
     updateCustomColorsVisibility();
   });
 
   document
     .querySelectorAll(
-      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-deselect-on-click",
+      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);

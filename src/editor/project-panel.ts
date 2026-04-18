@@ -388,10 +388,17 @@ async function indexDocumentForSearch(
   documentId: string,
   contentJson: string
 ): Promise<void> {
+  const PREFERENCES_KEY = "aurawrite-preferences";
+  const saved = localStorage.getItem(PREFERENCES_KEY);
+  const prefs = saved ? JSON.parse(saved) : {};
+  const semanticEnabled = prefs.semanticSearchEnabled !== false;
+  console.log(`[SemanticSearch] enabled=${semanticEnabled}, saved pref=${prefs.semanticSearchEnabled}`);
+  if (!semanticEnabled) return;
+
   try {
     const text = extractTextFromContent(contentJson);
     if (!text.trim()) return;
-    
+
     await invoke("embedding_save_document", {
       projectId,
       documentId,
@@ -401,7 +408,6 @@ async function indexDocumentForSearch(
     });
     console.log(`Document ${documentId} indexed for search`);
   } catch (error) {
-    // Silently fail - embedding is optional
     console.log(`Document ${documentId} not indexed (Ollama may not be available)`);
   }
 }

@@ -44,6 +44,31 @@
   --shadow-editor: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
+[data-theme="dark"] .preference-group select {
+  background-color: #252525;
+  color: #e0e0e0;
+  border-color: #444444;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 32px;
+}
+
+[data-theme="dark"] .preference-group select option {
+  background-color: #252525;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] .preference-group input[type="number"],
+[data-theme="dark"] .preference-group textarea {
+  background-color: #252525;
+  color: #e0e0e0;
+  border-color: #444444;
+}
+
 [data-theme="custom"] {
   --color-background: var(--custom-bg, #f0f0f0);
   --color-toolbar: var(--custom-toolbar, #ffffff);
@@ -829,8 +854,9 @@ body {
   position: relative;
   background: var(--color-surface);
   border-radius: 8px;
-  min-width: 400px;
+  min-width: 520px;
   max-width: 90%;
+  max-height: 85vh;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
@@ -840,6 +866,8 @@ body {
   align-items: center;
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--color-border);
+  cursor: move;
+  user-select: none;
 }
 
 .modal-header h2 {
@@ -864,6 +892,8 @@ body {
 
 .modal-body {
   padding: var(--spacing-md);
+  overflow-y: auto;
+  max-height: 70vh;
 }
 
 .preference-group {
@@ -875,6 +905,13 @@ body {
   font-size: 14px;
   font-weight: 500;
   color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+}
+
+.preference-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-muted);
   margin-bottom: var(--spacing-xs);
 }
 

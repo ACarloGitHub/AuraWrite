@@ -152,6 +152,7 @@
           <div class="modal-body">
             <div class="preference-group">
               <label>Toolbar Display</label>
+              <span class="preference-hint">Choose how toolbar buttons appear</span>
               <select id="pref-toolbar-display">
                 <option value="icon">Icon Only</option>
                 <option value="text">Text Only</option>
@@ -160,6 +161,7 @@
             </div>
             <div class="preference-group">
               <label>Theme</label>
+              <span class="preference-hint">Application color scheme</span>
               <select id="pref-theme">
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
@@ -167,7 +169,8 @@
               </select>
             </div>
             <div class="preference-group" id="custom-colors-group">
-              <label>Custom Colors (only for Custom theme)</label>
+              <label>Custom Colors</label>
+              <span class="preference-hint">Only visible when Theme is set to Custom</span>
               <div class="color-picker-row">
                 <span>Background:</span>
                 <input type="color" id="pref-custom-bg" value="#f0f0f0" />
@@ -201,11 +204,12 @@
               <label>Incremental Save</label>
               <div class="checkbox-row">
                 <input type="checkbox" id="pref-incremental-enabled" />
-                <span>Enable</span>
+                <span>Keep versioned snapshots each time you save (Ctrl+S)</span>
               </div>
             </div>
             <div class="preference-group">
-              <label>Max Incremental Saves (0 = infinite)</label>
+              <label>Max Versioned Snapshots</label>
+              <span class="preference-hint">Set to 0 for unlimited versions</span>
               <input
                 type="number"
                 id="pref-incremental-max"
@@ -215,7 +219,8 @@
             </div>
             <hr />
             <div class="preference-group">
-              <label>AI Suggestions Interval (seconds)</label>
+              <label>Suggestions Interval (seconds)</label>
+              <span class="preference-hint">How often the AI analyzes text and offers sentence suggestions</span>
               <input
                 type="number"
                 id="pref-ai-suggestions-interval"
@@ -225,7 +230,8 @@
               />
             </div>
             <div class="preference-group">
-              <label>AI Context Update Interval (seconds)</label>
+              <label>Context Update Interval (seconds)</label>
+              <span class="preference-hint">How often the AI panel refreshes document context</span>
               <input
                 type="number"
                 id="pref-ai-context-interval"
@@ -236,6 +242,7 @@
             </div>
             <div class="preference-group">
               <label>Suggestions Prompt</label>
+              <span class="preference-hint">System prompt for sentence suggestions (left panel)</span>
               <textarea
                 id="pref-suggestions-prompt"
                 rows="4"
@@ -244,6 +251,7 @@
             </div>
             <div class="preference-group">
               <label>AI Assistant Prompt</label>
+              <span class="preference-hint">System prompt for the AI chat assistant (right panel)</span>
               <textarea
                 id="pref-ai-assistant-prompt"
                 rows="4"
@@ -252,10 +260,17 @@
             </div>
             <hr />
             <div class="preference-group">
-              <label>Selection Behavior</label>
+              <label>Auto-clear Text Selection</label>
               <div class="checkbox-row">
                 <input type="checkbox" id="pref-deselect-on-click" checked />
-                <span>Clear selection on document click</span>
+                <span>Clear text selection when clicking inside the editor</span>
+              </div>
+            </div>
+            <div class="preference-group">
+              <label>Semantic Search Indexing</label>
+              <div class="checkbox-row">
+                <input type="checkbox" id="pref-semantic-search-enabled" checked />
+                <span>Automatically index documents for semantic search when saving (requires Ollama)</span>
               </div>
             </div>
           </div>

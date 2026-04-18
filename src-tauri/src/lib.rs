@@ -46,6 +46,7 @@ fn db_update_project(state: State<AppState>, project: Project) -> Result<(), Str
 #[tauri::command]
 fn db_delete_project(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_embeddings_for_project(&*conn, &id).map_err(|e| e.to_string())?;
     delete_project(&*conn, &id).map_err(|e| e.to_string())
 }
 
@@ -74,6 +75,10 @@ fn db_update_section(state: State<AppState>, section: Section) -> Result<(), Str
 #[tauri::command]
 fn db_delete_section(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let docs = get_documents_by_section(&*conn, &id).map_err(|e| e.to_string())?;
+    for doc in &docs {
+        embeddings::delete_embeddings_for_entity(&*conn, "document", &doc.id).map_err(|e| e.to_string())?;
+    }
     delete_section(&*conn, &id).map_err(|e| e.to_string())
 }
 
@@ -108,6 +113,7 @@ fn db_update_document(state: State<AppState>, document: Document) -> Result<(), 
 #[tauri::command]
 fn db_delete_document(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_embeddings_for_entity(&*conn, "document", &id).map_err(|e| e.to_string())?;
     delete_document(&*conn, &id).map_err(|e| e.to_string())
 }
 
@@ -397,6 +403,16 @@ fn embedding_delete_for_entity(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn embedding_delete_for_project(
+    state: State<AppState>,
+    project_id: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_embeddings_for_project(&*conn, &project_id)
+        .map_err(|e| e.to_string())
+}
+
 // ============================================================================
 // APP SETUP
 // ============================================================================
@@ -463,6 +479,7 @@ pub fn run() {
             embedding_search,
             embedding_search_documents,
             embedding_delete_for_entity,
+            embedding_delete_for_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
