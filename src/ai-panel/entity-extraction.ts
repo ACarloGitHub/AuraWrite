@@ -15,6 +15,7 @@ interface ExistingEntity {
   name: string;
   entity_type: string;
   description: string;
+  created_at: number;
 }
 
 const PROJECT_TYPE_SUGGESTIONS: Record<string, string> = {
@@ -74,11 +75,13 @@ async function getExistingEntities(projectId: string): Promise<ExistingEntity[]>
       name: string;
       entity_type_id?: string;
       description?: string;
+      created_at: number;
     }>).map((e) => ({
       id: e.id,
       name: e.name,
       entity_type: e.entity_type_id ? (typeMap.get(e.entity_type_id) || "unknown") : "unknown",
       description: e.description || "",
+      created_at: e.created_at,
     }));
   } catch {
     return [];
@@ -182,6 +185,7 @@ async function upsertEntity(
         description: updatedDesc.substring(0, 2000),
         image_path: null,
         metadata_json: null,
+        created_at: existing.created_at,
         updated_at: Date.now(),
       },
     });
@@ -211,6 +215,7 @@ async function upsertEntity(
     name: extracted.name,
     entity_type: extracted.type,
     description: extracted.description.substring(0, 150),
+    created_at: Date.now(),
   });
   return "created";
 }
