@@ -848,10 +848,15 @@ async function handleDeleteDocument(doc: Document): Promise<void> {
 let isIndexing = false;
 
 async function handleIndexDocument(doc: Document): Promise<void> {
-  if (!currentProject || isIndexing) return;
+  if (!currentProject) return;
+  if (isIndexing) {
+    showNotification("Already indexing, please wait...", "error");
+    return;
+  }
   isIndexing = true;
 
   try {
+    console.log("[IndexDocument] Starting for:", doc.title);
     showNotification("🗂 Indexing entities...", "indexing");
     const result = await extractEntitiesFromDocument(
       doc.id,
@@ -859,8 +864,10 @@ async function handleIndexDocument(doc: Document): Promise<void> {
       currentProject.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
+    console.log("[IndexDocument] Result:", result);
     showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
+    console.error("[IndexDocument] Error:", error);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
@@ -868,10 +875,15 @@ async function handleIndexDocument(doc: Document): Promise<void> {
 }
 
 async function handleIndexSection(section: Section): Promise<void> {
-  if (!currentProject || isIndexing) return;
+  if (!currentProject) return;
+  if (isIndexing) {
+    showNotification("Already indexing, please wait...", "error");
+    return;
+  }
   isIndexing = true;
 
   try {
+    console.log("[IndexSection] Starting for:", section.name);
     showNotification("🗂 Indexing section...", "indexing");
     const result = await extractEntitiesFromSection(
       section.id,
@@ -879,8 +891,10 @@ async function handleIndexSection(section: Section): Promise<void> {
       currentProject.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
+    console.log("[IndexSection] Result:", result);
     showNotification(`✓ ${section.name}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
+    console.error("[IndexSection] Error:", error);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
@@ -888,18 +902,24 @@ async function handleIndexSection(section: Section): Promise<void> {
 }
 
 async function handleIndexProject(project: Project): Promise<void> {
-  if (isIndexing) return;
+  if (isIndexing) {
+    showNotification("Already indexing, please wait...", "error");
+    return;
+  }
   isIndexing = true;
 
   try {
+    console.log("[IndexProject] Starting for:", project.name);
     showNotification("🗂 Indexing project...", "indexing");
     const result = await extractEntitiesFromProject(
       project.id,
       project.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
+    console.log("[IndexProject] Result:", result);
     showNotification(`✓ Project indexed: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
+    console.error("[IndexProject] Error:", error);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
