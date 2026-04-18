@@ -10,7 +10,7 @@ export class OllamaProvider implements AIProvider {
   private abortController: AbortController | null = null;
 
   constructor(
-    model: string = "huihui_ai/glm-4.7-flash-abliterated:q4_K",
+    model: string = "kimi-k2.5:cloud",
     baseUrl: string = "http://localhost:11434",
   ) {
     this.model = model;

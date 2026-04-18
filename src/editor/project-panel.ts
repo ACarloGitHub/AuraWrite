@@ -562,6 +562,7 @@ async function loadSections(projectId: string): Promise<void> {
     for (const section of sections) {
       const sectionDocs = await getDocuments(section.id);
       documents.push(...sectionDocs);
+      expandedSections.add(section.id);
     }
     renderProjectsList();
   } catch (error) {
@@ -1205,6 +1206,21 @@ function createSectionElement(section: Section): HTMLElement {
   const header = document.createElement("div");
   header.className = "item-header";
 
+  const isExpanded = expandedSections.has(section.id);
+  const toggleBtn = document.createElement("button");
+  toggleBtn.className = "section-toggle-btn";
+  toggleBtn.textContent = isExpanded ? "▼" : "▶";
+  toggleBtn.title = isExpanded ? "Collapse section" : "Expand section";
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (expandedSections.has(section.id)) {
+      expandedSections.delete(section.id);
+    } else {
+      expandedSections.add(section.id);
+    }
+    renderProjectsList();
+  });
+
   const nameEl = document.createElement("div");
   nameEl.className = "item-name";
   nameEl.textContent = section.name;
@@ -1254,6 +1270,7 @@ function createSectionElement(section: Section): HTMLElement {
   });
   actionsEl.appendChild(deleteBtn);
 
+  header.appendChild(toggleBtn);
   header.appendChild(nameEl);
   header.appendChild(actionsEl);
   header.addEventListener("click", (e) => {
@@ -1262,9 +1279,9 @@ function createSectionElement(section: Section): HTMLElement {
   });
   div.appendChild(header);
 
-  // Mostra documents appartenenti a questa sezione
+  // Mostra documents se la sezione e' espansa
   const sectionDocs = documents.filter((doc) => doc.section_id === section.id);
-  if (expandedSections.has(section.id) && sectionDocs.length > 0) {
+  if (isExpanded && sectionDocs.length > 0) {
     sectionDocs.forEach((doc) => {
       const docEl = createDocumentElement(doc);
       div.appendChild(docEl);
@@ -1422,12 +1439,8 @@ function selectProject(project: Project): void {
 
 function selectSection(section: Section): void {
   currentSection = section;
-
-  if (expandedSections.has(section.id)) {
-    expandedSections.delete(section.id);
-  } else {
-    expandedSections.add(section.id);
-  }
+  // Auto-expand on click
+  expandedSections.add(section.id);
 
   loadDocuments(section.id);
 

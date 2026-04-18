@@ -42,7 +42,7 @@ export interface AISettings {
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: true,
   provider: "ollama",
-  model: "gemma4:31b-cloud",
+  model: "kimi-k2.5:cloud",
   streamResponses: true,
   autoIndexDocument: false,
   privacyDisclaimerShown: false,
