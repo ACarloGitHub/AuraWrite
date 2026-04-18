@@ -169,7 +169,7 @@ export function getCurrentProvider(): AIProvider | null {
 
 export function buildContextWithTools(context: AIContext): AIContext {
   if (context.projectId) {
-    const toolPrompt = buildToolSystemPrompt();
+    const toolPrompt = buildToolSystemPrompt(context.projectId);
     return {
       ...context,
       toolInstructions: toolPrompt,

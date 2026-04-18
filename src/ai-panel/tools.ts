@@ -529,13 +529,14 @@ export function parseToolCalls(response: string): ToolCall[] {
 /**
  * Build system prompt with available tools
  */
-export function buildToolSystemPrompt(): string {
-  return `You are AuraWrite AI, an intelligent writing assistant.
+export function buildToolSystemPrompt(projectId?: string): string {
+  const projectInfo = projectId
+    ? `\nThe current project ID is: "${projectId}". Always use this as the project_id parameter when calling tools.\n`
+    : "";
 
-You have access to tools to query the project's database. Use these tools when the user asks about:
-- Characters, locations, or other entities in their project
-- Documents or chapters they've written
-- Project structure or organization
+  return `You are AuraWrite AI, an intelligent writing assistant with access to a project database.
+${projectInfo}
+IMPORTANT: When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering. Do NOT say "no entities found" without actually calling the tools first.
 
 Available tools:
 ${AVAILABLE_TOOLS.map((tool) => `
@@ -543,12 +544,15 @@ ${AVAILABLE_TOOLS.map((tool) => `
   Parameters: ${Object.keys(tool.parameters.properties).join(", ")}
 `).join("\n")}
 
-To use a tool, respond with:
+To use a tool, include this tag in your response:
 <tool name="TOOL_NAME">{"param1": "value1", "param2": "value2"}</tool>
 
-You can use multiple tools in one response if needed.
+You can use multiple tools in one response.
 
-Important: Be concise and helpful. When using tools, summarize the results in a natural way.`;
+Example: If the user asks "Who are the characters?", respond with:
+<tool name="search_entities">{"project_id": "${projectId || "PROJECT_ID"}", "query": "character"}</tool>
+
+After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.`;
 }
 
 /**

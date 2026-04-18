@@ -31,12 +31,13 @@ import {
 let currentProject: Project | null = null;
 let currentSection: Section | null = null;
 let currentDocument: Document | null = null;
+let expandedSections: Set<string> = new Set();
 let projects: Project[] = [];
 let sections: Section[] = [];
 let documents: Document[] = [];
-let lastSavedContent: string | null = null; // Contenuto salvato nel DB (per confronto)
+let lastSavedContent: string | null = null;
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-let showingProjectList = false; // Se true, mostra lista progetti invece del progetto attivo
+let showingProjectList = false;
 
 // Callbacks (set by main.ts)
 let onDocumentSelect: ((doc: Document) => void) | null = null;
@@ -433,7 +434,11 @@ async function handleSaveDocument(doc: Document): Promise<void> {
 }
 
 function showNotification(message: string, type: "success" | "error" | "indexing" = "success"): void {
-  document.querySelectorAll(".project-toast").forEach((t) => t.remove());
+  if (type === "indexing") {
+    document.querySelectorAll(".project-toast.indexing").forEach((t) => t.remove());
+  } else {
+    document.querySelectorAll(".project-toast").forEach((t) => t.remove());
+  }
 
   const toast = document.createElement("div");
   toast.className = `project-toast ${type}`;
@@ -457,8 +462,11 @@ function showNotification(message: string, type: "success" | "error" | "indexing
     white-space: nowrap;
   `;
   document.body.appendChild(toast);
-  const duration = type === "indexing" ? 8000 : 2500;
-  setTimeout(() => toast.remove(), duration);
+  const duration = type === "indexing" ? 60000 : 4000;
+  const timer = setTimeout(() => toast.remove(), duration);
+  if (type === "indexing") {
+    toast.dataset.autoRemove = String(timer);
+  }
 }
 
 function clearEditor(): void {
@@ -1256,7 +1264,7 @@ function createSectionElement(section: Section): HTMLElement {
 
   // Mostra documents appartenenti a questa sezione
   const sectionDocs = documents.filter((doc) => doc.section_id === section.id);
-  if (currentSection?.id === section.id && sectionDocs.length > 0) {
+  if (expandedSections.has(section.id) && sectionDocs.length > 0) {
     sectionDocs.forEach((doc) => {
       const docEl = createDocumentElement(doc);
       div.appendChild(docEl);
@@ -1415,12 +1423,20 @@ function selectProject(project: Project): void {
 function selectSection(section: Section): void {
   currentSection = section;
 
+  if (expandedSections.has(section.id)) {
+    expandedSections.delete(section.id);
+  } else {
+    expandedSections.add(section.id);
+  }
+
   loadDocuments(section.id);
 
   const titleEl = document.getElementById("document-title");
   if (titleEl && currentProject) {
     titleEl.textContent = `${currentProject.name} / ${section.name}`;
   }
+
+  renderProjectsList();
 }
 
 // ============================================================================
