@@ -82,6 +82,23 @@ export class OllamaProvider implements AIProvider {
   private buildPrompt(prompt: string, context?: AIContext): string {
     let fullPrompt = "";
 
+    if (context?.customAssistantPrompt) {
+      fullPrompt += context.customAssistantPrompt + "\n\n";
+    }
+
+    if (context?.assistantName) {
+      fullPrompt += `Your name is ${context.assistantName}.\n`;
+    }
+    if (context?.userName) {
+      fullPrompt += `The user's name is ${context.userName}.\n`;
+    }
+    if (context?.interfaceLanguage) {
+      fullPrompt += `Respond to the user in ${context.interfaceLanguage}.\n`;
+    }
+    if (context?.writingLanguage && context.writingLanguage !== context.interfaceLanguage) {
+      fullPrompt += `When writing or suggesting text for the document, write in ${context.writingLanguage}.\n`;
+    }
+
     if (context?.toolInstructions) {
       fullPrompt += context.toolInstructions + "\n\n";
     }

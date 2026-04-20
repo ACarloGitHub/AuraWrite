@@ -23,10 +23,21 @@ interface Preferences {
   customTextButtons: string;
   incrementalEnabled: boolean;
   incrementalMax: number;
+  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+  aiModel: string;
+  aiApiKey: string;
+  aiBaseUrl: string;
   aiSuggestionsInterval: number;
   aiContextInterval: number;
+  aiInterfaceLanguage: string;
+  aiWritingLanguage: string;
+  aiAssistantName: string;
+  aiUserName: string;
   suggestionsPrompt: string;
   aiAssistantPrompt: string;
+  entityExtractionRole: string;
+  entityExtractionPrompt: string;
+  toolCallingPrompt: string;
   deselectOnDocumentClick: boolean;
   semanticSearchEnabled: boolean;
 }
@@ -74,6 +85,37 @@ When you suggest accepting a modification:
 
 You can read and analyze the document at any time.`;
 
+const defaultEntityExtractionPrompt = `You are an entity extraction assistant for a writing application.
+Read the text and extract all named entities (characters, locations, objects, events, etc.).
+For each entity, provide:
+- name: the entity name
+- type: the category (character, location, object, event, etc.)
+- description: a brief description based on the text context
+
+Respond in JSON format:
+{
+  "entities": [
+    {"name": "Entity Name", "type": "character", "description": "Brief description"}
+  ]
+}
+
+Rules:
+- Extract only entities explicitly mentioned or clearly implied
+- Use consistent type names
+- Keep descriptions concise (max 200 characters)
+- If an entity was already known, update its description with new information`;
+
+const defaultToolCallingPrompt = `You are AuraWrite AI, an intelligent writing assistant with access to a project database.
+When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering.
+
+To use a tool, include this tag in your response:
+<tool name="TOOL_NAME">{"param1": "value1", "param2": "value2"}</tool>
+
+You can use multiple tools in one response.
+After receiving tool results, summarize them naturally for the user.`;
+
+const defaultEntityExtractionRole = "";
+
 const defaultPreferences: Preferences = {
   toolbarDisplay: "both",
   theme: "light",
@@ -84,10 +126,21 @@ const defaultPreferences: Preferences = {
   customTextButtons: "#222222",
   incrementalEnabled: false,
   incrementalMax: 10,
+  aiProvider: "ollama",
+  aiModel: "kimi-k2.5:cloud",
+  aiApiKey: "",
+  aiBaseUrl: "",
   aiSuggestionsInterval: 30,
   aiContextInterval: 30,
+  aiInterfaceLanguage: "English",
+  aiWritingLanguage: "English",
+  aiAssistantName: "Aura",
+  aiUserName: "",
   suggestionsPrompt: defaultSuggestionsPrompt,
   aiAssistantPrompt: defaultAIAssistantPrompt,
+  entityExtractionRole: defaultEntityExtractionRole,
+  entityExtractionPrompt: defaultEntityExtractionPrompt,
+  toolCallingPrompt: defaultToolCallingPrompt,
   deselectOnDocumentClick: true,
   semanticSearchEnabled: true,
 };
@@ -233,11 +286,25 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-custom-text-buttons") as HTMLInputElement
   ).value = prefs.customTextButtons;
+  (document.getElementById("pref-ai-provider") as HTMLSelectElement).value =
+    prefs.aiProvider;
+  (document.getElementById("pref-ai-model") as HTMLInputElement).value =
+    prefs.aiModel;
+  (document.getElementById("pref-ai-api-key") as HTMLInputElement).value =
+    prefs.aiApiKey;
+  (document.getElementById("pref-ai-base-url") as HTMLInputElement).value =
+    prefs.aiBaseUrl;
   (
-    document.getElementById("pref-incremental-enabled") as HTMLInputElement
-  ).checked = prefs.incrementalEnabled;
-  (document.getElementById("pref-incremental-max") as HTMLInputElement).value =
-    prefs.incrementalMax.toString();
+    document.getElementById("pref-ai-interface-language") as HTMLSelectElement
+  ).value = prefs.aiInterfaceLanguage;
+  (
+    document.getElementById("pref-ai-writing-language") as HTMLSelectElement
+  ).value = prefs.aiWritingLanguage;
+  (
+    document.getElementById("pref-ai-assistant-name") as HTMLInputElement
+  ).value = prefs.aiAssistantName;
+  (document.getElementById("pref-ai-user-name") as HTMLInputElement).value =
+    prefs.aiUserName;
   (
     document.getElementById("pref-ai-suggestions-interval") as HTMLInputElement
   ).value = prefs.aiSuggestionsInterval.toString();
@@ -251,6 +318,20 @@ function openPreferencesModal(): void {
     document.getElementById("pref-ai-assistant-prompt") as HTMLTextAreaElement
   ).value = prefs.aiAssistantPrompt;
   (
+    document.getElementById("pref-entity-extraction-role") as HTMLInputElement
+  ).value = prefs.entityExtractionRole;
+  (
+    document.getElementById("pref-entity-extraction-prompt") as HTMLTextAreaElement
+  ).value = prefs.entityExtractionPrompt;
+  (
+    document.getElementById("pref-tool-calling-prompt") as HTMLTextAreaElement
+  ).value = prefs.toolCallingPrompt;
+  (
+    document.getElementById("pref-incremental-enabled") as HTMLInputElement
+  ).checked = prefs.incrementalEnabled;
+  (document.getElementById("pref-incremental-max") as HTMLInputElement).value =
+    prefs.incrementalMax.toString();
+  (
     document.getElementById("pref-deselect-on-click") as HTMLInputElement
   ).checked = prefs.deselectOnDocumentClick;
   (
@@ -258,6 +339,7 @@ function openPreferencesModal(): void {
   ).checked = prefs.semanticSearchEnabled;
 
   updateCustomColorsVisibility();
+  updateApiKeyGroupVisibility();
 
   const content = modal?.querySelector(".modal-content") as HTMLElement | null;
   if (content) {
@@ -313,65 +395,134 @@ function makeModalDraggable(): void {
   });
 }
 
+function updateApiKeyGroupVisibility(): void {
+  const provider = (document.getElementById("pref-ai-provider") as HTMLSelectElement)?.value;
+  const apiKeyGroup = document.getElementById("api-key-group");
+  const baseUrlGroup = document.getElementById("base-url-group");
+  const apiKeyHint = document.getElementById("api-key-hint");
+  const baseUrlHint = document.getElementById("base-url-hint");
+
+  const defaultBaseUrls: Record<string, string> = {
+    ollama: "http://localhost:11434",
+    openai: "https://api.openai.com/v1",
+    anthropic: "https://api.anthropic.com/v1",
+    deepseek: "https://api.deepseek.com/v1",
+    openrouter: "https://openrouter.ai/api/v1",
+    lmstudio: "http://localhost:1234/v1",
+  };
+
+  const defaultModels: Record<string, string> = {
+    ollama: "kimi-k2.5:cloud",
+    openai: "gpt-4o",
+    anthropic: "claude-sonnet-4-20250514",
+    deepseek: "deepseek-chat",
+    openrouter: "openai/gpt-4o",
+    lmstudio: "loaded-model",
+  };
+
+  const apiKeyRequired = provider !== "ollama" && provider !== "lmstudio";
+
+  if (apiKeyGroup) {
+    apiKeyGroup.classList.remove("hidden");
+  }
+  if (baseUrlGroup) {
+    baseUrlGroup.classList.remove("hidden");
+  }
+  if (apiKeyHint) {
+    if (provider === "ollama") {
+      apiKeyHint.textContent = "Required for cloud models (leave empty for local models).";
+    } else if (provider === "lmstudio") {
+      apiKeyHint.textContent = "Not required for LM Studio.";
+    } else {
+      apiKeyHint.textContent = "Required.";
+    }
+  }
+  if (baseUrlHint) {
+    baseUrlHint.textContent = `Default: ${defaultBaseUrls[provider] || ""}. Leave empty to use default.`;
+  }
+
+  const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
+  if (modelInput && defaultModels[provider]) {
+    modelInput.placeholder = defaultModels[provider];
+  }
+
+  const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
+  if (baseUrlInput && !baseUrlInput.value.trim()) {
+    baseUrlInput.placeholder = defaultBaseUrls[provider] || "";
+  }
+}
+
+function switchPreferencesTab(tabName: string): void {
+  document.querySelectorAll(".pref-tab").forEach((tab) => {
+    tab.classList.toggle("active", (tab as HTMLElement).dataset.tab === tabName);
+  });
+  document.querySelectorAll(".pref-tab-content").forEach((content) => {
+    content.classList.toggle("active", (content as HTMLElement).dataset.tab === tabName);
+  });
+}
+
+function resetPrompt(promptType: string): void {
+  const defaults: Record<string, string> = {
+    suggestions: defaultSuggestionsPrompt,
+    assistant: defaultAIAssistantPrompt,
+    extraction: defaultEntityExtractionPrompt,
+    toolcalling: defaultToolCallingPrompt,
+  };
+  const fieldMap: Record<string, string> = {
+    suggestions: "pref-suggestions-prompt",
+    assistant: "pref-ai-assistant-prompt",
+    extraction: "pref-entity-extraction-prompt",
+    toolcalling: "pref-tool-calling-prompt",
+  };
+  const textArea = document.getElementById(fieldMap[promptType]) as HTMLTextAreaElement | null;
+  if (textArea && defaults[promptType]) {
+    textArea.value = defaults[promptType];
+    savePreferencesFromModal();
+  }
+}
+
 function savePreferencesFromModal(): void {
+  const el = (id: string) => document.getElementById(id);
+  const sel = (id: string) => (el(id) as HTMLSelectElement)?.value || "";
+  const inp = (id: string) => (el(id) as HTMLInputElement)?.value || "";
+  const chk = (id: string) => (el(id) as HTMLInputElement)?.checked ?? false;
+  const tarea = (id: string) => (el(id) as HTMLTextAreaElement)?.value || "";
+
   const prefs: Preferences = {
-    toolbarDisplay: (
-      document.getElementById("pref-toolbar-display") as HTMLSelectElement
-    ).value as Preferences["toolbarDisplay"],
-    theme: (document.getElementById("pref-theme") as HTMLSelectElement)
-      .value as ThemeMode,
-    customBg: (document.getElementById("pref-custom-bg") as HTMLInputElement)
-      .value,
-    customToolbar: (
-      document.getElementById("pref-custom-toolbar") as HTMLInputElement
-    ).value,
-    customPaper: (
-      document.getElementById("pref-custom-paper") as HTMLInputElement
-    ).value,
-    customTextEditor: (
-      document.getElementById("pref-custom-text-editor") as HTMLInputElement
-    ).value,
-    customTextButtons: (
-      document.getElementById("pref-custom-text-buttons") as HTMLInputElement
-    ).value,
-    incrementalEnabled: (
-      document.getElementById("pref-incremental-enabled") as HTMLInputElement
-    ).checked,
-    incrementalMax: parseInt(
-      (document.getElementById("pref-incremental-max") as HTMLInputElement)
-        .value,
-      10,
-    ),
-    aiSuggestionsInterval: parseInt(
-      (
-        document.getElementById(
-          "pref-ai-suggestions-interval",
-        ) as HTMLInputElement
-      ).value,
-      10,
-    ),
-    aiContextInterval: parseInt(
-      (document.getElementById("pref-ai-context-interval") as HTMLInputElement)
-        .value,
-      10,
-    ),
-    suggestionsPrompt: (
-      document.getElementById("pref-suggestions-prompt") as HTMLTextAreaElement
-    ).value,
-    aiAssistantPrompt: (
-      document.getElementById("pref-ai-assistant-prompt") as HTMLTextAreaElement
-    ).value,
-    deselectOnDocumentClick: (
-      document.getElementById("pref-deselect-on-click") as HTMLInputElement
-    ).checked,
-    semanticSearchEnabled: (
-      document.getElementById("pref-semantic-search-enabled") as HTMLInputElement
-    ).checked,
+    toolbarDisplay: sel("pref-toolbar-display") as Preferences["toolbarDisplay"],
+    theme: sel("pref-theme") as ThemeMode,
+    customBg: inp("pref-custom-bg"),
+    customToolbar: inp("pref-custom-toolbar"),
+    customPaper: inp("pref-custom-paper"),
+    customTextEditor: inp("pref-custom-text-editor"),
+    customTextButtons: inp("pref-custom-text-buttons"),
+    incrementalEnabled: chk("pref-incremental-enabled"),
+    incrementalMax: parseInt(inp("pref-incremental-max"), 10) || 10,
+    aiProvider: sel("pref-ai-provider") as Preferences["aiProvider"] || "ollama",
+    aiModel: inp("pref-ai-model"),
+    aiApiKey: inp("pref-ai-api-key"),
+    aiBaseUrl: inp("pref-ai-base-url"),
+    aiSuggestionsInterval: parseInt(inp("pref-ai-suggestions-interval"), 10) || 30,
+    aiContextInterval: parseInt(inp("pref-ai-context-interval"), 10) || 30,
+    aiInterfaceLanguage: sel("pref-ai-interface-language") || "English",
+    aiWritingLanguage: sel("pref-ai-writing-language") || "English",
+    aiAssistantName: inp("pref-ai-assistant-name"),
+    aiUserName: inp("pref-ai-user-name"),
+    suggestionsPrompt: tarea("pref-suggestions-prompt"),
+    aiAssistantPrompt: tarea("pref-ai-assistant-prompt"),
+    entityExtractionRole: inp("pref-entity-extraction-role"),
+    entityExtractionPrompt: tarea("pref-entity-extraction-prompt"),
+    toolCallingPrompt: tarea("pref-tool-calling-prompt"),
+    deselectOnDocumentClick: chk("pref-deselect-on-click"),
+    semanticSearchEnabled: chk("pref-semantic-search-enabled"),
   };
 
   savePreferences(prefs);
   updateThemeIcon(prefs.theme);
   updateCustomColorsVisibility();
+  updateApiKeyGroupVisibility();
+
+  window.dispatchEvent(new CustomEvent("aurawrite:preferences-changed"));
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -464,13 +615,59 @@ document.addEventListener("DOMContentLoaded", () => {
 
   makeModalDraggable();
 
+  document.querySelectorAll(".pref-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const tabName = (tab as HTMLElement).dataset.tab;
+      if (tabName) switchPreferencesTab(tabName);
+    });
+  });
+
+  document.querySelectorAll(".btn-reset-prompt").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const promptType = (btn as HTMLElement).dataset.default;
+      if (promptType) resetPrompt(promptType);
+    });
+  });
+
   document.getElementById("pref-theme")?.addEventListener("change", () => {
     updateCustomColorsVisibility();
   });
 
+  document.getElementById("pref-ai-provider")?.addEventListener("change", () => {
+    updateApiKeyGroupVisibility();
+  });
+
+  function migrateOldAISettings(): void {
+    const oldSettings = localStorage.getItem("aurawrite-ai-settings");
+    if (!oldSettings) return;
+    try {
+      const parsed = JSON.parse(oldSettings);
+      const current = getPreferences();
+      if (parsed.provider && !localStorage.getItem("aurawrite-preferences-migrated")) {
+        const merged: Preferences = {
+          ...current,
+          aiProvider: parsed.provider || current.aiProvider,
+          aiModel: parsed.model || current.aiModel,
+          aiApiKey: parsed.apiKey || current.aiApiKey,
+          aiBaseUrl: parsed.baseUrl || current.aiBaseUrl,
+        };
+        savePreferences(merged);
+        localStorage.setItem("aurawrite-preferences-migrated", "1");
+      }
+    } catch {
+      // Migration failed, keep defaults
+    }
+  }
+  migrateOldAISettings();
+
+  // Apply first-load preferences
+  const firstLoadPrefs = getPreferences();
+  applyPreferences(firstLoadPrefs);
+  updateThemeIcon(firstLoadPrefs.theme);
+
   document
     .querySelectorAll(
-      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled",
+      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);

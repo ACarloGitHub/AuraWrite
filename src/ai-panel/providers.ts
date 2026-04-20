@@ -13,6 +13,12 @@ export interface AIContext {
   documentText?: string;
   projectId?: string;
   toolInstructions?: string;
+  assistantName?: string;
+  userName?: string;
+  interfaceLanguage?: string;
+  writingLanguage?: string;
+  customAssistantPrompt?: string;
+  customSuggestionsPrompt?: string;
 }
 
 export interface AIResponse {
@@ -22,44 +28,31 @@ export interface AIResponse {
 }
 
 export interface AIProviderConfig {
-  provider: "ollama" | "openai" | "anthropic";
+  provider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
   model: string;
   apiKey?: string;
   baseUrl?: string;
 }
 
-export interface AISettings {
-  enabled: boolean;
-  provider: "ollama" | "openai" | "anthropic";
-  model: string;
-  apiKey?: string;
-  baseUrl?: string;
-  streamResponses: boolean;
-  autoIndexDocument: boolean;
-  privacyDisclaimerShown: boolean;
-}
-
-export const DEFAULT_AI_SETTINGS: AISettings = {
-  enabled: true,
-  provider: "ollama",
-  model: "kimi-k2.5:cloud",
-  streamResponses: true,
-  autoIndexDocument: false,
-  privacyDisclaimerShown: false,
+export const PROVIDER_BASE_URLS: Record<string, string> = {
+  ollama: "http://localhost:11434",
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  deepseek: "https://api.deepseek.com/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  lmstudio: "http://localhost:1234/v1",
 };
 
-export function loadAISettings(): AISettings {
-  const stored = localStorage.getItem("aurawrite-ai-settings");
-  if (stored) {
-    try {
-      return { ...DEFAULT_AI_SETTINGS, ...JSON.parse(stored) };
-    } catch {
-      return DEFAULT_AI_SETTINGS;
-    }
-  }
-  return DEFAULT_AI_SETTINGS;
-}
+export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
+  ollama: "kimi-k2.5:cloud",
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-20250514",
+  deepseek: "deepseek-chat",
+  openrouter: "openai/gpt-4o",
+  lmstudio: "",
+};
 
-export function saveAISettings(settings: AISettings): void {
-  localStorage.setItem("aurawrite-ai-settings", JSON.stringify(settings));
+export function getProviderBaseUrl(provider: string, customBaseUrl?: string): string {
+  if (customBaseUrl && customBaseUrl.trim() !== "") return customBaseUrl.trim();
+  return PROVIDER_BASE_URLS[provider] || PROVIDER_BASE_URLS.ollama;
 }

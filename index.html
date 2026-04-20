@@ -149,130 +149,218 @@
             <h2>Preferences</h2>
             <button id="preferences-close" class="modal-close">&times;</button>
           </div>
+          <div class="pref-tabs">
+            <button class="pref-tab active" data-tab="general">General</button>
+            <button class="pref-tab" data-tab="ai-provider">AI Provider</button>
+            <button class="pref-tab" data-tab="ai-behavior">AI Behavior</button>
+            <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
+            <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
+          </div>
           <div class="modal-body">
-            <div class="preference-group">
-              <label>Toolbar Display</label>
-              <span class="preference-hint">Choose how toolbar buttons appear</span>
-              <select id="pref-toolbar-display">
-                <option value="icon">Icon Only</option>
-                <option value="text">Text Only</option>
-                <option value="both" selected>Icon + Text</option>
-              </select>
-            </div>
-            <div class="preference-group">
-              <label>Theme</label>
-              <span class="preference-hint">Application color scheme</span>
-              <select id="pref-theme">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            <div class="preference-group" id="custom-colors-group">
-              <label>Custom Colors</label>
-              <span class="preference-hint">Only visible when Theme is set to Custom</span>
-              <div class="color-picker-row">
-                <span>Background:</span>
-                <input type="color" id="pref-custom-bg" value="#f0f0f0" />
+
+            <!-- TAB: General -->
+            <div class="pref-tab-content active" data-tab="general">
+              <div class="preference-group">
+                <label>Toolbar Display</label>
+                <span class="preference-hint">Choose how toolbar buttons appear</span>
+                <select id="pref-toolbar-display">
+                  <option value="icon">Icon Only</option>
+                  <option value="text">Text Only</option>
+                  <option value="both" selected>Icon + Text</option>
+                </select>
               </div>
-              <div class="color-picker-row">
-                <span>Toolbar:</span>
-                <input type="color" id="pref-custom-toolbar" value="#ffffff" />
+              <div class="preference-group">
+                <label>Theme</label>
+                <span class="preference-hint">Application color scheme</span>
+                <select id="pref-theme">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="custom">Custom</option>
+                </select>
               </div>
-              <div class="color-picker-row">
-                <span>Paper:</span>
-                <input type="color" id="pref-custom-paper" value="#ffffff" />
-              </div>
-              <div class="color-picker-row">
-                <span>Editor Text:</span>
-                <input
-                  type="color"
-                  id="pref-custom-text-editor"
-                  value="#222222"
-                />
-              </div>
-              <div class="color-picker-row">
-                <span>Button Text:</span>
-                <input
-                  type="color"
-                  id="pref-custom-text-buttons"
-                  value="#222222"
-                />
+              <div class="preference-group" id="custom-colors-group">
+                <label>Custom Colors</label>
+                <span class="preference-hint">Only visible when Theme is set to Custom</span>
+                <div class="color-picker-row">
+                  <span>Background:</span>
+                  <input type="color" id="pref-custom-bg" value="#f0f0f0" />
+                </div>
+                <div class="color-picker-row">
+                  <span>Toolbar:</span>
+                  <input type="color" id="pref-custom-toolbar" value="#ffffff" />
+                </div>
+                <div class="color-picker-row">
+                  <span>Paper:</span>
+                  <input type="color" id="pref-custom-paper" value="#ffffff" />
+                </div>
+                <div class="color-picker-row">
+                  <span>Editor Text:</span>
+                  <input type="color" id="pref-custom-text-editor" value="#222222" />
+                </div>
+                <div class="color-picker-row">
+                  <span>Button Text:</span>
+                  <input type="color" id="pref-custom-text-buttons" value="#222222" />
+                </div>
               </div>
             </div>
-            <div class="preference-group">
-              <label>Incremental Save</label>
-              <div class="checkbox-row">
-                <input type="checkbox" id="pref-incremental-enabled" />
-                <span>Keep versioned snapshots each time you save (Ctrl+S)</span>
+
+            <!-- TAB: AI Provider -->
+            <div class="pref-tab-content" data-tab="ai-provider">
+              <div class="preference-group">
+                <label>AI Provider</label>
+                <span class="preference-hint">Select which AI service to use</span>
+                <select id="pref-ai-provider">
+                  <option value="ollama">Ollama (Local)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="lmstudio">LM Studio (Local)</option>
+                </select>
+              </div>
+              <div class="preference-group">
+                <label>Model</label>
+                <span class="preference-hint">Model name as recognized by the provider (e.g. kimi-k2.5:cloud, gpt-4o, claude-sonnet-4-20250514)</span>
+                <input type="text" id="pref-ai-model" placeholder="kimi-k2.5:cloud" />
+              </div>
+              <div class="preference-group" id="api-key-group">
+                <label>API Key</label>
+                <span class="preference-hint" id="api-key-hint">Required.</span>
+                <input type="password" id="pref-ai-api-key" placeholder="sk-..." />
+              </div>
+              <div class="preference-group" id="base-url-group">
+                <label>Base URL</label>
+                <span class="preference-hint" id="base-url-hint">Override the default API endpoint. Leave empty for defaults.</span>
+                <input type="text" id="pref-ai-base-url" placeholder="http://localhost:11434" />
               </div>
             </div>
-            <div class="preference-group">
-              <label>Max Versioned Snapshots</label>
-              <span class="preference-hint">Set to 0 for unlimited versions</span>
-              <input
-                type="number"
-                id="pref-incremental-max"
-                value="10"
-                min="0"
-              />
-            </div>
-            <hr />
-            <div class="preference-group">
-              <label>Suggestions Interval (seconds)</label>
-              <span class="preference-hint">How often the AI analyzes text and offers sentence suggestions</span>
-              <input
-                type="number"
-                id="pref-ai-suggestions-interval"
-                value="30"
-                min="5"
-                max="300"
-              />
-            </div>
-            <div class="preference-group">
-              <label>Context Update Interval (seconds)</label>
-              <span class="preference-hint">How often the AI panel refreshes document context</span>
-              <input
-                type="number"
-                id="pref-ai-context-interval"
-                value="30"
-                min="5"
-                max="300"
-              />
-            </div>
-            <div class="preference-group">
-              <label>Suggestions Prompt</label>
-              <span class="preference-hint">System prompt for sentence suggestions (left panel)</span>
-              <textarea
-                id="pref-suggestions-prompt"
-                rows="4"
-                placeholder="Prompt for Suggestions mode..."
-              ></textarea>
-            </div>
-            <div class="preference-group">
-              <label>AI Assistant Prompt</label>
-              <span class="preference-hint">System prompt for the AI chat assistant (right panel)</span>
-              <textarea
-                id="pref-ai-assistant-prompt"
-                rows="4"
-                placeholder="Prompt for AI Assistant mode..."
-              ></textarea>
-            </div>
-            <hr />
-            <div class="preference-group">
-              <label>Auto-clear Text Selection</label>
-              <div class="checkbox-row">
-                <input type="checkbox" id="pref-deselect-on-click" checked />
-                <span>Clear text selection when clicking inside the editor</span>
+
+            <!-- TAB: AI Behavior -->
+            <div class="pref-tab-content" data-tab="ai-behavior">
+              <div class="preference-group">
+                <label>Interface Language</label>
+                <span class="preference-hint">Language the AI uses to talk to you (responses, explanations)</span>
+                <select id="pref-ai-interface-language">
+                  <option value="English">English</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Portuguese">Português</option>
+                  <option value="Japanese">日本語</option>
+                  <option value="Chinese">中文</option>
+                </select>
+              </div>
+              <div class="preference-group">
+                <label>Writing Language</label>
+                <span class="preference-hint">Language the AI uses when writing or suggesting text in the document</span>
+                <select id="pref-ai-writing-language">
+                  <option value="English">English</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Portuguese">Português</option>
+                  <option value="Japanese">日本語</option>
+                  <option value="Chinese">中文</option>
+                </select>
+              </div>
+              <div class="preference-group">
+                <label>Assistant Name</label>
+                <span class="preference-hint">Name the AI uses to refer to itself</span>
+                <input type="text" id="pref-ai-assistant-name" placeholder="Aura" />
+              </div>
+              <div class="preference-group">
+                <label>User Name</label>
+                <span class="preference-hint">Name the AI uses to refer to you (leave empty for default)</span>
+                <input type="text" id="pref-ai-user-name" placeholder="Your name" />
+              </div>
+              <div class="preference-group">
+                <label>Suggestions Interval (seconds)</label>
+                <span class="preference-hint">How often the AI analyzes text and offers sentence suggestions</span>
+                <input type="number" id="pref-ai-suggestions-interval" value="30" min="5" max="300" />
+              </div>
+              <div class="preference-group">
+                <label>Context Update Interval (seconds)</label>
+                <span class="preference-hint">How often the AI panel refreshes document context</span>
+                <input type="number" id="pref-ai-context-interval" value="30" min="5" max="300" />
+              </div>
+              <div class="preference-group">
+                <label>Suggestions Prompt</label>
+                <span class="preference-hint">System prompt for sentence suggestions (left panel)</span>
+                <div class="prompt-with-reset">
+                  <textarea id="pref-suggestions-prompt" rows="4" placeholder="Prompt for Suggestions mode..."></textarea>
+                  <button class="btn-reset-prompt" data-default="suggestions" title="Restore default prompt">↺ Reset</button>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>AI Assistant Prompt</label>
+                <span class="preference-hint">System prompt for the AI chat assistant (right panel)</span>
+                <div class="prompt-with-reset">
+                  <textarea id="pref-ai-assistant-prompt" rows="4" placeholder="Prompt for AI Assistant mode..."></textarea>
+                  <button class="btn-reset-prompt" data-default="assistant" title="Restore default prompt">↺ Reset</button>
+                </div>
+              </div>
+              <div class="pref-styles-placeholder" id="pref-styles-placeholder">
+                <span class="preference-hint">Style presets coming soon (e.g. Tolkien, Shakespeare, ...)</span>
               </div>
             </div>
-            <div class="preference-group">
-              <label>Semantic Search Indexing</label>
-              <div class="checkbox-row">
-                <input type="checkbox" id="pref-semantic-search-enabled" checked />
-                <span>Automatically index documents for semantic search when saving (requires Ollama)</span>
+
+            <!-- TAB: Editor & Data -->
+            <div class="pref-tab-content" data-tab="editor-data">
+              <div class="preference-group">
+                <label>Incremental Save</label>
+                <div class="checkbox-row">
+                  <input type="checkbox" id="pref-incremental-enabled" />
+                  <span>Keep versioned snapshots each time you save (Ctrl+S)</span>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>Max Versioned Snapshots</label>
+                <span class="preference-hint">Set to 0 for unlimited versions</span>
+                <input type="number" id="pref-incremental-max" value="10" min="0" />
+              </div>
+              <div class="preference-group">
+                <label>Auto-clear Text Selection</label>
+                <div class="checkbox-row">
+                  <input type="checkbox" id="pref-deselect-on-click" checked />
+                  <span>Clear text selection when clicking inside the editor</span>
+                </div>
               </div>
             </div>
+
+            <!-- TAB: Indexing & Tools -->
+            <div class="pref-tab-content" data-tab="indexing-tools">
+              <div class="preference-group">
+                <label>Semantic Search Indexing</label>
+                <div class="checkbox-row">
+                  <input type="checkbox" id="pref-semantic-search-enabled" checked />
+                  <span>Automatically index documents for semantic search when saving (requires Ollama)</span>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>Entity Extraction Role</label>
+                <span class="preference-hint">Define a perspective/role for entity extraction (e.g. "criminal lawyer", "fantasy novelist", "medical researcher"). Leave empty for default.</span>
+                <input type="text" id="pref-entity-extraction-role" placeholder="e.g. fantasy novelist" />
+              </div>
+              <div class="preference-group">
+                <label>Entity Extraction Prompt</label>
+                <span class="preference-hint">System prompt used when extracting entities from documents</span>
+                <div class="prompt-with-reset">
+                  <textarea id="pref-entity-extraction-prompt" rows="4" placeholder="Extraction prompt..."></textarea>
+                  <button class="btn-reset-prompt" data-default="extraction" title="Restore default prompt">↺ Reset</button>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>Tool Calling Prompt</label>
+                <span class="preference-hint">Instructions for AI to query the project database. Modifying this may affect database query functionality.</span>
+                <div class="prompt-with-reset">
+                  <textarea id="pref-tool-calling-prompt" rows="4" placeholder="Tool calling instructions..."></textarea>
+                  <button class="btn-reset-prompt" data-default="toolcalling" title="Restore default prompt">↺ Reset</button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>

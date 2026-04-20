@@ -1,6 +1,6 @@
 import type { EditorView } from "prosemirror-view";
 import type { AIContext } from "./providers";
-import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools } from "./ai-manager";
+import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools, handlePreferencesChanged } from "./ai-manager";
 import { selectionHighlightPluginKey } from "../editor/selection-highlight";
 import {
   splitIntoChunks,
@@ -38,6 +38,10 @@ interface Preferences {
   aiContextInterval: number;
   aiAssistantPrompt: string;
   deselectOnDocumentClick: boolean;
+  aiInterfaceLanguage: string;
+  aiWritingLanguage: string;
+  aiAssistantName: string;
+  aiUserName: string;
 }
 
 let messages: Message[] = [];
@@ -60,12 +64,20 @@ function getPreferences(): Preferences {
       aiContextInterval: prefs.aiContextInterval || DEFAULT_CONTEXT_INTERVAL,
       aiAssistantPrompt: prefs.aiAssistantPrompt || "",
       deselectOnDocumentClick: prefs.deselectOnDocumentClick ?? true,
+      aiInterfaceLanguage: prefs.aiInterfaceLanguage || "English",
+      aiWritingLanguage: prefs.aiWritingLanguage || "English",
+      aiAssistantName: prefs.aiAssistantName || "Aura",
+      aiUserName: prefs.aiUserName || "",
     };
   }
   return {
     aiContextInterval: DEFAULT_CONTEXT_INTERVAL,
     aiAssistantPrompt: "",
     deselectOnDocumentClick: true,
+    aiInterfaceLanguage: "English",
+    aiWritingLanguage: "English",
+    aiAssistantName: "Aura",
+    aiUserName: "",
   };
 }
 
@@ -74,6 +86,7 @@ export function setupAIPanel(view: EditorView): void {
   initAI();
   setupPanelEvents(view);
   setupEditorClickListener(view);
+  window.addEventListener("aurawrite:preferences-changed", handlePreferencesChanged);
 }
 
 function setupEditorClickListener(view: EditorView): void {
@@ -397,12 +410,18 @@ async function sendMessage(text: string): Promise<void> {
 
   const chunkText = getSelectedChunkText();
   const documentText = getDocumentText();
+  const prefs = getPreferences();
 
   let context: AIContext = {
     selectedText: currentSelection?.text || undefined,
     documentTitle: document.title.replace(" - AuraWrite", ""),
     documentText: chunkText || documentText || undefined,
     projectId: currentProject?.id || undefined,
+    assistantName: prefs.aiAssistantName || undefined,
+    userName: prefs.aiUserName || undefined,
+    interfaceLanguage: prefs.aiInterfaceLanguage || undefined,
+    writingLanguage: prefs.aiWritingLanguage || undefined,
+    customAssistantPrompt: prefs.aiAssistantPrompt || undefined,
   };
 
   if (context.projectId) {

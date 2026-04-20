@@ -1,6 +1,6 @@
 # AuraWrite — Stato Attuale
 
-**Ultimo aggiornamento:** 2026-04-18
+**Ultimo aggiornamento:** 2026-04-20
 
 ---
 
@@ -23,11 +23,15 @@
 - `embedding_delete_for_project` comando Tauri esposto
 
 ### AI Infrastructure
-- Provider interface: Ollama, OpenAI, Anthropic
+- Provider interface: Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio
 - AI Manager per gestire chiamate
 - AURA_EDIT system per modifiche documento (replace, insert, delete, format)
 - Suggestions Panel (sinistra) con trigger su punteggiatura
 - AI Assistant Panel (destra) con chat e contesto documento
+- 6 provider AI con model/API key/base URL configurabili nelle Preferenze
+- Lingua interfaccia + lingua scrittura separate
+- Nome assistente + nome utente personalizzabili
+- Prompt editabili con pulsante Ripristina default
 
 ### Semantic Search + Embeddings
 - nomic-embed-text-v2-moe via Ollama (768-dim, prefissi search_document/search_query)
@@ -49,6 +53,14 @@
 - Indicatore semaforo: rosso (non indicizzato), giallo (outdated), verde (aggiornato)
 
 ---
+
+## Preferences (ristrutturato a 5 schede)
+- **General**: theme, toolbar display, custom colors
+- **AI Provider**: provider dropdown, model, API key, base URL (visibilità condizionale)
+- **AI Behavior**: lingua interfaccia, lingua scrittura, nome assistente, nome utente, intervals, prompt editabili
+- **Editor & Data**: incremental save, max snapshots, deselect, semantic search
+- **Indexing & Tools**: extraction role, extraction prompt, tool calling prompt, semantic search toggle
+- localStorage unificato: `aurawrite-preferences` (migrato dal vecchio `aurawrite-ai-settings`)
 
 ## Bug Notevoli (Risolti)
 - Selection positions: uso di nodesBetween, mai textContent.indexOf()

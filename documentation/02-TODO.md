@@ -1,25 +1,22 @@
 # AuraWrite — TODO List
 
-**Ultimo aggiornamento:** 2026-04-18
+**Ultimo aggiornamento:** 2026-04-20
 
 ---
 
-## Sessione 2026-04-18 — Cosa e' stato fatto
+## Sessione 2026-04-20 — Cosa e' stato fatto
 
-1. **Embedding cleanup su delete** — `db_delete_project/section/document` ora cancellano embeddings correlate
-2. **Tool Calling integration** — chat.ts loop con parse `<tool>`, executeTool, indicatore visivo, max 3 iterazioni
-3. **Bug fix "Already processing"** — lock management spostato da sendToAI a chat.ts
-4. **Inline rename** — doppioclick per rinominare progetti, sezioni, documenti + update DB
-5. **Entity Extraction System** — `entity-extraction.ts` con AI extraction, dedup, upsert, pulsanti 🗂
-6. **Section expand/collapse** — pulsante ▶/▼, default tutte espanse
-7. **Modello default** — cambiato da `gemma4:31b-cloud` a `kimi-k2.5:cloud`
-8. **Fix notifiche** — indexing toast persistente, selector CSS rotto
-9. **Fix created_at** — mancava in db_update_entity
-10. **Fix documenti sotto sezione sbagliata** — filtro per section_id nel rendering
-11. **Document-Entity Links** — tabella `links` ora usata per collegare entities ai documenti
-12. **Indicatore semaforo icone 🗂** — rosso=non indicizzato, giallo=outdated, verde=aggiornato
-13. **Tool `entities_in_document`** — l'AI può ora chiedere quali entities sono in un documento specifico
-14. **Delete cascade per links** — cancellazione progetto/sezione/documento rimuove anche i link
+1. **Preferences ristrutturato a 5 schede** — General, AI Provider, AI Behavior, Editor & Data, Indexing & Tools
+2. **6 provider AI** — Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio
+3. **Campo Provider/Model/API Key/Base URL** — nella scheda AI Provider con visibilità condizionale
+4. **Lingua interfaccia + lingua scrittura** — doppio selettore lingua nella scheda AI Behavior
+5. **Nome assistente + Nome utente** — personalizzabili nella scheda AI Behavior
+6. **Prompt editabili con pulsante Reset** — Suggestions, AI Assistant, Entity Extraction, Tool Calling
+7. **Entity Extraction Role** — campo libero per prospettiva (es. "avvocato", "medico")
+8. **Unificazione localStorage** — `aurawrite-ai-settings` migrato in `aurawrite-preferences`
+9. **Nuovi campi AIContext** — assistantName, userName, interfaceLanguage, writingLanguage, customAssistantPrompt
+10. **Style presets placeholder** — spazio riservato per futuri preset (Tolkien, Shakespeare, etc.)
+11. **Bug noti ereditati**: toast indexing, ESLint config, dropdown dark mode
 
 ---
 
@@ -204,13 +201,16 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 ## PRIORITY 2: Features (in ordine di priorità)
 
 1. ~~**Indicatore stato indicizzazione sull'icona 🗂**~~ — ✅ Completato: rosso=non indicizzato, giallo=outdated, verde=aggiornato. Usa la tabella `links` con `link_type='extracted_from'`.
-2. **Provider/Model/API Key nelle Preferenze** — dropdown con provider (Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio), model selection, API key input
+2. **Provider/Model/API Key nelle Preferenze** — ✅ Completato: 6 provider (Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio), model input, API key, base URL, visibilità condizionale
 3. **Show AI thinking** — opzione nel pannello AI Assistant (header) per mostrare/nascondere il thinking del modello. Solo per modelli che supportano reasoning (es. kimi-k2.5)
 4. **Migliorare system prompt per tool calling** — forzare AI a chiamare tools prima di rispondere "no entities found", aggiungere project_id esplicito, esempi più chiari
-5. **Preferences a schede** — ristrutturare il modal Preferenze con tab/schede (es. "General", "AI Settings", "Editor", "Indexing") invece di una lista unica
+5. **Preferences a schede** — ✅ Completato: 5 tab (General, AI Provider, AI Behavior, Editor & Data, Indexing & Tools)
 6. **LM Studio preset** — gia' funzionante via OpenAI provider con baseUrl http://localhost:1234/v1, aggiungere preset nelle preferenze
 7. **Tool calling nativo per provider che lo supportano** — OpenAI e Anthropic hanno API tools nativa, LM Studio supporta function calling. Per ora usiamo prompt-based XML per tutti. Futuro: aggiungere supporto nativo come opzione per provider compatibili
-8. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (non urgente)
+8. **Prompt presets per modello** — dropdown per caricare prompt ottimizzati per modello (Qwen, Kimi, GPT-4o, Claude). Da implementare quando avremo più esperienza con i vari modelli
+9. **Style presets (semi)** — sistema ComfyUI-like con preset stile (Tolkien, Shakespeare, etc.) che configurano tono, ruolo estrazione, lingua. Placeholder già presente nelle Preferenze
+10. **MCP Server** — Carlo ha creato un server MCP (2026-04-20). In prospettiva, implementare l'integrazione MCP in AuraWrite per permettere a client esterni di interagire con il database e le funzionalità dell'app.
+11. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (non urgente)
 9. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
 10. **Enhanced title bar** (font/style)
 11. **Cronologia modifiche persistenti**

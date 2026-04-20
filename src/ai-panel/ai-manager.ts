@@ -1,50 +1,79 @@
 import {
   AIProvider,
   AIContext,
-  AISettings,
   AIResponse,
-  loadAISettings,
-  saveAISettings,
-  DEFAULT_AI_SETTINGS,
+  getProviderBaseUrl,
 } from "./providers";
 import { OllamaProvider } from "./ollama-provider";
-import { OpenAIProvider, AnthropicProvider } from "./remote-providers";
+import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider } from "./remote-providers";
 import { buildToolSystemPrompt } from "./tools";
 import { getEditorView } from "../editor/toolbar";
 
+const PREFERENCES_KEY = "aurawrite-preferences";
+
+interface PreferencesAI {
+  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+  aiModel: string;
+  aiApiKey: string;
+  aiBaseUrl: string;
+}
+
+function loadAIFromPreferences(): PreferencesAI {
+  const stored = localStorage.getItem(PREFERENCES_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      return {
+        aiProvider: parsed.aiProvider || "ollama",
+        aiModel: parsed.aiModel || "kimi-k2.5:cloud",
+        aiApiKey: parsed.aiApiKey || "",
+        aiBaseUrl: parsed.aiBaseUrl || "",
+      };
+    } catch {
+      return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "" };
+    }
+  }
+  return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "" };
+}
+
 let currentProvider: AIProvider | null = null;
-let currentSettings: AISettings;
 let isProcessing = false;
 
 export function initAI(): void {
-  currentSettings = loadAISettings();
-  currentProvider = createProvider(currentSettings);
+  const settings = loadAIFromPreferences();
+  currentProvider = createProvider(settings);
 }
 
-function createProvider(settings: AISettings): AIProvider {
-  switch (settings.provider) {
+function createProvider(settings: PreferencesAI): AIProvider {
+  const baseUrl = getProviderBaseUrl(settings.aiProvider, settings.aiBaseUrl);
+  switch (settings.aiProvider) {
     case "ollama":
-      return new OllamaProvider(settings.model, settings.baseUrl);
+      return new OllamaProvider(settings.aiModel, baseUrl);
     case "openai":
-      return new OpenAIProvider(settings.apiKey || "", settings.model);
+      return new OpenAIProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     case "anthropic":
-      return new AnthropicProvider(settings.apiKey || "", settings.model);
+      return new AnthropicProvider(settings.aiApiKey, settings.aiModel, baseUrl);
+    case "deepseek":
+      return new DeepSeekProvider(settings.aiApiKey, settings.aiModel, baseUrl);
+    case "openrouter":
+      return new OpenRouterProvider(settings.aiApiKey, settings.aiModel, baseUrl);
+    case "lmstudio":
+      return new LMStudioProvider(settings.aiModel, baseUrl);
     default:
       return new OllamaProvider();
   }
 }
 
-export function getAISettings(): AISettings {
-  if (!currentSettings) {
-    currentSettings = loadAISettings();
-  }
-  return currentSettings;
+export function getAISettings(): PreferencesAI {
+  return loadAIFromPreferences();
 }
 
-export function updateAISettings(settings: Partial<AISettings>): void {
-  currentSettings = { ...currentSettings, ...settings };
-  saveAISettings(currentSettings);
-  currentProvider = createProvider(currentSettings);
+export function updateAISettings(): void {
+  currentProvider = createProvider(loadAIFromPreferences());
+}
+
+export function handlePreferencesChanged(): void {
+  updateAISettings();
 }
 
 export async function sendToAI(
