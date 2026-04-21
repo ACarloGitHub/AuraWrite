@@ -84,6 +84,18 @@ export async function deleteDocument(id: string): Promise<void> {
 }
 
 // ============================================================================
+// REORDERING
+// ============================================================================
+
+export async function updateSectionsOrder(orders: [string, number][]): Promise<void> {
+  await invoke("db_update_sections_order", { orders });
+}
+
+export async function updateDocumentsOrder(orders: [string, number][]): Promise<void> {
+  await invoke("db_update_documents_order", { orders });
+}
+
+// ============================================================================
 // ENTITIES
 // ============================================================================
 

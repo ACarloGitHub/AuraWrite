@@ -31,6 +31,7 @@ export interface Document {
   status?: string;
   word_count: number;
   tags?: string;
+  order_index: number;
   created_at: number;
   updated_at: number;
 }
@@ -183,7 +184,7 @@ export function createSection(
   };
 }
 
-export function createDocument(sectionId: string, title: string = "Untitled", contentJson: string = "{}"): Document {
+export function createDocument(sectionId: string, title: string = "Untitled", contentJson: string = "{}", orderIndex: number = 0): Document {
   const now = Date.now();
   return {
     id: generateId(),
@@ -193,6 +194,7 @@ export function createDocument(sectionId: string, title: string = "Untitled", co
     status: "draft",
     word_count: 0,
     tags: undefined,
+    order_index: orderIndex,
     created_at: now,
     updated_at: now,
   };

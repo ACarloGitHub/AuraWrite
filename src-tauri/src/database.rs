@@ -42,6 +42,7 @@ pub struct Document {
     pub status: Option<String>,
     pub word_count: i32,
     pub tags: Option<String>,
+    pub order_index: i32,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -179,6 +180,7 @@ fn get_schema() -> String {
         status TEXT DEFAULT 'draft',
         word_count INTEGER DEFAULT 0,
         tags TEXT,
+        order_index INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
@@ -495,8 +497,8 @@ pub fn delete_section(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             document.id,
             document.section_id,
@@ -505,6 +507,7 @@ pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.status,
             document.word_count,
             document.tags,
+            document.order_index,
             document.created_at,
             document.updated_at
         ],
@@ -517,8 +520,8 @@ pub fn get_documents_by_section(
     section_id: &str,
 ) -> SqliteResult<Vec<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, created_at, updated_at 
-         FROM documents WHERE section_id = ?1 ORDER BY updated_at DESC"
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, created_at, updated_at 
+         FROM documents WHERE section_id = ?1 ORDER BY order_index, created_at"
     )?;
 
     let documents = stmt.query_map(params![section_id], |row| {
@@ -530,8 +533,9 @@ pub fn get_documents_by_section(
             status: row.get(4)?,
             word_count: row.get(5)?,
             tags: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+            order_index: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     })?;
 
@@ -540,7 +544,7 @@ pub fn get_documents_by_section(
 
 pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, created_at, updated_at 
          FROM documents WHERE id = ?1"
     )?;
 
@@ -555,8 +559,9 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
             status: row.get(4)?,
             word_count: row.get(5)?,
             tags: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+            order_index: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         }))
     } else {
         Ok(None)
@@ -565,18 +570,40 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
 
 pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE documents SET title = ?1, content_json = ?2, status = ?3, word_count = ?4, tags = ?5, updated_at = ?6 
-         WHERE id = ?7",
+        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, updated_at = ?8 
+         WHERE id = ?9",
         params![
+            document.section_id,
             document.title,
             document.content_json,
             document.status,
             document.word_count,
             document.tags,
+            document.order_index,
             document.updated_at,
             document.id
         ],
     )?;
+    Ok(())
+}
+
+pub fn update_sections_order(conn: &Connection, orders: &[(String, i32)], now: i64) -> SqliteResult<()> {
+    for (id, idx) in orders {
+        conn.execute(
+            "UPDATE sections SET order_index = ?1, updated_at = ?2 WHERE id = ?3",
+            params![idx, now, id],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn update_documents_order(conn: &Connection, orders: &[(String, i32)], now: i64) -> SqliteResult<()> {
+    for (id, idx) in orders {
+        conn.execute(
+            "UPDATE documents SET order_index = ?1, updated_at = ?2 WHERE id = ?3",
+            params![idx, now, id],
+        )?;
+    }
     Ok(())
 }
 

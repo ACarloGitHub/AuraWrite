@@ -1376,6 +1376,14 @@ body {
   margin-top: 2px;
 }
 
+.section-item.dragging {
+  opacity: 0.5;
+}
+
+.section-item.drag-over {
+  border-top: 2px solid var(--color-primary, #4a90d9);
+}
+
 .section-toggle-btn {
   background: none;
   border: none;
@@ -1415,6 +1423,14 @@ body {
 .document-item {
   margin-left: 32px;
   margin-top: 2px;
+}
+
+.document-item.dragging {
+  opacity: 0.5;
+}
+
+.document-item.drag-over {
+  border-top: 2px solid var(--color-primary, #4a90d9);
 }
 
 .document-item .item-header {

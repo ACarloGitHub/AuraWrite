@@ -120,6 +120,26 @@ fn db_delete_document(state: State<AppState>, id: String) -> Result<(), String> 
     delete_document(&*conn, &id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn db_update_sections_order(state: State<AppState>, orders: Vec<(String, i32)>) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    update_sections_order(&*conn, &orders, now).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_update_documents_order(state: State<AppState>, orders: Vec<(String, i32)>) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    update_documents_order(&*conn, &orders, now).map_err(|e| e.to_string())
+}
+
 // ============================================================================
 // ENTITY COMMANDS
 // ============================================================================
@@ -499,6 +519,8 @@ pub fn run() {
             db_get_document,
             db_update_document,
             db_delete_document,
+            db_update_sections_order,
+            db_update_documents_order,
             // Document version commands
             db_create_document_version,
             db_get_latest_version,
