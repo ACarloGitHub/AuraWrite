@@ -91,7 +91,10 @@ async function getExistingEntities(projectId: string): Promise<ExistingEntity[]>
 function extractTextFromProseMirror(contentJson: string): string {
   try {
     const content = JSON.parse(contentJson);
-    return extractTextFromNode(content);
+    // ProseMirror state.toJSON() returns {doc: {...}, selection: {...}}
+    // We need the doc object, not the whole state
+    const doc = content.doc || content;
+    return extractTextFromNode(doc);
   } catch {
     return contentJson;
   }
