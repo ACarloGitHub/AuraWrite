@@ -1255,11 +1255,11 @@ function createSectionElement(section: Section): HTMLElement {
   if (currentSection?.id === section.id) {
     div.classList.add("active");
   }
-  div.draggable = true;
   div.dataset.id = section.id;
   div.dataset.type = "section";
 
-  setupDragEvents(div, "section", section);
+  const dragHandle = createDragHandle("section");
+  setupDragEvents(div, dragHandle, "section", section);
 
   const header = document.createElement("div");
   header.className = "item-header";
@@ -1330,6 +1330,7 @@ function createSectionElement(section: Section): HTMLElement {
   });
   actionsEl.appendChild(deleteBtn);
 
+  header.appendChild(dragHandle);
   header.appendChild(toggleBtn);
   header.appendChild(nameEl);
   header.appendChild(actionsEl);
@@ -1359,12 +1360,12 @@ function createDocumentElement(doc: Document): HTMLElement {
   if (currentDocument?.id === doc.id) {
     div.classList.add("active");
   }
-  div.draggable = true;
   div.dataset.id = doc.id;
   div.dataset.type = "document";
   div.dataset.sectionId = doc.section_id;
 
-  setupDragEvents(div, "document", doc);
+  const dragHandle = createDragHandle("document");
+  setupDragEvents(div, dragHandle, "document", doc);
 
   const header = document.createElement("div");
   header.className = "item-header";
@@ -1418,6 +1419,7 @@ function createDocumentElement(doc: Document): HTMLElement {
   });
   actionsEl.appendChild(deleteBtn);
 
+  header.appendChild(dragHandle);
   header.appendChild(nameEl);
   header.appendChild(actionsEl);
   header.addEventListener("click", async (e) => {
@@ -1491,19 +1493,27 @@ interface DragData {
   sectionId?: string;
 }
 
-let dragSourceEl: HTMLElement | null = null;
+let dragSourceWrapper: HTMLElement | null = null;
 let currentDragData: DragData | null = null;
 
-function setupDragEvents(el: HTMLElement, type: "section" | "document", data: Section | Document): void {
-  el.addEventListener("dragstart", (e) => {
-    // Prevent drag when clicking buttons/links inside the item
-    if ((e.target as HTMLElement).closest("button, a, input")) {
-      e.preventDefault();
-      return;
-    }
+function createDragHandle(type: "section" | "document"): HTMLElement {
+  const handle = document.createElement("span");
+  handle.className = "drag-handle";
+  handle.textContent = type === "section" ? "⋮" : "⋮";
+  handle.title = "Drag to move";
+  handle.draggable = true;
+  return handle;
+}
 
-    dragSourceEl = el;
-    el.classList.add("dragging");
+function setupDragEvents(
+  wrapper: HTMLElement,
+  handle: HTMLElement,
+  type: "section" | "document",
+  data: Section | Document,
+): void {
+  handle.addEventListener("dragstart", (e) => {
+    dragSourceWrapper = wrapper;
+    wrapper.classList.add("dragging");
 
     currentDragData = {
       id: data.id,
@@ -1513,59 +1523,62 @@ function setupDragEvents(el: HTMLElement, type: "section" | "document", data: Se
 
     e.dataTransfer?.setData("application/json", JSON.stringify(currentDragData));
     e.dataTransfer!.effectAllowed = "move";
+
+    // Hide ugly ghost image by replacing with a 1x1 blank image
+    const img = new Image();
+    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    e.dataTransfer?.setDragImage(img, 0, 0);
   });
 
-  el.addEventListener("dragend", () => {
-    dragSourceEl = null;
-    el.classList.remove("dragging");
-    document.querySelectorAll(".drag-over, .drag-over-header").forEach((el) => {
-      el.classList.remove("drag-over", "drag-over-header");
+  handle.addEventListener("dragend", () => {
+    dragSourceWrapper = null;
+    wrapper.classList.remove("dragging");
+    document.querySelectorAll(".drag-over").forEach((el) => {
+      el.classList.remove("drag-over");
     });
   });
 
-    el.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      if (!currentDragData || dragSourceEl === el) return;
+  wrapper.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    if (!currentDragData || dragSourceWrapper === wrapper) return;
 
-      const targetType = el.dataset.type;
+    const targetType = wrapper.dataset.type;
 
-      if (currentDragData.type === "section" && targetType === "section") {
-        e.dataTransfer!.dropEffect = "move";
-        el.classList.add("drag-over");
-      } else if (currentDragData.type === "document" && targetType === "document") {
-        e.dataTransfer!.dropEffect = "move";
-        el.classList.add("drag-over");
-      } else if (currentDragData.type === "document" && targetType === "section") {
-        e.dataTransfer!.dropEffect = "move";
-        el.classList.add("drag-over");
+    const isSameTypeSection = currentDragData.type === "section" && targetType === "section";
+    const isSameTypeDocument = currentDragData.type === "document" && targetType === "document";
+    const isDocToSection = currentDragData.type === "document" && targetType === "section";
+
+    if (isSameTypeSection || isSameTypeDocument || isDocToSection) {
+      e.dataTransfer!.dropEffect = "move";
+      wrapper.classList.add("drag-over");
+    }
+  });
+
+  wrapper.addEventListener("dragleave", () => {
+    wrapper.classList.remove("drag-over");
+  });
+
+  wrapper.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    wrapper.classList.remove("drag-over");
+    if (!currentDragData || dragSourceWrapper === wrapper) return;
+
+    const targetId = wrapper.dataset.id!;
+    const targetType = wrapper.dataset.type!;
+
+    if (currentDragData.type === "section" && targetType === "section") {
+      await handleSectionReorder(currentDragData.id, targetId);
+    } else if (currentDragData.type === "document" && targetType === "document") {
+      await handleDocumentReorder(currentDragData.id, targetId, currentDragData.sectionId!);
+    } else if (currentDragData.type === "document" && targetType === "section") {
+      const section = sections.find((s) => s.id === targetId);
+      if (section) {
+        await handleDocumentDropOnSection(currentDragData.id, section);
       }
-    });
+    }
 
-    el.addEventListener("dragleave", () => {
-      el.classList.remove("drag-over");
-    });
-
-    el.addEventListener("drop", async (e) => {
-      e.preventDefault();
-      el.classList.remove("drag-over");
-      if (!currentDragData || dragSourceEl === el) return;
-
-      const targetId = el.dataset.id!;
-      const targetType = el.dataset.type!;
-
-      if (currentDragData.type === "section" && targetType === "section") {
-        await handleSectionReorder(currentDragData.id, targetId);
-      } else if (currentDragData.type === "document" && targetType === "document") {
-        await handleDocumentReorder(currentDragData.id, targetId, currentDragData.sectionId!);
-      } else if (currentDragData.type === "document" && targetType === "section") {
-        const section = sections.find((s) => s.id === targetId);
-        if (section) {
-          await handleDocumentDropOnSection(currentDragData.id, section);
-        }
-      }
-
-      currentDragData = null;
-    });
+    currentDragData = null;
+  });
 }
 
 async function handleSectionReorder(sourceId: string, targetId: string): Promise<void> {

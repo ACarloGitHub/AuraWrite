@@ -70,8 +70,8 @@
 
 ## Bug Aperti
 - [ ] Discard lento (dipende dal modello AI)
-- [ ] Dropdown select sfondo chiaro in dark mode (GTK/Linux)
-- [ ] ESLint config: aggiungere `env: { browser: true }` per risolvere errori `setTimeout`, `HTMLButtonElement` etc.
+- [x] Dropdown select sfondo chiaro in dark mode (GTK/Linux) — CSS fix in styles.css
+- [x] ESLint config: aggiunto CustomEvent, setTimeout/clearTimeout, HTMLButtonElement/AnchorElement in globals
 
 ---
 
@@ -84,7 +84,7 @@
 | Frontend | TypeScript, Vite, CSS puro |
 | Backend | Rust (tauri) |
 | Database | SQLite (rusqlite) |
-| AI Provider | Ollama, OpenAI, Anthropic |
+| AI Provider | Ollama, OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio |
 | Embeddings | nomic-embed-text-v2-moe via Ollama |
 | Vector Search | SQLite + cosine similarity in Rust |
 
@@ -108,7 +108,7 @@ src/
 │   ├── ai-manager.ts          # Gestione provider AI
 │   ├── providers.ts           # Interface provider
 │   ├── ollama-provider.ts     # Provider locale
-│   ├── remote-providers.ts    # OpenAI, Anthropic
+│   ├── remote-providers.ts    # OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio
 │   ├── chunks.ts              # Document chunking per contesto
 │   ├── tools.ts               # Tool calling per DB (8 tools, integrato)
 │   └── entity-extraction.ts   # Entity extraction con link document→entity
@@ -126,4 +126,4 @@ src-tauri/
 
 ---
 
-*Aggiornato 2026-04-18*
+*Aggiornato 2026-04-20*

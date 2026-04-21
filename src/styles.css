@@ -1433,6 +1433,35 @@ body {
   border-top: 2px solid var(--color-primary, #4a90d9);
 }
 
+.drag-handle {
+  cursor: grab;
+  padding: 0 4px;
+  color: var(--color-text-muted, #888);
+  font-size: 14px;
+  font-weight: bold;
+  user-select: none;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.section-item:hover .drag-handle,
+.document-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--color-primary, #4a90d9);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle[draggable="true"] {
+  cursor: grab;
+}
+
 .document-item .item-header {
   display: flex;
   justify-content: space-between;

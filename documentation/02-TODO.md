@@ -1,6 +1,15 @@
 # AuraWrite — TODO List
 
-**Ultimo aggiornamento:** 2026-04-20
+**Ultimo aggiornamento:** 2026-04-21
+
+---
+
+## Sessione 2026-04-21 — Cosa e' stato fatto
+
+1. **Wiki aggiornata** — log.md, index.md; nuove pagine: preferences-system, ai-providers, model-benchmark (proposta)
+2. **Toast indexing fix** — toast blu persistente fino a notifica successo/errore successivo
+3. **ESLint fix** — aggiunti `CustomEvent`, `setTimeout`/`clearTimeout`, `HTMLButtonElement`, `HTMLAnchorElement` nelle globals
+4. **Model Benchmark proposta** — framework per testare modelli su AURA_EDIT, suggestions, entity extraction, tool calling
 
 ---
 
@@ -193,8 +202,10 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 ## PRIORITY 1: Bugs aperti
 
 - [ ] Discard lento (dipende dal modello AI)
-- [ ] Dropdown select in dark mode (GTK) — minor
-- [ ] Toast "indexing" scompare senza essere sostituito da notifica di successo/fallimento
+- [x] Dropdown select in dark mode (GTK) — CSS fix
+- [x] Toast "indexing" scompare senza notifica — fix: toast blu persistente fino a successo/errore
+- [x] Entity extraction: extraction falliva silenziosamente per utente con provider senza API key (es. OpenAI/Anthropic senza key inserita) — aggiunto log di debug e controllo preventivo pre-chiamata AI con messaggio errore che guida a Preferences > AI Provider
+- [x] ESLint config: aggiunti globals browser
 
 ---
 
@@ -210,7 +221,7 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 8. **Prompt presets per modello** — dropdown per caricare prompt ottimizzati per modello (Qwen, Kimi, GPT-4o, Claude). Da implementare quando avremo più esperienza con i vari modelli
 9. **Style presets (semi)** — sistema ComfyUI-like con preset stile (Tolkien, Shakespeare, etc.) che configurano tono, ruolo estrazione, lingua. Placeholder già presente nelle Preferenze
 10. **MCP Server** — Carlo ha creato un server MCP (2026-04-20). In prospettiva, implementare l'integrazione MCP in AuraWrite per permettere a client esterni di interagire con il database e le funzionalità dell'app.
-11. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel (non urgente)
+11. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel. Richiede: aggiungere `order_index` alla tabella `documents` nel DB, implementare drag&drop HTML5 nel ProjectPanel, aggiornare `section_id` quando un documento viene spostato tra sezioni. NON iniziato — prossima sessione.
 9. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
 10. **Enhanced title bar** (font/style)
 11. **Cronologia modifiche persistenti**
