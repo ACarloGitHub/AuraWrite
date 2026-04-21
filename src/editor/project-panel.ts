@@ -1520,8 +1520,8 @@ function initSortable(): void {
     handle: ".drag-handle",
     ghostClass: "sortable-ghost",
     chosenClass: "sortable-chosen",
+    dragClass: "sortable-drag",
     forceFallback: true,
-    fallbackClass: "sortable-ghost",
     onEnd: async (evt) => {
       if (evt.oldIndex === evt.newIndex) return;
 
@@ -1556,6 +1556,8 @@ function initSortable(): void {
       handle: ".drag-handle",
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
+      dragClass: "sortable-drag",
+      forceFallback: true,
       onEnd: async (evt) => {
         const fromSection = evt.from.closest(".section-item") as HTMLElement;
         const toSection = evt.to.closest(".section-item") as HTMLElement;

@@ -1547,39 +1547,57 @@ body {
   color: var(--color-primary, #4a90d9);
 }
 
-.sortable-chosen {
-  opacity: 0.8;
-  background: var(--color-background-elevated, #fff);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* === CLONE VOLANTE (sortable-drag = drag image) === */
+.sortable-drag {
+  opacity: 0.85 !important;
+  max-height: 40px !important;
+  max-width: 280px !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 9999 !important;
 }
 
-/* Drag handle */
-.drag-handle {
-  cursor: grab;
-  padding: 0 4px;
-  color: var(--color-text-muted, #888);
-  font-size: 16px;
-  font-weight: bold;
-  user-select: none;
-  line-height: 1;
-  opacity: 1;
-  transition: opacity 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
+/* Sezione clonata: solo header, no nested */
+.sortable-drag.section-item {
+  background: var(--color-background-elevated, #fff) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid var(--color-border, #ddd) !important;
+  border-radius: 3px !important;
+  padding: 4px 6px !important;
+  margin: 0 !important;
 }
 
-.section-item:hover .drag-handle,
-.document-item:hover .drag-handle {
-  opacity: 1;
+.sortable-drag.section-item .docs-list {
+  display: none !important;
 }
 
-.drag-handle:hover {
-  color: var(--color-primary, #4a90d9);
+.sortable-drag.section-item .item-header {
+  padding: 0 !important;
+  min-height: unset !important;
 }
 
-.drag-handle:active {
-  cursor: grabbing;
+/* Documento clonato: molto compatto */
+.sortable-drag.document-item {
+  background: var(--color-background-elevated, #fff) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid var(--color-border, #ddd) !important;
+  border-radius: 3px !important;
+  padding: 2px 4px !important;
+  margin: 0 !important;
+}
+
+.sortable-drag.document-item .item-header {
+  padding: 0 !important;
+  min-height: unset !important;
+}
+
+.sortable-drag.document-item .item-name {
+  font-size: 12px !important;
+}
+
+/* Nascondi azioni nel clone */
+.sortable-drag .item-actions {
+  display: none !important;
 }
 
 /* List containers for SortableJS */

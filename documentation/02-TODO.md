@@ -4,7 +4,19 @@
 
 ---
 
-## Sessione 2026-04-21 — Cosa e' stato fatto
+## Sessione 2026-04-21 — Drag & Drop
+
+1. **Aggiunto `order_index` ai documenti** — tabella DB aggiornata, struct Rust, CRUD e query `ORDER BY order_index`
+2. **SortableJS per DnD** — libreria installata, nativa DnD API rimossa
+3. **Riordino sezioni** — drag handle `⋮`, SortableJS su `.sections-list`, salva `order_index`
+4. **Riordino documenti** — drag handle `⋮`, SortableJS su `.docs-list`, salva `order_index`
+5. **Sposta documenti tra sezioni** — cross-group SortableJS (`pull: true, put: ["documents"]`)
+6. **CSS ghost compatta** — `.sortable-drag`: max-height 40px, nasconde docs, azioni, riduce padding
+7. **DB cancellato e ricreato** per applicare schema con `order_index`
+
+---
+
+## Sessione 2026-04-21 — Bug Fixes
 
 1. **Wiki aggiornata** — log.md, index.md; nuove pagine: preferences-system, ai-providers, model-benchmark (proposta)
 2. **Toast indexing fix** — toast blu persistente fino a notifica successo/errore successivo
@@ -221,7 +233,7 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 8. **Prompt presets per modello** — dropdown per caricare prompt ottimizzati per modello (Qwen, Kimi, GPT-4o, Claude). Da implementare quando avremo più esperienza con i vari modelli
 9. **Style presets (semi)** — sistema ComfyUI-like con preset stile (Tolkien, Shakespeare, etc.) che configurano tono, ruolo estrazione, lingua. Placeholder già presente nelle Preferenze
 10. **MCP Server** — Carlo ha creato un server MCP (2026-04-20). In prospettiva, implementare l'integrazione MCP in AuraWrite per permettere a client esterni di interagire con il database e le funzionalità dell'app.
-11. **Drag & Drop** — riordinare documenti e sezioni nel ProjectPanel. Richiede: aggiungere `order_index` alla tabella `documents` nel DB, implementare drag&drop HTML5 nel ProjectPanel, aggiornare `section_id` quando un documento viene spostato tra sezioni. NON iniziato — prossima sessione.
+11. ~~**Drag & Drop**~~ — ✅ Completato: SortableJS al posto del nativo DnD. Riordino sezioni e documenti, spostamento inter-sezione, ghost compatta con CSS. Richiede `order_index` nella tabella `documents`.
 9. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
 10. **Enhanced title bar** (font/style)
 11. **Cronologia modifiche persistenti**

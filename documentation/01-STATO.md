@@ -1,6 +1,6 @@
 # AuraWrite — Stato Attuale
 
-**Ultimo aggiornamento:** 2026-04-20
+**Ultimo aggiornamento:** 2026-04-21
 
 ---
 
@@ -72,6 +72,17 @@
 - [ ] Discard lento (dipende dal modello AI)
 - [x] Dropdown select sfondo chiaro in dark mode (GTK/Linux) — CSS fix in styles.css
 - [x] ESLint config: aggiunto CustomEvent, setTimeout/clearTimeout, HTMLButtonElement/AnchorElement in globals
+
+---
+
+## Drag & Drop (ProjectPanel)
+- SortableJS per drag & drop fluido nella sidebar
+- Riordino sezioni nel progetto attivo
+- Riordino documenti intra-sezione
+- Spostamento documenti tra sezioni diverse
+- Handle `⋮` visibile su ogni riga per attivare il drag
+- Ghost compatta (CSS `.sortable-drag`) — clone volante ridotto e arrotondato
+- Campo `order_index` aggiunto alla tabella `documents` nel DB SQLite
 
 ---
 
