@@ -463,12 +463,13 @@ function showNotification(message: string, type: "success" | "error" | "indexing
     white-space: nowrap;
   `;
   document.body.appendChild(toast);
-  const duration = type === "indexing" ? 60000 : 5000;
-  setTimeout(() => {
-    if (toast.parentNode) {
-      toast.remove();
-    }
-  }, duration);
+  if (type !== "indexing") {
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.remove();
+      }
+    }, 5000);
+  }
 }
 
 function clearEditor(): void {
