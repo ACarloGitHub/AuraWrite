@@ -1508,23 +1508,27 @@ function initSortable(): void {
   const projectEl = document.querySelector(".project-item.active") as HTMLElement;
   if (!projectEl) return;
 
+  const sectionsListEl = projectEl.querySelector(".sections-list") as HTMLElement;
+  if (!sectionsListEl) return;
+
   // Section Sortable — riordina sezioni
   if (sectionSortable) sectionSortable.destroy();
-  sectionSortable = new Sortable(projectEl, {
+  sectionSortable = new Sortable(sectionsListEl, {
     group: { name: "sections", pull: false, put: false },
     animation: 150,
     draggable: ".section-item",
     handle: ".drag-handle",
     ghostClass: "sortable-ghost",
     chosenClass: "sortable-chosen",
+    forceFallback: true,
+    fallbackClass: "sortable-ghost",
     onEnd: async (evt) => {
       if (evt.oldIndex === evt.newIndex) return;
 
-      const items = Array.from(projectEl.querySelectorAll(".section-item")) as HTMLElement[];
+      const items = Array.from(sectionsListEl.querySelectorAll(".section-item")) as HTMLElement[];
       const orders: [string, number][] = items.map((el, i) => [el.dataset.id!, i]);
       await updateSectionsOrder(orders);
 
-      // Rileggi sezioni
       if (currentProject) {
         sections = await getSections(currentProject.id);
       }

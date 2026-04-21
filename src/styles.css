@@ -1483,11 +1483,68 @@ body {
   color: var(--color-primary, #4a90d9);
 }
 
-/* SortableJS ghost */
-.sortable-ghost {
-  opacity: 0.3;
+/* SortableJS ghost — section */
+.section-item.sortable-ghost {
+  opacity: 0.5;
   background: var(--color-primary, #4a90d9) !important;
   border: 2px dashed var(--color-primary, #4a90d9);
+  padding: 8px 10px;
+}
+
+/* Hide docs when section is ghost */
+.section-item.sortable-ghost .docs-list {
+  display: none !important;
+}
+
+/* SortableJS ghost — document */
+.document-item.sortable-ghost {
+  opacity: 0.5;
+  background: var(--color-primary, #4a90d9) !important;
+  border: 2px dashed var(--color-primary, #4a90d9);
+  min-height: 20px;
+  padding: 0;
+  margin: 0;
+}
+
+.section-item.sortable-chosen {
+  background: var(--color-background-elevated, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.document-item.sortable-chosen {
+  background: var(--color-background-elevated, #fff);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+
+/* Drag handle — always visible, clickable */
+.drag-handle {
+  cursor: grab;
+  padding: 2px 6px;
+  color: var(--color-text-muted, #888);
+  font-size: 16px;
+  font-weight: bold;
+  user-select: none;
+  line-height: 1;
+  opacity: 1;
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  min-height: 28px;
+  border-radius: 3px;
+}
+
+.drag-handle:hover {
+  color: var(--color-primary, #4a90d9);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  color: var(--color-primary, #4a90d9);
 }
 
 .sortable-chosen {
