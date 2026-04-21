@@ -1483,6 +1483,59 @@ body {
   color: var(--color-primary, #4a90d9);
 }
 
+/* SortableJS ghost */
+.sortable-ghost {
+  opacity: 0.3;
+  background: var(--color-primary, #4a90d9) !important;
+  border: 2px dashed var(--color-primary, #4a90d9);
+}
+
+.sortable-chosen {
+  opacity: 0.8;
+  background: var(--color-background-elevated, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Drag handle */
+.drag-handle {
+  cursor: grab;
+  padding: 0 4px;
+  color: var(--color-text-muted, #888);
+  font-size: 16px;
+  font-weight: bold;
+  user-select: none;
+  line-height: 1;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.section-item:hover .drag-handle,
+.document-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--color-primary, #4a90d9);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* List containers for SortableJS */
+.sections-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.docs-list {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Azioni inline */
 .item-actions {
   display: flex;

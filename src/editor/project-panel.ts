@@ -29,6 +29,7 @@ import {
   extractEntitiesFromSection,
   extractEntitiesFromProject,
 } from "../ai-panel/entity-extraction";
+import Sortable from "sortablejs";
 
 // State
 let currentProject: Project | null = null;
@@ -1119,6 +1120,9 @@ function renderProjectsList(): void {
   container.appendChild(activeProjectEl);
 
   updateIndexIndicators();
+
+  // Init SortableJS after DOM is rendered
+  initSortable();
 }
 
 function createActiveProjectElement(project: Project): HTMLElement {
@@ -1175,13 +1179,17 @@ function createActiveProjectElement(project: Project): HTMLElement {
   header.appendChild(actionsEl);
   div.appendChild(header);
 
-  // Mostra sections indentate (piatte, non dentro box)
+  // Lista sezioni — target di SortableJS "sections"
+  const sectionsList = document.createElement("div");
+  sectionsList.className = "sections-list";
+
   if (sections.length > 0) {
     sections.forEach((section) => {
       const sectionEl = createSectionElement(section);
-      div.appendChild(sectionEl);
+      sectionsList.appendChild(sectionEl);
     });
   }
+  div.appendChild(sectionsList);
 
   return div;
 }
@@ -1258,11 +1266,13 @@ function createSectionElement(section: Section): HTMLElement {
   div.dataset.id = section.id;
   div.dataset.type = "section";
 
-  const dragHandle = createDragHandle("section");
-  setupDragEvents(div, dragHandle, "section", section);
-
   const header = document.createElement("div");
   header.className = "item-header";
+
+  const dragHandle = document.createElement("span");
+  dragHandle.className = "drag-handle";
+  dragHandle.textContent = "⋮";
+  dragHandle.title = "Drag to move";
 
   const isExpanded = expandedSections.has(section.id);
   const toggleBtn = document.createElement("button");
@@ -1340,16 +1350,20 @@ function createSectionElement(section: Section): HTMLElement {
   });
   div.appendChild(header);
 
-  // Mostra documents se la sezione e' espansa
+  // Lista documenti — target di SortableJS "documents"
+  const docsList = document.createElement("div");
+  docsList.className = "docs-list";
+
   const sectionDocs = documents
     .filter((doc) => doc.section_id === section.id)
     .sort((a, b) => a.order_index - b.order_index);
   if (isExpanded && sectionDocs.length > 0) {
     sectionDocs.forEach((doc) => {
       const docEl = createDocumentElement(doc);
-      div.appendChild(docEl);
+      docsList.appendChild(docEl);
     });
   }
+  div.appendChild(docsList);
 
   return div;
 }
@@ -1364,11 +1378,13 @@ function createDocumentElement(doc: Document): HTMLElement {
   div.dataset.type = "document";
   div.dataset.sectionId = doc.section_id;
 
-  const dragHandle = createDragHandle("document");
-  setupDragEvents(div, dragHandle, "document", doc);
-
   const header = document.createElement("div");
   header.className = "item-header";
+
+  const dragHandle = document.createElement("span");
+  dragHandle.className = "drag-handle";
+  dragHandle.textContent = "⋮";
+  dragHandle.title = "Drag to move";
 
   const nameEl = document.createElement("div");
   nameEl.className = "item-name";
@@ -1483,220 +1499,112 @@ function startInlineRename(
   });
 }
 
-// ============================================================================
 // DRAG & DROP
-// ============================================================================
+// SortableJS instances — recreated on each render
+let sectionSortable: Sortable | null = null;
+const docSortables: Map<string, Sortable> = new Map();
 
-interface DragData {
-  id: string;
-  type: "section" | "document";
-  sectionId?: string;
-}
+function initSortable(): void {
+  const projectEl = document.querySelector(".project-item.active") as HTMLElement;
+  if (!projectEl) return;
 
-let dragSourceWrapper: HTMLElement | null = null;
-let currentDragData: DragData | null = null;
+  // Section Sortable — riordina sezioni
+  if (sectionSortable) sectionSortable.destroy();
+  sectionSortable = new Sortable(projectEl, {
+    group: { name: "sections", pull: false, put: false },
+    animation: 150,
+    draggable: ".section-item",
+    handle: ".drag-handle",
+    ghostClass: "sortable-ghost",
+    chosenClass: "sortable-chosen",
+    onEnd: async (evt) => {
+      if (evt.oldIndex === evt.newIndex) return;
 
-function createDragHandle(type: "section" | "document"): HTMLElement {
-  const handle = document.createElement("span");
-  handle.className = "drag-handle";
-  handle.textContent = type === "section" ? "⋮" : "⋮";
-  handle.title = "Drag to move";
-  handle.draggable = true;
-  return handle;
-}
+      const items = Array.from(projectEl.querySelectorAll(".section-item")) as HTMLElement[];
+      const orders: [string, number][] = items.map((el, i) => [el.dataset.id!, i]);
+      await updateSectionsOrder(orders);
 
-function setupDragEvents(
-  wrapper: HTMLElement,
-  handle: HTMLElement,
-  type: "section" | "document",
-  data: Section | Document,
-): void {
-  handle.addEventListener("dragstart", (e) => {
-    dragSourceWrapper = wrapper;
-    wrapper.classList.add("dragging");
-
-    currentDragData = {
-      id: data.id,
-      type,
-      sectionId: "section_id" in data ? data.section_id : undefined,
-    };
-
-    e.dataTransfer?.setData("application/json", JSON.stringify(currentDragData));
-    e.dataTransfer!.effectAllowed = "move";
-
-    // Hide ugly ghost image by replacing with a 1x1 blank image
-    const img = new Image();
-    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-    e.dataTransfer?.setDragImage(img, 0, 0);
-  });
-
-  handle.addEventListener("dragend", () => {
-    dragSourceWrapper = null;
-    wrapper.classList.remove("dragging");
-    document.querySelectorAll(".drag-over").forEach((el) => {
-      el.classList.remove("drag-over");
-    });
-  });
-
-  wrapper.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    if (!currentDragData || dragSourceWrapper === wrapper) return;
-
-    const targetType = wrapper.dataset.type;
-
-    const isSameTypeSection = currentDragData.type === "section" && targetType === "section";
-    const isSameTypeDocument = currentDragData.type === "document" && targetType === "document";
-    const isDocToSection = currentDragData.type === "document" && targetType === "section";
-
-    if (isSameTypeSection || isSameTypeDocument || isDocToSection) {
-      e.dataTransfer!.dropEffect = "move";
-      wrapper.classList.add("drag-over");
-    }
-  });
-
-  wrapper.addEventListener("dragleave", () => {
-    wrapper.classList.remove("drag-over");
-  });
-
-  wrapper.addEventListener("drop", async (e) => {
-    e.preventDefault();
-    wrapper.classList.remove("drag-over");
-    if (!currentDragData || dragSourceWrapper === wrapper) return;
-
-    const targetId = wrapper.dataset.id!;
-    const targetType = wrapper.dataset.type!;
-
-    if (currentDragData.type === "section" && targetType === "section") {
-      await handleSectionReorder(currentDragData.id, targetId);
-    } else if (currentDragData.type === "document" && targetType === "document") {
-      await handleDocumentReorder(currentDragData.id, targetId, currentDragData.sectionId!);
-    } else if (currentDragData.type === "document" && targetType === "section") {
-      const section = sections.find((s) => s.id === targetId);
-      if (section) {
-        await handleDocumentDropOnSection(currentDragData.id, section);
+      // Rileggi sezioni
+      if (currentProject) {
+        sections = await getSections(currentProject.id);
       }
-    }
+    },
+  });
 
-    currentDragData = null;
+  // Document Sortables — una per ogni sezione
+  docSortables.forEach((s) => s.destroy());
+  docSortables.clear();
+
+  projectEl.querySelectorAll(".section-item").forEach((el) => {
+    const sectionEl = el as HTMLElement;
+    const sectionId = sectionEl.dataset.id!;
+    const docsList = sectionEl.querySelector(".docs-list") as HTMLElement;
+    if (!docsList) return;
+
+    const sortable = new Sortable(docsList, {
+      group: {
+        name: "documents",
+        pull: true,
+        put: ["documents"],
+      },
+      animation: 150,
+      draggable: ".document-item",
+      handle: ".drag-handle",
+      ghostClass: "sortable-ghost",
+      chosenClass: "sortable-chosen",
+      onEnd: async (evt) => {
+        const fromSection = evt.from.closest(".section-item") as HTMLElement;
+        const toSection = evt.to.closest(".section-item") as HTMLElement;
+        const docEl = evt.item as HTMLElement;
+        const docId = docEl.dataset.id!;
+
+        if (!fromSection || !toSection) return;
+
+        const fromSectionId = fromSection.dataset.id!;
+        const toSectionId = toSection.dataset.id!;
+
+        if (fromSectionId === toSectionId && evt.oldIndex === evt.newIndex) return;
+
+        // Ricompatta ordini nella sezione di destinazione
+        const targetDocs = Array.from(toSection.querySelectorAll(".document-item") as NodeListOf<HTMLElement>).map(
+          (el, i) => [el.dataset.id!, i] as [string, number]
+        );
+        await updateDocumentsOrder(targetDocs);
+
+        // Se cambiato sezione, ricompatta anche la vecchia
+        if (fromSectionId !== toSectionId) {
+          const oldDocs = Array.from(fromSection.querySelectorAll(".document-item") as NodeListOf<HTMLElement>).map(
+            (el, i) => [el.dataset.id!, i] as [string, number]
+          );
+          await updateDocumentsOrder(oldDocs);
+
+          // Aggiorna sezione del doc spostato
+          const movedDoc = documents.find((d) => d.id === docId);
+          if (movedDoc) {
+            movedDoc.section_id = toSectionId;
+            movedDoc.updated_at = Date.now();
+            await updateDocument(movedDoc);
+          }
+
+          // Espandi la sezione di destinazione
+          expandedSections.add(toSectionId);
+
+          // Ricarica documenti
+          if (currentSection) {
+            documents = await getDocuments(currentSection.id);
+          }
+        } else {
+          // Rileggi documenti dalla stessa sezione
+          documents = await getDocuments(toSectionId);
+        }
+
+        renderProjectsList();
+      },
+    });
+
+    docSortables.set(sectionId, sortable);
   });
 }
-
-async function handleSectionReorder(sourceId: string, targetId: string): Promise<void> {
-  if (sourceId === targetId) return;
-  const sourceIndex = sections.findIndex((s) => s.id === sourceId);
-  const targetIndex = sections.findIndex((s) => s.id === targetId);
-  if (sourceIndex === -1 || targetIndex === -1) return;
-
-  const [removed] = sections.splice(sourceIndex, 1);
-  sections.splice(targetIndex, 0, removed);
-
-  const orders: [string, number][] = sections.map((s, i) => [s.id, i]);
-  await updateSectionsOrder(orders);
-
-  renderProjectsList();
-}
-
-async function handleDocumentReorder(sourceId: string, targetId: string, sourceSectionId: string): Promise<void> {
-  if (sourceId === targetId) return;
-
-  const sourceDoc = documents.find((d) => d.id === sourceId);
-  const targetDoc = documents.find((d) => d.id === targetId);
-  if (!sourceDoc || !targetDoc) return;
-
-  if (sourceDoc.section_id === targetDoc.section_id) {
-    // Same section — reorder
-    const sectionDocs = documents.filter((d) => d.section_id === sourceDoc.section_id).sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    const sourceIndex = sectionDocs.findIndex((d) => d.id === sourceId);
-    const targetIndex = sectionDocs.findIndex((d) => d.id === targetId);
-    if (sourceIndex === -1 || targetIndex === -1) return;
-
-    const [removed] = sectionDocs.splice(sourceIndex, 1);
-    sectionDocs.splice(targetIndex, 0, removed);
-
-    const orders: [string, number][] = sectionDocs.map((d, i) => [d.id, i]);
-    await updateDocumentsOrder(orders);
-  } else {
-    // Different section — move
-    const targetSectionId = targetDoc.section_id;
-
-    // Update source doc section
-    sourceDoc.section_id = targetSectionId;
-    sourceDoc.order_index = 9999; // temporary, will be updated by batch
-    sourceDoc.updated_at = Date.now();
-    await updateDocument(sourceDoc);
-
-    // Reorder target section
-    const targetSectionDocs = documents.filter((d) => d.section_id === targetSectionId).sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    const targetIndex = targetSectionDocs.findIndex((d) => d.id === targetId);
-    if (targetIndex === -1) return;
-
-    const sourceInTargetIndex = targetSectionDocs.findIndex((d) => d.id === sourceId);
-    if (sourceInTargetIndex !== -1) {
-      targetSectionDocs.splice(sourceInTargetIndex, 1);
-    }
-    targetSectionDocs.splice(targetIndex, 0, sourceDoc);
-
-    const targetOrders: [string, number][] = targetSectionDocs.map((d, i) => [d.id, i]);
-    await updateDocumentsOrder(targetOrders);
-
-    // Reorder source section
-    const oldSectionDocs = documents.filter((d) => d.section_id === sourceSectionId && d.id !== sourceId).sort(
-      (a, b) => a.order_index - b.order_index
-    );
-    const oldOrders: [string, number][] = oldSectionDocs.map((d, i) => [d.id, i]);
-    await updateDocumentsOrder(oldOrders);
-  }
-
-  if (currentSection) {
-    await loadDocuments(currentSection.id);
-  }
-  renderProjectsList();
-}
-
-async function handleDocumentDropOnSection(sourceDocId: string, targetSection: Section): Promise<void> {
-  const sourceDoc = documents.find((d) => d.id === sourceDocId);
-  if (!sourceDoc) return;
-
-  const targetSectionId = targetSection.id;
-
-  if (sourceDoc.section_id === targetSectionId) return;
-
-  // Move document to target section (append to end)
-  sourceDoc.section_id = targetSectionId;
-  sourceDoc.order_index = 9999;
-  sourceDoc.updated_at = Date.now();
-  await updateDocument(sourceDoc);
-
-  // Reorder old section
-  const oldSectionDocs = documents.filter((d) => d.section_id === currentDragData?.sectionId && d.id !== sourceDoc.id).sort(
-    (a, b) => a.order_index - b.order_index
-  );
-  const oldOrders: [string, number][] = oldSectionDocs.map((d, i) => [d.id, i]);
-  await updateDocumentsOrder(oldOrders);
-
-  // Reorder target section
-  const targetSectionDocs = documents.filter((d) => d.section_id === targetSectionId).sort(
-    (a, b) => a.order_index - b.order_index
-  );
-  const targetOrders: [string, number][] = targetSectionDocs.map((d, i) => [d.id, i]);
-  await updateDocumentsOrder(targetOrders);
-
-  // Expand target section
-  expandedSections.add(targetSectionId);
-
-  if (currentSection) {
-    await loadDocuments(currentSection.id);
-  }
-  renderProjectsList();
-}
-
-// ============================================================================
-// SELECTION HANDLERS
-// ============================================================================
 
 function selectProject(project: Project): void {
   currentProject = project;
