@@ -91,11 +91,16 @@ async function getExistingEntities(projectId: string): Promise<ExistingEntity[]>
 function extractTextFromProseMirror(contentJson: string): string {
   try {
     const content = JSON.parse(contentJson);
+    console.log("[EntityExtraction] extractTextFromProseMirror - parsed type:", typeof content, "has .doc:", !!content.doc, "has .type:", !!content.type);
     // ProseMirror state.toJSON() returns {doc: {...}, selection: {...}}
     // We need the doc object, not the whole state
     const doc = content.doc || content;
-    return extractTextFromNode(doc);
-  } catch {
+    const text = extractTextFromNode(doc);
+    console.log("[EntityExtraction] extractTextFromProseMirror - output text length:", text.length);
+    return text;
+  } catch (err: any) {
+    console.error("[EntityExtraction] extractTextFromProseMirror - parse/extract failed:", err);
+    console.log("[EntityExtraction] extractTextFromProseMirror - returning raw contentJson (length:", contentJson.length, ")");
     return contentJson;
   }
 }
@@ -229,73 +234,107 @@ export async function extractEntitiesFromDocument(
   projectType: string,
   onProgress?: (message: string) => void,
 ): Promise<{ created: number; updated: number }> {
+  console.log("[DEBUG-EXTRACTION] ====== START extractEntitiesFromDocument ======", { documentId, projectId, projectType });
   try {
-    await deleteLinksBySource("document", documentId);
-  } catch (err) {
-    console.warn("[EntityExtraction] Failed to delete old links (may be first extraction):", err);
-  }
-
-  const doc = await invoke("db_get_document", { id: documentId }) as {
-    id: string;
-    content_json: string;
-    title: string;
-  } | null;
-
-  if (!doc || !doc.content_json) {
-    onProgress?.(`Skipping empty document: ${doc?.title || documentId}`);
-    return { created: 0, updated: 0 };
-  }
-
-  const text = extractTextFromProseMirror(doc.content_json);
-  if (!text.trim()) {
-    onProgress?.(`Skipping document with no text: ${doc.title}`);
-    return { created: 0, updated: 0 };
-  }
-
-  const existingEntities = await getExistingEntities(projectId);
-
-  const chunkSize = getChunkTokenSetting();
-  const chunks = splitIntoExtractionChunks(text, chunkSize);
-
-  let created = 0;
-  let updated = 0;
-
-  for (let i = 0; i < chunks.length; i++) {
-    onProgress?.(`Indexing "${doc.title}" — chunk ${i + 1}/${chunks.length}...`);
-
-    const prompt = buildExtractionPrompt(chunks[i], existingEntities, projectType);
-    const context: AIContext = { projectId };
-    const response = await sendToAI(prompt, context);
-
-    if (response.error || !response.content) {
-      onProgress?.(`Error on chunk ${i + 1}: ${response.error || "empty response"}`);
-      continue;
+    try {
+      await deleteLinksBySource("document", documentId);
+      console.log("[DEBUG-EXTRACTION] deleted old links for document", documentId);
+    } catch (err) {
+      console.warn("[DEBUG-EXTRACTION] Failed to delete old links (may be first extraction):", err);
     }
 
-    const extracted = parseExtractionResponse(response.content);
+    const doc = await invoke("db_get_document", { id: documentId }) as {
+      id: string;
+      content_json: string;
+      title: string;
+    } | null;
 
-    for (const entity of extracted) {
-      const { result, entityId } = await upsertEntity(projectId, entity, existingEntities);
+    console.log("[DEBUG-EXTRACTION] db_get_document result:", doc ? { id: doc.id, title: doc.title, content_len: doc.content_json?.length } : null);
 
-      await createLink({
-        id: generateId(),
-        source_type: "document",
-        source_id: documentId,
-        target_type: "entity",
-        target_id: entityId,
-        link_type: "extracted_from",
-        context_json: undefined,
-        created_at: Date.now(),
-      }).catch((err) => {
-        console.warn("[EntityExtraction] Failed to create document-entity link:", err);
-      });
-
-      if (result === "created") created++;
-      else updated++;
+    if (!doc || !doc.content_json) {
+      console.log("[DEBUG-EXTRACTION] No document or no content_json");
+      onProgress?.(`Skipping empty document: ${doc?.title || documentId}`);
+      return { created: 0, updated: 0 };
     }
-  }
 
-  return { created, updated };
+    const text = extractTextFromProseMirror(doc.content_json);
+    console.log(`[DEBUG-EXTRACTION] Document "${doc.title}" — extracted text length:`, text.length);
+    console.log("[DEBUG-EXTRACTION] First 200 chars of extracted text:", text.substring(0, 200));
+
+    if (!text.trim()) {
+      console.warn("[DEBUG-EXTRACTION] Document has no text after extraction:", doc.title);
+      onProgress?.(`Skipping document with no text: ${doc.title}`);
+      return { created: 0, updated: 0 };
+    }
+
+    const existingEntities = await getExistingEntities(projectId);
+    console.log("[DEBUG-EXTRACTION] Existing entities count:", existingEntities.length);
+
+    const chunkSize = getChunkTokenSetting();
+    const chunks = splitIntoExtractionChunks(text, chunkSize);
+    console.log("[DEBUG-EXTRACTION] Number of chunks:", chunks.length, "chunkSize:", chunkSize);
+
+    let created = 0;
+    let updated = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      onProgress?.(`Indexing "${doc.title}" — chunk ${i + 1}/${chunks.length}...`);
+      console.log(`[DEBUG-EXTRACTION] Chunk ${i + 1}/${chunks.length} — length ${chunks[i].length}`);
+
+      const prompt = buildExtractionPrompt(chunks[i], existingEntities, projectType);
+      console.log("[DEBUG-EXTRACTION] Prompt length:", prompt.length);
+
+      const context: AIContext = { projectId };
+      console.log("[DEBUG-EXTRACTION] Calling sendToAI with projectId:", projectId);
+      const response = await sendToAI(prompt, context);
+      console.log("[DEBUG-EXTRACTION] sendToAI response:", { error: response.error, content_length: response.content?.length, content_preview: response.content?.substring(0, 300) });
+
+      if (response.error || !response.content) {
+        console.error(`[DEBUG-EXTRACTION] AI error on chunk ${i + 1}:`, response.error || "empty response");
+        onProgress?.(`Error on chunk ${i + 1}: ${response.error || "empty response"}`);
+        continue;
+      }
+
+      const extracted = parseExtractionResponse(response.content);
+      console.log(`[DEBUG-EXTRACTION] Chunk ${i + 1} parsed entities count:`, extracted.length);
+      if (extracted.length > 0) {
+        console.log("[DEBUG-EXTRACTION] First entity:", extracted[0]);
+      }
+
+      for (const entity of extracted) {
+        console.log("[DEBUG-EXTRACTION] Upserting entity:", entity.name, "of type", entity.type);
+        const { result, entityId } = await upsertEntity(projectId, entity, existingEntities);
+        console.log("[DEBUG-EXTRACTION] Upsert result:", result, "entityId:", entityId);
+
+        console.log("[DEBUG-EXTRACTION] Creating document-entity link:", { documentId, entityId });
+        try {
+          await createLink({
+            id: generateId(),
+            source_type: "document",
+            source_id: documentId,
+            target_type: "entity",
+            target_id: entityId,
+            link_type: "extracted_from",
+            context_json: undefined,
+            created_at: Date.now(),
+          });
+          console.log("[DEBUG-EXTRACTION] Link created successfully");
+        } catch (err) {
+          console.error("[DEBUG-EXTRACTION] Failed to create link:", err);
+        }
+
+        if (result === "created") created++;
+        else updated++;
+      }
+    }
+
+    console.log(`[DEBUG-EXTRACTION] ====== FINISHED created:${created}, updated:${updated} ======`);
+    return { created, updated };
+  } catch (err: any) {
+    console.error("[DEBUG-EXTRACTION] Catastrophic error:", err);
+    onProgress?.(`Fatal error: ${err?.message || String(err)}`);
+    return { created: 0, updated: 0 };
+  }
 }
 
 export async function extractEntitiesFromSection(

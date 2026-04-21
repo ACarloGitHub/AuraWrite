@@ -84,6 +84,32 @@ export async function sendToAI(
     initAI();
   }
 
+  // Check if the current provider requires an API key
+  const settings = loadAIFromPreferences();
+  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter"];
+  if (providersRequiringKey.includes(settings.aiProvider) && !settings.aiApiKey.trim()) {
+    const msg =
+      `Missing API key for ${settings.aiProvider}. Please add your API key in Preferences > AI Provider.`;
+    console.error("[AI]", msg);
+    return {
+      content: "",
+      done: false,
+      error: msg,
+    };
+  }
+
+  // Also warn if no model is set
+  if (!settings.aiModel.trim()) {
+    const msg =
+      `No AI model selected for ${settings.aiProvider}. Please add a model name in Preferences > AI Provider.`;
+    console.error("[AI]", msg);
+    return {
+      content: "",
+      done: false,
+      error: msg,
+    };
+  }
+
   try {
     const response = await currentProvider!.stream(prompt, context);
     return response;

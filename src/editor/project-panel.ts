@@ -868,7 +868,7 @@ async function handleIndexDocument(doc: Document): Promise<void> {
   isIndexing = true;
 
   try {
-    console.log("[IndexDocument] Starting for:", doc.title);
+    console.log("[DEBUG-HANDLER] Starting handleIndexDocument for:", doc.title, "project:", currentProject.id, "type:", currentProject.type);
     showNotification("🗂 Indexing entities...", "indexing");
     const result = await extractEntitiesFromDocument(
       doc.id,
@@ -876,10 +876,10 @@ async function handleIndexDocument(doc: Document): Promise<void> {
       currentProject.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
-    console.log("[IndexDocument] Result:", result);
+    console.log("[DEBUG-HANDLER] Result from extractEntitiesFromDocument:", result);
     showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
-    console.error("[IndexDocument] Error:", error);
+    console.error("[DEBUG-HANDLER] Error in handleIndexDocument:", error);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
