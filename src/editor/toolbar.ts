@@ -493,14 +493,24 @@ function setupFormattingButtons(): void {
 
   btnBlockquote?.addEventListener("click", () => {
     const { state } = editorView;
-    const nodeType = state.schema.nodes.blockquote;
-    if (!nodeType) return;
-    const cmd = wrapIn(nodeType);
-    const didApply = cmd(state, editorView.dispatch);
-    if (!didApply) {
-      lift(editorView.state, editorView.dispatch);
+    const blockquoteType = state.schema.nodes.blockquote;
+    if (!blockquoteType) return;
+
+    const { $from } = state.selection;
+    for (let d = $from.depth; d > 0; d--) {
+      if ($from.node(d).type === blockquoteType) {
+        lift(state, (tr: Transaction) => {
+          editorView.dispatch(tr);
+          editorView.focus();
+        });
+        return;
+      }
     }
-    editorView.focus();
+
+    wrapIn(blockquoteType)(state, (tr: Transaction) => {
+      editorView.dispatch(tr);
+      editorView.focus();
+    });
   });
 
   btnCodeBlock?.addEventListener("click", () => {

@@ -126,20 +126,43 @@ function selectActiveResult(view: EditorView): void {
 export function replaceOne(view: EditorView, replacement: string): void {
   if (findState.results.length === 0 || findState.activeIndex < 0) return;
   const r = findState.results[findState.activeIndex];
+  const replacedFrom = r.from;
+  const replacedLen = r.to - r.from;
+  const newLen = replacement.length;
+  const diff = newLen - replacedLen;
+
   const tr = view.state.tr.replaceWith(r.from, r.to, view.state.schema.text(replacement));
   view.dispatch(tr);
-  const input = document.getElementById("find-input") as HTMLInputElement;
-  if (input) setFindQuery(input.value, view);
+
+  findState.results = searchInDoc(view.state.doc, findState.query, findState.caseSensitive);
+  
+  if (findState.results.length === 0) {
+    findState.activeIndex = -1;
+  } else {
+    let nextIndex = -1;
+    for (let i = 0; i < findState.results.length; i++) {
+      const res = findState.results[i];
+      if (res.from >= replacedFrom + newLen) {
+        nextIndex = i;
+        break;
+      }
+    }
+    if (nextIndex === -1) nextIndex = 0;
+    findState.activeIndex = nextIndex;
+    selectActiveResult(view);
+  }
+  triggerUpdate(view);
+  updateFindCount();
 }
 
 export function replaceAll(view: EditorView, replacement: string): void {
   if (findState.results.length === 0) return;
+  let tr = view.state.tr;
   const results = [...findState.results].sort((a, b) => b.from - a.from);
   for (const r of results) {
-    view.dispatch(
-      view.state.tr.replaceWith(r.from, r.to, view.state.schema.text(replacement)),
-    );
+    tr = tr.replaceWith(r.from, r.to, view.state.schema.text(replacement));
   }
+  view.dispatch(tr);
   findState.query = "";
   findState.results = [];
   findState.activeIndex = -1;
