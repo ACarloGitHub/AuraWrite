@@ -1,6 +1,6 @@
 # AuraWrite — Stato Attuale
 
-**Ultimo aggiornamento:** 2026-04-21
+**Ultimo aggiornamento:** 2026-04-22
 
 ---
 
@@ -8,10 +8,22 @@
 
 ### Core Editor
 - Editor ProseMirror funzionante
-- File operations: Save, Save As, Open, Export (JSON, MD, TXT, HTML, DOCX)
+- File operations: Save, Save As, Open, Export — in File dropdown menu
+- File dropdown: Save, Save As, Open, Export + Save Project, Index Document, Index & Create Entities
+- Toolbar formatting: Bold, Italic, Underline, Strikethrough (toggle mode via storedMarks)
+- Heading dropdown (H1/H2/H3/Normal)
+- Lists: Bullet, Ordered (splitListItem per continuare elenco)
+- Blockquote toggle (wrapIn/lift)
+- Code Block toggle (setBlockType/paragraph)
+- Alignment (left/center/right/justify) — funziona su selezioni multiple
+- Font family, font size, text color, highlight toggle + color picker
+- Text color: nero non parsato come mark (gestito dal tema CSS)
+- Line height (1.0, 1.15, 1.5, 2.0)
+- Find (Ctrl+F) and Find & Replace (Ctrl+H) con decorations e navigazione
 - Title bar con nome documento e dirty indicator
 - Theme toggle (light/dark/custom)
 - Preferences modal trascinabile con hint descrittivi
+- Toolbar overflow menu (⋯) per finestre compresse
 
 ### Database SQLite — Phase A + B
 - Backend Rust CRUD completo (projects, sections, documents, entities, entity_types, versions)
@@ -70,6 +82,18 @@
 
 ## Bug Aperti
 - [ ] Discard lento (dipende dal modello AI)
+
+## Bug Risolti (Sessione 8)
+- [x] Toolbar buttons non funzionavano — setupToolbar() non veniva chiamata in main.ts
+- [x] Bold/Italic/Underline/Strikethrough non funzionavano in modalità toggle (storedMarks)
+- [x] Blockquote aggiungeva sempre blocco senza toglierlo — fix: toggle con lift/wrapIn
+- [x] Code block non aveva "off" — fix: rileva nodo corrente, converte in paragrafo
+- [x] Allineamento non funzionava su testo ampio — fix: nodesBetween per applicare a tutti i paragrafi nella selezione
+- [x] Liste numerate non continuavano con Enter — fix: splitListItem nel keymap
+- [x] File dropdown non visibile — fix: overflow:hidden rimosso, z-index corretto
+- [x] TextColor mark nero forzato in tema dark — fix: nero/rgb(0,0,0)/black non parsati come mark
+- [x] Highlight non aveva toggle — fix: pulsante 🖎 per on/off + color picker separato
+- [x] Replace "ecco" in "cecco" poi rimpiazzava sottostringa — fix: skip past replaced region
 - [x] Dropdown select sfondo chiaro in dark mode (GTK/Linux) — CSS fix in styles.css
 - [x] ESLint config: aggiunto CustomEvent, setTimeout/clearTimeout, HTMLButtonElement/AnchorElement in globals
 
@@ -137,4 +161,4 @@ src-tauri/
 
 ---
 
-*Aggiornato 2026-04-20*
+*Aggiornato 2026-04-22*

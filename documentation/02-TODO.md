@@ -1,10 +1,25 @@
 # AuraWrite — TODO List
 
-**Ultimo aggiornamento:** 2026-04-21
+**Ultimo aggiornamento:** 2026-04-22
 
 ---
 
-## Sessione 2026-04-21 — Drag & Drop
+## Sessione 2026-04-22 — Toolbar Fix & Find/Replace
+
+1. **Bug critico: setupToolbar() mai chiamata** — importata in main.ts ma mai invocata. Fix: aggiunta chiamata.
+2. **Toggle marks** — Bold/Italic/Underline/Strikethrough usano ora storedMarks per modalità toggle (click poi scrivi)
+3. **Blockquote toggle** — controlla se cursore dentro blockquote, poi lift o wrapIn
+4. **Code block toggle** — rileva nodo corrente, converte in paragrafo se già code_block
+5. **Allineamento su selezione multipla** — nodesBetween applica align a tutti i paragrafi/heading nella selezione
+6. **Liste numerate** — splitListItem/liftListItem/sinkListItem aggiunti al keymap ProseMirror
+7. **File dropdown** — Save/SaveAs/Open/Export + Save Project/Index/Index&CreateEntities in menu a tendina
+8. **Toolbar overflow** — menu ⋯ per gruppi che non ci stanno
+9. **Find/Replace** — Ctrl+F, Ctrl+H, decorations, navigazione risultati, replace one/all
+10. **TextColor mark** — nero/rgb(0,0,0)/black non parsati come mark (gestito dal tema CSS)
+11. **Highlight toggle** — pulsante 🖎 per on/off + color picker separato
+12. **Replace word boundary** — dopo replaceOne salta oltre la regione sostituita per evitare sottostringhe
+
+---
 
 1. **Aggiunto `order_index` ai documenti** — tabella DB aggiornata, struct Rust, CRUD e query `ORDER BY order_index`
 2. **SortableJS per DnD** — libreria installata, nativa DnD API rimossa
