@@ -492,23 +492,31 @@ function setupFormattingButtons(): void {
   btnStrikethrough?.addEventListener("click", () => toggleMarkWithStored("strikethrough"));
 
   btnBlockquote?.addEventListener("click", () => {
-    const nodeType = editorView.state.schema.nodes.blockquote;
-    if (nodeType) {
-      const cmd = wrapIn(nodeType);
-      const didApply = cmd(editorView.state, editorView.dispatch);
-      if (!didApply) {
-        lift(editorView.state, editorView.dispatch);
-      }
-      editorView.focus();
+    const { state } = editorView;
+    const nodeType = state.schema.nodes.blockquote;
+    if (!nodeType) return;
+    const cmd = wrapIn(nodeType);
+    const didApply = cmd(state, editorView.dispatch);
+    if (!didApply) {
+      lift(editorView.state, editorView.dispatch);
     }
+    editorView.focus();
   });
 
   btnCodeBlock?.addEventListener("click", () => {
-    const nodeType = editorView.state.schema.nodes.code_block;
-    if (nodeType) {
-      setBlockType(nodeType)(editorView.state, editorView.dispatch);
-      editorView.focus();
+    const { state } = editorView;
+    const codeBlockType = state.schema.nodes.code_block;
+    const paragraphType = state.schema.nodes.paragraph;
+    if (!codeBlockType || !paragraphType) return;
+
+    const { $from } = state.selection;
+    const node = $from.parent;
+    if (node.type === codeBlockType) {
+      setBlockType(paragraphType)(state, editorView.dispatch);
+    } else {
+      setBlockType(codeBlockType)(state, editorView.dispatch);
     }
+    editorView.focus();
   });
 
   btnPageBreak?.addEventListener("click", () => {
@@ -592,20 +600,34 @@ function setupAlignmentControls(): void {
 
 function setAlignment(align: "left" | "center" | "right" | "justify"): void {
   const { state } = editorView;
-  const { $from } = state.selection;
-  const depth = $from.depth;
+  const tr = state.tr;
+  const { from, to } = state.selection;
 
-  if (depth === 0) return;
-
-  const node = $from.node(depth);
-  const pos = $from.before(depth);
-
-  const tr = state.tr.setNodeMarkup(pos, undefined, {
-    ...(node.attrs || {}),
-    align,
+  let applied = false;
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name === "paragraph" || node.type.name === "heading") {
+      tr.setNodeMarkup(pos, undefined, { ...(node.attrs || {}), align });
+      applied = true;
+    }
   });
-  editorView.dispatch(tr);
-  editorView.focus();
+
+  if (!applied) {
+    const { $from } = state.selection;
+    for (let d = $from.depth; d > 0; d--) {
+      const node = $from.node(d);
+      if (node.type.name === "paragraph" || node.type.name === "heading") {
+        const pos = $from.before(d);
+        tr.setNodeMarkup(pos, undefined, { ...(node.attrs || {}), align });
+        applied = true;
+        break;
+      }
+    }
+  }
+
+  if (applied) {
+    editorView.dispatch(tr);
+    editorView.focus();
+  }
 }
 
 // ============================================================================
@@ -616,13 +638,14 @@ function setupStyleControls(): void {
   const selFont = document.getElementById("sel-font-family") as HTMLSelectElement | null;
   const selSize = document.getElementById("sel-font-size") as HTMLSelectElement | null;
   const btnTextColor = document.getElementById("btn-text-color") as HTMLInputElement | null;
-  const btnHighlight = document.getElementById("btn-highlight") as HTMLInputElement | null;
+  const btnHighlightToggle = document.getElementById("btn-highlight-toggle");
+  const btnHighlightColor = document.getElementById("btn-highlight") as HTMLInputElement | null;
   const selLineHeight = document.getElementById("sel-line-height") as HTMLSelectElement | null;
 
   selFont?.addEventListener("change", () => {
     const font = selFont.value;
     if (!font) return;
-    applyTextMark("fontFamily", { font });
+    applyTextMarkOrStored("fontFamily", { font });
     selFont.blur();
     editorView.focus();
   });
@@ -630,7 +653,7 @@ function setupStyleControls(): void {
   selSize?.addEventListener("change", () => {
     const size = selSize.value;
     if (!size) return;
-    applyTextMark("fontSize", { size });
+    applyTextMarkOrStored("fontSize", { size });
     selSize.blur();
     editorView.focus();
   });
@@ -638,20 +661,52 @@ function setupStyleControls(): void {
   btnTextColor?.addEventListener("input", () => {
     const color = btnTextColor.value;
     if (!color) return;
-    applyTextMark("textColor", { color });
+    applyTextMarkOrStored("textColor", { color });
   });
 
   btnTextColor?.addEventListener("change", () => {
     editorView.focus();
   });
 
-  btnHighlight?.addEventListener("input", () => {
-    const color = btnHighlight.value;
-    if (!color) return;
-    applyTextMark("highlight", { color });
+  btnHighlightToggle?.addEventListener("click", () => {
+    const { state } = editorView;
+    const markType = state.schema.marks.highlight;
+    if (!markType) return;
+    const color = btnHighlightColor?.value || "#ffff00";
+    const { from, to } = state.selection;
+
+    if (from === to) {
+      const activeMarks = state.storedMarks || [];
+      const hasHighlight = activeMarks.some((m) => m.type === markType);
+      if (hasHighlight) {
+        editorView.dispatch(state.tr.setStoredMarks(activeMarks.filter((m) => m.type !== markType)));
+      } else {
+        editorView.dispatch(state.tr.addStoredMark(markType.create({ color })));
+      }
+    } else {
+      const hasHighlight = state.doc.rangeHasMark(from, to, markType);
+      if (hasHighlight) {
+        editorView.dispatch(state.tr.removeMark(from, to, markType));
+      } else {
+        editorView.dispatch(state.tr.addMark(from, to, markType.create({ color })));
+      }
+    }
+    editorView.focus();
   });
 
-  btnHighlight?.addEventListener("change", () => {
+  btnHighlightColor?.addEventListener("input", () => {
+    const color = btnHighlightColor.value;
+    if (!color) return;
+    const { state } = editorView;
+    const { from, to } = state.selection;
+    const markType = state.schema.marks.highlight;
+    if (!markType) return;
+    if (from === to) return;
+    const tr = state.tr.addMark(from, to, markType.create({ color }));
+    editorView.dispatch(tr);
+  });
+
+  btnHighlightColor?.addEventListener("change", () => {
     editorView.focus();
   });
 
@@ -664,6 +719,28 @@ function setupStyleControls(): void {
   });
 }
 
+function applyTextMarkOrStored(markName: string, attrs: Record<string, string>): void {
+  const { state } = editorView;
+  const markType = state.schema.marks[markName];
+  if (!markType) return;
+
+  const { from, to } = state.selection;
+  if (from === to) {
+    const activeMarks = state.storedMarks || [];
+    const existing = activeMarks.find((m) => m.type === markType);
+    if (existing) {
+      const updated = activeMarks.filter((m) => m.type !== markType);
+      updated.push(markType.create(attrs));
+      editorView.dispatch(state.tr.setStoredMarks(updated));
+    } else {
+      editorView.dispatch(state.tr.addStoredMark(markType.create(attrs)));
+    }
+  } else {
+    const tr = state.tr.addMark(from, to, markType.create(attrs));
+    editorView.dispatch(tr);
+  }
+}
+
 function applyTextMark(markName: string, attrs: Record<string, string>): void {
   const { state } = editorView;
   const markType = state.schema.marks[markName];
@@ -672,8 +749,7 @@ function applyTextMark(markName: string, attrs: Record<string, string>): void {
   const { from, to } = state.selection;
   if (from === to) return;
 
-  const tr = state.tr;
-  tr.addMark(from, to, markType.create(attrs));
+  const tr = state.tr.addMark(from, to, markType.create(attrs));
   editorView.dispatch(tr);
 }
 

@@ -145,6 +145,7 @@ body {
 .toolbar-dropdown {
   position: relative;
   flex-shrink: 0;
+  z-index: 10;
 }
 
 .dropdown-menu {
@@ -156,7 +157,7 @@ body {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  z-index: 10000;
   padding: var(--spacing-xs) 0;
 }
 
@@ -202,21 +203,22 @@ body {
 }
 
 .toolbar button {
-  padding: 2px 4px;
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: transparent;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
   color: var(--color-text);
   transition:
     background 0.15s,
+    border-color 0.15s,
     color 0.3s;
 }
 
 .toolbar button:hover {
   background: var(--color-background);
-  border-radius: 4px;
+  border-color: var(--color-primary);
 }
 
 .toolbar-separator {
@@ -234,33 +236,34 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   background: transparent;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 16px;
   color: var(--color-text-buttons);
   transition:
     background 0.15s,
+    border-color 0.15s,
     color 0.3s;
   flex-shrink: 0;
 }
 
 .toolbar__btn-icon-only:hover {
   background: var(--color-background);
-  border-radius: 4px;
+  border-color: var(--color-primary);
 }
 
 .toolbar__btn {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 4px;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: transparent;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -275,15 +278,15 @@ body {
 
 .toolbar__btn:hover {
   background: var(--color-background);
-  border-radius: 4px;
+  border-color: var(--color-primary);
 }
 
 .toolbar__btn-icon {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .toolbar__btn-text {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .toolbar-display-icon .toolbar__btn-text {
@@ -292,6 +295,70 @@ body {
 
 .toolbar-display-text .toolbar__btn-icon {
   display: none;
+}
+
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 4px var(--spacing-md);
+  background: var(--color-toolbar);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.find-bar.hidden {
+  display: none;
+}
+
+.find-bar__input {
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-size: 13px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  width: 160px;
+}
+
+.find-bar__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.find-bar__replace {
+  width: 140px;
+}
+
+.find-bar__count {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.find-bar__btn {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.find-bar__btn:hover {
+  background: var(--color-background);
+}
+
+.ProseMirror .find-highlight {
+  background: rgba(255, 200, 0, 0.4);
+}
+
+.ProseMirror .find-highlight-active {
+  background: rgba(255, 150, 0, 0.7);
 }
 
 .editor-container {
@@ -2022,23 +2089,23 @@ body {
   -moz-appearance: none;
   background-color: var(--color-toolbar);
   color: var(--color-text-buttons);
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  padding: 2px 22px 2px 4px;
-  font-size: 12px;
+  padding: var(--spacing-xs) 28px var(--spacing-xs) var(--spacing-sm);
+  font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: border-color 0.15s, background-color 0.15s;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23999' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 4px center;
+  background-position: right 8px center;
   background-size: 10px 6px;
-  height: 26px;
-  min-width: 50px;
+  height: 30px;
+  min-width: 60px;
   flex-shrink: 0;
 }
 
 .toolbar select.toolbar__select:hover {
-  background-color: var(--color-background);
+  border-color: var(--color-primary);
 }
 
 .toolbar select.toolbar__select:focus {

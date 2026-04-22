@@ -5,6 +5,14 @@ import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, triggerSaveStatusCheck } from "./editor/project-panel";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  setFindQuery,
+  findNext,
+  findPrev,
+  replaceOne,
+  replaceAll,
+  clearFind,
+} from "./editor/find-replace";
 import "./styles.css";
 
 const THEME_KEY = "aurawrite-theme";
@@ -602,6 +610,66 @@ document.addEventListener("DOMContentLoaded", () => {
   setupSuggestionsPanel(editorView);
   setupToolbar(editorView);
 
+  const findBar = document.getElementById("find-bar");
+  const findInput = document.getElementById("find-input") as HTMLInputElement | null;
+  const replaceInput = document.getElementById("replace-input") as HTMLInputElement | null;
+  const findCountEl = document.getElementById("find-count");
+
+  function openFindBar(replaceVisible = false): void {
+    findBar?.classList.remove("hidden");
+    if (!replaceVisible) {
+      document.querySelector(".find-bar__replace")?.classList.add("hidden");
+      document.getElementById("replace-one")?.classList.add("hidden");
+      document.getElementById("replace-all")?.classList.add("hidden");
+    } else {
+      document.querySelector(".find-bar__replace")?.classList.remove("hidden");
+      document.getElementById("replace-one")?.classList.remove("hidden");
+      document.getElementById("replace-all")?.classList.remove("hidden");
+    }
+    findInput?.focus();
+    findInput?.select();
+  }
+
+  function closeFindBar(): void {
+    findBar?.classList.add("hidden");
+    clearFind(editorView);
+  }
+
+  const btnFind = document.getElementById("btn-find");
+  btnFind?.addEventListener("click", () => openFindBar(false));
+
+  const btnFindReplace = document.getElementById("btn-find-replace");
+  btnFindReplace?.addEventListener("click", () => openFindBar(true));
+
+  document.getElementById("find-close")?.addEventListener("click", closeFindBar);
+
+  findInput?.addEventListener("input", () => {
+    setFindQuery(findInput.value, editorView);
+  });
+
+  findInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        findPrev(editorView);
+      } else {
+        findNext(editorView);
+      }
+    }
+    if (e.key === "Escape") {
+      closeFindBar();
+    }
+  });
+
+  document.getElementById("find-next")?.addEventListener("click", () => findNext(editorView));
+  document.getElementById("find-prev")?.addEventListener("click", () => findPrev(editorView));
+  document.getElementById("replace-one")?.addEventListener("click", () => {
+    if (replaceInput) replaceOne(editorView, replaceInput.value);
+  });
+  document.getElementById("replace-all")?.addEventListener("click", () => {
+    if (replaceInput) replaceAll(editorView, replaceInput.value);
+  });
+
   const btnTheme = document.getElementById("btn-theme");
   btnTheme?.addEventListener("click", toggleTheme);
 
@@ -683,6 +751,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+      e.preventDefault();
+      openFindBar(false);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "h") {
+      e.preventDefault();
+      openFindBar(true);
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "=") {
       e.preventDefault();

@@ -12,11 +12,13 @@ import { schema as basicSchema } from "prosemirror-schema-basic";
 import { history, undo, redo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
+import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
 import { createPageBreakPlugin } from "./page-break-plugin";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
+import { findReplacePlugin } from "./find-replace";
 
 // ============================================================================
 // Custom Schema — Extended for full rich text editing
@@ -206,20 +208,37 @@ const strikethroughMark: MarkSpec = {
 
 const textColorMark: MarkSpec = {
   attrs: {
-    color: { default: "#000000" },
+    color: { default: "" },
   },
   parseDOM: [
     {
       style: "color",
       getAttrs: (value) => {
+        if (!value) return false;
+        const normalized = normalizeColor(value);
+        if (normalized === "#000000" || normalized === "rgb(0,0,0)" || normalized === "black") return false;
         return { color: value as string };
       },
     },
   ],
   toDOM(node) {
+    if (!node.attrs.color) return ["span", {}, 0];
     return ["span", { style: `color: ${node.attrs.color}` }, 0];
   },
 };
+
+function normalizeColor(value: string): string {
+  const v = value.toLowerCase().trim();
+  if (v === "black") return "#000000";
+  const match = v.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (match) {
+    const r = parseInt(match[1], 10);
+    const g = parseInt(match[2], 10);
+    const b = parseInt(match[3], 10);
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+  }
+  return v;
+}
 
 const highlightMark: MarkSpec = {
   attrs: {
@@ -359,6 +378,11 @@ export function createEditor(element: HTMLElement): EditorViewType {
     plugins: [
       history(),
       keymap({ "Mod-z": undo, "Mod-y": redo, "Mod-Shift-z": redo }),
+      keymap({
+        Enter: splitListItem(editorSchema.nodes.list_item),
+        "Mod-]": sinkListItem(editorSchema.nodes.list_item),
+        "Mod-[": liftListItem(editorSchema.nodes.list_item),
+      }),
       keymap(baseKeymap),
       wordCountPlugin,
       selectionHighlightPlugin,
@@ -366,6 +390,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       pageBreakPlugin,
       autoPageBreakPlugin,
       suggestionsMarkerPlugin,
+      findReplacePlugin,
     ],
   });
 

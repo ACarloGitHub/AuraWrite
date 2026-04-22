@@ -73,6 +73,9 @@
             <option value="48px">48</option>
           </select>
           <input type="color" id="btn-text-color" class="toolbar__color" title="Text Color" value="#000000" />
+          <button id="btn-highlight-toggle" class="toolbar__btn" title="Toggle Highlight">
+            <span class="toolbar__btn-icon">🖍</span>
+          </button>
           <input type="color" id="btn-highlight" class="toolbar__color" title="Highlight Color" value="#ffff00" />
         </div>
 
@@ -163,10 +166,22 @@
 
         <!-- MISC GROUP -->
         <div class="toolbar-group">
+          <button id="btn-find" class="toolbar__btn-icon-only" title="Find (Ctrl+F)">🔍</button>
+          <button id="btn-find-replace" class="toolbar__btn-icon-only" title="Find &amp; Replace (Ctrl+H)">🔀</button>
           <button id="btn-preferences" class="toolbar__btn-icon-only" title="Preferences">⚙️</button>
           <button id="btn-theme" class="toolbar__btn-icon-only" title="Toggle Theme">🌙</button>
         </div>
       </header>
+      <div id="find-bar" class="find-bar hidden">
+        <input type="text" id="find-input" class="find-bar__input" placeholder="Find..." />
+        <span id="find-count" class="find-bar__count"></span>
+        <button id="find-prev" class="find-bar__btn" title="Previous (Shift+Enter)">▲</button>
+        <button id="find-next" class="find-bar__btn" title="Next (Enter)">▼</button>
+        <input type="text" id="replace-input" class="find-bar__input find-bar__replace" placeholder="Replace..." />
+        <button id="replace-one" class="find-bar__btn" title="Replace">Replace</button>
+        <button id="replace-all" class="find-bar__btn" title="Replace All">All</button>
+        <button id="find-close" class="find-bar__btn" title="Close (Escape)">✕</button>
+      </div>
       <main class="editor-container">
         <aside id="project-panel" class="project-panel">
           <div class="project-panel__header">
