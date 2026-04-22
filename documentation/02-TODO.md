@@ -211,6 +211,95 @@ Ogni pulsante mostra un feedback progressivo: "Indexing document 1/5...", "Index
 
 ---
 
+## Piano Sessioni 2026-04-22+ — Core Editing, Output, Colori UI
+
+Discussione del 2026-04-22: Carlo ha richiesto una serie di miglioramenti all'interfaccia di editing e all'usabilita' generale. Abbiamo suddiviso il lavoro in 3 sessioni.
+
+---
+
+## Sessione 7: Core Editing — Schema ProseMirror + Toolbar
+
+**Obiettivo:** Aggiornare lo schema ProseMirror e la toolbar con tutte le funzioni di editing di base.
+
+### Schema ProseMirror da aggiungere
+- **Marks:**
+  - `underline` (Ctrl+U)
+  - `strikethrough` (Ctrl+Shift+X)
+  - `textColor` — colore del testo (non del tema)
+  - `highlight` — evidenziazione del testo
+  - `fontSize` — dimensione font
+  - `fontFamily` — scelta font
+- **Nodi:**
+  - `heading` (H1, H2, H3, Normal/Paragraph) via dropdown
+  - `bullet_list` — elenco puntato
+  - `ordered_list` — elenco numerato
+  - `list_item` — elemento di lista
+  - `blockquote` — citazione
+  - `code_block` — blocco codice
+- **Attributi:**
+  - `alignment` (left/center/right/justify) sui paragrafi e heading
+  - `lineHeight` (interlinea: 1.0, 1.15, 1.5, 2.0)
+
+### Toolbar ristrutturata in gruppi logici
+```
+[File: Save | Save As | Open | Export]
+[Edit: Undo | Redo]
+[Style: Font | Size | Color | Highlight]
+[Format: B | I | U | S | H1 ▼ | List ▼ | Quote | Code]
+[Align: ← | ↔ | → | ≡]
+[Page: Break | Auto]
+```
+
+### Note tecniche
+- L'editor attuale usa `basicSchema` con paragraph override (pageBreakBefore). Andrà esteso lo schema invece di sovrascrivere.
+- Interlinea: attributo `lineHeight` su paragraph e heading.
+- Colori testo/evidenziazione: attributi `style` gestiti con `toDOM`/`parseDOM`.
+- Font: uso di CSS variables e attributo `data-font`.
+
+### Commits previsti
+1. `feat(schema): add underline, strikethrough, textColor, highlight marks`
+2. `feat(schema): add heading, bullet_list, ordered_list, blockquote, code_block nodes`
+3. `feat(schema): add alignment and lineHeight attributes`
+4. `feat(toolbar): add font, size, color, highlight, alignment controls`
+5. `feat(toolbar): add heading, list, quote, code controls`
+
+---
+
+## Sessione 8: Output, Stampa, Colori Box
+
+**Obiettivi:**
+1. **Paged.js** per anteprima di stampa (`@media print` + paginazione A4)
+2. **Stampa nativa** (`window.print()` nel WebView Tauri)
+3. **Aggiornare import/export** (Markdown/HTML/DOCX/TXT) per supportare i nuovi marks/nodi
+4. **Color picker per project/section/document box** — ispirato a 3LO (`color_picker.js`):
+   - Colori solidi predefiniti + color picker custom
+   - Gradienti opzionali per sfondi
+   - Testo colorato contrasto automatico
+   - Preview live
+   - Reset ai default
+   - Cache per evitare query ripetute
+   - Stato nel database SQLite
+   - Pulsante colore su ogni box (project card nella home, section header, document item)
+
+---
+
+## Sessione 9: Polish & AI
+
+**Obiettivi:**
+1. **Show AI Thinking** — toggle nell'header del pannello AI Assistant per mostrare/nascondere il reasoning dei modelli (modelli con `<thinking>` o tag simili)
+2. **Test Entity Extraction end-to-end** — il codice esiste in `entity-extraction.ts`, serve un test reale con documento demo
+3. **Bug Discard lento** — investigare per quali modelli la chiamata AI su `Discard` è lenta (possibile: modelli con thinking esteso)
+4. **Migliorare system prompt tool calling** — forzare AI a chiamare tools prima di rispondere "no entities found", esempi piu' chiari, project_id esplicito
+5. **Prompt presets per modello** — dropdown per caricare prompt ottimizzati per modello (Qwen, Kimi, GPT-4o, Claude) — placeholder gia' presente nelle Preferenze
+
+---
+
+## Regola per i Commit
+- Un commit dopo ogni modifica importante che raggiunge un risultato o implementa qualcosa di nuovo che non rompe cio' che c'e' gia' e funziona.
+- Non fare commit su main ma su branch `feat/sessione-7`, poi merge a fine sessione.
+
+---
+
 ## PRIORITY 1: Bugs aperti
 
 - [ ] Discard lento (dipende dal modello AI)

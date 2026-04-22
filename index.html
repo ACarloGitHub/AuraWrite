@@ -13,58 +13,149 @@
         <span id="document-format"></span>
       </div>
       <header class="toolbar">
-        <button id="btn-save" class="toolbar__btn" title="Save (Ctrl+S)">
-          <span class="toolbar__btn-icon">💾</span>
-          <span class="toolbar__btn-text">Save</span>
-        </button>
-        <button id="btn-save-as" class="toolbar__btn" title="Save As">
-          <span class="toolbar__btn-icon">📄</span>
-          <span class="toolbar__btn-text">Save As</span>
-        </button>
-        <button id="btn-open" class="toolbar__btn" title="Open">
-          <span class="toolbar__btn-icon">📂</span>
-          <span class="toolbar__btn-text">Open</span>
-        </button>
-        <button id="btn-export" class="toolbar__btn" title="Export">
-          <span class="toolbar__btn-icon">📤</span>
-          <span class="toolbar__btn-text">Export</span>
-        </button>
-        <span class="toolbar-separator"></span>
-        <button id="btn-undo" class="toolbar__btn" title="Undo (Ctrl+Z)">
-          <span class="toolbar__btn-icon">↩️</span>
-          <span class="toolbar__btn-text">Undo</span>
-        </button>
-        <button id="btn-redo" class="toolbar__btn" title="Redo (Ctrl+Y)">
-          <span class="toolbar__btn-icon">↪️</span>
-          <span class="toolbar__btn-text">Redo</span>
-        </button>
-        <span class="toolbar-separator"></span>
-        <button id="btn-bold" class="toolbar__btn" title="Bold (Ctrl+B)">
-          <span class="toolbar__btn-icon"><strong>B</strong></span>
-          <span class="toolbar__btn-text">Bold</span>
-        </button>
-        <button id="btn-italic" class="toolbar__btn" title="Italic (Ctrl+I)">
-          <span class="toolbar__btn-icon"><em>I</em></span>
-          <span class="toolbar__btn-text">Italic</span>
-        </button>
-        <span class="toolbar-separator"></span>
-        <button id="btn-page-break" class="toolbar__btn" title="Page Break">
-          <span class="toolbar__btn-icon">⏎</span>
-          <span class="toolbar__btn-text">Page Break</span>
-        </button>
-        <button
-          id="btn-auto-pagination"
-          class="toolbar__btn"
-          title="Auto Pagination"
-        >
-          <span class="toolbar__btn-icon">📄</span>
-          <span class="toolbar__btn-text">Auto</span>
-        </button>
-        <span class="toolbar-separator"></span>
-        <button id="btn-preferences" title="Preferences">⚙️</button>
-        <button id="btn-theme" class="theme-toggle" title="Toggle Theme">
-          🌙
-        </button>
+        <!-- FILE GROUP -->
+        <div class="toolbar-group">
+          <button id="btn-save" class="toolbar__btn" title="Save (Ctrl+S)">
+            <span class="toolbar__btn-icon">💾</span>
+            <span class="toolbar__btn-text">Save</span>
+          </button>
+          <button id="btn-save-as" class="toolbar__btn" title="Save As">
+            <span class="toolbar__btn-icon">📄</span>
+            <span class="toolbar__btn-text">Save As</span>
+          </button>
+          <button id="btn-open" class="toolbar__btn" title="Open">
+            <span class="toolbar__btn-icon">📂</span>
+            <span class="toolbar__btn-text">Open</span>
+          </button>
+          <button id="btn-export" class="toolbar__btn" title="Export">
+            <span class="toolbar__btn-icon">📤</span>
+            <span class="toolbar__btn-text">Export</span>
+          </button>
+        </div>
+
+        <!-- EDIT GROUP -->
+        <div class="toolbar-group">
+          <button id="btn-undo" class="toolbar__btn" title="Undo (Ctrl+Z)">
+            <span class="toolbar__btn-icon">↩️</span>
+            <span class="toolbar__btn-text">Undo</span>
+          </button>
+          <button id="btn-redo" class="toolbar__btn" title="Redo (Ctrl+Y)">
+            <span class="toolbar__btn-icon">↪️</span>
+            <span class="toolbar__btn-text">Redo</span>
+          </button>
+        </div>
+
+        <!-- STYLE GROUP -->
+        <div class="toolbar-group">
+          <select id="sel-font-family" class="toolbar__select" title="Font Family">
+            <option value="">Default</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="'Palatino Linotype', 'Book Antiqua', serif">Palatino</option>
+            <option value="'Segoe UI', sans-serif">Segoe UI</option>
+            <option value="monospace">Monospace</option>
+          </select>
+          <select id="sel-font-size" class="toolbar__select" title="Font Size">
+            <option value="">Size</option>
+            <option value="10px">10</option>
+            <option value="12px">12</option>
+            <option value="14px">14</option>
+            <option value="16px">16</option>
+            <option value="18px">18</option>
+            <option value="20px">20</option>
+            <option value="24px">24</option>
+            <option value="30px">30</option>
+            <option value="36px">36</option>
+            <option value="48px">48</option>
+          </select>
+          <input type="color" id="btn-text-color" class="toolbar__color" title="Text Color" value="#000000" />
+          <input type="color" id="btn-highlight" class="toolbar__color" title="Highlight Color" value="#ffff00" />
+        </div>
+
+        <!-- FORMAT GROUP -->
+        <div class="toolbar-group">
+          <button id="btn-bold" class="toolbar__btn" title="Bold (Ctrl+B)">
+            <span class="toolbar__btn-icon"><strong>B</strong></span>
+          </button>
+          <button id="btn-italic" class="toolbar__btn" title="Italic (Ctrl+I)">
+            <span class="toolbar__btn-icon"><em>I</em></span>
+          </button>
+          <button id="btn-underline" class="toolbar__btn" title="Underline (Ctrl+U)">
+            <span class="toolbar__btn-icon"><u>U</u></span>
+          </button>
+          <button id="btn-strikethrough" class="toolbar__btn" title="Strikethrough (Ctrl+Shift+X)">
+            <span class="toolbar__btn-icon"><s>S</s></span>
+          </button>
+          <select id="sel-heading" class="toolbar__select" title="Heading">
+            <option value="0">Normal</option>
+            <option value="1">Heading 1</option>
+            <option value="2">Heading 2</option>
+            <option value="3">Heading 3</option>
+          </select>
+          <button id="btn-bullet-list" class="toolbar__btn" title="Bullet List">
+            <span class="toolbar__btn-icon">•</span>
+          </button>
+          <button id="btn-ordered-list" class="toolbar__btn" title="Ordered List">
+            <span class="toolbar__btn-icon">1.</span>
+          </button>
+          <button id="btn-blockquote" class="toolbar__btn" title="Blockquote">
+            <span class="toolbar__btn-icon">"</span>
+          </button>
+          <button id="btn-code-block" class="toolbar__btn" title="Code Block">
+            <span class="toolbar__btn-icon">&lt;/&gt;</span>
+          </button>
+        </div>
+
+        <!-- ALIGNMENT GROUP -->
+        <div class="toolbar-group">
+          <button id="btn-align-left" class="toolbar__btn" title="Align Left">
+            <span class="toolbar__btn-icon">≡</span>
+          </button>
+          <button id="btn-align-center" class="toolbar__btn" title="Align Center">
+            <span class="toolbar__btn-icon"><span style="display:inline-block;text-align:center">≡</span></span>
+          </button>
+          <button id="btn-align-right" class="toolbar__btn" title="Align Right">
+            <span class="toolbar__btn-icon" style="display:inline-block;text-align:right">≡</span>
+          </button>
+          <button id="btn-align-justify" class="toolbar__btn" title="Justify">
+            <span class="toolbar__btn-icon" style="display:inline-block;text-align:justify">≡</span>
+          </button>
+        </div>
+
+        <!-- LINE HEIGHT GROUP -->
+        <div class="toolbar-group">
+          <select id="sel-line-height" class="toolbar__select" title="Line Height">
+            <option value="1.0">1.0</option>
+            <option value="1.15">1.15</option>
+            <option value="1.5" selected>1.5</option>
+            <option value="2.0">2.0</option>
+          </select>
+        </div>
+
+        <!-- PAGE GROUP -->
+        <div class="toolbar-group">
+          <button id="btn-page-break" class="toolbar__btn" title="Page Break">
+            <span class="toolbar__btn-icon">⏎</span>
+            <span class="toolbar__btn-text">Break</span>
+          </button>
+          <button id="btn-auto-pagination" class="toolbar__btn" title="Auto Pagination">
+            <span class="toolbar__btn-icon">📄</span>
+            <span class="toolbar__btn-text">Auto</span>
+          </button>
+          <button id="btn-print" class="toolbar__btn" title="Print">
+            <span class="toolbar__btn-icon">🖨</span>
+            <span class="toolbar__btn-text">Print</span>
+          </button>
+        </div>
+
+        <!-- MISC GROUP -->
+        <div class="toolbar-group">
+          <button id="btn-preferences" title="Preferences">⚙️</button>
+          <button id="btn-theme" class="theme-toggle" title="Toggle Theme">🌙</button>
+        </div>
       </header>
       <main class="editor-container">
         <aside id="project-panel" class="project-panel">
@@ -109,25 +200,13 @@
       </main>
       <footer class="status-bar">
         <div class="footer-ai-controls">
-          <button
-            id="btn-projects"
-            class="footer-btn"
-            title="Toggle Projects Panel"
-          >
+          <button id="btn-projects" class="footer-btn" title="Toggle Projects Panel">
             📁 Projects
           </button>
-          <button
-            id="btn-suggestions"
-            class="footer-btn"
-            title="Suggestions (Proactive)"
-          >
+          <button id="btn-suggestions" class="footer-btn" title="Suggestions (Proactive)">
             💡 Suggestions
           </button>
-          <button
-            id="btn-ai"
-            class="footer-btn"
-            title="AI Assistant (Reactive)"
-          >
+          <button id="btn-ai" class="footer-btn" title="AI Assistant (Reactive)">
             ✨ AI
           </button>
         </div>
@@ -147,7 +226,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h2>Preferences</h2>
-            <button id="preferences-close" class="modal-close">&times;</button>
+            <button id="preferences-close" class="modal-close">×</button>
           </div>
           <div class="pref-tabs">
             <button class="pref-tab active" data-tab="general">General</button>
@@ -157,12 +236,10 @@
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
           </div>
           <div class="modal-body">
-
             <!-- TAB: General -->
             <div class="pref-tab-content active" data-tab="general">
               <div class="preference-group">
-                <label>Toolbar Display</label>
-                <span class="preference-hint">Choose how toolbar buttons appear</span>
+                <span class="preference-hint">Toolbar Display</span>
                 <select id="pref-toolbar-display">
                   <option value="icon">Icon Only</option>
                   <option value="text">Text Only</option>
@@ -203,7 +280,6 @@
                 </div>
               </div>
             </div>
-
             <!-- TAB: AI Provider -->
             <div class="pref-tab-content" data-tab="ai-provider">
               <div class="preference-group">
@@ -220,26 +296,25 @@
               </div>
               <div class="preference-group">
                 <label>Model</label>
-                <span class="preference-hint">Model name as recognized by the provider (e.g. kimi-k2.5:cloud, gpt-4o, claude-sonnet-4-20250514)</span>
-                <input type="text" id="pref-ai-model" placeholder="kimi-k2.5:cloud" />
+                <span class="preference-hint">Model name as recognized by the provider</span>
+                <input type="text" id="pref-ai-model" placeholder="e.g. kimi-k2.5:cloud" />
               </div>
               <div class="preference-group" id="api-key-group">
                 <label>API Key</label>
-                <span class="preference-hint" id="api-key-hint">Required.</span>
+                <span class="preference-hint">Required for non-local providers</span>
                 <input type="password" id="pref-ai-api-key" placeholder="sk-..." />
               </div>
               <div class="preference-group" id="base-url-group">
                 <label>Base URL</label>
-                <span class="preference-hint" id="base-url-hint">Override the default API endpoint. Leave empty for defaults.</span>
+                <span class="preference-hint">Override the default API endpoint</span>
                 <input type="text" id="pref-ai-base-url" placeholder="http://localhost:11434" />
               </div>
             </div>
-
             <!-- TAB: AI Behavior -->
             <div class="pref-tab-content" data-tab="ai-behavior">
               <div class="preference-group">
                 <label>Interface Language</label>
-                <span class="preference-hint">Language the AI uses to talk to you (responses, explanations)</span>
+                <span class="preference-hint">Language the AI uses to talk to you</span>
                 <select id="pref-ai-interface-language">
                   <option value="English">English</option>
                   <option value="Italian">Italiano</option>
@@ -253,7 +328,7 @@
               </div>
               <div class="preference-group">
                 <label>Writing Language</label>
-                <span class="preference-hint">Language the AI uses when writing or suggesting text in the document</span>
+                <span class="preference-hint">Language the AI uses when writing/suggesting</span>
                 <select id="pref-ai-writing-language">
                   <option value="English">English</option>
                   <option value="Italian">Italiano</option>
@@ -272,95 +347,89 @@
               </div>
               <div class="preference-group">
                 <label>User Name</label>
-                <span class="preference-hint">Name the AI uses to refer to you (leave empty for default)</span>
+                <span class="preference-hint">Name the AI uses to refer to you</span>
                 <input type="text" id="pref-ai-user-name" placeholder="Your name" />
               </div>
               <div class="preference-group">
                 <label>Suggestions Interval (seconds)</label>
-                <span class="preference-hint">How often the AI analyzes text and offers sentence suggestions</span>
+                <span class="preference-hint">How often the AI analyzes text for suggestions</span>
                 <input type="number" id="pref-ai-suggestions-interval" value="30" min="5" max="300" />
               </div>
               <div class="preference-group">
                 <label>Context Update Interval (seconds)</label>
-                <span class="preference-hint">How often the AI panel refreshes document context</span>
+                <span class="preference-hint">How often the AI panel refreshes context</span>
                 <input type="number" id="pref-ai-context-interval" value="30" min="5" max="300" />
               </div>
               <div class="preference-group">
                 <label>Suggestions Prompt</label>
-                <span class="preference-hint">System prompt for sentence suggestions (left panel)</span>
+                <span class="preference-hint">System prompt for sentence suggestions</span>
                 <div class="prompt-with-reset">
-                  <textarea id="pref-suggestions-prompt" rows="4" placeholder="Prompt for Suggestions mode..."></textarea>
-                  <button class="btn-reset-prompt" data-default="suggestions" title="Restore default prompt">↺ Reset</button>
+                  <textarea id="pref-suggestions-prompt" rows="4"></textarea>
+                  <button class="btn-reset-prompt" data-default="suggestions">↺ Reset</button>
                 </div>
               </div>
               <div class="preference-group">
                 <label>AI Assistant Prompt</label>
-                <span class="preference-hint">System prompt for the AI chat assistant (right panel)</span>
+                <span class="preference-hint">System prompt for AI chat</span>
                 <div class="prompt-with-reset">
-                  <textarea id="pref-ai-assistant-prompt" rows="4" placeholder="Prompt for AI Assistant mode..."></textarea>
-                  <button class="btn-reset-prompt" data-default="assistant" title="Restore default prompt">↺ Reset</button>
+                  <textarea id="pref-ai-assistant-prompt" rows="4"></textarea>
+                  <button class="btn-reset-prompt" data-default="assistant">↺ Reset</button>
                 </div>
               </div>
-              <div class="pref-styles-placeholder" id="pref-styles-placeholder">
-                <span class="preference-hint">Style presets coming soon (e.g. Tolkien, Shakespeare, ...)</span>
-              </div>
             </div>
-
             <!-- TAB: Editor & Data -->
             <div class="pref-tab-content" data-tab="editor-data">
               <div class="preference-group">
                 <label>Incremental Save</label>
                 <div class="checkbox-row">
                   <input type="checkbox" id="pref-incremental-enabled" />
-                  <span>Keep versioned snapshots each time you save (Ctrl+S)</span>
+                  <span>Keep versioned snapshots each save</span>
                 </div>
               </div>
               <div class="preference-group">
-                <label>Max Versioned Snapshots</label>
-                <span class="preference-hint">Set to 0 for unlimited versions</span>
+                <label>Max Snapshots</label>
+                <span class="preference-hint">0 = unlimited</span>
                 <input type="number" id="pref-incremental-max" value="10" min="0" />
               </div>
               <div class="preference-group">
-                <label>Auto-clear Text Selection</label>
+                <label>Auto-clear Selection</label>
                 <div class="checkbox-row">
                   <input type="checkbox" id="pref-deselect-on-click" checked />
-                  <span>Clear text selection when clicking inside the editor</span>
+                  <span>Clear selection on editor click</span>
                 </div>
               </div>
             </div>
-
             <!-- TAB: Indexing & Tools -->
             <div class="pref-tab-content" data-tab="indexing-tools">
               <div class="preference-group">
                 <label>Semantic Search Indexing</label>
                 <div class="checkbox-row">
                   <input type="checkbox" id="pref-semantic-search-enabled" checked />
-                  <span>Automatically index documents for semantic search when saving (requires Ollama)</span>
+                  <span>Auto index on save (requires Ollama)</span>
                 </div>
               </div>
               <div class="preference-group">
                 <label>Entity Extraction Role</label>
-                <span class="preference-hint">Define a perspective/role for entity extraction (e.g. "criminal lawyer", "fantasy novelist", "medical researcher"). Leave empty for default.</span>
+                <span class="preference-hint">Perspective for entity extraction</span>
                 <input type="text" id="pref-entity-extraction-role" placeholder="e.g. fantasy novelist" />
               </div>
               <div class="preference-group">
-                <label>Entity Extraction Prompt</label>
-                <span class="preference-hint">System prompt used when extracting entities from documents</span>
+                <label>Extraction Prompt</label>
+                <span class="preference-hint">Prompt for entity extraction</span>
                 <div class="prompt-with-reset">
-                  <textarea id="pref-entity-extraction-prompt" rows="4" placeholder="Extraction prompt..."></textarea>
-                  <button class="btn-reset-prompt" data-default="extraction" title="Restore default prompt">↺ Reset</button>
+                  <textarea id="pref-entity-extraction-prompt" rows="4"></textarea>
+                  <button class="btn-reset-prompt" data-default="extraction">↺ Reset</button>
                 </div>
               </div>
               <div class="preference-group">
                 <label>Tool Calling Prompt</label>
-                <span class="preference-hint">Instructions for AI to query the project database. Modifying this may affect database query functionality.</span>
+                <span class="preference-hint">Instructions for AI database queries</span>
                 <div class="prompt-with-reset">
-                  <textarea id="pref-tool-calling-prompt" rows="4" placeholder="Tool calling instructions..."></textarea>
-                  <button class="btn-reset-prompt" data-default="toolcalling" title="Restore default prompt">↺ Reset</button>
+                  <textarea id="pref-tool-calling-prompt" rows="4"></textarea>
+                  <button class="btn-reset-prompt" data-default="toolcalling">↺ Reset</button>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
