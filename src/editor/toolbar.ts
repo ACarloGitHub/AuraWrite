@@ -1,8 +1,10 @@
 import { undo, redo } from "prosemirror-history";
-import { toggleMark } from "prosemirror-commands";
+import { toggleMark, wrapIn, lift, setBlockType } from "prosemirror-commands";
+import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
 import type { EditorView } from "prosemirror-view";
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
+import type { NodeType } from "prosemirror-model";
 
 import { toMarkdown, fromMarkdown } from "../formats/markdown";
 import { toPlainText, fromPlainText } from "../formats/txt";
@@ -40,6 +42,10 @@ export function setupToolbar(view: EditorView): void {
 
   setupUndoRedoButtons();
   setupFormattingButtons();
+  setupHeadingControl();
+  setupListControls();
+  setupAlignmentControls();
+  setupStyleControls();
   setupTopLevelButtons();
   setupDirtyTracking();
   loadPreferences();
@@ -54,16 +60,14 @@ function setupDirtyTracking(): void {
       editorView.updateState(newState);
 
       if (transaction.docChanged) {
-        // Non emettere eventi se stiamo caricando un documento
         const isLoading = (window as any).__aurawrite_loading === true;
         const newContent = JSON.stringify(newState.doc.toJSON());
         if (documentState.lastSavedContent !== newContent) {
           documentState.isDirty = true;
           updateWindowTitle();
           updateDocumentTitleBar();
-          
+
           if (!isLoading) {
-            // Emetti evento per auto-salvataggio
             window.dispatchEvent(new CustomEvent("aurawrite:content-changed", {
               detail: { content: newContent }
             }));
@@ -155,6 +159,9 @@ function setupTopLevelButtons(): void {
   btnSaveAs?.addEventListener("click", () => handleSaveAs());
   btnOpen?.addEventListener("click", () => handleOpen());
   btnExport?.addEventListener("click", () => handleExport());
+
+  const btnPrint = document.getElementById("btn-print");
+  btnPrint?.addEventListener("click", () => window.print());
 }
 
 async function handleSave(): Promise<void> {
@@ -387,6 +394,10 @@ async function loadBinaryFile(path: string): Promise<ArrayBuffer> {
   return bytes.buffer;
 }
 
+// ============================================================================
+// UNDO / REDO
+// ============================================================================
+
 function setupUndoRedoButtons(): void {
   const btnUndo = document.getElementById("btn-undo");
   const btnRedo = document.getElementById("btn-redo");
@@ -402,10 +413,18 @@ function setupUndoRedoButtons(): void {
   });
 }
 
+// ============================================================================
+// FORMATTING — Bold, Italic, Underline, Strikethrough
+// ============================================================================
+
 function setupFormattingButtons(): void {
   const btnBold = document.getElementById("btn-bold");
   const btnItalic = document.getElementById("btn-italic");
+  const btnUnderline = document.getElementById("btn-underline");
+  const btnStrikethrough = document.getElementById("btn-strikethrough");
   const btnPageBreak = document.getElementById("btn-page-break");
+  const btnBlockquote = document.getElementById("btn-blockquote");
+  const btnCodeBlock = document.getElementById("btn-code-block");
 
   btnBold?.addEventListener("click", () => {
     const markType = editorView.state.schema.marks.strong;
@@ -423,6 +442,22 @@ function setupFormattingButtons(): void {
     }
   });
 
+  btnUnderline?.addEventListener("click", () => {
+    const markType = editorView.state.schema.marks.underline;
+    if (markType) {
+      toggleMark(markType)(editorView.state, editorView.dispatch);
+      editorView.focus();
+    }
+  });
+
+  btnStrikethrough?.addEventListener("click", () => {
+    const markType = editorView.state.schema.marks.strikethrough;
+    if (markType) {
+      toggleMark(markType)(editorView.state, editorView.dispatch);
+      editorView.focus();
+    }
+  });
+
   btnPageBreak?.addEventListener("click", () => {
     togglePageBreak();
     editorView.focus();
@@ -433,6 +468,182 @@ function setupFormattingButtons(): void {
     toggleAutoPagination();
   });
 }
+
+// ============================================================================
+// HEADING DROPDOWN
+// ============================================================================
+
+function setupHeadingControl(): void {
+  const sel = document.getElementById("sel-heading") as HTMLSelectElement | null;
+  if (!sel) return;
+
+  sel.addEventListener("change", () => {
+    const level = parseInt(sel.value, 10);
+    const state = editorView.state;
+
+    if (level === 0) {
+      // Set to paragraph
+      const nodeType = state.schema.nodes.paragraph;
+      if (!nodeType) return;
+      setBlockType(nodeType)(state, editorView.dispatch);
+    } else {
+      const nodeType = state.schema.nodes.heading;
+      if (!nodeType) return;
+      setBlockType(nodeType, { level })(state, editorView.dispatch);
+    }
+
+    sel.blur();
+    editorView.focus();
+  });
+}
+
+// ============================================================================
+// LIST CONTROLS
+// ============================================================================
+
+function setupListControls(): void {
+  const btnBullet = document.getElementById("btn-bullet-list");
+  const btnOrdered = document.getElementById("btn-ordered-list");
+
+  btnBullet?.addEventListener("click", () => {
+    wrapInList(editorView.state.schema.nodes.bullet_list);
+  });
+
+  btnOrdered?.addEventListener("click", () => {
+    wrapInList(editorView.state.schema.nodes.ordered_list);
+  });
+}
+
+function wrapInList(listType?: NodeType): void {
+  if (!listType) return;
+  wrapIn(listType)(
+    editorView.state,
+    (tr: Transaction) => {
+      editorView.dispatch(tr);
+      editorView.focus();
+    },
+  );
+}
+
+function setupAlignmentControls(): void {
+  const btnLeft = document.getElementById("btn-align-left");
+  const btnCenter = document.getElementById("btn-align-center");
+  const btnRight = document.getElementById("btn-align-right");
+  const btnJustify = document.getElementById("btn-align-justify");
+
+  btnLeft?.addEventListener("click", () => setAlignment("left"));
+  btnCenter?.addEventListener("click", () => setAlignment("center"));
+  btnRight?.addEventListener("click", () => setAlignment("right"));
+  btnJustify?.addEventListener("click", () => setAlignment("justify"));
+}
+
+function setAlignment(align: "left" | "center" | "right" | "justify"): void {
+  const { state } = editorView;
+  const { $from } = state.selection;
+  const depth = $from.depth;
+
+  if (depth === 0) return;
+
+  const node = $from.node(depth);
+  const pos = $from.before(depth);
+
+  const tr = state.tr.setNodeMarkup(pos, undefined, {
+    ...(node.attrs || {}),
+    align,
+  });
+  editorView.dispatch(tr);
+  editorView.focus();
+}
+
+// ============================================================================
+// STYLE CONTROLS — Font, Size, Color, Highlight, Line Height
+// ============================================================================
+
+function setupStyleControls(): void {
+  const selFont = document.getElementById("sel-font-family") as HTMLSelectElement | null;
+  const selSize = document.getElementById("sel-font-size") as HTMLSelectElement | null;
+  const btnTextColor = document.getElementById("btn-text-color") as HTMLInputElement | null;
+  const btnHighlight = document.getElementById("btn-highlight") as HTMLInputElement | null;
+  const selLineHeight = document.getElementById("sel-line-height") as HTMLSelectElement | null;
+
+  selFont?.addEventListener("change", () => {
+    const font = selFont.value;
+    if (!font) return;
+    applyTextMark("fontFamily", { font });
+    selFont.blur();
+    editorView.focus();
+  });
+
+  selSize?.addEventListener("change", () => {
+    const size = selSize.value;
+    if (!size) return;
+    applyTextMark("fontSize", { size });
+    selSize.blur();
+    editorView.focus();
+  });
+
+  btnTextColor?.addEventListener("input", () => {
+    const color = btnTextColor.value;
+    if (!color) return;
+    applyTextMark("textColor", { color });
+  });
+
+  btnTextColor?.addEventListener("change", () => {
+    editorView.focus();
+  });
+
+  btnHighlight?.addEventListener("input", () => {
+    const color = btnHighlight.value;
+    if (!color) return;
+    applyTextMark("highlight", { color });
+  });
+
+  btnHighlight?.addEventListener("change", () => {
+    editorView.focus();
+  });
+
+  selLineHeight?.addEventListener("change", () => {
+    const lineHeight = selLineHeight.value;
+    if (!lineHeight) return;
+    setLineHeight(lineHeight);
+    selLineHeight.blur();
+    editorView.focus();
+  });
+}
+
+function applyTextMark(markName: string, attrs: Record<string, string>): void {
+  const { state } = editorView;
+  const markType = state.schema.marks[markName];
+  if (!markType) return;
+
+  const { from, to } = state.selection;
+  if (from === to) return;
+
+  const tr = state.tr;
+  tr.addMark(from, to, markType.create(attrs));
+  editorView.dispatch(tr);
+}
+
+function setLineHeight(lineHeight: string): void {
+  const { state } = editorView;
+  const { $from } = state.selection;
+  const depth = $from.depth;
+
+  if (depth === 0) return;
+
+  const node = $from.node(depth);
+  const pos = $from.before(depth);
+
+  const tr = state.tr.setNodeMarkup(pos, undefined, {
+    ...(node.attrs || {}),
+    lineHeight,
+  });
+  editorView.dispatch(tr);
+}
+
+// ============================================================================
+// PAGE BREAK
+// ============================================================================
 
 function togglePageBreak(): void {
   const { from } = editorView.state.selection;
@@ -465,9 +676,6 @@ function togglePageBreak(): void {
   }
 }
 
-/**
- * Toggle auto pagination on/off
- */
 function toggleAutoPagination(): void {
   const enabled = togglePagination(editorView);
   updateAutoPaginationButtonText(enabled);
