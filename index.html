@@ -13,24 +13,25 @@
         <span id="document-format"></span>
       </div>
       <header class="toolbar">
-        <!-- FILE GROUP -->
-        <div class="toolbar-group">
-          <button id="btn-save" class="toolbar__btn" title="Save (Ctrl+S)">
-            <span class="toolbar__btn-icon">💾</span>
-            <span class="toolbar__btn-text">Save</span>
+        <!-- FILE DROPDOWN -->
+        <div class="toolbar-group toolbar-dropdown" id="file-dropdown">
+          <button id="btn-file-menu" class="toolbar__btn" title="File">
+            <span class="toolbar__btn-icon">📁</span>
+            <span class="toolbar__btn-text">File</span>
+            <span class="toolbar__btn-caret">▾</span>
           </button>
-          <button id="btn-save-as" class="toolbar__btn" title="Save As">
-            <span class="toolbar__btn-icon">📄</span>
-            <span class="toolbar__btn-text">Save As</span>
-          </button>
-          <button id="btn-open" class="toolbar__btn" title="Open">
-            <span class="toolbar__btn-icon">📂</span>
-            <span class="toolbar__btn-text">Open</span>
-          </button>
-          <button id="btn-export" class="toolbar__btn" title="Export">
-            <span class="toolbar__btn-icon">📤</span>
-            <span class="toolbar__btn-text">Export</span>
-          </button>
+          <div id="file-menu" class="dropdown-menu hidden">
+            <div class="dropdown-section">File Operations</div>
+            <button class="dropdown-item" data-action="save">💾 Save (Ctrl+S)</button>
+            <button class="dropdown-item" data-action="save-as">📄 Save As...</button>
+            <button class="dropdown-item" data-action="open">📂 Open...</button>
+            <button class="dropdown-item" data-action="export">📤 Export...</button>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-section">Project</div>
+            <button class="dropdown-item" data-action="save-project">💿 Save Project</button>
+            <button class="dropdown-item" data-action="index">🔍 Index Document</button>
+            <button class="dropdown-item" data-action="index-create">🔍✨ Index &amp; Create Entities</button>
+          </div>
         </div>
 
         <!-- EDIT GROUP -->
@@ -153,8 +154,8 @@
 
         <!-- MISC GROUP -->
         <div class="toolbar-group">
-          <button id="btn-preferences" title="Preferences">⚙️</button>
-          <button id="btn-theme" class="theme-toggle" title="Toggle Theme">🌙</button>
+          <button id="btn-preferences" class="toolbar__btn-icon-only" title="Preferences">⚙️</button>
+          <button id="btn-theme" class="toolbar__btn-icon-only" title="Toggle Theme">🌙</button>
         </div>
       </header>
       <main class="editor-container">

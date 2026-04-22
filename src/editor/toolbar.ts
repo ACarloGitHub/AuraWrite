@@ -1,6 +1,5 @@
 import { undo, redo } from "prosemirror-history";
 import { toggleMark, wrapIn, lift, setBlockType } from "prosemirror-commands";
-import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
 import type { EditorView } from "prosemirror-view";
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
@@ -12,12 +11,17 @@ import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { schema } from "./editor";
 import {
-  setPaginationEnabled,
-  getPaginationEnabled,
   initPagination,
   updateOnTextChange,
   togglePagination,
 } from "./fake-pagination";
+import {
+  currentProject,
+  currentDocument,
+  handleSaveToDatabase as saveProjectToDb,
+  handleIndexDocument as indexSingleDocument,
+  handleIndexProject as indexEntireProject,
+} from "./project-panel";
 
 let editorView: EditorView;
 
@@ -150,15 +154,47 @@ async function saveIncremental(): Promise<void> {
 }
 
 function setupTopLevelButtons(): void {
-  const btnSave = document.getElementById("btn-save");
-  const btnSaveAs = document.getElementById("btn-save-as");
-  const btnOpen = document.getElementById("btn-open");
-  const btnExport = document.getElementById("btn-export");
+  const fileMenuBtn = document.getElementById("btn-file-menu");
+  const fileMenu = document.getElementById("file-menu");
 
-  btnSave?.addEventListener("click", () => handleSave());
-  btnSaveAs?.addEventListener("click", () => handleSaveAs());
-  btnOpen?.addEventListener("click", () => handleOpen());
-  btnExport?.addEventListener("click", () => handleExport());
+  fileMenuBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fileMenu?.classList.toggle("hidden");
+  });
+
+  fileMenu?.querySelectorAll(".dropdown-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const action = (item as HTMLElement).dataset.action;
+      fileMenu?.classList.add("hidden");
+      switch (action) {
+        case "save":
+          handleSave();
+          break;
+        case "save-as":
+          handleSaveAs();
+          break;
+        case "open":
+          handleOpen();
+          break;
+        case "export":
+          handleExport();
+          break;
+        case "save-project":
+          handleSaveProject();
+          break;
+        case "index":
+          handleIndexDocument();
+          break;
+        case "index-create":
+          handleIndexAndCreateEntities();
+          break;
+      }
+    });
+  });
+
+  document.addEventListener("click", () => {
+    fileMenu?.classList.add("hidden");
+  });
 
   const btnPrint = document.getElementById("btn-print");
   btnPrint?.addEventListener("click", () => window.print());
@@ -417,43 +453,60 @@ function setupUndoRedoButtons(): void {
 // FORMATTING — Bold, Italic, Underline, Strikethrough
 // ============================================================================
 
+function toggleMarkWithStored(markName: string): void {
+  const { state } = editorView;
+  const markType = state.schema.marks[markName];
+  if (!markType) return;
+
+  const { from, to } = state.selection;
+  if (from === to) {
+    const activeMarks = state.storedMarks || [];
+    const hasMark = activeMarks.some((m) => m.type === markType);
+    if (hasMark) {
+      editorView.dispatch(
+        state.tr.setStoredMarks(activeMarks.filter((m) => m.type !== markType))
+      );
+    } else {
+      editorView.dispatch(
+        state.tr.addStoredMark(markType.create())
+      );
+    }
+  } else {
+    toggleMark(markType)(state, editorView.dispatch);
+  }
+  editorView.focus();
+}
+
 function setupFormattingButtons(): void {
   const btnBold = document.getElementById("btn-bold");
   const btnItalic = document.getElementById("btn-italic");
   const btnUnderline = document.getElementById("btn-underline");
   const btnStrikethrough = document.getElementById("btn-strikethrough");
-  const btnPageBreak = document.getElementById("btn-page-break");
   const btnBlockquote = document.getElementById("btn-blockquote");
   const btnCodeBlock = document.getElementById("btn-code-block");
+  const btnPageBreak = document.getElementById("btn-page-break");
 
-  btnBold?.addEventListener("click", () => {
-    const markType = editorView.state.schema.marks.strong;
-    if (markType) {
-      toggleMark(markType)(editorView.state, editorView.dispatch);
+  btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
+  btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
+  btnUnderline?.addEventListener("click", () => toggleMarkWithStored("underline"));
+  btnStrikethrough?.addEventListener("click", () => toggleMarkWithStored("strikethrough"));
+
+  btnBlockquote?.addEventListener("click", () => {
+    const nodeType = editorView.state.schema.nodes.blockquote;
+    if (nodeType) {
+      const cmd = wrapIn(nodeType);
+      const didApply = cmd(editorView.state, editorView.dispatch);
+      if (!didApply) {
+        lift(editorView.state, editorView.dispatch);
+      }
       editorView.focus();
     }
   });
 
-  btnItalic?.addEventListener("click", () => {
-    const markType = editorView.state.schema.marks.em;
-    if (markType) {
-      toggleMark(markType)(editorView.state, editorView.dispatch);
-      editorView.focus();
-    }
-  });
-
-  btnUnderline?.addEventListener("click", () => {
-    const markType = editorView.state.schema.marks.underline;
-    if (markType) {
-      toggleMark(markType)(editorView.state, editorView.dispatch);
-      editorView.focus();
-    }
-  });
-
-  btnStrikethrough?.addEventListener("click", () => {
-    const markType = editorView.state.schema.marks.strikethrough;
-    if (markType) {
-      toggleMark(markType)(editorView.state, editorView.dispatch);
+  btnCodeBlock?.addEventListener("click", () => {
+    const nodeType = editorView.state.schema.nodes.code_block;
+    if (nodeType) {
+      setBlockType(nodeType)(editorView.state, editorView.dispatch);
       editorView.focus();
     }
   });
@@ -690,6 +743,34 @@ function updateAutoPaginationButtonText(enabled: boolean): void {
   if (!btnText) return;
 
   btnText.textContent = enabled ? "Cont" : "Auto";
+}
+
+async function handleSaveProject(): Promise<void> {
+  if (!currentProject) {
+    alert("No project open. Open a project from the sidebar first.");
+    return;
+  }
+  await saveProjectToDb();
+}
+
+async function handleIndexDocument(): Promise<void> {
+  if (!currentProject) {
+    alert("No project open.");
+    return;
+  }
+  if (!currentDocument) {
+    alert("No document selected. Select a document first.");
+    return;
+  }
+  await indexSingleDocument(currentDocument);
+}
+
+async function handleIndexAndCreateEntities(): Promise<void> {
+  if (!currentProject) {
+    alert("No project open.");
+    return;
+  }
+  await indexEntireProject(currentProject);
 }
 
 export function getEditorView(): EditorView {

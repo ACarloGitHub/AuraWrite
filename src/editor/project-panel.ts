@@ -1680,4 +1680,7 @@ export {
   sections,
   documents,
   triggerSaveStatusCheck,
+  handleSaveToDatabase,
+  handleIndexDocument,
+  handleIndexProject,
 };
