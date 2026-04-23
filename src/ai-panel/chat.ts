@@ -145,22 +145,33 @@ function setupPanelEvents(view: EditorView): void {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
 
   btnAI?.addEventListener("click", () => {
-    const selection = getSelectionRange(view);
-    if (selection) {
-      currentSelection = selection;
-      applySelectionHighlight(view, selection);
-    }
-    aiPanel?.classList.remove("hidden");
-    isPanelOpen = true;
+    const wasHidden = aiPanel?.classList.contains("hidden");
+    if (wasHidden) {
+      const selection = getSelectionRange(view);
+      if (selection) {
+        currentSelection = selection;
+        applySelectionHighlight(view, selection);
+      }
+      aiPanel?.classList.remove("hidden");
+      isPanelOpen = true;
 
-    if (!documentChunksComputed) {
-      computeDocumentChunks();
-      documentChunksComputed = true;
-    }
+      if (!documentChunksComputed) {
+        computeDocumentChunks();
+        documentChunksComputed = true;
+      }
 
-    updateContextDisplay();
-    updateChunkSelector();
-    aiInput?.focus();
+      updateContextDisplay();
+      updateChunkSelector();
+      aiInput?.focus();
+    } else {
+      aiPanel?.classList.add("hidden");
+      isPanelOpen = false;
+      if (currentSelection && editorViewRef) {
+        clearSelectionHighlight(editorViewRef);
+      }
+      currentSelection = null;
+      updateContextDisplay();
+    }
   });
 
   aiInput?.addEventListener("focus", () => {

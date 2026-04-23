@@ -44,6 +44,12 @@
             <span class="toolbar__btn-icon">↪️</span>
             <span class="toolbar__btn-text">Redo</span>
           </button>
+          <button id="btn-find" class="toolbar__btn" title="Find (Ctrl+F)">
+            <span class="toolbar__btn-icon">🔍</span>
+          </button>
+          <button id="btn-find-replace" class="toolbar__btn" title="Find &amp; Replace (Ctrl+H)">
+            <span class="toolbar__btn-icon">🔀</span>
+          </button>
         </div>
 
         <!-- STYLE GROUP -->
@@ -166,8 +172,6 @@
 
         <!-- MISC GROUP -->
         <div class="toolbar-group">
-          <button id="btn-find" class="toolbar__btn-icon-only" title="Find (Ctrl+F)">🔍</button>
-          <button id="btn-find-replace" class="toolbar__btn-icon-only" title="Find &amp; Replace (Ctrl+H)">🔀</button>
           <button id="btn-preferences" class="toolbar__btn-icon-only" title="Preferences">⚙️</button>
           <button id="btn-theme" class="toolbar__btn-icon-only" title="Toggle Theme">🌙</button>
         </div>
@@ -263,14 +267,6 @@
           <div class="modal-body">
             <!-- TAB: General -->
             <div class="pref-tab-content active" data-tab="general">
-              <div class="preference-group">
-                <span class="preference-hint">Toolbar Display</span>
-                <select id="pref-toolbar-display">
-                  <option value="icon">Icon Only</option>
-                  <option value="text">Text Only</option>
-                  <option value="both" selected>Icon + Text</option>
-                </select>
-              </div>
               <div class="preference-group">
                 <label>Theme</label>
                 <span class="preference-hint">Application color scheme</span>

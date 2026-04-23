@@ -103,6 +103,7 @@ body {
 .title-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--spacing-md);
   height: 32px;
   padding: 0 var(--spacing-md);
@@ -115,7 +116,9 @@ body {
 }
 
 #document-title {
-  font-weight: 500;
+  font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
   color: var(--color-text);
 }
 
@@ -287,15 +290,11 @@ body {
 }
 
 .toolbar__btn-text {
-  font-size: 13px;
-}
-
-.toolbar-display-icon .toolbar__btn-text {
   display: none;
 }
 
-.toolbar-display-text .toolbar__btn-icon {
-  display: none;
+.toolbar-dropdown .toolbar__btn-text {
+  display: inline;
 }
 
 .find-bar {
@@ -623,6 +622,51 @@ body {
 
 .suggestion-item--accepted {
   opacity: 0.7;
+}
+
+.suggestion-item--processing {
+  opacity: 0.85;
+}
+
+.suggestion-item__processing-badge {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  color: var(--color-primary, #4a90d9);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.suggestion-item__processing-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) 0;
+}
+
+.suggestion-item__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary, #4a90d9);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.suggestion-item__processing-text {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-style: italic;
 }
 
 .suggestion-item__close:hover {
@@ -1218,15 +1262,6 @@ body {
   text-align: center;
   font-size: 13px;
   color: var(--color-text-muted);
-}
-
-.toolbar-display-icon .toolbar__btn-text,
-.toolbar-display-text .toolbar__btn-icon {
-  display: none;
-}
-
-.toolbar-display-icon .toolbar__btn-icon {
-  display: inline;
 }
 
 .toolbar button[data-tooltip]::after {

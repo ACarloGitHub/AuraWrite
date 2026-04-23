@@ -22,6 +22,7 @@ interface SentenceSuggestion {
   showingOriginal: boolean;
   isAccepted: boolean;
   isCollapsed: boolean;
+  isProcessing: boolean;
 }
 
 interface AISuggestionResponse {
@@ -294,6 +295,7 @@ function createBoxesFromSlots(): void {
       showingOriginal: false,
       isAccepted: slot.state === "accepted",
       isCollapsed: false,
+      isProcessing: slot.state === "processing",
     };
 
     newSuggestions.push(suggestion);
@@ -326,6 +328,12 @@ async function processNextSlot(): Promise<void> {
   slot.state = "processing";
   currentProcessingSlotId = slot.id;
   isCurrentlyProcessing = true;
+
+  const suggestionBox = suggestions.find((b) => b.id === slot.id);
+  if (suggestionBox) {
+    suggestionBox.isProcessing = true;
+    renderSuggestions();
+  }
 
   log(
     `PROCESS: Processing slot ${slot.id} - "${slot.text.slice(0, 30)}..." (wasDiscarded: ${wasDiscarded})`,
@@ -388,6 +396,11 @@ Remember: Respond only with valid JSON in this exact format:
 
   isCurrentlyProcessing = false;
   currentProcessingSlotId = null;
+
+  const processingBox = suggestions.find((b) => b.isProcessing);
+  if (processingBox) {
+    processingBox.isProcessing = false;
+  }
 
   setTimeout(() => processNextSlot(), 100);
 }
@@ -672,25 +685,35 @@ function renderSuggestions(): void {
     ${suggestions
       .map(
         (s) => `
-      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""}" data-id="${s.id}">
+      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""}" data-id="${s.id}">
         <div class="suggestion-item__header">
           <button class="suggestion-item__toggle" data-action="toggle">${s.isExpanded ? "▼" : "▶"}</button>
           <button class="suggestion-item__collapse" data-action="collapse">${s.isCollapsed ? "»" : "«"}</button>
           <span class="suggestion-item__title">${escapeHtml(s.sentenceTitle)}</span>
           ${s.isAccepted ? "<span class='suggestion-item__accepted-badge'>✓</span>" : ""}
+          ${s.isProcessing ? "<span class='suggestion-item__processing-badge'>⟳</span>" : ""}
           <button class="suggestion-item__close" data-action="close">✕</button>
         </div>
         ${
-          s.isCollapsed
+          s.isProcessing
             ? `
+        <div class="suggestion-item__body suggestion-item__body--processing">
+          <div class="suggestion-item__processing-indicator">
+            <span class="suggestion-item__spinner"></span>
+            <span class="suggestion-item__processing-text">Generating new suggestion...</span>
+          </div>
+        </div>
+        `
+            : s.isCollapsed
+              ? `
         <div class="suggestion-item__actions">
           <button class="suggestion-item__accept" data-action="accept">Accept</button>
           <button class="suggestion-item__reject" data-action="reject">Discard</button>
           <button class="suggestion-item__switch" data-action="switch">Switch</button>
         </div>
         `
-            : s.isExpanded
-              ? `
+              : s.isExpanded
+                ? `
         <div class="suggestion-item__body">
           <div class="suggestion-item__original">
             <span class="suggestion-item__label">Original:</span>
@@ -723,7 +746,7 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-              : ""
+                : ""
         }
       </div>
     `,

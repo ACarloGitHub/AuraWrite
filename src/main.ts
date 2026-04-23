@@ -22,7 +22,6 @@ const ZOOM_KEY = "aurawrite-zoom";
 type ThemeMode = "light" | "dark" | "custom";
 
 interface Preferences {
-  toolbarDisplay: "icon" | "text" | "both";
   theme: ThemeMode;
   customBg: string;
   customToolbar: string;
@@ -125,7 +124,6 @@ After receiving tool results, summarize them naturally for the user.`;
 const defaultEntityExtractionRole = "";
 
 const defaultPreferences: Preferences = {
-  toolbarDisplay: "both",
   theme: "light",
   customBg: "#f0f0f0",
   customToolbar: "#ffffff",
@@ -192,16 +190,6 @@ function applyPreferences(prefs: Preferences): void {
     root.style.setProperty("--custom-paper", prefs.customPaper);
     root.style.setProperty("--custom-text-editor", prefs.customTextEditor);
     root.style.setProperty("--custom-text-buttons", prefs.customTextButtons);
-  }
-
-  const toolbar = document.querySelector(".toolbar");
-  if (toolbar) {
-    toolbar.classList.remove(
-      "toolbar-display-icon",
-      "toolbar-display-text",
-      "toolbar-display-both",
-    );
-    toolbar.classList.add(`toolbar-display-${prefs.toolbarDisplay}`);
   }
 
   localStorage.setItem(THEME_KEY, prefs.theme);
@@ -278,8 +266,6 @@ function openPreferencesModal(): void {
   const modal = document.getElementById("preferences-modal");
   const prefs = getPreferences();
 
-  (document.getElementById("pref-toolbar-display") as HTMLSelectElement).value =
-    prefs.toolbarDisplay;
   (document.getElementById("pref-theme") as HTMLSelectElement).value =
     prefs.theme;
   (document.getElementById("pref-custom-bg") as HTMLInputElement).value =
@@ -497,7 +483,6 @@ function savePreferencesFromModal(): void {
   const tarea = (id: string) => (el(id) as HTMLTextAreaElement)?.value || "";
 
   const prefs: Preferences = {
-    toolbarDisplay: sel("pref-toolbar-display") as Preferences["toolbarDisplay"],
     theme: sel("pref-theme") as ThemeMode,
     customBg: inp("pref-custom-bg"),
     customToolbar: inp("pref-custom-toolbar"),
@@ -736,7 +721,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document
     .querySelectorAll(
-      "#pref-toolbar-display, #pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);
