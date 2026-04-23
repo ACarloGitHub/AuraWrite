@@ -877,19 +877,24 @@ const OVERFLOW_ORDER: string[] = [
   "style-group",
 ];
 
-let overflowObserver: ResizeObserver | null = null;
+const GROUP_IDS: string[] = [
+  "file-dropdown",
+  "edit-group",
+  "style-group",
+  "format-group",
+  "alignment-group",
+  "line-height-group",
+  "page-group",
+  "overflow-dropdown",
+  "misc-group",
+];
 
 function assignGroupIds(): void {
   const toolbar = document.querySelector(".toolbar");
   if (!toolbar) return;
-
   const groups = toolbar.querySelectorAll(":scope > .toolbar-group");
-  const groupNames = ["file-dropdown", "edit-group", "style-group", "format-group", "alignment-group", "line-height-group", "page-group", "overflow-dropdown", "misc-group"];
-
   groups.forEach((group, i) => {
-    if (groupNames[i]) {
-      group.id = groupNames[i];
-    }
+    if (GROUP_IDS[i]) group.id = GROUP_IDS[i];
   });
 }
 
@@ -912,73 +917,103 @@ function setupOverflowMenu(): void {
   });
 
   const toolbar = document.querySelector(".toolbar") as HTMLElement;
-  if (!toolbar) return;
-
   const overflowDropdown = document.getElementById("overflow-dropdown") as HTMLElement;
-  if (!overflowDropdown) return;
+  if (!toolbar || !overflowDropdown) return;
 
-  overflowObserver = new ResizeObserver(() => {
-    recalcOverflow(toolbar, overflowDropdown, menu);
-  });
-  overflowObserver.observe(toolbar);
+  // Use a pooled recalc to avoid thrashing
+  let pendingRaf = false;
+  const scheduleRecalc = () => {
+    if (pendingRaf) return;
+    pendingRaf = true;
+    requestAnimationFrame(() => {
+      pendingRaf = false;
+      recalcOverflow(toolbar, overflowDropdown, menu);
+    });
+  };
 
-  // Also recalc on window resize
-  window.addEventListener("resize", () => {
-    recalcOverflow(toolbar, overflowDropdown, menu);
-  });
+  new ResizeObserver(scheduleRecalc).observe(toolbar);
+  window.addEventListener("resize", scheduleRecalc);
 
-  // Initial calculation after a frame so toolbar has layout
-  requestAnimationFrame(() => {
-    recalcOverflow(toolbar, overflowDropdown, menu);
-  });
+  // Initial after layout settles
+  setTimeout(scheduleRecalc, 100);
+  scheduleRecalc();
 }
 
 function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, overflowMenu: HTMLElement): void {
-  // Step 1: Move all overflowed groups back to toolbar and show everything
-  const hiddenGroups = overflowMenu.querySelectorAll(".overflow-hidden-group") as NodeListOf<HTMLElement>;
-  hiddenGroups.forEach((g) => {
+  // Step 1: Put ALL groups back under the toolbar (before overflow dropdown)
+  // This includes groups currently living inside overflowMenu
+  const movedGroups = overflowMenu.querySelectorAll(".toolbar-group") as NodeListOf<HTMLElement>;
+  movedGroups.forEach((g) => {
     toolbar.insertBefore(g, overflowDropdown);
     g.classList.remove("overflow-hidden-group");
-    g.style.display = "";
   });
 
-  // Step 2: Hide overflow dropdown, clear menu
-  overflowDropdown.classList.remove("visible");
-  overflowMenu.classList.add("hidden");
+  // Also check for groups that were hidden with display:none on the toolbar
+  const allToolbarGroups = Array.from(toolbar.querySelectorAll(":scope > .toolbar-group")) as HTMLElement[];
+  allToolbarGroups.forEach((g) => {
+    g.style.display = "";
+    g.classList.remove("overflow-hidden-group");
+  });
+
+  // Clear overflow menu
   overflowMenu.innerHTML = "";
+  overflowMenu.classList.add("hidden");
 
-  // Step 3: Measure total width of all groups
-  const groups = Array.from(toolbar.querySelectorAll(":scope > .toolbar-group")) as HTMLElement[];
+  // Step 2: Force browser layout so offsetWidth is accurate
+  // Reading offsetWidth triggers a reflow
+  const _ = toolbar.offsetWidth;
+  void _;
+
+  // Step 3: Measure
   const toolbarWidth = toolbar.clientWidth;
-  const gapWidth = 8;
-
+  const gap = 8;
   let usedWidth = 0;
-  for (const g of groups) {
+
+  const measurableGroups: HTMLElement[] = [];
+  for (const g of allToolbarGroups) {
     if (g.id === "overflow-dropdown") continue;
-    usedWidth += g.offsetWidth + gapWidth;
+    measurableGroups.push(g);
+    usedWidth += g.offsetWidth + gap;
   }
 
-  // Step 4: If everything fits, done
+  // Step 4: Everything fits — hide overflow button, done
+  overflowDropdown.classList.remove("visible");
   if (usedWidth <= toolbarWidth) return;
 
-  // Step 5: Need overflow — find groups to hide in priority order
-  const overflowBtnWidth = 48;
-  const targetWidth = toolbarWidth - overflowBtnWidth;
+  // Step 5: Need to overflow some groups
+  const overflowBtnWidth = overflowDropdown.offsetWidth || 48;
+  const targetWidth = toolbarWidth - overflowBtnWidth - gap;
 
   for (const groupId of OVERFLOW_ORDER) {
     if (usedWidth <= targetWidth) break;
 
     const group = document.getElementById(groupId) as HTMLElement;
-    if (!group || group.parentElement !== toolbar) continue;
+    if (!group) continue;
 
-    usedWidth -= (group.offsetWidth + gapWidth);
+    const groupWidth = group.offsetWidth + gap;
+    usedWidth -= groupWidth;
     group.classList.add("overflow-hidden-group");
-
-    // Move group into overflow menu container
     overflowMenu.appendChild(group);
-    group.style.display = "flex";
   }
 
-  // Step 6: Show overflow dropdown
+  // Step 6: Show overflow button
   overflowDropdown.classList.add("visible");
+
+  // Re-measure to verify it actually fits now
+  void toolbar.offsetWidth;
+  const remainingWidth = measurableGroups
+    .filter((g) => g.parentElement === toolbar)
+    .reduce((sum, g) => sum + g.offsetWidth + gap, 0);
+
+  if (remainingWidth > toolbarWidth) {
+    // Still overflowing — hide more groups aggressively
+    for (const groupId of OVERFLOW_ORDER) {
+      const group = document.getElementById(groupId) as HTMLElement;
+      if (!group || group.parentElement !== toolbar) continue;
+      if (remainingWidth <= toolbarWidth) break;
+      usedWidth -= (group.offsetWidth + gap);
+      group.classList.add("overflow-hidden-group");
+      overflowMenu.appendChild(group);
+    }
+  }
 }

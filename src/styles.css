@@ -141,6 +141,7 @@ body {
   border-bottom: 1px solid var(--color-border);
   position: relative;
   z-index: 20;
+  overflow: hidden;
   transition:
     background 0.3s,
     border-color 0.3s;
@@ -2107,8 +2108,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Overflow menu items in dropdown */
-/* Overflow groups inside the dropdown menu */
+/* Overflow dropdown menu for toolbar */
 #overflow-dropdown {
   display: none;
 }
@@ -2117,12 +2117,19 @@ body {
   display: flex;
 }
 
+#overflow-menu {
+  min-width: 200px;
+  max-width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
 #overflow-menu .toolbar-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--color-border, #eee);
 }
 
