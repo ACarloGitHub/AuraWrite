@@ -934,6 +934,7 @@ function setupOverflowMenu(): void {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (menu?.classList.contains("hidden")) {
+      forceRecalc();
       positionDropdown(btn, menu);
       menu?.classList.remove("hidden");
     } else {
@@ -961,6 +962,11 @@ function setupOverflowMenu(): void {
     });
   };
 
+  const forceRecalc = () => {
+    pendingRaf = false;
+    recalcOverflow(toolbar, overflowDropdown, menu);
+  };
+
   // Observe the toolbar itself — it must have overflow:hidden for clientWidth to work
   new ResizeObserver(scheduleRecalc).observe(toolbar);
 
@@ -974,18 +980,20 @@ function setupOverflowMenu(): void {
 }
 
 function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, overflowMenu: HTMLElement): void {
-  // Step 1: Show all groups, clear overflow menu
+  const isMenuOpen = !overflowMenu.classList.contains("hidden");
+
   const allGroups = Array.from(toolbar.querySelectorAll(":scope > .toolbar-group")) as HTMLElement[];
   for (const g of allGroups) {
     g.style.display = "";
   }
-  overflowDropdown.classList.remove("visible");
-  overflowMenu.classList.add("hidden");
 
-  // Step 2: Force layout
+  if (!isMenuOpen) {
+    overflowMenu.classList.add("hidden");
+  }
+  overflowDropdown.classList.remove("visible");
+
   void toolbar.offsetWidth;
 
-  // Step 3: Measure
   const toolbarWidth = toolbar.clientWidth;
   const gap = 8;
   let usedWidth = 0;
@@ -994,21 +1002,19 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
     usedWidth += g.offsetWidth + gap;
   }
 
-  // Everything fits
   if (usedWidth <= toolbarWidth) {
-    overflowMenu.innerHTML = "";
+    if (!isMenuOpen) {
+      overflowMenu.innerHTML = "";
+    }
     return;
   }
 
-  // Step 4: Show overflow dropdown so we can measure its width
   overflowDropdown.classList.add("visible");
   void overflowDropdown.offsetWidth;
   const overflowBtnWidth = overflowDropdown.offsetWidth + gap;
 
-  // Step 5: Calculate target width
   const targetWidth = toolbarWidth - overflowBtnWidth;
 
-  // Step 6: Hide groups until we fit
   let currentWidth = usedWidth;
   for (const groupId of OVERFLOW_ORDER) {
     if (currentWidth <= targetWidth) break;
@@ -1020,7 +1026,6 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
     group.style.display = "none";
   }
 
-  // Step 7: Build overflow menu with proxy buttons for hidden groups
   overflowMenu.innerHTML = "";
 
   for (const groupId of OVERFLOW_ORDER) {
@@ -1035,10 +1040,8 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
       overflowMenu.appendChild(section);
     }
 
-    // Add proxy buttons for each interactive child
     const children = Array.from(group.children);
     for (const child of children) {
-      // Skip non-interactive containers like the dropdown-menu itself
       if (child.classList.contains("dropdown-menu")) continue;
 
       const proxy = createProxyButton(child as HTMLElement);
@@ -1050,10 +1053,14 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
     overflowMenu.appendChild(divider);
   }
 
-  // Remove trailing divider
   const lastChild = overflowMenu.lastElementChild;
   if (lastChild && lastChild.classList.contains("dropdown-divider")) {
     lastChild.remove();
+  }
+
+  if (isMenuOpen) {
+    overflowMenu.classList.remove("hidden");
+    positionDropdown(overflowDropdown.querySelector("#btn-overflow-menu") as HTMLElement, overflowMenu);
   }
 }
 
