@@ -86,7 +86,7 @@
 
 ## Bug Risolti (Sessione 9)
 - [x] AI panel non si collassava con btn-ai — fix: classList.toggle invece di remove
-- [x] Discard suggestions senza feedback — fix: isProcessing flag + spinner "Generating new suggestion..."
+- [x] Discard suggestions senza feedback — fix: 3 visual states (processing/queued/pending) + status counter
 - [x] Toolbar display mode incoerente — fix: rimossa opzione text/both, toolbar icon-only con tooltip
 - [x] Find/Replace posizione insolita — fix: spostati nel gruppo EDIT dopo Undo/Redo
 - [x] Title bar non centrato — fix: justify-content:center, Georgia serif bold 16px
