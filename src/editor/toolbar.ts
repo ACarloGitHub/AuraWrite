@@ -55,6 +55,7 @@ export function setupToolbar(view: EditorView): void {
   loadPreferences();
   updateDocumentTitleBar();
   initPagination(document.getElementById("editor")!, view);
+  setupOverflowMenu();
 }
 
 function setupDirtyTracking(): void {
@@ -861,4 +862,171 @@ async function handleIndexAndCreateEntities(): Promise<void> {
 
 export function getEditorView(): EditorView {
   return editorView;
+}
+
+// ============================================================================
+// OVERFLOW MENU — responsive toolbar items
+// ============================================================================
+
+const OVERFLOW_ORDER: string[] = [
+  "misc-group",
+  "line-height-group",
+  "page-group",
+  "alignment-group",
+  "format-group",
+  "style-group",
+];
+
+const ALWAYS_VISIBLE: string[] = [
+  "file-dropdown",
+  "edit-group",
+];
+
+function assignGroupIds(): void {
+  const toolbar = document.querySelector(".toolbar");
+  if (!toolbar) return;
+
+  const groups = toolbar.querySelectorAll(":scope > .toolbar-group");
+  const groupNames = ["file-dropdown", "edit-group", "style-group", "format-group", "alignment-group", "line-height-group", "page-group", "overflow-dropdown", "misc-group"];
+
+  groups.forEach((group, i) => {
+    if (groupNames[i]) {
+      group.id = groupNames[i];
+    }
+  });
+}
+
+function setupOverflowMenu(): void {
+  assignGroupIds();
+  setupOverflowToggle();
+
+  const toolbar = document.querySelector(".toolbar") as HTMLElement;
+  if (!toolbar) return;
+
+  const overflowDropdown = document.getElementById("overflow-dropdown") as HTMLElement;
+  if (!overflowDropdown) return;
+
+  const ro = new ResizeObserver(() => {
+    recalcOverflow(toolbar, overflowDropdown);
+  });
+  ro.observe(toolbar);
+
+  recalcOverflow(toolbar, overflowDropdown);
+}
+
+function setupOverflowToggle(): void {
+  const btn = document.getElementById("btn-overflow-menu") as HTMLButtonElement;
+  const menu = document.getElementById("overflow-menu") as HTMLElement;
+  if (!btn || !menu) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!btn.contains(e.target as Node) && !menu.contains(e.target as Node)) {
+      menu.classList.add("hidden");
+    }
+  });
+}
+
+function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement): void {
+  const overflowMenu = document.getElementById("overflow-menu") as HTMLElement;
+  if (!overflowMenu) return;
+
+  const toolbarWidth = toolbar.clientWidth;
+  const groups = Array.from(toolbar.querySelectorAll(":scope > .toolbar-group")) as HTMLElement[];
+
+  // Reset: show all groups, empty overflow
+  groups.forEach((g) => {
+    g.style.display = "";
+  });
+  overflowDropdown.style.display = "none";
+  overflowMenu.innerHTML = "";
+  overflowMenu.classList.add("hidden");
+
+  // Measure total width of all groups
+  let totalWidth = 0;
+  groups.forEach((g) => {
+    totalWidth += g.offsetWidth;
+  });
+
+  // If everything fits, done
+  const overflowBtnWidth = 44;
+  if (totalWidth <= toolbarWidth) return;
+
+  // Hide groups in overflow order until everything fits
+  const availableWidth = toolbarWidth - overflowBtnWidth;
+
+  // First, hide groups in overflow order
+  for (const groupId of OVERFLOW_ORDER) {
+    if (totalWidth <= availableWidth) break;
+
+    const group = document.getElementById(groupId) as HTMLElement;
+    if (!group) continue;
+
+    totalWidth -= group.offsetWidth;
+    group.style.display = "none";
+
+    // Add group items to overflow menu
+    addGroupToOverflowMenu(group, overflowMenu);
+  }
+
+  // Show overflow dropdown
+  overflowDropdown.style.display = "";
+}
+
+function addGroupToOverflowMenu(group: HTMLElement, overflowMenu: HTMLElement): void {
+  const GROUP_LABELS: Record<string, string> = {
+    "style-group": "Style",
+    "format-group": "Format",
+    "alignment-group": "Alignment",
+    "line-height-group": "Line Height",
+    "page-group": "Page",
+    "misc-group": "Misc",
+  };
+
+  const label = GROUP_LABELS[group.id] || "";
+  if (label) {
+    const section = document.createElement("div");
+    section.className = "dropdown-section";
+    section.textContent = label;
+    overflowMenu.appendChild(section);
+  }
+
+  // Clone each child element (buttons, selects, color inputs)
+  const children = Array.from(group.children);
+  children.forEach((child) => {
+    if (child.classList.contains("dropdown-menu") && child.id === "file-menu") return;
+
+    const clone = child.cloneNode(true) as HTMLElement;
+
+    if (clone instanceof HTMLSelectElement) {
+      clone.value = (child as HTMLSelectElement).value;
+      clone.addEventListener("change", () => {
+        (child as HTMLSelectElement).value = clone.value;
+        (child as HTMLSelectElement).dispatchEvent(new Event("change"));
+      });
+    } else if (clone instanceof HTMLInputElement && clone.type === "color") {
+      clone.value = (child as HTMLInputElement).value;
+      clone.addEventListener("input", () => {
+        (child as HTMLInputElement).value = clone.value;
+        (child as HTMLInputElement).dispatchEvent(new Event("input"));
+      });
+    } else if (clone instanceof HTMLButtonElement) {
+      clone.addEventListener("click", (e) => {
+        e.stopPropagation();
+        (child as HTMLButtonElement).click();
+        overflowMenu.classList.add("hidden");
+      });
+    }
+
+    clone.classList.add("overflow-menu-item");
+    overflowMenu.appendChild(clone);
+  });
+
+  const divider = document.createElement("div");
+  divider.className = "dropdown-divider";
+  overflowMenu.appendChild(divider);
 }

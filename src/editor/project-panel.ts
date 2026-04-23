@@ -1201,14 +1201,23 @@ function createActiveProjectElement(project: Project): HTMLElement {
     openColorPicker({
       itemType: "project",
       itemId: project.id,
+      currentName: project.name,
       currentBg: project.bg_color,
       currentText: project.text_color,
-      onSave: async (bg, text) => {
+      onSave: async (newName, bg, text) => {
+        project.name = newName;
         project.bg_color = bg;
         project.text_color = text;
         project.updated_at = Date.now();
         await updateProject(project);
+        nameEl.innerHTML = `<strong>${newName}</strong>`;
         applyItemColors(header, bg, text, "project");
+        const titleEl = document.getElementById("document-title");
+        if (titleEl && currentSection && currentDocument) {
+          titleEl.textContent = `${newName} / ${currentSection.name} / ${currentDocument.title}`;
+        } else if (titleEl) {
+          titleEl.textContent = newName;
+        }
       },
       onReset: async () => {
         project.bg_color = undefined;
@@ -1294,13 +1303,16 @@ function createProjectElement(project: Project): HTMLElement {
     openColorPicker({
       itemType: "project",
       itemId: project.id,
+      currentName: project.name,
       currentBg: project.bg_color,
       currentText: project.text_color,
-      onSave: async (bg, text) => {
+      onSave: async (newName, bg, text) => {
+        project.name = newName;
         project.bg_color = bg;
         project.text_color = text;
         project.updated_at = Date.now();
         await updateProject(project);
+        nameEl.textContent = newName;
         applyItemColors(header, bg, text, "project");
       },
       onReset: async () => {
@@ -1316,15 +1328,29 @@ function createProjectElement(project: Project): HTMLElement {
   header.appendChild(nameEl);
   header.appendChild(colorBtnProjectList);
   header.appendChild(actionsEl);
-  
-  // Click sul progetto chiede conferma se ci sono modifiche
+   
+  let projectListClickTimer: ReturnType<typeof setTimeout> | null = null;
   header.addEventListener("click", async () => {
-    const action = await handleCloseDocument();
-    if (action === 'proceed') {
-      selectProject(project);
+    if (projectListClickTimer) {
+      clearTimeout(projectListClickTimer);
+      projectListClickTimer = null;
+      return;
+    }
+    projectListClickTimer = setTimeout(async () => {
+      projectListClickTimer = null;
+      const action = await handleCloseDocument();
+      if (action === 'proceed') {
+        selectProject(project);
+      }
+    }, 300);
+  });
+  header.addEventListener("dblclick", () => {
+    if (projectListClickTimer) {
+      clearTimeout(projectListClickTimer);
+      projectListClickTimer = null;
     }
   });
-  
+   
   div.appendChild(header);
 
   applyItemColors(header, project.bg_color, project.text_color, "project");
@@ -1425,13 +1451,16 @@ function createSectionElement(section: Section): HTMLElement {
     openColorPicker({
       itemType: "section",
       itemId: section.id,
+      currentName: section.name,
       currentBg: section.bg_color,
       currentText: section.text_color,
-      onSave: async (bg, text) => {
+      onSave: async (newName, bg, text) => {
+        section.name = newName;
         section.bg_color = bg;
         section.text_color = text;
         section.updated_at = Date.now();
         await updateSection(section);
+        nameEl.textContent = newName;
         applyItemColors(header, bg, text, "section");
       },
       onReset: async () => {
@@ -1446,9 +1475,25 @@ function createSectionElement(section: Section): HTMLElement {
   header.appendChild(colorBtnSection);
 
   header.appendChild(actionsEl);
+  let sectionClickTimer: ReturnType<typeof setTimeout> | null = null;
   header.addEventListener("click", (e) => {
     e.stopPropagation();
-    selectSection(section);
+    if (sectionClickTimer) {
+      clearTimeout(sectionClickTimer);
+      sectionClickTimer = null;
+      return;
+    }
+    sectionClickTimer = setTimeout(() => {
+      sectionClickTimer = null;
+      selectSection(section);
+    }, 300);
+  });
+  header.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    if (sectionClickTimer) {
+      clearTimeout(sectionClickTimer);
+      sectionClickTimer = null;
+    }
   });
   div.appendChild(header);
 
@@ -1548,13 +1593,16 @@ function createDocumentElement(doc: Document): HTMLElement {
     openColorPicker({
       itemType: "document",
       itemId: doc.id,
+      currentName: doc.title,
       currentBg: doc.bg_color,
       currentText: doc.text_color,
-      onSave: async (bg, text) => {
+      onSave: async (newName, bg, text) => {
+        doc.title = newName;
         doc.bg_color = bg;
         doc.text_color = text;
         doc.updated_at = Date.now();
         await updateDocument(doc);
+        nameEl.textContent = newName;
         applyItemColors(header, bg, text, "document");
       },
       onReset: async () => {
@@ -1569,15 +1617,28 @@ function createDocumentElement(doc: Document): HTMLElement {
   header.appendChild(colorBtnDoc);
 
   header.appendChild(actionsEl);
+  let docClickTimer: ReturnType<typeof setTimeout> | null = null;
   header.addEventListener("click", async (e) => {
     e.stopPropagation();
-    // Se è già il documento corrente, non fare nulla
     if (currentDocument?.id === doc.id) return;
-    
-    // Controlla se ci sono modifiche non salvate
-    const action = await handleCloseDocument();
-    if (action === 'proceed') {
-      await selectDocument(doc);
+    if (docClickTimer) {
+      clearTimeout(docClickTimer);
+      docClickTimer = null;
+      return;
+    }
+    docClickTimer = setTimeout(async () => {
+      docClickTimer = null;
+      const action = await handleCloseDocument();
+      if (action === 'proceed') {
+        await selectDocument(doc);
+      }
+    }, 300);
+  });
+  header.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    if (docClickTimer) {
+      clearTimeout(docClickTimer);
+      docClickTimer = null;
     }
   });
   div.appendChild(header);

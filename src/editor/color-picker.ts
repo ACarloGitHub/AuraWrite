@@ -1,5 +1,5 @@
 // ============================================================================
-// Color Picker - Modal for item customization (bg_color / text_color)
+// Color Picker - Modal for item customization (name, bg_color, text_color)
 // ============================================================================
 
 const PRESET_COLORS: string[] = [
@@ -23,14 +23,15 @@ const ALPHA_MAP: Record<string, number> = {
 export interface ColorPickerOptions {
   itemType: "project" | "section" | "document";
   itemId: string;
+  currentName: string;
   currentBg?: string;
   currentText?: string;
-  onSave: (bgColor: string | undefined, textColor: string | undefined) => Promise<void>;
+  onSave: (newName: string, bgColor: string | undefined, textColor: string | undefined) => Promise<void>;
   onReset: () => Promise<void>;
 }
 
 export function openColorPicker(options: ColorPickerOptions): void {
-  const { itemType, currentBg, currentText, onSave, onReset } = options;
+  const { itemType, currentName, currentBg, currentText, onSave, onReset } = options;
 
   let selectedBg: string | undefined = currentBg;
   let selectedText: string | undefined = currentText;
@@ -39,14 +40,19 @@ export function openColorPicker(options: ColorPickerOptions): void {
   overlay.className = "color-picker-overlay active";
 
   const alpha = ALPHA_MAP[itemType] || 0.12;
+  const labelMap: Record<string, string> = { project: "Project", section: "Section", document: "Document" };
 
   overlay.innerHTML = `
     <div class="color-picker-modal">
       <div class="color-picker-header">
-        <span>Customize</span>
+        <span>Customize ${labelMap[itemType]}</span>
         <button class="color-picker-close" title="Close">&times;</button>
       </div>
       <div class="color-picker-body">
+        <div class="color-picker-section">
+          <label>Name</label>
+          <input type="text" id="cp-name" class="cp-name-input" value="${escapeAttr(currentName)}" placeholder="Enter name...">
+        </div>
         <div class="color-picker-section">
           <label>Background</label>
           <div class="color-swatches" id="cp-bg-swatches"></div>
@@ -66,7 +72,7 @@ export function openColorPicker(options: ColorPickerOptions): void {
         <div class="color-picker-preview" id="cp-preview">
           <div class="color-picker-preview-label">Preview</div>
           <div class="color-picker-preview-box" id="cp-preview-box">
-            <span class="color-picker-preview-text">${itemType}</span>
+            <span class="color-picker-preview-text"></span>
           </div>
         </div>
       </div>
@@ -78,6 +84,14 @@ export function openColorPicker(options: ColorPickerOptions): void {
   `;
 
   document.body.appendChild(overlay);
+
+  const nameInput = overlay.querySelector("#cp-name") as HTMLInputElement;
+  const previewText = overlay.querySelector(".color-picker-preview-text") as HTMLSpanElement;
+  previewText.textContent = currentName;
+
+  nameInput.addEventListener("input", () => {
+    previewText.textContent = nameInput.value || currentName;
+  });
 
   // Populate bg swatches
   const bgSwatches = overlay.querySelector("#cp-bg-swatches") as HTMLDivElement;
@@ -160,9 +174,13 @@ export function openColorPicker(options: ColorPickerOptions): void {
   // Save
   overlay.querySelector("#cp-save")?.addEventListener("click", async (e) => {
     e.stopPropagation();
-    await onSave(selectedBg, selectedText);
+    const newName = nameInput.value.trim();
+    await onSave(newName || currentName, selectedBg, selectedText);
     overlay.remove();
   });
+
+  nameInput.focus();
+  nameInput.select();
 }
 
 export function applyItemColors(
@@ -200,7 +218,7 @@ export function applyItemColors(
 export function createColorBtn(): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.className = "item-color-btn";
-  btn.title = "Customize colors";
+  btn.title = "Customize";
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12.1 1.4a1.4 1.4 0 0 1 2 0l.5.5a1.4 1.4 0 0 1 0 2L5.6 12.9a1 1 0 0 1-.4.2l-3 .7a.3.3 0 0 1-.4-.4l.7-3a1 1 0 0 1 .2-.4L12.1 1.4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
     <circle cx="4" cy="13" r="1.5" fill="currentColor" opacity="0.4"/>
@@ -215,4 +233,8 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     g: parseInt(h.substring(2, 4), 16),
     b: parseInt(h.substring(4, 6), 16),
   };
+}
+
+function escapeAttr(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
