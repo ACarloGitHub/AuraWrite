@@ -16,6 +16,8 @@ pub struct Project {
     #[serde(rename = "type")]
     pub project_type: String,
     pub description: Option<String>,
+    pub bg_color: Option<String>,
+    pub text_color: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -27,7 +29,8 @@ pub struct Section {
     pub parent_id: Option<String>,
     pub name: String,
     pub order_index: i32,
-    pub color: Option<String>,
+    pub bg_color: Option<String>,
+    pub text_color: Option<String>,
     pub section_type: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -43,6 +46,8 @@ pub struct Document {
     pub word_count: i32,
     pub tags: Option<String>,
     pub order_index: i32,
+    pub bg_color: Option<String>,
+    pub text_color: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -127,7 +132,69 @@ pub fn init_database() -> SqliteResult<Connection> {
     // Create schema
     conn.execute_batch(&get_schema())?;
 
+    // Migrate: add bg_color/text_color columns if missing, rename sections.color → sections.bg_color
+    run_migrations(&conn)?;
+
     Ok(conn)
+}
+
+fn run_migrations(conn: &Connection) -> SqliteResult<()> {
+    // Add bg_color to projects if missing
+    let has_project_bg: bool = conn
+        .prepare("SELECT bg_color FROM projects LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_project_bg {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN bg_color TEXT;")?;
+    }
+
+    // Add text_color to projects if missing
+    let has_project_text: bool = conn
+        .prepare("SELECT text_color FROM projects LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_project_text {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN text_color TEXT;")?;
+    }
+
+    // Migrate sections: color → bg_color
+    let has_section_color: bool = conn
+        .prepare("SELECT color FROM sections LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    let has_section_bg: bool = conn
+        .prepare("SELECT bg_color FROM sections LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+
+    if has_section_color && !has_section_bg {
+        // Old schema: rename color to bg_color via copy
+        conn.execute_batch("ALTER TABLE sections ADD COLUMN bg_color TEXT;")?;
+        conn.execute_batch("UPDATE sections SET bg_color = color WHERE color IS NOT NULL;")?;
+        conn.execute_batch("ALTER TABLE sections ADD COLUMN text_color TEXT;")?;
+    } else if !has_section_bg {
+        conn.execute_batch("ALTER TABLE sections ADD COLUMN bg_color TEXT;")?;
+        conn.execute_batch("ALTER TABLE sections ADD COLUMN text_color TEXT;")?;
+    }
+
+    // Add bg_color/text_color to documents if missing
+    let has_doc_bg: bool = conn
+        .prepare("SELECT bg_color FROM documents LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_doc_bg {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN bg_color TEXT;")?;
+    }
+
+    let has_doc_text: bool = conn
+        .prepare("SELECT text_color FROM documents LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_doc_text {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN text_color TEXT;")?;
+    }
+
+    Ok(())
 }
 
 /// Get the full schema SQL
@@ -143,6 +210,8 @@ fn get_schema() -> String {
         name TEXT NOT NULL,
         type TEXT NOT NULL DEFAULT 'novel',
         description TEXT,
+        bg_color TEXT,
+        text_color TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
@@ -165,7 +234,8 @@ fn get_schema() -> String {
         parent_id TEXT REFERENCES sections(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         order_index INTEGER NOT NULL DEFAULT 0,
-        color TEXT,
+        bg_color TEXT,
+        text_color TEXT,
         section_type TEXT DEFAULT 'chapter',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
@@ -181,6 +251,8 @@ fn get_schema() -> String {
         word_count INTEGER DEFAULT 0,
         tags TEXT,
         order_index INTEGER NOT NULL DEFAULT 0,
+        bg_color TEXT,
+        text_color TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
@@ -350,13 +422,15 @@ mod tests {
 
 pub fn create_project(conn: &Connection, project: &Project) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO projects (id, name, type, description, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO projects (id, name, type, description, bg_color, text_color, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             project.id,
             project.name,
             project.project_type,
             project.description,
+            project.bg_color,
+            project.text_color,
             project.created_at,
             project.updated_at
         ],
@@ -366,7 +440,7 @@ pub fn create_project(conn: &Connection, project: &Project) -> SqliteResult<()> 
 
 pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, type, description, created_at, updated_at FROM projects ORDER BY updated_at DESC"
+        "SELECT id, name, type, description, bg_color, text_color, created_at, updated_at FROM projects ORDER BY updated_at DESC"
     )?;
 
     let projects = stmt.query_map([], |row| {
@@ -375,8 +449,10 @@ pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
             name: row.get(1)?,
             project_type: row.get(2)?,
             description: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
+            bg_color: row.get(4)?,
+            text_color: row.get(5)?,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
         })
     })?;
 
@@ -385,7 +461,7 @@ pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
 
 pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, type, description, created_at, updated_at FROM projects WHERE id = ?1",
+        "SELECT id, name, type, description, bg_color, text_color, created_at, updated_at FROM projects WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query(params![id])?;
@@ -396,8 +472,10 @@ pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Pro
             name: row.get(1)?,
             project_type: row.get(2)?,
             description: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
+            bg_color: row.get(4)?,
+            text_color: row.get(5)?,
+            created_at: row.get(6)?,
+            updated_at: row.get(7)?,
         }))
     } else {
         Ok(None)
@@ -406,11 +484,13 @@ pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Pro
 
 pub fn update_project(conn: &Connection, project: &Project) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE projects SET name = ?1, type = ?2, description = ?3, updated_at = ?4 WHERE id = ?5",
+        "UPDATE projects SET name = ?1, type = ?2, description = ?3, bg_color = ?4, text_color = ?5, updated_at = ?6 WHERE id = ?7",
         params![
             project.name,
             project.project_type,
             project.description,
+            project.bg_color,
+            project.text_color,
             project.updated_at,
             project.id
         ],
@@ -429,15 +509,16 @@ pub fn delete_project(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_section(conn: &Connection, section: &Section) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO sections (id, project_id, parent_id, name, order_index, color, section_type, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO sections (id, project_id, parent_id, name, order_index, bg_color, text_color, section_type, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             section.id,
             section.project_id,
             section.parent_id,
             section.name,
             section.order_index,
-            section.color,
+            section.bg_color,
+            section.text_color,
             section.section_type,
             section.created_at,
             section.updated_at
@@ -448,7 +529,7 @@ pub fn create_section(conn: &Connection, section: &Section) -> SqliteResult<()> 
 
 pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteResult<Vec<Section>> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, parent_id, name, order_index, color, section_type, created_at, updated_at 
+        "SELECT id, project_id, parent_id, name, order_index, bg_color, text_color, section_type, created_at, updated_at 
          FROM sections WHERE project_id = ?1 ORDER BY order_index, created_at"
     )?;
 
@@ -459,10 +540,11 @@ pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteRes
             parent_id: row.get(2)?,
             name: row.get(3)?,
             order_index: row.get(4)?,
-            color: row.get(5)?,
-            section_type: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+            bg_color: row.get(5)?,
+            text_color: row.get(6)?,
+            section_type: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     })?;
 
@@ -471,13 +553,14 @@ pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteRes
 
 pub fn update_section(conn: &Connection, section: &Section) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE sections SET name = ?1, parent_id = ?2, order_index = ?3, color = ?4, section_type = ?5, updated_at = ?6 
-         WHERE id = ?7",
+        "UPDATE sections SET name = ?1, parent_id = ?2, order_index = ?3, bg_color = ?4, text_color = ?5, section_type = ?6, updated_at = ?7 
+         WHERE id = ?8",
         params![
             section.name,
             section.parent_id,
             section.order_index,
-            section.color,
+            section.bg_color,
+            section.text_color,
             section.section_type,
             section.updated_at,
             section.id
@@ -497,8 +580,8 @@ pub fn delete_section(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             document.id,
             document.section_id,
@@ -508,6 +591,8 @@ pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.word_count,
             document.tags,
             document.order_index,
+            document.bg_color,
+            document.text_color,
             document.created_at,
             document.updated_at
         ],
@@ -520,7 +605,7 @@ pub fn get_documents_by_section(
     section_id: &str,
 ) -> SqliteResult<Vec<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, created_at, updated_at 
          FROM documents WHERE section_id = ?1 ORDER BY order_index, created_at"
     )?;
 
@@ -534,8 +619,10 @@ pub fn get_documents_by_section(
             word_count: row.get(5)?,
             tags: row.get(6)?,
             order_index: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
+            bg_color: row.get(8)?,
+            text_color: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         })
     })?;
 
@@ -544,7 +631,7 @@ pub fn get_documents_by_section(
 
 pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, created_at, updated_at 
          FROM documents WHERE id = ?1"
     )?;
 
@@ -560,8 +647,10 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
             word_count: row.get(5)?,
             tags: row.get(6)?,
             order_index: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
+            bg_color: row.get(8)?,
+            text_color: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         }))
     } else {
         Ok(None)
@@ -570,8 +659,8 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
 
 pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, updated_at = ?8 
-         WHERE id = ?9",
+        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, bg_color = ?8, text_color = ?9, updated_at = ?10 
+         WHERE id = ?11",
         params![
             document.section_id,
             document.title,
@@ -580,6 +669,8 @@ pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.word_count,
             document.tags,
             document.order_index,
+            document.bg_color,
+            document.text_color,
             document.updated_at,
             document.id
         ],

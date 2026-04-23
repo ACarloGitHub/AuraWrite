@@ -7,6 +7,8 @@ export interface Project {
   name: string;
   type: string;
   description?: string;
+  bg_color?: string;
+  text_color?: string;
   created_at: number;
   updated_at: number;
 }
@@ -17,7 +19,8 @@ export interface Section {
   parent_id?: string;
   name: string;
   order_index: number;
-  color?: string;
+  bg_color?: string;
+  text_color?: string;
   section_type?: string;
   created_at: number;
   updated_at: number;
@@ -32,6 +35,8 @@ export interface Document {
   word_count: number;
   tags?: string;
   order_index: number;
+  bg_color?: string;
+  text_color?: string;
   created_at: number;
   updated_at: number;
 }
@@ -177,7 +182,8 @@ export function createSection(
     parent_id: parentId,
     name,
     order_index: orderIndex,
-    color: undefined,
+    bg_color: undefined,
+    text_color: undefined,
     section_type: sectionType,
     created_at: now,
     updated_at: now,

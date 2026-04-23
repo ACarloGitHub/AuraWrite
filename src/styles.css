@@ -2351,3 +2351,282 @@ body {
   border-left-color: var(--color-primary);
   color: #aaa;
 }
+
+/* ============================================================================
+   COLOR PICKER MODAL
+   ============================================================================ */
+
+.color-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.color-picker-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.color-picker-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 8px;
+  width: 320px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.color-picker-overlay.active .color-picker-modal {
+  transform: scale(1);
+}
+
+.color-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #eee);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-text, #333);
+}
+
+.color-picker-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--color-text-muted, #888);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.color-picker-close:hover {
+  color: var(--color-text, #333);
+}
+
+.color-picker-body {
+  padding: 12px 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.color-picker-section {
+  margin-bottom: 12px;
+}
+
+.color-picker-section label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted, #888);
+  margin-bottom: 6px;
+}
+
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  padding: 0;
+  outline: none;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.selected {
+  border-color: var(--color-text, #333);
+  box-shadow: 0 0 0 1px var(--color-surface, #fff);
+}
+
+.color-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.color-custom-row input[type="color"] {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+}
+
+.color-custom-row input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-custom-row input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
+.color-custom-label {
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+}
+
+.color-picker-preview {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border, #eee);
+}
+
+.color-picker-preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted, #888);
+  margin-bottom: 6px;
+}
+
+.color-picker-preview-box {
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.color-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border, #eee);
+}
+
+.color-picker-btn {
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border, #ddd);
+  transition: background 0.15s ease;
+}
+
+.color-picker-btn.reset {
+  background: transparent;
+  color: var(--color-text-muted, #888);
+}
+
+.color-picker-btn.reset:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #cc0000;
+}
+
+.color-picker-btn.save {
+  background: var(--color-primary, #4a90d9);
+  color: white;
+  border-color: var(--color-primary, #4a90d9);
+}
+
+.color-picker-btn.save:hover {
+  opacity: 0.9;
+}
+
+/* ============================================================================
+   ITEM COLOR CUSTOMIZATION BUTTON
+   ============================================================================ */
+
+.item-color-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  color: var(--color-text-muted, #888);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+
+.item-color-btn:hover {
+  color: var(--color-primary, #4a90d9);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.item-header:hover .item-color-btn,
+.project-item.active .item-color-btn,
+.section-item.active .item-color-btn,
+.document-item.active .item-color-btn {
+  opacity: 1;
+}
+
+/* ============================================================================
+   ITEMS WITH CUSTOM COLORS
+   ============================================================================ */
+
+.has-custom-colors:hover {
+  background: rgba(var(--custom-bg-rgb, 74, 144, 217), 0.2) !important;
+}
+
+.section-item .item-header.has-custom-colors {
+  border-left: 3px solid var(--custom-bg, var(--color-primary, #4a90d9));
+  padding-left: 7px;
+}
+
+.document-item .item-header.has-custom-colors {
+  border-left: 3px solid var(--custom-bg, var(--color-primary, #4a90d9));
+  padding-left: 5px;
+}
+
+.project-item .item-header.has-custom-colors {
+  border-left: 3px solid var(--custom-bg, var(--color-primary, #4a90d9));
+  padding-left: 9px;
+}
+
+/* Preserve active state colors for project */
+.project-item.active .item-header.has-custom-colors {
+  background: var(--custom-bg, var(--color-primary, #4a90d9)) !important;
+}
+
+/* Dark theme overrides for color picker */
+[data-theme="dark"] .color-picker-modal {
+  background: #2a2a2a;
+}
+
+[data-theme="dark"] .color-swatch.selected {
+  border-color: #ccc;
+  box-shadow: 0 0 0 1px #2a2a2a;
+}
+
+[data-theme="dark"] .color-picker-btn.save {
+  background: var(--color-primary, #4a90d9);
+}
+
+[data-theme="dark"] .item-color-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

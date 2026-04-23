@@ -30,6 +30,7 @@ import {
   extractEntitiesFromProject,
 } from "../ai-panel/entity-extraction";
 import Sortable from "sortablejs";
+import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
 
 // State
 let currentProject: Project | null = null;
@@ -1136,6 +1137,23 @@ function createActiveProjectElement(project: Project): HTMLElement {
   const nameEl = document.createElement("div");
   nameEl.className = "item-name";
   nameEl.innerHTML = `<strong>${project.name}</strong>`;
+  nameEl.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    startInlineRename(nameEl, project.name, async (newName) => {
+      project.name = newName;
+      project.updated_at = Date.now();
+      await updateProject(project);
+      nameEl.innerHTML = `<strong>${newName}</strong>`;
+      const titleEl = document.getElementById("document-title");
+      if (titleEl && currentSection && currentDocument) {
+        titleEl.textContent = `${newName} / ${currentSection.name} / ${currentDocument.title}`;
+      } else if (titleEl) {
+        titleEl.textContent = newName;
+      }
+    }, () => {
+      nameEl.innerHTML = `<strong>${project.name}</strong>`;
+    });
+  });
 
   // Container per azioni inline
   const actionsEl = document.createElement("div");
@@ -1176,6 +1194,33 @@ function createActiveProjectElement(project: Project): HTMLElement {
   actionsEl.appendChild(deleteBtn);
 
   header.appendChild(nameEl);
+
+  const colorBtnProject = createColorBtn();
+  colorBtnProject.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openColorPicker({
+      itemType: "project",
+      itemId: project.id,
+      currentBg: project.bg_color,
+      currentText: project.text_color,
+      onSave: async (bg, text) => {
+        project.bg_color = bg;
+        project.text_color = text;
+        project.updated_at = Date.now();
+        await updateProject(project);
+        applyItemColors(header, bg, text, "project");
+      },
+      onReset: async () => {
+        project.bg_color = undefined;
+        project.text_color = undefined;
+        project.updated_at = Date.now();
+        await updateProject(project);
+        applyItemColors(header, undefined, undefined, "project");
+      },
+    });
+  });
+  header.appendChild(colorBtnProject);
+
   header.appendChild(actionsEl);
   div.appendChild(header);
 
@@ -1190,6 +1235,8 @@ function createActiveProjectElement(project: Project): HTMLElement {
     });
   }
   div.appendChild(sectionsList);
+
+  applyItemColors(header, project.bg_color, project.text_color, "project");
 
   return div;
 }
@@ -1241,7 +1288,33 @@ function createProjectElement(project: Project): HTMLElement {
   });
   actionsEl.appendChild(deleteBtn);
 
+  const colorBtnProjectList = createColorBtn();
+  colorBtnProjectList.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openColorPicker({
+      itemType: "project",
+      itemId: project.id,
+      currentBg: project.bg_color,
+      currentText: project.text_color,
+      onSave: async (bg, text) => {
+        project.bg_color = bg;
+        project.text_color = text;
+        project.updated_at = Date.now();
+        await updateProject(project);
+        applyItemColors(header, bg, text, "project");
+      },
+      onReset: async () => {
+        project.bg_color = undefined;
+        project.text_color = undefined;
+        project.updated_at = Date.now();
+        await updateProject(project);
+        applyItemColors(header, undefined, undefined, "project");
+      },
+    });
+  });
+
   header.appendChild(nameEl);
+  header.appendChild(colorBtnProjectList);
   header.appendChild(actionsEl);
   
   // Click sul progetto chiede conferma se ci sono modifiche
@@ -1253,6 +1326,8 @@ function createProjectElement(project: Project): HTMLElement {
   });
   
   div.appendChild(header);
+
+  applyItemColors(header, project.bg_color, project.text_color, "project");
 
   return div;
 }
@@ -1343,6 +1418,33 @@ function createSectionElement(section: Section): HTMLElement {
   header.appendChild(dragHandle);
   header.appendChild(toggleBtn);
   header.appendChild(nameEl);
+
+  const colorBtnSection = createColorBtn();
+  colorBtnSection.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openColorPicker({
+      itemType: "section",
+      itemId: section.id,
+      currentBg: section.bg_color,
+      currentText: section.text_color,
+      onSave: async (bg, text) => {
+        section.bg_color = bg;
+        section.text_color = text;
+        section.updated_at = Date.now();
+        await updateSection(section);
+        applyItemColors(header, bg, text, "section");
+      },
+      onReset: async () => {
+        section.bg_color = undefined;
+        section.text_color = undefined;
+        section.updated_at = Date.now();
+        await updateSection(section);
+        applyItemColors(header, undefined, undefined, "section");
+      },
+    });
+  });
+  header.appendChild(colorBtnSection);
+
   header.appendChild(actionsEl);
   header.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1364,6 +1466,8 @@ function createSectionElement(section: Section): HTMLElement {
     });
   }
   div.appendChild(docsList);
+
+  applyItemColors(header, section.bg_color, section.text_color, "section");
 
   return div;
 }
@@ -1437,6 +1541,33 @@ function createDocumentElement(doc: Document): HTMLElement {
 
   header.appendChild(dragHandle);
   header.appendChild(nameEl);
+
+  const colorBtnDoc = createColorBtn();
+  colorBtnDoc.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openColorPicker({
+      itemType: "document",
+      itemId: doc.id,
+      currentBg: doc.bg_color,
+      currentText: doc.text_color,
+      onSave: async (bg, text) => {
+        doc.bg_color = bg;
+        doc.text_color = text;
+        doc.updated_at = Date.now();
+        await updateDocument(doc);
+        applyItemColors(header, bg, text, "document");
+      },
+      onReset: async () => {
+        doc.bg_color = undefined;
+        doc.text_color = undefined;
+        doc.updated_at = Date.now();
+        await updateDocument(doc);
+        applyItemColors(header, undefined, undefined, "document");
+      },
+    });
+  });
+  header.appendChild(colorBtnDoc);
+
   header.appendChild(actionsEl);
   header.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -1451,6 +1582,8 @@ function createDocumentElement(doc: Document): HTMLElement {
   });
   div.appendChild(header);
 
+  applyItemColors(header, doc.bg_color, doc.text_color, "document");
+
   return div;
 }
 
@@ -1462,6 +1595,7 @@ function startInlineRename(
   el: HTMLElement,
   currentName: string,
   onSave: (newName: string) => Promise<void>,
+  onCancel?: () => void,
 ): void {
   const input = document.createElement("input");
   input.type = "text";
@@ -1480,10 +1614,13 @@ function startInlineRename(
     saved = true;
     const newName = input.value.trim();
     if (newName && newName !== currentName) {
-      el.textContent = newName;
       await onSave(newName);
     } else {
-      el.textContent = currentName;
+      if (onCancel) {
+        onCancel();
+      } else {
+        el.textContent = currentName;
+      }
     }
   };
 
@@ -1494,7 +1631,11 @@ function startInlineRename(
       input.blur();
     } else if (e.key === "Escape") {
       saved = true;
-      el.textContent = currentName;
+      if (onCancel) {
+        onCancel();
+      } else {
+        el.textContent = currentName;
+      }
     }
   });
 }
