@@ -1,6 +1,6 @@
 # AuraWrite — Lezioni Apprese
 
-**Ultimo aggiornamento:** 2026-04-07
+**Ultimo aggiornamento:** 2026-04-23
 
 ---
 
@@ -122,21 +122,19 @@ if (!validatePosition(id)) {
 
 ## Bug Risolti
 
-### Accept/Switch mangiava spazi
+### Accept/Switch mangiava spazi (MITIGATO, non risolto)
 
-**Sintomi:** Punti doppi, a-capo scomparsi, testo corrotto.
+**Sintomi:** Punti doppi, a-capo scomparsi, testo corrotto. Dopo correzioni con segnaposto precisi il problema e' molto mitigato, ma con testo lungo si ripresenta in alcuni frangenti.
 
 **Root cause:**
 1. Posizioni calcolate su `textContent` invece che su ProseMirror
 2. `slotPositions` non aggiornato dopo modifica
 3. `updatePositionsAfterChange` aggiornava solo gli ALTRI slot
+4. Pattern a due transazioni (replace + decoration update) — le posizioni nella seconda transazione possono driftare su documenti lunghi
 
-**Soluzione:**
-1. Usare `nodesBetween` per posizioni ProseMirror
-2. Aggiornare `pos.to` e `pos.original` dopo `dispatch`
-3. Validare posizione prima di usare
+**Stato:** Molto mitigato grazie ai segnaposto precisi. Il problema residuo con testo lungo e' difficile da riprodurre e richiede test specifici con documenti lunghi multi-pagina.
 
-**Commit:** Fix implementato in `suggestions-panel.ts`
+**Da investigare:** Il pattern a due transazioni in `acceptSuggestion()` e `switchSuggestion()` potrebbe essere la causa residua. Valutare l'uso di una singola transazione con meta per entrambe le operazioni.
 
 ---
 
@@ -231,4 +229,4 @@ La soluzione ottimale combina entrambi: usare API native (`nodesBetween`) + vali
 
 ---
 
-*Aggiornato da Aura — 2026-04-07*
+*Aggiornato da Aura — 2026-04-23*

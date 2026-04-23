@@ -318,6 +318,7 @@ Discussione del 2026-04-22: Carlo ha richiesto una serie di miglioramenti all'in
 ## PRIORITY 1: Bugs aperti
 
 - [ ] Discard lento (dipende dal modello AI)
+- [ ] Accept/Switch mangia spazi residuale — mitigato con segnaposto precisi, ma si ripresenta con testo lungo. Investigare pattern a due transazioni
 - [x] Dropdown select in dark mode (GTK) — CSS fix
 - [x] Toast "indexing" scompare senza notifica — fix: toast blu persistente fino a successo/errore
 - [x] Entity extraction: extraction falliva silenziosamente per utente con provider senza API key (es. OpenAI/Anthropic senza key inserita) — aggiunto log di debug e controllo preventivo pre-chiamata AI con messaggio errore che guida a Preferences > AI Provider
@@ -339,10 +340,11 @@ Discussione del 2026-04-22: Carlo ha richiesto una serie di miglioramenti all'in
 10. **MCP Server** — Carlo ha creato un server MCP (2026-04-20). In prospettiva, implementare l'integrazione MCP in AuraWrite per permettere a client esterni di interagire con il database e le funzionalità dell'app.
 11. ~~**Drag & Drop**~~ — ✅ Completato: SortableJS al posto del nativo DnD. Riordino sezioni e documenti, spostamento inter-sezione, ghost compatta con CSS. Richiede `order_index` nella tabella `documents`.
 9. **Hugging Face GGUF local models** (rimuovere dipendenza Ollama)
-10. **Enhanced title bar** (font/style)
+10. ~~**Enhanced title bar**~~ — ✅ Completato: centrato, Georgia serif bold 16px
 11. **Cronologia modifiche persistenti**
 12. **Writing stats, token counter, sentence counter**
 13. **Export PDF/ePub migliorato**
+14. **Icone personalizzate SVG** — Sostituire le emoji nella toolbar con icone SVG custom. Ideale: set di icone minimal monocromatiche che cambi colore col tema. Da progettare: stile consistente, dimensione standard, stroke width uniforme. Non dipendere da librerie esterne di icone per evitare vincoli di licenza e dipendenze.
 
 ---
 

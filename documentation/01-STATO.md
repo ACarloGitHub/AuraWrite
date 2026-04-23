@@ -1,6 +1,6 @@
 # AuraWrite — Stato Attuale
 
-**Ultimo aggiornamento:** 2026-04-22
+**Ultimo aggiornamento:** 2026-04-23
 
 ---
 
@@ -19,11 +19,11 @@
 - Font family, font size, text color, highlight toggle + color picker
 - Text color: nero non parsato come mark (gestito dal tema CSS)
 - Line height (1.0, 1.15, 1.5, 2.0)
-- Find (Ctrl+F) and Find & Replace (Ctrl+H) con decorations e navigazione
-- Title bar con nome documento e dirty indicator
+- Find (Ctrl+F) and Find & Replace (Ctrl+H) con decorations e navigazione (posizione: gruppo EDIT)
+- Title bar centrato con Georgia serif bold 16px e dirty indicator
 - Theme toggle (light/dark/custom)
 - Preferences modal trascinabile con hint descrittivi
-- Toolbar overflow menu (⋯) per finestre compresse
+- Toolbar icon-only con tooltip nativo (rimosso display mode text/both/icon)
 
 ### Database SQLite — Phase A + B
 - Backend Rust CRUD completo (projects, sections, documents, entities, entity_types, versions)
@@ -82,6 +82,14 @@
 
 ## Bug Aperti
 - [ ] Discard lento (dipende dal modello AI)
+- [ ] Accept/Switch mangia spazi residuale (mitigato, si ripresenta con testo lungo)
+
+## Bug Risolti (Sessione 9)
+- [x] AI panel non si collassava con btn-ai — fix: classList.toggle invece di remove
+- [x] Discard suggestions senza feedback — fix: isProcessing flag + spinner "Generating new suggestion..."
+- [x] Toolbar display mode incoerente — fix: rimossa opzione text/both, toolbar icon-only con tooltip
+- [x] Find/Replace posizione insolita — fix: spostati nel gruppo EDIT dopo Undo/Redo
+- [x] Title bar non centrato — fix: justify-content:center, Georgia serif bold 16px
 
 ## Bug Risolti (Sessione 8)
 - [x] Toolbar buttons non funzionavano — setupToolbar() non veniva chiamata in main.ts
@@ -161,4 +169,4 @@ src-tauri/
 
 ---
 
-*Aggiornato 2026-04-22*
+*Aggiornato 2026-04-23*
