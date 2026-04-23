@@ -23,6 +23,7 @@ interface SentenceSuggestion {
   isAccepted: boolean;
   isCollapsed: boolean;
   isProcessing: boolean;
+  isQueued: boolean;
 }
 
 interface AISuggestionResponse {
@@ -296,6 +297,7 @@ function createBoxesFromSlots(): void {
       isAccepted: slot.state === "accepted",
       isCollapsed: false,
       isProcessing: slot.state === "processing",
+      isQueued: slot.state === "discarded",
     };
 
     newSuggestions.push(suggestion);
@@ -332,8 +334,26 @@ async function processNextSlot(): Promise<void> {
   const suggestionBox = suggestions.find((b) => b.id === slot.id);
   if (suggestionBox) {
     suggestionBox.isProcessing = true;
-    renderSuggestions();
+    suggestionBox.isQueued = false;
   }
+
+  const queuedCount = slots.filter(
+    (s) => s.state === "pending" || s.state === "discarded",
+  ).length;
+  const totalActive = slots.filter(
+    (s) =>
+      s.state === "processing" ||
+      s.state === "pending" ||
+      s.state === "discarded",
+  ).length;
+  const currentIdx = totalActive - queuedCount;
+
+  updateAnalysisStatus(
+    wasDiscarded
+      ? `Re-analyzing ${currentIdx}/${totalActive}${queuedCount > 0 ? ` • ${queuedCount} queued` : ""}`
+      : `Analyzing ${currentIdx}/${totalActive}${queuedCount > 0 ? ` • ${queuedCount} queued` : ""}`,
+  );
+  renderSuggestions();
 
   log(
     `PROCESS: Processing slot ${slot.id} - "${slot.text.slice(0, 30)}..." (wasDiscarded: ${wasDiscarded})`,
@@ -540,6 +560,7 @@ export function rejectSuggestion(id: string): void {
 
   if (suggestion) {
     suggestion.isExpanded = true;
+    suggestion.isQueued = true;
     renderSuggestions();
   }
 
@@ -680,18 +701,35 @@ function renderSuggestions(): void {
     return;
   }
 
+  const processingCount = slots.filter(
+    (s) => s.state === "processing",
+  ).length;
+  const queuedCount = slots.filter(
+    (s) => s.state === "pending" || s.state === "discarded",
+  ).length;
+
+  let statusText = "";
+  if (processingCount > 0 && queuedCount > 0) {
+    statusText = `Processing… ${queuedCount} more queued`;
+  } else if (processingCount > 0) {
+    statusText = "Processing…";
+  } else if (queuedCount > 0) {
+    statusText = `${queuedCount} queued`;
+  } else {
+    statusText = "Analysis complete";
+  }
+
   const statusHtml = `
-    <div class="suggestions-status">${escapeHtml(contextUnderstood) || "Analysis complete"}</div>
+    <div class="suggestions-status">${escapeHtml(statusText)}</div>
     ${suggestions
       .map(
         (s) => `
-      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""}" data-id="${s.id}">
+      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""} ${s.isQueued ? "suggestion-item--queued" : ""}" data-id="${s.id}">
         <div class="suggestion-item__header">
           <button class="suggestion-item__toggle" data-action="toggle">${s.isExpanded ? "▼" : "▶"}</button>
           <button class="suggestion-item__collapse" data-action="collapse">${s.isCollapsed ? "»" : "«"}</button>
           <span class="suggestion-item__title">${escapeHtml(s.sentenceTitle)}</span>
           ${s.isAccepted ? "<span class='suggestion-item__accepted-badge'>✓</span>" : ""}
-          ${s.isProcessing ? "<span class='suggestion-item__processing-badge'>⟳</span>" : ""}
           <button class="suggestion-item__close" data-action="close">✕</button>
         </div>
         ${
@@ -700,20 +738,38 @@ function renderSuggestions(): void {
         <div class="suggestion-item__body suggestion-item__body--processing">
           <div class="suggestion-item__processing-indicator">
             <span class="suggestion-item__spinner"></span>
-            <span class="suggestion-item__processing-text">Generating new suggestion...</span>
+            <span class="suggestion-item__processing-text">Analyzing…</span>
           </div>
         </div>
         `
-            : s.isCollapsed
+            : s.isQueued
               ? `
+        <div class="suggestion-item__body suggestion-item__body--queued">
+          <div class="suggestion-item__processing-indicator">
+            <span class="suggestion-item__queued-dot"></span>
+            <span class="suggestion-item__queued-text">Queued for re-analysis…</span>
+          </div>
+        </div>
+        `
+              : !s.suggested && !s.isAccepted
+                ? `
+        <div class="suggestion-item__body suggestion-item__body--pending">
+          <div class="suggestion-item__processing-indicator">
+            <span class="suggestion-item__queued-dot"></span>
+            <span class="suggestion-item__queued-text">Waiting for analysis…</span>
+          </div>
+        </div>
+        `
+                : s.isCollapsed
+                ? `
         <div class="suggestion-item__actions">
           <button class="suggestion-item__accept" data-action="accept">Accept</button>
           <button class="suggestion-item__reject" data-action="reject">Discard</button>
           <button class="suggestion-item__switch" data-action="switch">Switch</button>
         </div>
         `
-              : s.isExpanded
-                ? `
+                : s.isExpanded
+                  ? `
         <div class="suggestion-item__body">
           <div class="suggestion-item__original">
             <span class="suggestion-item__label">Original:</span>
@@ -746,7 +802,7 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-                : ""
+                  : ""
         }
       </div>
     `,

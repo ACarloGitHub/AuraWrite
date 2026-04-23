@@ -628,12 +628,8 @@ body {
   opacity: 0.85;
 }
 
-.suggestion-item__processing-badge {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-  color: var(--color-primary, #4a90d9);
-  font-size: 12px;
-  margin-left: 4px;
+.suggestion-item--queued {
+  opacity: 0.75;
 }
 
 @keyframes spin {
@@ -643,6 +639,11 @@ body {
   to {
     transform: rotate(360deg);
   }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .suggestion-item__processing-indicator {
@@ -664,6 +665,22 @@ body {
 }
 
 .suggestion-item__processing-text {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.suggestion-item__queued-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary, #4a90d9);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.suggestion-item__queued-text {
   color: var(--color-text-muted);
   font-size: 12px;
   font-style: italic;
