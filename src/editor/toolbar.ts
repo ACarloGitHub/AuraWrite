@@ -876,8 +876,17 @@ export function getEditorView(): EditorView {
 function positionDropdown(trigger: HTMLElement, menu: HTMLElement | null): void {
   if (!menu || !trigger) return;
   const rect = trigger.getBoundingClientRect();
+  const menuWidth = menu.offsetWidth || 240;
+  const vw = window.innerWidth;
+
+  let left = rect.left;
+  if (left + menuWidth > vw) {
+    left = rect.right - menuWidth;
+  }
+  if (left < 0) left = 4;
+
   menu.style.top = `${rect.bottom}px`;
-  menu.style.left = `${rect.left}px`;
+  menu.style.left = `${left}px`;
 }
 
 // ============================================================================
@@ -1035,24 +1044,24 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
     const label = GROUP_LABELS[groupId] || "";
     if (label) {
       const sectionHeader = document.createElement("div");
-      sectionHeader.className = "dropdown-section";
+      sectionHeader.className = "overflow-section-label";
       sectionHeader.textContent = label;
       overflowMenu.appendChild(sectionHeader);
     }
 
-    const grid = document.createElement("div");
-    grid.className = "overflow-grid";
+    const row = document.createElement("div");
+    row.className = "overflow-group-row";
 
     const children = Array.from(group.children);
     for (const child of children) {
       if (child.classList.contains("dropdown-menu")) continue;
 
       const proxy = createProxyButton(child as HTMLElement);
-      if (proxy) grid.appendChild(proxy);
+      if (proxy) row.appendChild(proxy);
     }
 
-    if (grid.children.length > 0) {
-      overflowMenu.appendChild(grid);
+    if (row.children.length > 0) {
+      overflowMenu.appendChild(row);
     }
 
     const divider = document.createElement("div");
@@ -1074,79 +1083,58 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
 function createProxyButton(original: HTMLElement): HTMLElement | null {
   if (original instanceof HTMLButtonElement) {
     const btn = document.createElement("button");
-    btn.className = "overflow-item";
+    btn.className = original.className;
     btn.title = original.title || "";
+    if (original.classList.contains("active")) btn.classList.add("active");
 
     const icon = original.querySelector(".toolbar__btn-icon");
     const isIconOnly = original.classList.contains("toolbar__btn-icon-only");
 
     if (icon) {
-      const iconClone = icon.cloneNode(true) as HTMLElement;
-      btn.appendChild(iconClone);
+      btn.appendChild(icon.cloneNode(true));
     } else if (isIconOnly) {
-      const iconSpan = document.createElement("span");
-      iconSpan.className = "toolbar__btn-icon";
-      iconSpan.textContent = original.textContent?.trim() || "";
-      btn.appendChild(iconSpan);
-    }
-
-    if (original.classList.contains("active")) {
-      btn.classList.add("active");
+      btn.textContent = original.textContent?.trim() || "";
+    } else {
+      const txt = original.querySelector(".toolbar__btn-text");
+      if (txt) btn.appendChild(txt.cloneNode(true));
     }
 
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       original.click();
-      const menu = document.getElementById("overflow-menu");
-      if (menu) menu.classList.add("hidden");
+      const m = document.getElementById("overflow-menu");
+      if (m) m.classList.add("hidden");
     });
 
     return btn;
   }
 
   if (original instanceof HTMLSelectElement) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "overflow-select-row";
-
-    const label = document.createElement("span");
-    label.className = "overflow-select-label";
-    label.textContent = original.title || "Select";
-    wrapper.appendChild(label);
-
     const select = original.cloneNode(true) as HTMLSelectElement;
     select.value = original.value;
-    select.className = "toolbar__select overflow-select";
+    select.className = original.className;
 
     select.addEventListener("change", () => {
       original.value = select.value;
       original.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    wrapper.appendChild(select);
-    return wrapper;
+    return select;
   }
 
   if (original instanceof HTMLInputElement && original.type === "color") {
-    const wrapper = document.createElement("div");
-    wrapper.className = "overflow-color-row";
-
-    const label = document.createElement("span");
-    label.className = "overflow-color-label";
-    label.textContent = original.title || "Color";
-    wrapper.appendChild(label);
-
     const input = document.createElement("input");
     input.type = "color";
     input.value = original.value;
-    input.className = "toolbar__color overflow-color-input";
+    input.className = original.className;
+    input.title = original.title || "";
 
     input.addEventListener("input", () => {
       original.value = input.value;
       original.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    wrapper.appendChild(input);
-    return wrapper;
+    return input;
   }
 
   return null;
