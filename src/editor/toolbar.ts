@@ -1034,18 +1034,25 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
 
     const label = GROUP_LABELS[groupId] || "";
     if (label) {
-      const section = document.createElement("div");
-      section.className = "dropdown-section";
-      section.textContent = label;
-      overflowMenu.appendChild(section);
+      const sectionHeader = document.createElement("div");
+      sectionHeader.className = "dropdown-section";
+      sectionHeader.textContent = label;
+      overflowMenu.appendChild(sectionHeader);
     }
+
+    const grid = document.createElement("div");
+    grid.className = "overflow-grid";
 
     const children = Array.from(group.children);
     for (const child of children) {
       if (child.classList.contains("dropdown-menu")) continue;
 
       const proxy = createProxyButton(child as HTMLElement);
-      if (proxy) overflowMenu.appendChild(proxy);
+      if (proxy) grid.appendChild(proxy);
+    }
+
+    if (grid.children.length > 0) {
+      overflowMenu.appendChild(grid);
     }
 
     const divider = document.createElement("div");
@@ -1067,33 +1074,35 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
 function createProxyButton(original: HTMLElement): HTMLElement | null {
   if (original instanceof HTMLButtonElement) {
     const btn = document.createElement("button");
-    btn.className = "dropdown-item";
+    btn.className = "overflow-item";
+    btn.title = original.title || "";
 
-    // Get visual label from the button
-    const icon = original.querySelector(".toolbar__btn-icon, .toolbar__btn-text");
-    const iconOnly = original.classList.contains("toolbar__btn-icon-only");
-    const title = original.title || "";
+    const icon = original.querySelector(".toolbar__btn-icon");
+    if (icon) {
+      const iconClone = icon.cloneNode(true) as HTMLElement;
+      btn.appendChild(iconClone);
+    }
 
-    if (iconOnly) {
-      btn.textContent = title;
-    } else if (icon) {
-      btn.textContent = title || original.textContent?.trim() || "";
-    } else {
-      btn.textContent = title || original.textContent?.trim() || "";
+    const textContent = original.querySelector(".toolbar__btn-text");
+    if (textContent) {
+      const textSpan = document.createElement("span");
+      textSpan.className = "overflow-item__label";
+      textSpan.textContent = textContent.textContent?.trim() || original.title || "";
+      btn.appendChild(textSpan);
+    } else if (!icon) {
+      btn.textContent = original.title || original.textContent?.trim() || "";
+    }
+
+    if (original.classList.contains("active")) {
+      btn.classList.add("active");
     }
 
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       original.click();
-      // Close overflow menu
       const menu = document.getElementById("overflow-menu");
       if (menu) menu.classList.add("hidden");
     });
-
-    // Copy active state
-    if (original.classList.contains("active") || original.tagName === "SELECT") {
-      btn.classList.add("active");
-    }
 
     return btn;
   }
