@@ -1078,19 +1078,16 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
     btn.title = original.title || "";
 
     const icon = original.querySelector(".toolbar__btn-icon");
+    const isIconOnly = original.classList.contains("toolbar__btn-icon-only");
+
     if (icon) {
       const iconClone = icon.cloneNode(true) as HTMLElement;
       btn.appendChild(iconClone);
-    }
-
-    const textContent = original.querySelector(".toolbar__btn-text");
-    if (textContent) {
-      const textSpan = document.createElement("span");
-      textSpan.className = "overflow-item__label";
-      textSpan.textContent = textContent.textContent?.trim() || original.title || "";
-      btn.appendChild(textSpan);
-    } else if (!icon) {
-      btn.textContent = original.title || original.textContent?.trim() || "";
+    } else if (isIconOnly) {
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "toolbar__btn-icon";
+      iconSpan.textContent = original.textContent?.trim() || "";
+      btn.appendChild(iconSpan);
     }
 
     if (original.classList.contains("active")) {

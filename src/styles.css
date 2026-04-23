@@ -2117,34 +2117,31 @@ body {
 }
 
 #overflow-menu {
-  min-width: 240px;
-  max-width: 400px;
+  width: 240px;
   max-height: 70vh;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: var(--spacing-xs);
 }
 
 .overflow-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  grid-template-columns: repeat(5, 1fr);
   gap: 2px;
   padding: 4px 0;
 }
 
 .overflow-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
   padding: 6px 4px;
   border: none;
   background: none;
   color: var(--color-text);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 11px;
-  min-height: 40px;
+  min-height: 36px;
   transition: background 0.15s;
 }
 
@@ -2159,16 +2156,6 @@ body {
 .overflow-item .toolbar__btn-icon {
   font-size: 16px;
   line-height: 1;
-}
-
-.overflow-item__label {
-  font-size: 10px;
-  line-height: 1.2;
-  color: var(--color-text-muted, #888);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 52px;
 }
 
 /* Proxy select/color rows inside overflow menu */
