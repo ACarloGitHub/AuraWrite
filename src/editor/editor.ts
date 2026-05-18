@@ -5,8 +5,10 @@ import {
   DOMParser as ProseMirrorDOMParser,
   NodeSpec,
   MarkSpec,
+  Fragment,
   type NodeType,
   type MarkType,
+  type Node as PMNode,
 } from "prosemirror-model";
 import { schema as basicSchema } from "prosemirror-schema-basic";
 import { history, undo, redo } from "prosemirror-history";
@@ -19,6 +21,9 @@ import { pageBreakPlugin } from "./page-break-widget";
 import { createPageBreakPlugin } from "./page-break-plugin";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
+import { createPaginationPlugin, requestPaginationRecalc } from "./pagination-plugin";
+import { PageNodeView } from "./page-node-view";
+import { initPagedMode, getPagedMode, setPagedMode } from "./pagination-state";
 
 // ============================================================================
 // Custom Schema — Extended for full rich text editing
@@ -155,6 +160,20 @@ const blockquoteSpec: NodeSpec = {
   parseDOM: [{ tag: "blockquote" }],
   toDOM() {
     return ["blockquote", 0];
+  },
+};
+
+const pageSpec: NodeSpec = {
+  content: "block+",
+  group: "page",
+  isolating: true,
+  defining: true,
+  attrs: {
+    pageNumber: { default: 1 },
+  },
+  parseDOM: [{ tag: "div[data-page-node]" }],
+  toDOM(node) {
+    return ["div", { "data-page-node": "true", class: "pm-page-wrapper" }, 0];
   },
 };
 
@@ -314,14 +333,17 @@ function rgbToHex(rgb: string): string | null {
 // ============================================================================
 
 let nodes = basicSchema.spec.nodes.update("paragraph", paragraphWithPageBreak);
-nodes = nodes.append({
-  heading: headingSpec,
-  list_item: listItemSpec,
-  bullet_list: bulletListSpec,
-  ordered_list: orderedListSpec,
-  blockquote: blockquoteSpec,
-  code_block: codeBlockSpec,
-});
+nodes = nodes
+  .update("doc", { content: "(page | block)+" })
+  .append({
+    heading: headingSpec,
+    list_item: listItemSpec,
+    bullet_list: bulletListSpec,
+    ordered_list: orderedListSpec,
+    blockquote: blockquoteSpec,
+    page: pageSpec,
+    code_block: codeBlockSpec,
+  });
 
 const marks = basicSchema.spec.marks.append({
   underline: underlineMark,
@@ -371,7 +393,9 @@ export { wordCountPlugin };
 export type EditorViewType = EditorView;
 
 export function createEditor(element: HTMLElement): EditorViewType {
+  initPagedMode();
   const autoPageBreakPlugin = createPageBreakPlugin();
+  const paginationPluginInstance = createPaginationPlugin();
 
   const state = EditorState.create({
     schema: editorSchema,
@@ -391,6 +415,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       autoPageBreakPlugin,
       suggestionsMarkerPlugin,
       findReplacePlugin,
+      paginationPluginInstance,
     ],
   });
 
@@ -399,7 +424,19 @@ export function createEditor(element: HTMLElement): EditorViewType {
     attributes: {
       class: "prosemirror-editor",
     },
+    nodeViews: {
+      page: (node, view, getPos) => new PageNodeView(node, view, getPos),
+    },
   });
+
+  window.addEventListener("aurawrite:pagination-mode-changed", ((e: CustomEvent) => {
+    const enabled = e.detail.enabled as boolean;
+    if (enabled) {
+      view.dom.classList.add("is-paged-mode");
+    } else {
+      view.dom.classList.remove("is-paged-mode");
+    }
+  }) as EventListener);
 
   return view as unknown as EditorViewType;
 }
@@ -428,4 +465,80 @@ export function parseHTML(html: string): any {
 
   const pmParser = ProseMirrorDOMParser.fromSchema(editorSchema);
   return pmParser.parse(div);
+}
+
+export function wrapInPages(view: EditorView): void {
+  const { doc, schema, tr } = view.state;
+  const pageType = schema.nodes.page;
+  if (!pageType) return;
+
+  if (doc.firstChild && doc.firstChild.type.name === "page") return;
+
+  const blocks: PMNode[] = [];
+  doc.forEach((node) => {
+    blocks.push(node);
+  });
+
+  if (blocks.length === 0) {
+    const paraType = schema.nodes.paragraph;
+    if (paraType) {
+      const page = pageType.create(null, paraType.create());
+      tr.replaceWith(0, doc.content.size, page);
+    }
+  } else {
+    const page = pageType.create(null, Fragment.from(blocks));
+    tr.replaceWith(0, doc.content.size, page);
+  }
+
+  tr.setMeta("pagination", true);
+  tr.setMeta("addToHistory", false);
+  view.dispatch(tr);
+}
+
+export function unwrapPages(view: EditorView): void {
+  const { doc, schema, tr } = view.state;
+
+  let hasPages = false;
+  doc.forEach((node) => {
+    if (node.type.name === "page") hasPages = true;
+  });
+  if (!hasPages) return;
+
+  const allBlocks: PMNode[] = [];
+  doc.forEach((pageNode) => {
+    if (pageNode.type.name === "page") {
+      pageNode.forEach((block) => {
+        allBlocks.push(block);
+      });
+    } else {
+      allBlocks.push(pageNode);
+    }
+  });
+
+  tr.replaceWith(0, doc.content.size, Fragment.from(allBlocks));
+  tr.setMeta("pagination", true);
+  tr.setMeta("addToHistory", false);
+  view.dispatch(tr);
+}
+
+export function togglePagedMode(view: EditorView): void {
+  const currentlyPaged = getPagedMode();
+  if (currentlyPaged) {
+    unwrapPages(view);
+    setPagedMode(false);
+    view.dom.classList.remove("paged-mode");
+    view.dom.classList.remove("is-paged-mode");
+  } else {
+    wrapInPages(view);
+    setPagedMode(true);
+    view.dom.classList.add("paged-mode");
+    view.dom.classList.add("is-paged-mode");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          requestPaginationRecalc();
+        });
+      });
+    });
+  }
 }

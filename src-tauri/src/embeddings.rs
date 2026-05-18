@@ -83,10 +83,14 @@ pub fn init_embeddings_table(conn: &Connection) -> SqliteResult<()> {
 
 /// Generate embedding vector using Ollama's nomic-embed-text-v2-moe
 /// Uses prefix "search_document: " for documents, "search_query: " for queries
-pub async fn generate_embedding(text: &str, is_query: bool) -> Result<Vec<f32>, String> {
+pub async fn generate_embedding(text: &str, is_query: bool, base_url: Option<&str>) -> Result<Vec<f32>, String> {
     let client = reqwest::Client::new();
 
-    // Add appropriate prefix for v2-moe model
+    let url = match base_url {
+        Some(url) => format!("{}/api/embeddings", url.trim_end_matches('/')),
+        None => "http://localhost:11434/api/embeddings".to_string(),
+    };
+
     let prefixed_text = if is_query {
         format!("search_query: {}", text)
     } else {
@@ -94,7 +98,7 @@ pub async fn generate_embedding(text: &str, is_query: bool) -> Result<Vec<f32>, 
     };
 
     let response = client
-        .post("http://localhost:11434/api/embeddings")
+        .post(&url)
         .json(&serde_json::json!({
             "model": "nomic-embed-text-v2-moe",
             "prompt": prefixed_text
@@ -130,11 +134,16 @@ pub async fn generate_embedding(text: &str, is_query: bool) -> Result<Vec<f32>, 
 }
 
 /// Check if Ollama is available with nomic-embed-text-v2-moe
-pub async fn check_ollama_available() -> Result<bool, String> {
+pub async fn check_ollama_available(base_url: Option<&str>) -> Result<bool, String> {
     let client = reqwest::Client::new();
 
+    let url = match base_url {
+        Some(url) => format!("{}/api/tags", url.trim_end_matches('/')),
+        None => "http://localhost:11434/api/tags".to_string(),
+    };
+
     match client
-        .get("http://localhost:11434/api/tags")
+        .get(&url)
         .timeout(std::time::Duration::from_secs(5))
         .send()
         .await

@@ -1,4 +1,4 @@
-import type { AIProvider, AIContext, AIResponse } from "./providers";
+import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
 
 export class OllamaProvider implements AIProvider {
   name = "ollama";
@@ -125,13 +125,25 @@ export class OllamaProvider implements AIProvider {
       }
 
       if (parts.length > 0) {
-        fullPrompt += `[Context]\n${parts.join("\n\n")}\n\n[User Request]\n${prompt}`;
-      } else {
-        fullPrompt += prompt;
+        fullPrompt += `[Context]\n${parts.join("\n\n")}\n\n`;
       }
-    } else {
-      fullPrompt += prompt;
     }
+
+    if (context?.messageHistory && context.messageHistory.length > 0) {
+      const maxHistory = 10;
+      const history = context.messageHistory.slice(-maxHistory);
+      fullPrompt += "[Conversation History]\n";
+      for (const msg of history) {
+        if (msg.role === "user") {
+          fullPrompt += `User: ${msg.content}\n`;
+        } else if (msg.role === "assistant") {
+          fullPrompt += `Assistant: ${msg.content}\n`;
+        }
+      }
+      fullPrompt += "\n";
+    }
+
+    fullPrompt += `[User Request]\n${prompt}`;
 
     fullPrompt += `
 

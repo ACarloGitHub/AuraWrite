@@ -749,6 +749,32 @@ pub fn get_entities_by_project(conn: &Connection, project_id: &str) -> SqliteRes
     entities.collect()
 }
 
+pub fn get_entity_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Entity>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, project_id, entity_type_id, name, description, image_path, metadata_json, created_at, updated_at 
+         FROM entities WHERE id = ?1"
+    )?;
+
+    let mut entities = stmt.query_map(params![id], |row| {
+        Ok(Entity {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            entity_type_id: row.get(2)?,
+            name: row.get(3)?,
+            description: row.get(4)?,
+            image_path: row.get(5)?,
+            metadata_json: row.get(6)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    })?;
+
+    match entities.next() {
+        Some(entity) => Ok(Some(entity?)),
+        None => Ok(None),
+    }
+}
+
 pub fn update_entity(conn: &Connection, entity: &Entity) -> SqliteResult<()> {
     conn.execute(
         "UPDATE entities SET name = ?1, entity_type_id = ?2, description = ?3, image_path = ?4, metadata_json = ?5, updated_at = ?6 

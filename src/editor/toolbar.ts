@@ -13,8 +13,9 @@ import { schema } from "./editor";
 import {
   initPagination,
   updateOnTextChange,
-  togglePagination,
 } from "./fake-pagination";
+import { setPagedMode, getPagedMode } from "./pagination-state";
+import { togglePagedMode as toggleDocPagedMode } from "./editor";
 import {
   currentProject,
   currentDocument,
@@ -51,6 +52,7 @@ export function setupToolbar(view: EditorView): void {
   setupAlignmentControls();
   setupStyleControls();
   setupTopLevelButtons();
+  setupWidthControl();
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
@@ -540,9 +542,13 @@ function setupFormattingButtons(): void {
     editorView.focus();
   });
 
-  const btnAutoPagination = document.getElementById("btn-auto-pagination");
-  btnAutoPagination?.addEventListener("click", () => {
-    toggleAutoPagination();
+  const btnPagedMode = document.getElementById("btn-paged-mode");
+  btnPagedMode?.addEventListener("click", () => {
+    handleTogglePagedMode();
+  });
+  updatePagedModeButtonText();
+  window.addEventListener("aurawrite:pagination-mode-changed", () => {
+    updatePagedModeButtonText();
   });
 }
 
@@ -802,18 +808,13 @@ function togglePageBreak(): void {
 
       if (!nodeAtPos) continue;
 
+      const currentValue = nodeAtPos.attrs.pageBreakBefore as boolean;
       const tr = editorView.state.tr;
 
       tr.setNodeMarkup(pos, undefined, {
         ...nodeAtPos.attrs,
-        pageBreakBefore: true,
+        pageBreakBefore: !currentValue,
       });
-
-      const endPos = pos + nodeAtPos.nodeSize;
-      const newParagraph = editorView.state.schema.nodes.paragraph.create();
-      tr.insert(endPos, newParagraph);
-
-      tr.setSelection(TextSelection.create(tr.doc, endPos + 1));
 
       editorView.dispatch(tr);
       return;
@@ -821,20 +822,22 @@ function togglePageBreak(): void {
   }
 }
 
-function toggleAutoPagination(): void {
-  const enabled = togglePagination(editorView);
-  updateAutoPaginationButtonText(enabled);
+function handleTogglePagedMode(): void {
+  toggleDocPagedMode(editorView);
+  updatePagedModeButtonText();
   editorView.focus();
 }
 
-function updateAutoPaginationButtonText(enabled: boolean): void {
-  const btn = document.getElementById("btn-auto-pagination");
+function updatePagedModeButtonText(): void {
+  const btn = document.getElementById("btn-paged-mode");
   if (!btn) return;
-
   const btnText = btn.querySelector(".toolbar__btn-text");
   if (!btnText) return;
-
-  btnText.textContent = enabled ? "Cont" : "Auto";
+  const isPaged = getPagedMode();
+  btnText.textContent = isPaged ? "Scroll" : "Pages";
+  btn.classList.toggle("toolbar__btn--active", isPaged);
+  // Show/hide the width control depending on mode
+  syncWidthGroupVisibility();
 }
 
 async function handleSaveProject(): Promise<void> {
@@ -870,6 +873,85 @@ export function getEditorView(): EditorView {
 }
 
 // ============================================================================
+// EDITOR MARGIN CONTROL (continuous mode only)
+// ============================================================================
+
+// The user-facing scale is 0–100.
+// 0  = no margins (text fills the full editor area)
+// 100 = maximum margins (very narrow text column, ~10% of editor width)
+// Internally we map 0-100 → 0-45% actual CSS padding on each side.
+const MARGIN_KEY = "aurawrite-editor-margin-pct";
+const MARGIN_MIN = 0;
+const MARGIN_MAX = 100;
+const MARGIN_DEFAULT = 20; // ≈ 9% actual padding each side
+
+function userToActualPct(userVal: number): number {
+  // Linear map: 0 → 0%, 100 → 45%
+  return (userVal / 100) * 45;
+}
+
+function getEditorMargin(): number {
+  const saved = localStorage.getItem(MARGIN_KEY);
+  if (saved) {
+    const n = parseInt(saved, 10);
+    if (!isNaN(n) && n >= MARGIN_MIN && n <= MARGIN_MAX) return n;
+  }
+  return MARGIN_DEFAULT;
+}
+
+// Keep a persistent injected <style> element to override any cached CSS.
+// This guarantees the rules apply even if Vite HMR hasn't refreshed styles.css.
+let _editorStyleEl: HTMLStyleElement | null = null;
+
+function applyEditorMargin(userVal: number): void {
+  const actualPct = userToActualPct(userVal);
+
+  // Inject (or update) a high-specificity style that overrides the CSS file
+  if (!_editorStyleEl) {
+    _editorStyleEl = document.createElement("style");
+    _editorStyleEl.id = "__aura-editor-margin";
+    document.head.appendChild(_editorStyleEl);
+  }
+  _editorStyleEl.textContent = `
+    .ProseMirror:not(.is-paged-mode) {
+      max-width: none !important;
+      background: transparent !important;
+      padding-left: ${actualPct.toFixed(2)}% !important;
+      padding-right: ${actualPct.toFixed(2)}% !important;
+    }
+  `;
+
+  document.documentElement.style.setProperty("--editor-margin-h", `${actualPct.toFixed(2)}%`);
+  localStorage.setItem(MARGIN_KEY, String(userVal));
+  const inp = document.getElementById("inp-editor-width") as HTMLInputElement | null;
+  if (inp && inp.value !== String(userVal)) inp.value = String(userVal);
+}
+
+function syncWidthGroupVisibility(): void {
+  const group = document.getElementById("width-group");
+  if (!group) return;
+  group.classList.toggle("hidden", getPagedMode());
+}
+
+function setupWidthControl(): void {
+  applyEditorMargin(getEditorMargin());
+  syncWidthGroupVisibility();
+
+  const inp = document.getElementById("inp-editor-width") as HTMLInputElement | null;
+  if (!inp) return;
+
+  inp.addEventListener("change", () => {
+    const raw = parseInt(inp.value, 10);
+    const val = isNaN(raw) ? MARGIN_DEFAULT : Math.max(MARGIN_MIN, Math.min(MARGIN_MAX, raw));
+    applyEditorMargin(val);
+  });
+
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+  });
+}
+
+// ============================================================================
 // DROPDOWN POSITIONING — position:fixed support for overflow:hidden toolbar
 // ============================================================================
 
@@ -893,8 +975,10 @@ function positionDropdown(trigger: HTMLElement, menu: HTMLElement | null): void 
 // OVERFLOW MENU — responsive toolbar items
 // ============================================================================
 
-// Groups that can overflow, in priority order (first to hide = lowest priority)
+// Groups that can overflow, in priority order (first to hide = lowest priority).
+// width-group is first: it's least critical and already hides in paged mode.
 const OVERFLOW_ORDER: string[] = [
+  "width-group",
   "misc-group",
   "line-height-group",
   "page-group",
@@ -909,6 +993,7 @@ const GROUP_LABELS: Record<string, string> = {
   "alignment-group": "Alignment",
   "line-height-group": "Line Height",
   "page-group": "Page",
+  "width-group": "Width",
   "misc-group": "Settings",
 };
 
@@ -920,6 +1005,7 @@ const GROUP_IDS_IN_ORDER: string[] = [
   "alignment-group",
   "line-height-group",
   "page-group",
+  "width-group",
   "overflow-dropdown",
   "misc-group",
 ];
@@ -929,7 +1015,10 @@ function assignGroupIds(): void {
   if (!toolbar) return;
   const groups = toolbar.querySelectorAll(":scope > .toolbar-group");
   groups.forEach((group, i) => {
-    if (GROUP_IDS_IN_ORDER[i]) group.id = GROUP_IDS_IN_ORDER[i];
+    // Only assign if the element has no explicit id already set in HTML.
+    if (GROUP_IDS_IN_ORDER[i] && !group.id) {
+      group.id = GROUP_IDS_IN_ORDER[i];
+    }
   });
 }
 
@@ -1008,6 +1097,9 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
   let usedWidth = 0;
   for (const g of allGroups) {
     if (g.id === "overflow-dropdown") continue;
+    // Skip groups hidden via CSS class (e.g. width-group in paged mode) —
+    // their offsetWidth is 0 anyway, but the explicit skip is cleaner.
+    if (g.classList.contains("hidden")) continue;
     usedWidth += g.offsetWidth + gap;
   }
 

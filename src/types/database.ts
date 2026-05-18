@@ -153,7 +153,7 @@ export const DEFAULT_ENTITY_TYPES: EntityType[] = [
 // ============================================================================
 
 export function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 export function createProject(name: string, type: ProjectType = "novel", description?: string): Project {

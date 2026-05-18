@@ -284,6 +284,13 @@ body {
   border-color: var(--color-primary);
 }
 
+.toolbar__btn.toolbar__btn--disabled,
+.toolbar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .toolbar__btn-icon {
   font-size: 16px;
 }
@@ -375,11 +382,11 @@ body {
 
 .ProseMirror {
   width: 100%;
-  max-width: 800px;
+  max-width: none;
   min-height: 100%;
   margin: 0 auto;
-  background: var(--color-surface);
-  padding: var(--spacing-xl);
+  background: transparent;
+  padding: var(--spacing-xl) var(--editor-margin-h, 10%);
   font-family: var(--font-editor);
   font-size: 18px;
   line-height: 1.7;
@@ -935,9 +942,43 @@ body {
 
 .ai-panel__input {
   display: flex;
-  gap: var(--spacing-sm);
+  flex-direction: column;
+  gap: var(--spacing-xs);
   padding: var(--spacing-md);
   border-top: 1px solid var(--color-border);
+}
+
+.ai-panel__input-row {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.ai-panel__actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.ai-panel__action-btn {
+  padding: 4px var(--spacing-sm);
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ai-panel__action-btn:hover:not(:disabled) {
+  background: var(--color-background);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.ai-panel__action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .ai-panel__input textarea {
@@ -1324,14 +1365,186 @@ body {
   display: none;
 }
 
+/* ============================================================================
+   SYNONYM POPUP
+   ============================================================================ */
+
+.synonym-popup {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  max-width: 280px;
+  background: var(--color-toolbar);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  font-family: var(--font-family);
+}
+
+.synonym-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.synonym-popup__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.synonym-popup__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  padding: 0 0 0 8px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.synonym-popup__close:hover {
+  color: var(--color-text);
+}
+
+.synonym-popup__body {
+  padding: 6px;
+}
+
+.synonym-popup__loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.synonym-popup__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: synonym-spin 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@keyframes synonym-spin {
+  to { transform: rotate(360deg); }
+}
+
+.synonym-popup__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.synonym-popup__item {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.synonym-popup__item:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.synonym-popup__empty,
+.synonym-popup__error {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 /* Print styles */
 @media print {
+  .title-bar,
+  .toolbar,
+  .find-bar,
+  .status-bar,
+  .project-panel,
+  .ai-panel,
+  .suggestions-panel {
+    display: none !important;
+  }
+
+  #editor {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .ProseMirror {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   .page-break-widget {
     display: none;
   }
 
   .page-break-before {
     break-before: page;
+  }
+
+  .auto-page-break {
+    display: none !important;
+  }
+
+  .pm-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    page-break-after: always;
+  }
+
+  .pm-page:last-child {
+    page-break-after: auto;
+  }
+
+  .chunk-marker,
+  .suggestion-marker,
+  .selection-ai {
+    display: none !important;
+  }
+
+  .ProseMirror .pm-page {
+    width: 100%;
+    min-height: auto;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    page-break-after: always;
+  }
+
+  .ProseMirror .pm-page:last-child {
+    page-break-after: auto;
+  }
+
+  .ProseMirror .pm-page-header,
+  .ProseMirror .pm-page-footer {
+    position: static;
+    border: none;
+    text-align: center;
   }
 }
 
@@ -1370,8 +1583,179 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* Pagination mode paged — same as continuous, only adds auto page breaks */
-/* No style overrides: both modes share the same editor appearance */
+/* ============================================================================
+   PAGED MODE — A4 pagination with page nodes
+   ============================================================================ */
+
+/* The pm-page is rendered by PageNodeView (div.pm-page > header + content + footer) */
+.ProseMirror .pm-page {
+  width: 794px;
+  min-height: 1123px;
+  padding: 96px;
+  margin: 24px auto;
+  background: var(--color-paper, #fff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  position: relative;
+  box-sizing: border-box;
+  display: block;
+}
+
+.ProseMirror .pm-page-content {
+  position: relative;
+}
+
+.ProseMirror .pm-page-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.ProseMirror .pm-page-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ProseMirror.pm-page-wrapper {
+  margin: 0;
+  padding: 0;
+}
+
+/* ============================================================================
+   KEYBOARD HELP MODAL
+   ============================================================================ */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: relative;
+  background: var(--color-surface, #fff);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 520px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border, #ccc);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--color-text, #222);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-text-muted, #888);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--color-text, #222);
+}
+
+.modal-body {
+  padding: 16px 20px 20px;
+}
+
+.shortcut-group {
+  margin-bottom: 16px;
+}
+
+.shortcut-group h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 14px;
+  color: var(--color-text, #222);
+}
+
+.shortcut-row span {
+  color: var(--color-text-muted, #666);
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-family: var(--font-family, sans-serif);
+  background: var(--color-background, #f0f0f0);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  color: var(--color-text, #222);
+  line-height: 1.4;
+}
+
+/* When paged mode is active, override the base .ProseMirror layout.
+   In paged mode we reset #editor horizontal padding to 0 (via JS class),
+   and the .pm-page blocks center themselves via margin:auto. */
+.ProseMirror.is-paged-mode {
+  max-width: none;
+  width: 100%;
+  padding: var(--spacing-xl) 0;
+  background: transparent;
+  white-space: normal;
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
 
 /* ============================================================================
    PROJECT PANEL - Stili gerarchici
@@ -2106,6 +2490,43 @@ body {
   flex-shrink: 0;
 }
 
+/* Active state for toggle buttons (e.g. paged mode ON) */
+.toolbar__btn--active {
+  background: var(--color-primary) !important;
+  color: var(--color-on-primary, #fff) !important;
+  border-color: var(--color-primary) !important;
+}
+
+/* Toolbar label (small text next to controls) */
+.toolbar__label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Number input inside toolbar (e.g. Width control) */
+.toolbar__number-input {
+  width: 56px;
+  padding: 2px 4px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.toolbar__number-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* Hide the width group while paged mode is active */
+#width-group.hidden {
+  display: none;
+}
+
 /* Overflow dropdown menu for toolbar */
 #overflow-dropdown {
   display: none;
@@ -2718,4 +3139,62 @@ body {
 
 [data-theme="dark"] .item-color-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================================
+   ERROR TOAST
+   ============================================================================ */
+
+#error-toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 400px;
+}
+
+.error-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--color-surface, #fff);
+  border: 1px solid #e74c3c;
+  border-left: 4px solid #e74c3c;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  color: var(--color-text, #222);
+  opacity: 0;
+  transform: translateX(40px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.error-toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.error-toast--fade {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
+.error-toast-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--color-text-muted, #888);
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.error-toast-close:hover {
+  color: var(--color-text, #222);
 }

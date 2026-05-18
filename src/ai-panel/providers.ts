@@ -6,6 +6,11 @@ export interface AIProvider {
   stop(): void;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
 export interface AIContext {
   selectedText?: string;
   documentTitle?: string;
@@ -19,6 +24,7 @@ export interface AIContext {
   writingLanguage?: string;
   customAssistantPrompt?: string;
   customSuggestionsPrompt?: string;
+  messageHistory?: ChatMessage[];
 }
 
 export interface AIResponse {

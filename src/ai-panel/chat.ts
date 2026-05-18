@@ -2,6 +2,7 @@ import type { EditorView } from "prosemirror-view";
 import type { AIContext } from "./providers";
 import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools, handlePreferencesChanged } from "./ai-manager";
 import { selectionHighlightPluginKey } from "../editor/selection-highlight";
+import { showSynonymPopup } from "../editor/synonym-popup";
 import {
   splitIntoChunks,
   getChunkSettings,
@@ -86,7 +87,38 @@ export function setupAIPanel(view: EditorView): void {
   initAI();
   setupPanelEvents(view);
   setupEditorClickListener(view);
+  setupEditorSelectionListener(view);
   window.addEventListener("aurawrite:preferences-changed", handlePreferencesChanged);
+}
+
+// Track selection only while the editor is focused, so the stored value
+// survives when focus moves to the AI panel.
+function setupEditorSelectionListener(view: EditorView): void {
+  document.addEventListener("selectionchange", () => {
+    // Defer one frame so ProseMirror has time to process the event
+    // (e.g. double-click word selection updates PM state asynchronously)
+    requestAnimationFrame(() => {
+      if (!editorViewRef) return;
+      const active = document.activeElement;
+      const editorFocused = active === view.dom || view.dom.contains(active);
+      if (!editorFocused) return;
+      currentSelection = getSelectionRange(editorViewRef);
+      updateSynonymsButton();
+      // Update the "Selected: ..." display in real time while the panel is open
+      if (isPanelOpen) updateContextDisplay();
+    });
+  });
+}
+
+function updateSynonymsButton(): void {
+  const btn = document.getElementById("ai-synonyms") as HTMLButtonElement | null;
+  if (!btn) return;
+  // Button is always enabled — works on selected text or on word at cursor.
+  btn.disabled = false;
+  const word = currentSelection?.text.trim().split(/\s+/)[0];
+  btn.title = word
+    ? `Synonyms for "${word}"`
+    : "Synonyms — looks up word at cursor";
 }
 
 function setupEditorClickListener(view: EditorView): void {
@@ -174,12 +206,25 @@ function setupPanelEvents(view: EditorView): void {
     }
   });
 
+  // mousedown fires before focus — capture stored selection before editor loses it.
+  aiPanel?.addEventListener("mousedown", (e) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (editorViewRef && currentSelection && !highlighted) {
+      applySelectionHighlight(editorViewRef, currentSelection);
+      updateContextDisplay();
+    }
+    // Prevent default only for non-input elements so the editor keeps its
+    // DOM selection alive long enough for selectionchange to have fired.
+    if (tag !== "TEXTAREA" && tag !== "INPUT" && tag !== "SELECT") {
+      e.preventDefault();
+    }
+  });
+
+  // When the textarea gets focus, use the stored selection (never live-read
+  // the editor — it has already lost focus at this point).
   aiInput?.addEventListener("focus", () => {
-    if (!editorViewRef) return;
-    const selection = getSelectionRange(editorViewRef);
-    if (selection) {
-      currentSelection = selection;
-      applySelectionHighlight(editorViewRef, selection);
+    if (editorViewRef && currentSelection && !highlighted) {
+      applySelectionHighlight(editorViewRef, currentSelection);
       updateContextDisplay();
     }
   });
@@ -192,22 +237,41 @@ function setupPanelEvents(view: EditorView): void {
     }
     currentSelection = null;
     updateContextDisplay();
+    updateSynonymsButton();
+  });
+
+  // Synonyms button — show popup above the selected word
+  const aiSynonyms = document.getElementById("ai-synonyms") as HTMLButtonElement | null;
+  aiSynonyms?.addEventListener("click", () => {
+    if (!editorViewRef) return;
+    // Ensure the selection is highlighted before opening the popup
+    if (currentSelection && !highlighted) {
+      applySelectionHighlight(editorViewRef, currentSelection);
+      updateContextDisplay();
+    }
+    showSynonymPopup(editorViewRef, currentSelection);
   });
 
   aiSend?.addEventListener("click", () => {
     const text = aiInput?.value.trim();
-    if (text) {
-      sendMessage(text);
+    if (!text) return;
+    if (editorViewRef && currentSelection && !highlighted) {
+      applySelectionHighlight(editorViewRef, currentSelection);
+      updateContextDisplay();
     }
+    sendMessage(text);
   });
 
   aiInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const text = aiInput.value.trim();
-      if (text) {
-        sendMessage(text);
+      if (!text) return;
+      if (editorViewRef && currentSelection && !highlighted) {
+        applySelectionHighlight(editorViewRef, currentSelection);
+        updateContextDisplay();
       }
+      sendMessage(text);
     }
   });
 }
@@ -345,6 +409,7 @@ function clearCurrentSelection(): void {
   }
   currentSelection = null;
   updateContextDisplay();
+  updateSynonymsButton();
 }
 
 function truncateText(text: string, maxLength: number): string {
@@ -433,6 +498,10 @@ async function sendMessage(text: string): Promise<void> {
     interfaceLanguage: prefs.aiInterfaceLanguage || undefined,
     writingLanguage: prefs.aiWritingLanguage || undefined,
     customAssistantPrompt: prefs.aiAssistantPrompt || undefined,
+    messageHistory: messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-10)
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
   };
 
   if (context.projectId) {
@@ -595,4 +664,11 @@ export function getChunks(): Chunk[] {
 
 export function getSelectedChunk(): string | null {
   return selectedChunkId;
+}
+
+export function resetChatChunks(): void {
+  documentChunksComputed = false;
+  chunks = [];
+  selectedChunkId = null;
+  clearChunkDecorations(editorViewRef!);
 }

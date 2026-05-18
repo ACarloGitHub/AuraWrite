@@ -59,7 +59,8 @@ let closedSentences: Set<string> = new Set();
 let isCurrentlyProcessing: boolean = false;
 let currentProcessingSlotId: string | null = null;
 
-let SUGGESTIONS_DEBUG = true;
+let SUGGESTIONS_DEBUG = false;
+const DEBUG_LOG_MAX = 100;
 const DEBUG_LOG: string[] = [];
 
 function log(message: string): void {
@@ -71,6 +72,9 @@ function log(message: string): void {
   });
   const entry = `[${time}] ${message}`;
   DEBUG_LOG.push(entry);
+  if (DEBUG_LOG.length > DEBUG_LOG_MAX) {
+    DEBUG_LOG.splice(0, DEBUG_LOG.length - DEBUG_LOG_MAX);
+  }
   console.log(entry);
   updateDebugLog();
 }
@@ -844,7 +848,7 @@ function renderSuggestions(): void {
 }
 
 function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
+  return crypto.randomUUID().slice(0, 9);
 }
 
 function truncateText(text: string, maxLength: number): string {

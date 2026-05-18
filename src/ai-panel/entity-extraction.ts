@@ -153,7 +153,7 @@ async function findOrCreateEntityType(
   );
   if (existing) return existing.id;
 
-  const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const newId = crypto.randomUUID();
   await invoke("db_create_entity_type", {
     entityType: {
       id: newId,
@@ -204,7 +204,7 @@ async function upsertEntity(
     return { result: "updated", entityId: existing.id };
   }
 
-  const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const newId = crypto.randomUUID();
   await invoke("db_create_entity", {
     entity: {
       id: newId,

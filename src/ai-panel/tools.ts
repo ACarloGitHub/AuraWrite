@@ -246,17 +246,11 @@ async function searchEntities(
 
 // Tool: get_entity_details
 async function getEntityDetails(entityId: string): Promise<Entity | null> {
-  // We need to get all entities and find by ID
-  // This is inefficient but works with current API
-  // In production, add a get_entity_by_id command
-
-  // For now, return minimal info
-  return {
-    id: entityId,
-    project_id: "",
-    name: "Entity",
-    description: "Details not available"
-  };
+  try {
+    return await invoke("db_get_entity_by_id", { id: entityId });
+  } catch {
+    return null;
+  }
 }
 
 // Tool: list_entities_by_type
@@ -366,12 +360,17 @@ async function semanticSearch(
   limit: number = 5
 ): Promise<Array<{ entity_type: string; entity_id: string; content_text: string; distance: number }>> {
   try {
-    // Generate embedding for query
+    const PREFERENCES_KEY = "aurawrite-preferences";
+    const saved = localStorage.getItem(PREFERENCES_KEY);
+    const prefs = saved ? JSON.parse(saved) : {};
+    const baseUrl = prefs.aiBaseUrl || undefined;
+
     const queryVector: number[] = await invoke("embedding_generate", {
-      text: query
+      text: query,
+      isQuery: true,
+      baseUrl,
     });
 
-    // Search similar documents
     const results = await invoke("embedding_search_documents", {
       projectId,
       queryVector,
@@ -581,13 +580,33 @@ export async function executeTool(
  */
 export function parseToolCalls(response: string): ToolCall[] {
   const toolCalls: ToolCall[] = [];
-  const regex = /<tool\s+name="([^"]+)">\s*({[^}]+})\s*<\/tool>/g;
+  const tagRegex = /<tool\s+name="([^"]+)">\s*/g;
 
-  let match;
-  while ((match = regex.exec(response)) !== null) {
+  let tagMatch;
+  while ((tagMatch = tagRegex.exec(response)) !== null) {
+    const name = tagMatch[1];
+    const startIndex = tagMatch.index + tagMatch[0].length;
+
+    if (response[startIndex] !== "{") continue;
+
+    let braceCount = 0;
+    let jsonEnd = -1;
+    for (let i = startIndex; i < response.length; i++) {
+      if (response[i] === "{") braceCount++;
+      else if (response[i] === "}") {
+        braceCount--;
+        if (braceCount === 0) {
+          jsonEnd = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (jsonEnd === -1) continue;
+
+    const jsonStr = response.slice(startIndex, jsonEnd);
     try {
-      const name = match[1];
-      const args = JSON.parse(match[2]);
+      const args = JSON.parse(jsonStr);
       toolCalls.push({ name, arguments: args });
     } catch {
       // Ignore malformed tool calls
@@ -629,72 +648,4 @@ Example: If the user asks "Which characters appear in chapter 1?", respond with:
 After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.`;
 }
 
-/**
- * Process AI response with potential tool calls
- */
-export async function processAIResponseWithTools(
-  response: string,
-  projectId: string
-): Promise<{ text: string; toolResults: ToolResult[] }> {
-  const toolCalls = parseToolCalls(response);
 
-  if (toolCalls.length === 0) {
-    return { text: response, toolResults: [] };
-  }
-
-  // Inject project_id if missing
-  const enrichedToolCalls = toolCalls.map((call) => ({
-    ...call,
-    arguments: {
-      project_id: projectId,
-      ...call.arguments
-    }
-  }));
-
-  // Execute all tools
-  const toolResults = await Promise.all(
-    enrichedToolCalls.map((call) => executeTool(call))
-  );
-
-  // Build result text
-  let resultText = response.replace(/<tool[^>]*>.*?<\/tool>/gs, "");
-  resultText += "\n\n";
-  resultText += toolResults
-    .map((r) => {
-      if (r.error) {
-        return `Error with ${r.tool}: ${r.error}`;
-      }
-      return formatToolResult(r.tool, r.result);
-    })
-    .join("\n\n");
-
-  return { text: resultText, toolResults };
-}
-
-function formatToolResult(tool: string, result: unknown): string {
-  if (Array.isArray(result) && result.length === 0) {
-    return `No results found for ${tool}.`;
-  }
-
-  if (Array.isArray(result)) {
-    const items = result.slice(0, 5); // Limit to 5 items
-    return `${tool} results:\n${items
-      .map((item) => `  - ${formatItem(item)}`)
-      .join("\n")}`;
-  }
-
-  return `${tool}: ${JSON.stringify(result, null, 2)}`;
-}
-
-function formatItem(item: unknown): string {
-  if (typeof item === "object" && item !== null) {
-    const obj = item as Record<string, unknown>;
-    if (obj.name) {
-      return String(obj.name);
-    }
-    if (obj.title) {
-      return String(obj.title);
-    }
-  }
-  return JSON.stringify(item);
-}

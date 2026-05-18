@@ -185,7 +185,7 @@ export async function createProjectWithDefaults(
   if (type === "novel") {
     for (const et of DEFAULT_ENTITY_TYPES) {
       const entityType = { ...et, project_id: project.id, id: undefined as any };
-      entityType.id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      entityType.id = crypto.randomUUID();
       await createEntityType(entityType);
       entityTypes.push(entityType);
     }
@@ -246,7 +246,7 @@ export async function saveDocumentVersion(document: Document): Promise<void> {
     : 1;
 
   const version: DocumentVersion = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: crypto.randomUUID(),
     document_id: document.id,
     version_number: nextVersionNumber,
     backup_path: "",

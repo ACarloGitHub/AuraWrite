@@ -157,6 +157,12 @@ fn db_get_entities(state: State<AppState>, project_id: String) -> Result<Vec<Ent
 }
 
 #[tauri::command]
+fn db_get_entity_by_id(state: State<AppState>, id: String) -> Result<Option<Entity>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_entity_by_id(&*conn, &id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn db_update_entity(state: State<AppState>, entity: Entity) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     update_entity(&*conn, &entity).map_err(|e| e.to_string())
@@ -341,13 +347,13 @@ fn base64_encode(data: &[u8]) -> String {
 // ============================================================================
 
 #[tauri::command]
-async fn embedding_check_ollama() -> Result<bool, String> {
-    embeddings::check_ollama_available().await.map_err(|e| e.to_string())
+async fn embedding_check_ollama(base_url: Option<String>) -> Result<bool, String> {
+    embeddings::check_ollama_available(base_url.as_deref()).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn embedding_generate(text: String, is_query: Option<bool>) -> Result<Vec<f32>, String> {
-    embeddings::generate_embedding(&text, is_query.unwrap_or(false)).await.map_err(|e| e.to_string())
+async fn embedding_generate(text: String, is_query: Option<bool>, base_url: Option<String>) -> Result<Vec<f32>, String> {
+    embeddings::generate_embedding(&text, is_query.unwrap_or(false), base_url.as_deref()).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -529,6 +535,7 @@ pub fn run() {
             // Entity commands
             db_create_entity,
             db_get_entities,
+            db_get_entity_by_id,
             db_update_entity,
             db_delete_entity,
             // Entity type commands

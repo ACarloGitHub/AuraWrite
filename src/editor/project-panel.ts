@@ -122,7 +122,8 @@ function toggleProjectPanel(): void {
   const btnProjects = document.getElementById("btn-projects");
   if (panel) {
     panel.classList.toggle("hidden");
-    btnProjects?.classList.toggle("active");
+    // active = panel is VISIBLE (not hidden)
+    btnProjects?.classList.toggle("active", !panel.classList.contains("hidden"));
   }
 }
 
@@ -275,9 +276,11 @@ async function saveCurrentDocument(content: string, createVersion: boolean = fal
   if (!currentDocument || !currentProject) return false;
 
   try {
+    const wordCount = countWordsInContent(content);
     const updatedDoc: Document = {
       ...currentDocument,
       content_json: content,
+      word_count: wordCount,
       updated_at: Date.now(),
     };
     
@@ -319,6 +322,7 @@ async function handleSaveToDatabase(): Promise<void> {
       const updatedDoc: Document = {
         ...currentDocument,
         content_json: content,
+        word_count: countWordsInContent(content),
         updated_at: Date.now(),
       };
       try {
@@ -390,6 +394,11 @@ function extractTextFromNode(node: any): string {
   return "";
 }
 
+function countWordsInContent(contentJson: string): number {
+  const text = extractTextFromContent(contentJson);
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
 /**
  * Index document content for semantic search
  * Silently fails if Ollama is not available
@@ -410,12 +419,16 @@ async function indexDocumentForSearch(
     const text = extractTextFromContent(contentJson);
     if (!text.trim()) return;
 
+    const prefs = saved ? JSON.parse(saved) : {};
+    const baseUrl = prefs.aiBaseUrl || undefined;
+
     await invoke("embedding_save_document", {
       projectId,
       documentId,
       contentText: text,
       chunkSize: 100,
       chunkOverlap: 20,
+      baseUrl,
     });
     console.log(`Document ${documentId} indexed for search`);
   } catch (error) {
@@ -424,18 +437,29 @@ async function indexDocumentForSearch(
 }
 
 async function handleSaveDocument(doc: Document): Promise<void> {
-  // Se il documento è quello corrente, salva il contenuto attuale dell'editor
   if (currentDocument?.id === doc.id) {
     await handleSaveToDatabase();
     return;
   }
 
-  // Altrimenti, seleziona il documento prima di salvarlo
+  const content = getEditorContent ? getEditorContent() : null;
+  if (content && currentDocument) {
+    const updatedDoc: Document = {
+      ...currentDocument,
+      content_json: content,
+      word_count: countWordsInContent(content),
+      updated_at: Date.now(),
+    };
+    try {
+      await saveDocumentVersion(updatedDoc);
+      await updateDocument(updatedDoc);
+    } catch (error) {
+      console.error("Failed to save current document:", error);
+    }
+  }
+
   await selectDocument(doc);
-  // Piccolo delay per permettere a ProseMirror di caricare
-  setTimeout(async () => {
-    await handleSaveToDatabase();
-  }, 150);
+  await handleSaveToDatabase();
 }
 
 function showNotification(message: string, type: "success" | "error" | "indexing" = "success"): void {
@@ -994,7 +1018,7 @@ async function handleNewSection(projectId: string): Promise<void> {
     const orderIndex = existingSections.length;
 
     const section: Section = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
       project_id: projectId,
       parent_id: null as any, // null for top-level sections
       name,
@@ -1020,7 +1044,7 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 
   try {
     const document: Document = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
       section_id: sectionId,
       title,
       content_json: "",

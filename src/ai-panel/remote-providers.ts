@@ -1,4 +1,24 @@
-import type { AIProvider, AIContext, AIResponse } from "./providers";
+import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
+
+function buildOpenAICompatibleMessages(
+  prompt: string,
+  context?: AIContext,
+): Array<{ role: string; content: string }> {
+  const messages: Array<{ role: string; content: string }> = [
+    { role: "system", content: buildOpenAICompatibleSystemPrompt(context) },
+  ];
+
+  if (context?.messageHistory && context.messageHistory.length > 0) {
+    const maxHistory = 10;
+    const history = context.messageHistory.slice(-maxHistory);
+    for (const msg of history) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  messages.push({ role: "user", content: prompt });
+  return messages;
+}
 
 function buildOpenAICompatibleSystemPrompt(context?: AIContext): string {
   const parts: string[] = [];
@@ -95,16 +115,7 @@ export class OpenAIProvider implements AIProvider {
         },
         body: JSON.stringify({
           model: this.model,
-          messages: [
-            {
-              role: "system",
-              content: buildOpenAICompatibleSystemPrompt(context),
-            },
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
+          messages: buildOpenAICompatibleMessages(prompt, context),
           stream: false,
         }),
         signal: this.abortController.signal,
@@ -183,7 +194,7 @@ export class AnthropicProvider implements AIProvider {
 
     try {
       const systemPrompt = this.buildSystemPrompt(context);
-      const userContent = this.buildUserContent(prompt, context);
+      const userMessages = this.buildUserMessages(prompt, context);
 
       const response = await fetch(`${this.baseUrl}/messages`, {
         method: "POST",
@@ -196,12 +207,7 @@ export class AnthropicProvider implements AIProvider {
           model: this.model,
           max_tokens: 4096,
           system: systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: userContent,
-            },
-          ],
+          messages: userMessages,
         }),
         signal: this.abortController.signal,
       });
@@ -280,6 +286,16 @@ export class AnthropicProvider implements AIProvider {
       parts.push(`The current document is titled: ${context.documentTitle}`);
     }
 
+    if (context?.documentText) {
+      parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
+    }
+
+    if (context?.selectedText) {
+      parts.push(
+        `\nSELECTED TEXT (you may ONLY modify this):\n"""\n${context.selectedText}\n"""`,
+      );
+    }
+
     parts.push(`
 When the user explicitly asks you to modify, replace, or change text in the document, respond with the AURA_EDIT format:
 <<<AURA_EDIT>>>
@@ -290,16 +306,25 @@ Do NOT use AURA_EDIT for normal conversation - only for document edits.`);
     return parts.join("\n");
   }
 
-  private buildUserContent(prompt: string, context?: AIContext): string {
-    if (context?.documentText) {
-      return `DOCUMENT:\n"""\n${context.documentText}\n"""\n\nSELECTED TEXT: ${context.selectedText || "None"}\n\nUser request: ${prompt}`;
+  private buildUserMessages(
+    prompt: string,
+    context?: AIContext,
+  ): Array<{ role: string; content: string }> {
+    const messages: Array<{ role: string; content: string }> = [];
+
+    if (context?.messageHistory && context.messageHistory.length > 0) {
+      const maxHistory = 10;
+      const history = context.messageHistory.slice(-maxHistory);
+      for (const msg of history) {
+        if (msg.role === "user" || msg.role === "assistant") {
+          messages.push({ role: msg.role, content: msg.content });
+        }
+      }
     }
 
-    if (context?.selectedText) {
-      return `SELECTED TEXT: "${context.selectedText}"\n\nUser request: ${prompt}`;
-    }
+    messages.push({ role: "user", content: prompt });
 
-    return prompt;
+    return messages;
   }
 }
 
@@ -335,10 +360,7 @@ export class DeepSeekProvider implements AIProvider {
         },
         body: JSON.stringify({
           model: this.model,
-          messages: [
-            { role: "system", content: buildOpenAICompatibleSystemPrompt(context) },
-            { role: "user", content: prompt },
-          ],
+          messages: buildOpenAICompatibleMessages(prompt, context),
           stream: false,
         }),
         signal: this.abortController.signal,
@@ -397,10 +419,7 @@ export class OpenRouterProvider implements AIProvider {
         },
         body: JSON.stringify({
           model: this.model,
-          messages: [
-            { role: "system", content: buildOpenAICompatibleSystemPrompt(context) },
-            { role: "user", content: prompt },
-          ],
+          messages: buildOpenAICompatibleMessages(prompt, context),
           stream: false,
         }),
         signal: this.abortController.signal,
@@ -448,10 +467,7 @@ export class LMStudioProvider implements AIProvider {
 
     try {
       const body: Record<string, unknown> = {
-        messages: [
-          { role: "system", content: buildOpenAICompatibleSystemPrompt(context) },
-          { role: "user", content: prompt },
-        ],
+        messages: buildOpenAICompatibleMessages(prompt, context),
         stream: false,
       };
       if (this.model) body.model = this.model;

@@ -1,8 +1,10 @@
 import { createEditor } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
-import { setupAIPanel } from "./ai-panel/chat";
+import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
-import { initProjectPanel, triggerSaveStatusCheck } from "./editor/project-panel";
+import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "./editor/project-panel";
+import { initKeyboardHelp } from "./editor/keyboard-help";
+import { initErrorBoundaries } from "./error-boundary";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -47,6 +49,7 @@ interface Preferences {
   toolCallingPrompt: string;
   deselectOnDocumentClick: boolean;
   semanticSearchEnabled: boolean;
+  selectionHighlightColor: string;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -149,7 +152,17 @@ const defaultPreferences: Preferences = {
   toolCallingPrompt: defaultToolCallingPrompt,
   deselectOnDocumentClick: true,
   semanticSearchEnabled: true,
+  selectionHighlightColor: "#ffff00",
 };
+
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(255, 255, 0, ${alpha})`;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 let currentZoom = 100;
 
@@ -193,6 +206,11 @@ function applyPreferences(prefs: Preferences): void {
   }
 
   localStorage.setItem(THEME_KEY, prefs.theme);
+
+  // Apply selection highlight color (works in all themes)
+  const hlColor = prefs.selectionHighlightColor || "#ffff00";
+  root.style.setProperty("--selection-highlight", hexToRgba(hlColor, 0.4));
+  root.style.setProperty("--selection-highlight-flash", hexToRgba(hlColor, 0.6));
 }
 
 function initTheme(): void {
@@ -331,6 +349,9 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-semantic-search-enabled") as HTMLInputElement
   ).checked = prefs.semanticSearchEnabled;
+  (
+    document.getElementById("pref-selection-highlight") as HTMLInputElement
+  ).value = prefs.selectionHighlightColor || "#ffff00";
 
   updateCustomColorsVisibility();
   updateApiKeyGroupVisibility();
@@ -508,6 +529,7 @@ function savePreferencesFromModal(): void {
     toolCallingPrompt: tarea("pref-tool-calling-prompt"),
     deselectOnDocumentClick: chk("pref-deselect-on-click"),
     semanticSearchEnabled: chk("pref-semantic-search-enabled"),
+    selectionHighlightColor: inp("pref-selection-highlight") || "#ffff00",
   };
 
   savePreferences(prefs);
@@ -519,6 +541,7 @@ function savePreferencesFromModal(): void {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  initErrorBoundaries();
   initTheme();
   initZoom();
 
@@ -555,6 +578,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initProjectPanel({
     onDocumentSelect: (doc) => {
       console.log("Document selected:", doc.title);
+      resetChatChunks();
       setLoading(true);
       try {
         if (doc.content_json && doc.content_json.trim() !== "") {
@@ -594,6 +618,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAIPanel(editorView);
   setupSuggestionsPanel(editorView);
   setupToolbar(editorView);
+  initKeyboardHelp();
 
   const findBar = document.getElementById("find-bar");
   const findInput = document.getElementById("find-input") as HTMLInputElement | null;
@@ -721,7 +746,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);
@@ -736,6 +761,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
+      handleSaveToDatabase();
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "f") {
       e.preventDefault();
@@ -756,24 +782,24 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   document.addEventListener("keydown", handleKeyDown);
 
-  // Expose test functions globally for development
-  (window as any).auraTest = {
-    checkOllama: () => invoke('embedding_check_ollama'),
-    generateEmbedding: (text: string, isQuery = false) => 
-      invoke('embedding_generate', { text, isQuery }),
-    saveEmbedding: (projectId: string, documentId: string, contentText: string) =>
-      invoke('embedding_save_document', { projectId, documentId, contentText, chunkSize: 100, chunkOverlap: 20 }),
-    searchSimilar: async (projectId: string, query: string, limit = 5) => {
-      const queryVector = await invoke('embedding_generate', { text: query, isQuery: true });
-      return invoke('embedding_search_documents', { projectId, queryVector, limit });
-    },
-    // Espone i dati correnti per debug
-    getCurrentState: () => ({
-      project: (window as any).auraProject,
-      section: (window as any).auraSection, 
-      document: (window as any).auraDocument
-    })
-  };
+  if (import.meta.env.DEV) {
+    (window as any).auraTest = {
+      checkOllama: () => invoke('embedding_check_ollama'),
+      generateEmbedding: (text: string, isQuery = false) => 
+        invoke('embedding_generate', { text, isQuery }),
+      saveEmbedding: (projectId: string, documentId: string, contentText: string) =>
+        invoke('embedding_save_document', { projectId, documentId, contentText, chunkSize: 100, chunkOverlap: 20 }),
+      searchSimilar: async (projectId: string, query: string, limit = 5) => {
+        const queryVector = await invoke('embedding_generate', { text: query, isQuery: true });
+        return invoke('embedding_search_documents', { projectId, queryVector, limit });
+      },
+      getCurrentState: () => ({
+        project: (window as any).auraProject,
+        section: (window as any).auraSection, 
+        document: (window as any).auraDocument
+      })
+    };
+  }
 
 
 });
