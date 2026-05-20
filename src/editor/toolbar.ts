@@ -330,8 +330,15 @@ async function openJSON(path: string): Promise<void> {
   const { Node } = await import("prosemirror-model");
 
   const newDoc = Node.fromJSON(schema, json);
-  const newState = EditorState.create({ doc: newDoc });
+  const newState = EditorState.create({
+    schema: editorView.state.schema,
+    doc: newDoc,
+    plugins: editorView.state.plugins,
+  });
   editorView.updateState(newState);
+
+  const { syncDocumentPaginationState } = await import("./editor");
+  syncDocumentPaginationState(editorView);
 
   markSaved(content, path, "json");
 }
@@ -343,8 +350,15 @@ async function openMarkdown(path: string): Promise<void> {
   const { Node } = await import("prosemirror-model");
 
   const newDoc = Node.fromJSON(schema, json);
-  const newState = EditorState.create({ doc: newDoc });
+  const newState = EditorState.create({
+    schema: editorView.state.schema,
+    doc: newDoc,
+    plugins: editorView.state.plugins,
+  });
   editorView.updateState(newState);
+
+  const { syncDocumentPaginationState } = await import("./editor");
+  syncDocumentPaginationState(editorView);
 
   markSaved(JSON.stringify(json), path, "md");
 }
@@ -354,11 +368,16 @@ async function openDOCX(path: string): Promise<void> {
     const arrayBuffer = await loadBinaryFile(path);
     const html = await fromDocx(arrayBuffer);
 
-    const { parseHTML } = await import("./editor");
+    const { parseHTML, syncDocumentPaginationState } = await import("./editor");
 
     const newDoc = parseHTML(html);
-    const newState = EditorState.create({ doc: newDoc });
+    const newState = EditorState.create({
+      schema: editorView.state.schema,
+      doc: newDoc,
+      plugins: editorView.state.plugins,
+    });
     editorView.updateState(newState);
+    syncDocumentPaginationState(editorView);
 
     markSaved(JSON.stringify(newState.doc.toJSON()), path, "docx");
   } catch (e) {
@@ -374,8 +393,15 @@ async function openTXT(path: string): Promise<void> {
   const { Node } = await import("prosemirror-model");
 
   const newDoc = Node.fromJSON(schema, json);
-  const newState = EditorState.create({ doc: newDoc });
+  const newState = EditorState.create({
+    schema: editorView.state.schema,
+    doc: newDoc,
+    plugins: editorView.state.plugins,
+  });
   editorView.updateState(newState);
+
+  const { syncDocumentPaginationState } = await import("./editor");
+  syncDocumentPaginationState(editorView);
 
   markSaved(JSON.stringify(json), path, "txt");
 }
@@ -915,9 +941,22 @@ function applyEditorMargin(userVal: number): void {
   _editorStyleEl.textContent = `
     .ProseMirror:not(.is-paged-mode) {
       max-width: none !important;
-      background: transparent !important;
       padding-left: ${actualPct.toFixed(2)}% !important;
       padding-right: ${actualPct.toFixed(2)}% !important;
+    }
+    .ProseMirror:not(.is-paged-mode) .pm-page {
+      width: 100% !important;
+      max-width: none !important;
+      min-height: 100% !important;
+      margin: 0 !important;
+      padding: var(--spacing-xl) 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+    }
+    .ProseMirror:not(.is-paged-mode) .pm-page-header,
+    .ProseMirror:not(.is-paged-mode) .pm-page-footer {
+      display: none !important;
     }
   `;
 

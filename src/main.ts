@@ -1,4 +1,4 @@
-import { createEditor } from "./editor/editor";
+import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
@@ -570,6 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const tr = editorView.state.tr;
     tr.delete(0, tr.doc.content.size);
     editorView.dispatch(tr);
+    syncDocumentPaginationState(editorView);
     console.log("Editor cleared");
     setTimeout(() => setLoading(false), 50);
   });
@@ -590,12 +591,14 @@ document.addEventListener("DOMContentLoaded", () => {
             plugins: editorView.state.plugins,
           });
           editorView.updateState(newState);
+          syncDocumentPaginationState(editorView);
           console.log("Loaded document content");
         } else {
           // Document is empty — clear the editor
           const tr = editorView.state.tr;
           tr.delete(0, tr.doc.content.size);
           editorView.dispatch(tr);
+          syncDocumentPaginationState(editorView);
           console.log("Loaded empty document");
         }
       } catch (e) {
@@ -604,6 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const tr = editorView.state.tr;
         tr.delete(0, tr.doc.content.size);
         editorView.dispatch(tr);
+        syncDocumentPaginationState(editorView);
       }
       setTimeout(() => setLoading(false), 50);
     },

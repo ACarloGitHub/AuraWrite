@@ -386,7 +386,7 @@ body {
   min-height: 100%;
   margin: 0 auto;
   background: transparent;
-  padding: var(--spacing-xl) var(--editor-margin-h, 10%);
+  padding: var(--spacing-xl) 0;
   font-family: var(--font-editor);
   font-size: 18px;
   line-height: 1.7;
@@ -3197,4 +3197,27 @@ kbd {
 
 .error-toast-close:hover {
   color: var(--color-text, #222);
+}
+
+
+/* FIX-EDITOR-OVERRIDE */
+/* Rimuove box grigio e gestisce margini in modalità continua */
+
+/* Vince su qualsiasi regola precedente grazie a !important */
+.ProseMirror {
+  background: transparent !important;
+  max-width: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* Horizontal padding = 0 su .ProseMirror: lo gestisce #editor via JS */
+.ProseMirror:not(.is-paged-mode) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Nessun flex-centering su #editor */
+#editor {
+  display: block !important;
 }

@@ -429,12 +429,23 @@ export function createEditor(element: HTMLElement): EditorViewType {
     },
   });
 
+  // Set initial pagination classes based on getPagedMode()
+  if (getPagedMode()) {
+    view.dom.classList.add("is-paged-mode");
+    view.dom.classList.add("paged-mode");
+  } else {
+    view.dom.classList.remove("is-paged-mode");
+    view.dom.classList.remove("paged-mode");
+  }
+
   window.addEventListener("aurawrite:pagination-mode-changed", ((e: CustomEvent) => {
     const enabled = e.detail.enabled as boolean;
     if (enabled) {
       view.dom.classList.add("is-paged-mode");
+      view.dom.classList.add("paged-mode");
     } else {
       view.dom.classList.remove("is-paged-mode");
+      view.dom.classList.remove("paged-mode");
     }
   }) as EventListener);
 
@@ -540,5 +551,25 @@ export function togglePagedMode(view: EditorView): void {
         });
       });
     });
+  }
+}
+
+export function syncDocumentPaginationState(view: EditorView): void {
+  const isPagedMode = getPagedMode();
+  const doc = view.state.doc;
+
+  let hasPages = false;
+  doc.forEach((node) => {
+    if (node.type.name === "page") hasPages = true;
+  });
+
+  if (isPagedMode) {
+    if (!hasPages) {
+      wrapInPages(view);
+    }
+  } else {
+    if (hasPages) {
+      unwrapPages(view);
+    }
   }
 }
