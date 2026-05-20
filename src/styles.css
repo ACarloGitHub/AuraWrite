@@ -3201,23 +3201,21 @@ kbd {
 
 
 /* FIX-EDITOR-OVERRIDE */
-/* Rimuove box grigio e gestisce margini in modalità continua */
+/* Gestione del layout dell'editor e protezione contro duplicazioni visive dell'interfaccia */
 
-/* Vince su qualsiasi regola precedente grazie a !important */
-.ProseMirror {
-  background: transparent !important;
-  max-width: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
+/* Impedisce che elementi strutturali dell'interfaccia incollati per errore vengano renderizzati dentro l'editor */
+.ProseMirror .toolbar,
+.ProseMirror .sidebar,
+.ProseMirror .status-bar,
+.ProseMirror .footer-ai-controls,
+.ProseMirror .title-bar,
+.ProseMirror .app-header {
+  display: none !important;
 }
 
-/* Horizontal padding = 0 su .ProseMirror: lo gestisce #editor via JS */
-.ProseMirror:not(.is-paged-mode) {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-
-/* Nessun flex-centering su #editor */
+/* Stabilità del visualizzatore dell'editor */
 #editor {
   display: block !important;
+  overflow: auto !important;
+  padding: 0 !important; /* Rimosso padding esterno per far respirare il foglio fluttuante al 95% */
 }

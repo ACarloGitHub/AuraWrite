@@ -555,6 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const editorView = createEditor(editorElement);
+  syncDocumentPaginationState(editorView);
   let isLoadingDocument = false;
 
   // Esponi flag globale per toolbar.ts

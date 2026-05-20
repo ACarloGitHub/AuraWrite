@@ -930,7 +930,8 @@ function getEditorMargin(): number {
 let _editorStyleEl: HTMLStyleElement | null = null;
 
 function applyEditorMargin(userVal: number): void {
-  const actualPct = userToActualPct(userVal);
+  // Calcolo lineare dei margini interni: da 16px (0%) a calc(16px + 23%) (100%)
+  const internalPct = (userVal / 100) * 23;
 
   // Inject (or update) a high-specificity style that overrides the CSS file
   if (!_editorStyleEl) {
@@ -940,16 +941,26 @@ function applyEditorMargin(userVal: number): void {
   }
   _editorStyleEl.textContent = `
     .ProseMirror:not(.is-paged-mode) {
-      max-width: none !important;
-      padding-left: ${actualPct.toFixed(2)}% !important;
-      padding-right: ${actualPct.toFixed(2)}% !important;
+      width: 95% !important;
+      max-width: 95% !important;
+      min-height: calc(100% - 40px) !important;
+      margin: 20px auto !important;
+      background: var(--color-paper, #fff) !important;
+      box-shadow: var(--shadow-editor) !important;
+      border-radius: 6px !important;
+      padding-top: var(--spacing-xl) !important;
+      padding-bottom: var(--spacing-xl) !important;
+      padding-left: calc(16px + ${internalPct.toFixed(2)}%) !important;
+      padding-right: calc(16px + ${internalPct.toFixed(2)}%) !important;
+      box-sizing: border-box !important;
     }
     .ProseMirror:not(.is-paged-mode) .pm-page {
       width: 100% !important;
       max-width: none !important;
       min-height: 100% !important;
       margin: 0 !important;
-      padding: var(--spacing-xl) 0 !important;
+      padding: 0 !important;
+      background: transparent !important;
       box-shadow: none !important;
       border: none !important;
       border-radius: 0 !important;
@@ -960,7 +971,7 @@ function applyEditorMargin(userVal: number): void {
     }
   `;
 
-  document.documentElement.style.setProperty("--editor-margin-h", `${actualPct.toFixed(2)}%`);
+  document.documentElement.style.setProperty("--editor-margin-h", `calc(16px + ${internalPct.toFixed(2)}%)`);
   localStorage.setItem(MARGIN_KEY, String(userVal));
   const inp = document.getElementById("inp-editor-width") as HTMLInputElement | null;
   if (inp && inp.value !== String(userVal)) inp.value = String(userVal);
