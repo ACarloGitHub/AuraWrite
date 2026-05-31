@@ -2,7 +2,7 @@
 
 import type { EditorView } from "prosemirror-view";
 import { Decoration } from "prosemirror-view";
-import { sendToAI } from "./ai-manager";
+import { sendToAI, extractJson } from "./ai-manager";
 import { getEditorContent } from "../editor/editor";
 import { notifyDocumentChange } from "./modification-hub";
 import {
@@ -24,6 +24,7 @@ interface SentenceSuggestion {
   isCollapsed: boolean;
   isProcessing: boolean;
   isQueued: boolean;
+  isFailed?: boolean;
 }
 
 interface AISuggestionResponse {
@@ -45,7 +46,8 @@ interface SentenceSlot {
     | "suggested"
     | "discarded"
     | "accepted"
-    | "closed";
+    | "closed"
+    | "failed";
   suggestion: string | null;
   reason: string | null;
 }
@@ -302,6 +304,7 @@ function createBoxesFromSlots(): void {
       isCollapsed: false,
       isProcessing: slot.state === "processing",
       isQueued: slot.state === "discarded",
+      isFailed: slot.state === "failed",
     };
 
     newSuggestions.push(suggestion);
@@ -311,6 +314,22 @@ function createBoxesFromSlots(): void {
     suggestions = [...suggestions, ...newSuggestions];
     renderSuggestions();
   }
+}
+
+export function retrySuggestion(id: string): void {
+  log(`RETRY: Retrying slot ${id}`);
+  const slot = slots.find((s) => s.id === id);
+  const suggestion = suggestions.find((s) => s.id === id);
+  if (!slot) return;
+
+  slot.state = "pending";
+  if (suggestion) {
+    suggestion.isFailed = false;
+    suggestion.isProcessing = true;
+    suggestion.isQueued = false;
+  }
+  renderSuggestions();
+  processNextSlot();
 }
 
 async function processNextSlot(): Promise<void> {
@@ -339,6 +358,7 @@ async function processNextSlot(): Promise<void> {
   if (suggestionBox) {
     suggestionBox.isProcessing = true;
     suggestionBox.isQueued = false;
+    suggestionBox.isFailed = false;
   }
 
   const queuedCount = slots.filter(
@@ -382,7 +402,7 @@ ${previousSuggestion ? `\nIMPORTANT: You must provide a COMPLETELY DIFFERENT sug
 SINGLE SENTENCE TO ANALYZE:
 "${slot.text}"
 
-Remember: Respond only with valid JSON in this exact format:
+Remember: DO NOT output any thinking, reasoning, explanation, or <thought>/<thinking> tags. You must respond IMMEDIATELY and ONLY with valid JSON in this exact format:
 {
   "context_understood": "brief summary of tone/style (1 sentence max)",
   "suggestions": [
@@ -405,14 +425,24 @@ Remember: Respond only with valid JSON in this exact format:
     );
 
     if (response.error) {
-      slot.state = slot.suggestion ? "suggested" : "pending";
+      slot.state = slot.suggestion ? "suggested" : "failed";
+      const existingBox = suggestions.find((b) => b.id === slot.id);
+      if (existingBox) {
+        existingBox.isFailed = true;
+        existingBox.isProcessing = false;
+      }
       updateAnalysisStatus(`Error: ${response.error}`);
     } else {
       processAIResponse(response.content, slot);
     }
   } catch (error) {
     log(`AI EXCEPTION: ${error}`);
-    slot.state = slot.suggestion ? "suggested" : "pending";
+    slot.state = slot.suggestion ? "suggested" : "failed";
+    const existingBox = suggestions.find((b) => b.id === slot.id);
+    if (existingBox) {
+      existingBox.isFailed = true;
+      existingBox.isProcessing = false;
+    }
     updateAnalysisStatus(
       `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
@@ -431,14 +461,20 @@ Remember: Respond only with valid JSON in this exact format:
 
 function processAIResponse(content: string, slot: SentenceSlot): void {
   try {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const jsonStr = extractJson(content);
+    if (!jsonStr) {
       log(`PARSE ERROR: No JSON found`);
-      slot.state = "suggested";
+      slot.state = slot.suggestion ? "suggested" : "failed";
+      const existingBox = suggestions.find((b) => b.id === slot.id);
+      if (existingBox) {
+        existingBox.isFailed = true;
+        existingBox.isProcessing = false;
+        renderSuggestions();
+      }
       return;
     }
 
-    const response: AISuggestionResponse = JSON.parse(jsonMatch[0]);
+    const response: AISuggestionResponse = JSON.parse(jsonStr);
 
     if (response.context_understood) {
       contextUnderstood = response.context_understood;
@@ -460,6 +496,7 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
           existingBox.reason = slot.reason;
           existingBox.sentenceTitle =
             newSuggestion.sentence_title || truncateText(slot.text, 30);
+          existingBox.isFailed = false;
           renderSuggestions();
         }
 
@@ -467,6 +504,11 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
       } else {
         log(`SUGGESTION: No valid suggestion`);
         slot.state = "suggested";
+        const existingBox = suggestions.find((b) => b.id === slot.id);
+        if (existingBox) {
+          existingBox.isFailed = false;
+          renderSuggestions();
+        }
       }
     }
 
@@ -475,7 +517,13 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
     }
   } catch (error) {
     log(`PARSE EXCEPTION: ${error}`);
-    slot.state = "suggested";
+    slot.state = slot.suggestion ? "suggested" : "failed";
+    const existingBox = suggestions.find((b) => b.id === slot.id);
+    if (existingBox) {
+      existingBox.isFailed = true;
+      existingBox.isProcessing = false;
+      renderSuggestions();
+    }
   }
 }
 
@@ -728,7 +776,7 @@ function renderSuggestions(): void {
     ${suggestions
       .map(
         (s) => `
-      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""} ${s.isQueued ? "suggestion-item--queued" : ""}" data-id="${s.id}">
+      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""} ${s.isQueued ? "suggestion-item--queued" : ""} ${s.isFailed ? "suggestion-item--failed" : ""}" data-id="${s.id}">
         <div class="suggestion-item__header">
           <button class="suggestion-item__toggle" data-action="toggle">${s.isExpanded ? "▼" : "▶"}</button>
           <button class="suggestion-item__collapse" data-action="collapse">${s.isCollapsed ? "»" : "«"}</button>
@@ -746,8 +794,18 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-            : s.isQueued
+            : s.isFailed
               ? `
+        <div class="suggestion-item__body suggestion-item__body--failed">
+          <div class="suggestion-item__processing-indicator">
+            <span class="suggestion-item__error-dot">✕</span>
+            <span class="suggestion-item__error-text">Analysis failed.</span>
+            <button class="suggestion-item__retry" data-action="retry">Retry</button>
+          </div>
+        </div>
+        `
+              : s.isQueued
+                ? `
         <div class="suggestion-item__body suggestion-item__body--queued">
           <div class="suggestion-item__processing-indicator">
             <span class="suggestion-item__queued-dot"></span>
@@ -755,8 +813,8 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-              : !s.suggested && !s.isAccepted
-                ? `
+                : !s.suggested && !s.isAccepted
+                  ? `
         <div class="suggestion-item__body suggestion-item__body--pending">
           <div class="suggestion-item__processing-indicator">
             <span class="suggestion-item__queued-dot"></span>
@@ -764,16 +822,16 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-                : s.isCollapsed
-                ? `
+                  : s.isCollapsed
+                  ? `
         <div class="suggestion-item__actions">
           <button class="suggestion-item__accept" data-action="accept">Accept</button>
           <button class="suggestion-item__reject" data-action="reject">Discard</button>
           <button class="suggestion-item__switch" data-action="switch">Switch</button>
         </div>
         `
-                : s.isExpanded
-                  ? `
+                  : s.isExpanded
+                    ? `
         <div class="suggestion-item__body">
           <div class="suggestion-item__original">
             <span class="suggestion-item__label">Original:</span>
@@ -806,7 +864,7 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-                  : ""
+                    : ""
         }
       </div>
     `,
@@ -841,6 +899,9 @@ function renderSuggestions(): void {
           break;
         case "collapse":
           toggleCollapseSuggestion(itemId);
+          break;
+        case "retry":
+          retrySuggestion(itemId);
           break;
       }
     });

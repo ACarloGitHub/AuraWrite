@@ -137,11 +137,25 @@ export function setProcessing(processing: boolean): void {
   isProcessing = processing;
 }
 
+export function extractJson(content: string): string | null {
+  if (!content) return null;
+  // Strip out thought/thinking blocks completely
+  let clean = content.replace(/<(thought|thinking)>[\s\S]*?<\/\1>/gi, "");
+  // Find first '{' and last '}'
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+    return clean.substring(firstBrace, lastBrace + 1);
+  }
+  return null;
+}
+
 export async function getSynonyms(
   word: string,
   context?: AIContext,
 ): Promise<string[]> {
-  const prompt = `Find synonyms and antonyms for the word "${word}". Respond in JSON format:
+  const prompt = `Find synonyms and antonyms for the word "${word}". 
+DO NOT output any thinking, reasoning, explanation, or <thought>/<thinking> tags. You must respond IMMEDIATELY and ONLY with valid JSON in this format:
 {
   "synonyms": ["word1", "word2", "word3"],
   "antonyms": ["opposite1", "opposite2"]
@@ -155,9 +169,9 @@ Only include common, usable synonyms. If none found, return empty arrays.`;
   }
 
   try {
-    const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    const jsonStr = extractJson(response.content);
+    if (jsonStr) {
+      const parsed = JSON.parse(jsonStr);
       return [...(parsed.synonyms || []), ...(parsed.antonyms || [])];
     }
   } catch {
@@ -190,14 +204,17 @@ export async function suggestAlternatives(
   text: string,
   context?: AIContext,
 ): Promise<string[]> {
-  const prompt = `Suggest 3 alternative ways to write this phrase or sentence. Respond in JSON format:
+  const prompt = `Suggest 3 alternative ways to write this phrase or sentence.
+DO NOT output any thinking, reasoning, explanation, or <thought>/<thinking> tags. You must respond IMMEDIATELY and ONLY with valid JSON in this format:
 {
   "alternatives": [
     "alternative 1",
     "alternative 2", 
     "alternative 3"
   ]
-}\n\nOriginal: "${text}"`;
+}
+
+Original: "${text}"`;
 
   const response = await sendToAI(prompt, context);
 
@@ -206,9 +223,9 @@ export async function suggestAlternatives(
   }
 
   try {
-    const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    const jsonStr = extractJson(response.content);
+    if (jsonStr) {
+      const parsed = JSON.parse(jsonStr);
       return parsed.alternatives || [];
     }
   } catch {
