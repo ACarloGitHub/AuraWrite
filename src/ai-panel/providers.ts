@@ -59,6 +59,8 @@ export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
 };
 
 export function getProviderBaseUrl(provider: string, customBaseUrl?: string): string {
-  if (customBaseUrl && customBaseUrl.trim() !== "") return customBaseUrl.trim();
-  return PROVIDER_BASE_URLS[provider] || PROVIDER_BASE_URLS.ollama;
+  const url = (customBaseUrl && customBaseUrl.trim() !== "")
+    ? customBaseUrl.trim()
+    : (PROVIDER_BASE_URLS[provider] || PROVIDER_BASE_URLS.ollama);
+  return url.replace(/\/+$/, "");
 }

@@ -469,8 +469,8 @@ export class LMStudioProvider implements AIProvider {
       const body: Record<string, unknown> = {
         messages: buildOpenAICompatibleMessages(prompt, context),
         stream: false,
+        model: this.model || "local-model",
       };
-      if (this.model) body.model = this.model;
 
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",

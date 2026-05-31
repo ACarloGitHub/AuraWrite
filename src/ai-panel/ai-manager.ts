@@ -3,6 +3,7 @@ import {
   AIContext,
   AIResponse,
   getProviderBaseUrl,
+  PROVIDER_DEFAULT_MODELS,
 } from "./providers";
 import { OllamaProvider } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider } from "./remote-providers";
@@ -23,9 +24,11 @@ function loadAIFromPreferences(): PreferencesAI {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
+      const provider = parsed.aiProvider || "ollama";
+      const defaultModel = PROVIDER_DEFAULT_MODELS[provider] || "";
       return {
-        aiProvider: parsed.aiProvider || "ollama",
-        aiModel: parsed.aiModel || "kimi-k2.5:cloud",
+        aiProvider: provider,
+        aiModel: parsed.aiModel || defaultModel,
         aiApiKey: parsed.aiApiKey || "",
         aiBaseUrl: parsed.aiBaseUrl || "",
       };
