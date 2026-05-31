@@ -463,7 +463,7 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
   try {
     const jsonStr = extractJson(content);
     if (!jsonStr) {
-      log(`PARSE ERROR: No JSON found`);
+      log(`PARSE ERROR: No JSON found in content: "${truncateText(content, 100)}"`);
       slot.state = slot.suggestion ? "suggested" : "failed";
       const existingBox = suggestions.find((b) => b.id === slot.id);
       if (existingBox) {
@@ -474,11 +474,14 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
       return;
     }
 
+    log(`PARSE: Extracted JSON: ${jsonStr}`);
     const response: AISuggestionResponse = JSON.parse(jsonStr);
 
     if (response.context_understood) {
       contextUnderstood = response.context_understood;
     }
+
+    let suggestionFound = false;
 
     if (response.suggestions && Array.isArray(response.suggestions)) {
       const newSuggestion = response.suggestions.find(
@@ -489,6 +492,7 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
         slot.suggestion = newSuggestion.suggested;
         slot.reason = newSuggestion.reason || null;
         slot.state = "suggested";
+        suggestionFound = true;
 
         const existingBox = suggestions.find((b) => b.id === slot.id);
         if (existingBox) {
@@ -501,14 +505,17 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
         }
 
         log(`SUGGESTION: Got suggestion for slot ${slot.id}`);
-      } else {
-        log(`SUGGESTION: No valid suggestion`);
-        slot.state = "suggested";
-        const existingBox = suggestions.find((b) => b.id === slot.id);
-        if (existingBox) {
-          existingBox.isFailed = false;
-          renderSuggestions();
-        }
+      }
+    }
+
+    if (!suggestionFound) {
+      log(`SUGGESTION: No valid suggestion found in response`);
+      slot.state = "suggested";
+      const existingBox = suggestions.find((b) => b.id === slot.id);
+      if (existingBox) {
+        existingBox.isFailed = false;
+        existingBox.isProcessing = false;
+        renderSuggestions();
       }
     }
 
