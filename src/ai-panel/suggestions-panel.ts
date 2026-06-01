@@ -25,6 +25,7 @@ interface SentenceSuggestion {
   isProcessing: boolean;
   isQueued: boolean;
   isFailed?: boolean;
+  noChangeNeeded?: boolean;
 }
 
 interface AISuggestionResponse {
@@ -61,12 +62,38 @@ let closedSentences: Set<string> = new Set();
 let isCurrentlyProcessing: boolean = false;
 let currentProcessingSlotId: string | null = null;
 
-let SUGGESTIONS_DEBUG = false;
 const DEBUG_LOG_MAX = 100;
 const DEBUG_LOG: string[] = [];
+const PREFERENCES_KEY_DEBUG = "aurawrite-preferences";
+
+function isDebugEnabled(): boolean {
+  try {
+    const saved = localStorage.getItem(PREFERENCES_KEY_DEBUG);
+    if (!saved) return false;
+    const prefs = JSON.parse(saved);
+    return Boolean(prefs.suggestionsDebug);
+  } catch {
+    return false;
+  }
+}
+
+function setDebugEnabled(enabled: boolean): void {
+  try {
+    const saved = localStorage.getItem(PREFERENCES_KEY_DEBUG);
+    const prefs = saved ? JSON.parse(saved) : {};
+    prefs.suggestionsDebug = enabled;
+    localStorage.setItem(PREFERENCES_KEY_DEBUG, JSON.stringify(prefs));
+  } catch {
+    // Ignore: localStorage may be disabled
+  }
+  if (!enabled) {
+    DEBUG_LOG.length = 0;
+  }
+  updateDebugLog();
+}
 
 function log(message: string): void {
-  if (!SUGGESTIONS_DEBUG) return;
+  if (!isDebugEnabled()) return;
   const time = new Date().toLocaleTimeString("it-IT", {
     hour: "2-digit",
     minute: "2-digit",
@@ -82,7 +109,7 @@ function log(message: string): void {
 }
 
 function updateDebugLog(): void {
-  if (!SUGGESTIONS_DEBUG) return;
+  if (!isDebugEnabled()) return;
   const logEl = document.getElementById("suggestions-debug-log");
   if (logEl) {
     if (DEBUG_LOG.length === 0) {
@@ -325,11 +352,16 @@ export function retrySuggestion(id: string): void {
   slot.state = "pending";
   if (suggestion) {
     suggestion.isFailed = false;
-    suggestion.isProcessing = true;
-    suggestion.isQueued = false;
+    suggestion.noChangeNeeded = false;
+    suggestion.isProcessing = isCurrentlyProcessing ? false : true;
+    suggestion.isQueued = isCurrentlyProcessing;
   }
   renderSuggestions();
-  processNextSlot();
+  if (isCurrentlyProcessing) {
+    log(`RETRY: Queued slot ${id} — will be picked up after current request finishes`);
+  } else {
+    processNextSlot();
+  }
 }
 
 async function processNextSlot(): Promise<void> {
@@ -454,6 +486,8 @@ Remember: DO NOT output any thinking, reasoning, explanation, or <thought>/<thin
   const processingBox = suggestions.find((b) => b.isProcessing);
   if (processingBox) {
     processingBox.isProcessing = false;
+    renderSuggestions();
+    log(`SAFETY: Cleared stuck isProcessing on box ${processingBox.id}`);
   }
 
   setTimeout(() => processNextSlot(), 100);
@@ -513,8 +547,14 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
       slot.state = "suggested";
       const existingBox = suggestions.find((b) => b.id === slot.id);
       if (existingBox) {
-        existingBox.isFailed = false;
-        existingBox.isProcessing = false;
+        if (slot.suggestion) {
+          existingBox.isFailed = false;
+          existingBox.isProcessing = false;
+        } else {
+          existingBox.noChangeNeeded = true;
+          existingBox.isFailed = false;
+          existingBox.isProcessing = false;
+        }
         renderSuggestions();
       }
     }
@@ -783,12 +823,13 @@ function renderSuggestions(): void {
     ${suggestions
       .map(
         (s) => `
-      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""} ${s.isQueued ? "suggestion-item--queued" : ""} ${s.isFailed ? "suggestion-item--failed" : ""}" data-id="${s.id}">
+      <div class="suggestion-item ${s.isExpanded ? "suggestion-item--expanded" : ""} ${s.isAccepted ? "suggestion-item--accepted" : ""} ${s.isProcessing ? "suggestion-item--processing" : ""} ${s.isQueued ? "suggestion-item--queued" : ""} ${s.isFailed ? "suggestion-item--failed" : ""} ${s.noChangeNeeded ? "suggestion-item--no-change" : ""}" data-id="${s.id}">
         <div class="suggestion-item__header">
           <button class="suggestion-item__toggle" data-action="toggle">${s.isExpanded ? "▼" : "▶"}</button>
           <button class="suggestion-item__collapse" data-action="collapse">${s.isCollapsed ? "»" : "«"}</button>
           <span class="suggestion-item__title">${escapeHtml(s.sentenceTitle)}</span>
           ${s.isAccepted ? "<span class='suggestion-item__accepted-badge'>✓</span>" : ""}
+          <button class="suggestion-item__debug" data-action="debug" title="Toggle debug log">🐛</button>
           <button class="suggestion-item__close" data-action="close">✕</button>
         </div>
         ${
@@ -811,8 +852,18 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-              : s.isQueued
+              : s.noChangeNeeded
                 ? `
+        <div class="suggestion-item__body suggestion-item__body--no-change">
+          <div class="suggestion-item__processing-indicator">
+            <span class="suggestion-item__no-change-dot">✓</span>
+            <span class="suggestion-item__no-change-text">No changes suggested.</span>
+            <button class="suggestion-item__retry" data-action="reanalyze">Re-analyze</button>
+          </div>
+        </div>
+        `
+                : s.isQueued
+                  ? `
         <div class="suggestion-item__body suggestion-item__body--queued">
           <div class="suggestion-item__processing-indicator">
             <span class="suggestion-item__queued-dot"></span>
@@ -820,8 +871,8 @@ function renderSuggestions(): void {
           </div>
         </div>
         `
-                : !s.suggested && !s.isAccepted
-                  ? `
+                  : !s.suggested && !s.isAccepted
+                    ? `
         <div class="suggestion-item__body suggestion-item__body--pending">
           <div class="suggestion-item__processing-indicator">
             <span class="suggestion-item__queued-dot"></span>
@@ -910,6 +961,12 @@ function renderSuggestions(): void {
         case "retry":
           retrySuggestion(itemId);
           break;
+        case "reanalyze":
+          retrySuggestion(itemId);
+          break;
+        case "debug":
+          toggleDebugFromPanel();
+          break;
       }
     });
   });
@@ -917,6 +974,13 @@ function renderSuggestions(): void {
 
 function generateId(): string {
   return crypto.randomUUID().slice(0, 9);
+}
+
+function toggleDebugFromPanel(): void {
+  const next = !isDebugEnabled();
+  setDebugEnabled(next);
+  console.log(`[Suggestions] Debug log ${next ? "enabled" : "disabled"}`);
+  renderSuggestions();
 }
 
 function truncateText(text: string, maxLength: number): string {

@@ -44,6 +44,7 @@ interface Preferences {
   aiWritingLanguage: string;
   aiAssistantName: string;
   aiUserName: string;
+  suggestionsDebug: boolean;
   suggestionsPrompt: string;
   aiAssistantPrompt: string;
   entityExtractionRole: string;
@@ -148,6 +149,7 @@ const defaultPreferences: Preferences = {
   aiWritingLanguage: "English",
   aiAssistantName: "Aura",
   aiUserName: "",
+  suggestionsDebug: false,
   suggestionsPrompt: defaultSuggestionsPrompt,
   aiAssistantPrompt: defaultAIAssistantPrompt,
   entityExtractionRole: defaultEntityExtractionRole,
@@ -322,6 +324,8 @@ function openPreferencesModal(): void {
   ).value = prefs.aiAssistantName;
   (document.getElementById("pref-ai-user-name") as HTMLInputElement).value =
     prefs.aiUserName;
+  (document.getElementById("pref-suggestions-debug") as HTMLInputElement).checked =
+    prefs.suggestionsDebug;
   (
     document.getElementById("pref-ai-suggestions-interval") as HTMLInputElement
   ).value = prefs.aiSuggestionsInterval.toString();
@@ -639,6 +643,7 @@ function savePreferencesFromModal(): void {
     aiWritingLanguage: sel("pref-ai-writing-language") || "English",
     aiAssistantName: inp("pref-ai-assistant-name"),
     aiUserName: inp("pref-ai-user-name"),
+    suggestionsDebug: chk("pref-suggestions-debug"),
     suggestionsPrompt: tarea("pref-suggestions-prompt"),
     aiAssistantPrompt: tarea("pref-ai-assistant-prompt"),
     entityExtractionRole: inp("pref-entity-extraction-role"),
@@ -889,7 +894,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);

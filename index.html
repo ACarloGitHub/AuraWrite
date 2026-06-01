@@ -220,6 +220,7 @@
             </button>
           </div>
           <div class="suggestions-panel__content"></div>
+          <div id="suggestions-debug-log" class="suggestions-debug-log" style="display: none;"></div>
         </aside>
         <div id="editor"></div>
         <div id="paginated-container" style="display: none"></div>
@@ -414,6 +415,13 @@
                 <label>Suggestions Interval (seconds)</label>
                 <span class="preference-hint">How often the AI analyzes text for suggestions</span>
                 <input type="number" id="pref-ai-suggestions-interval" value="30" min="5" max="300" />
+              </div>
+              <div class="preference-group">
+                <label class="preference-checkbox-label">
+                  <input type="checkbox" id="pref-suggestions-debug" />
+                  Enable suggestions debug log
+                </label>
+                <span class="preference-hint">Show a live log of suggestion panel events in the panel footer. Also accessible via the 🐛 button in each item header.</span>
               </div>
               <div class="preference-group">
                 <label>Context Update Interval (seconds)</label>
