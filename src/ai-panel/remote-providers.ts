@@ -390,7 +390,7 @@ export class DeepSeekProvider implements AIProvider {
   constructor(
     apiKey: string,
     model: string = "deepseek-chat",
-    baseUrl: string = "https://api.deepseek.com/v1",
+    baseUrl: string = "https://api.deepseek.com",
   ) {
     this.apiKey = apiKey;
     this.model = model;

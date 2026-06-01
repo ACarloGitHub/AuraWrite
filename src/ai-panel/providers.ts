@@ -46,7 +46,7 @@ export const PROVIDER_BASE_URLS: Record<string, string> = {
   "ollama-cloud": "https://ollama.com",
   openai: "https://api.openai.com/v1",
   anthropic: "https://api.anthropic.com/v1",
-  deepseek: "https://api.deepseek.com/v1",
+  deepseek: "https://api.deepseek.com",
   openrouter: "https://openrouter.ai/api/v1",
   lmstudio: "http://localhost:1234/v1",
 };

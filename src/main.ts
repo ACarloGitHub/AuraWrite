@@ -6,6 +6,7 @@ import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries } from "./error-boundary";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
+import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -433,16 +434,6 @@ function updateApiKeyGroupVisibility(): void {
   const isOllamaCloud = provider === "ollama" && ollamaMode === "cloud";
   const effectiveProvider = isOllamaCloud ? "ollama-cloud" : provider;
 
-  const defaultBaseUrls: Record<string, string> = {
-    ollama: "http://localhost:11434",
-    "ollama-cloud": "https://ollama.com",
-    openai: "https://api.openai.com/v1",
-    anthropic: "https://api.anthropic.com/v1",
-    deepseek: "https://api.deepseek.com/v1",
-    openrouter: "https://openrouter.ai/api/v1",
-    lmstudio: "http://localhost:1234/v1",
-  };
-
   const defaultModels: Record<string, string> = {
     ollama: "kimi-k2.5:cloud",
     "ollama-cloud": "gpt-oss:120b-cloud",
@@ -479,7 +470,7 @@ function updateApiKeyGroupVisibility(): void {
     }
   }
   if (baseUrlHint) {
-    baseUrlHint.textContent = `Default: ${defaultBaseUrls[effectiveProvider] || ""}. Leave empty to use default.`;
+    baseUrlHint.textContent = `Default: ${PROVIDER_BASE_URLS[effectiveProvider] || ""}. Leave empty to use default.`;
   }
 
   const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
@@ -488,12 +479,12 @@ function updateApiKeyGroupVisibility(): void {
   }
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
-  const knownDefaultUrls = Object.values(defaultBaseUrls);
+  const knownDefaultUrls = Object.values(PROVIDER_BASE_URLS);
   const currentBaseUrl = baseUrlInput?.value.trim().replace(/\/+$/, "") || "";
   if (baseUrlInput) {
-    baseUrlInput.placeholder = defaultBaseUrls[effectiveProvider] || "";
+    baseUrlInput.placeholder = PROVIDER_BASE_URLS[effectiveProvider] || "";
     if (currentBaseUrl === "" || knownDefaultUrls.includes(currentBaseUrl)) {
-      baseUrlInput.value = defaultBaseUrls[effectiveProvider] || "";
+      baseUrlInput.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
     }
   }
 }
@@ -510,16 +501,7 @@ function getEffectiveBaseUrl(): string {
   const value = (baseUrlInput?.value || "").trim();
   if (value) return value.replace(/\/+$/, "");
   const effectiveProvider = getEffectiveProvider();
-  const defaults: Record<string, string> = {
-    ollama: "http://localhost:11434",
-    "ollama-cloud": "https://ollama.com",
-    openai: "https://api.openai.com/v1",
-    anthropic: "https://api.anthropic.com/v1",
-    deepseek: "https://api.deepseek.com",
-    openrouter: "https://openrouter.ai/api/v1",
-    lmstudio: "http://localhost:1234/v1",
-  };
-  return defaults[effectiveProvider] || "";
+  return PROVIDER_BASE_URLS[effectiveProvider] || "";
 }
 
 function setModelStatus(text: string, isError = false): void {
