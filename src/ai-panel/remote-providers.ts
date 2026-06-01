@@ -464,7 +464,15 @@ export class LMStudioProvider implements AIProvider {
     baseUrl: string = "http://localhost:1234/v1",
   ) {
     this.model = model;
-    this.baseUrl = baseUrl;
+    this.baseUrl = this.normalizeBaseUrl(baseUrl);
+  }
+
+  private normalizeBaseUrl(url: string): string {
+    let normalized = url.replace(/\/+$/, "");
+    if (!normalized.match(/\/v1\/?$/)) {
+      normalized = normalized + "/v1";
+    }
+    return normalized;
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
@@ -484,12 +492,24 @@ export class LMStudioProvider implements AIProvider {
         signal: this.abortController.signal,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        return { content: "", done: false, error: `LM Studio error: ${response.status} - ${errorData.error?.message || response.statusText}` };
+      const data = await response.json().catch(() => null);
+      if (!data) {
+        return { content: "", done: false, error: `LM Studio error: empty response (status ${response.status})` };
       }
-
-      const data = await response.json();
+      if (data.error) {
+        const errMsg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
+        if (errMsg.includes("Unexpected endpoint or method")) {
+          return {
+            content: "",
+            done: false,
+            error: `LM Studio endpoint error: baseUrl must end with /v1. URL: ${this.baseUrl}/chat/completions. Server: ${errMsg}`,
+          };
+        }
+        return { content: "", done: false, error: `LM Studio error: ${errMsg}` };
+      }
+      if (!response.ok) {
+        return { content: "", done: false, error: `LM Studio error: HTTP ${response.status} ${response.statusText}` };
+      }
       return { content: data.choices?.[0]?.message?.content || "", done: true };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
