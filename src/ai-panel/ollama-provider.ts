@@ -65,10 +65,11 @@ export class OllamaProvider implements AIProvider {
           error: "Request cancelled",
         };
       }
+      console.error(`[Ollama] Request failed:`, error);
       return {
         content: "",
         done: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }

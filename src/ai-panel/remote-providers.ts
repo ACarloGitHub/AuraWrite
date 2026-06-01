@@ -146,10 +146,11 @@ export class OpenAIProvider implements AIProvider {
           error: "Request cancelled",
         };
       }
+      console.error(`[OpenAI] Request failed:`, error);
       return {
         content: "",
         done: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -237,10 +238,11 @@ export class AnthropicProvider implements AIProvider {
           error: "Request cancelled",
         };
       }
+      console.error(`[Anthropic] Request failed:`, error);
       return {
         content: "",
         done: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -378,7 +380,8 @@ export class DeepSeekProvider implements AIProvider {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
       }
-      return { content: "", done: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error(`[DeepSeek] Request failed:`, error);
+      return { content: "", done: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -437,7 +440,8 @@ export class OpenRouterProvider implements AIProvider {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
       }
-      return { content: "", done: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error(`[OpenRouter] Request failed:`, error);
+      return { content: "", done: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -491,7 +495,8 @@ export class LMStudioProvider implements AIProvider {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
       }
-      return { content: "", done: false, error: error instanceof Error ? error.message : "Unknown error" };
+      console.error(`[LMStudio] Request failed:`, error);
+      return { content: "", done: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
