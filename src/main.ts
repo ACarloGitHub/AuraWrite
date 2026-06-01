@@ -5,6 +5,7 @@ import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries } from "./error-boundary";
+import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -359,6 +360,7 @@ function openPreferencesModal(): void {
 
   updateCustomColorsVisibility();
   updateApiKeyGroupVisibility();
+  refreshModelList();
 
   const content = modal?.querySelector(".modal-content") as HTMLElement | null;
   if (content) {
@@ -489,6 +491,95 @@ function updateApiKeyGroupVisibility(): void {
     if (currentBaseUrl === "" || knownDefaultUrls.includes(currentBaseUrl)) {
       baseUrlInput.value = defaultBaseUrls[effectiveProvider] || "";
     }
+  }
+}
+
+function getEffectiveProvider(): string {
+  const provider = (document.getElementById("pref-ai-provider") as HTMLSelectElement | null)?.value || "ollama";
+  const ollamaMode = (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement | null)?.value || "local";
+  if (provider === "ollama" && ollamaMode === "cloud") return "ollama-cloud";
+  return provider;
+}
+
+function getEffectiveBaseUrl(): string {
+  const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
+  const value = (baseUrlInput?.value || "").trim();
+  if (value) return value.replace(/\/+$/, "");
+  const effectiveProvider = getEffectiveProvider();
+  const defaults: Record<string, string> = {
+    ollama: "http://localhost:11434",
+    "ollama-cloud": "https://ollama.com",
+    openai: "https://api.openai.com/v1",
+    anthropic: "https://api.anthropic.com/v1",
+    deepseek: "https://api.deepseek.com",
+    openrouter: "https://openrouter.ai/api/v1",
+    lmstudio: "http://localhost:1234/v1",
+  };
+  return defaults[effectiveProvider] || "";
+}
+
+function setModelStatus(text: string, isError = false): void {
+  const el = document.getElementById("pref-ai-model-status");
+  if (el) {
+    el.textContent = text;
+    el.classList.toggle("model-status-error", isError);
+    el.classList.toggle("model-status-ok", !isError && text.length > 0);
+  }
+}
+
+function populateModelSelect(models: ModelInfo[], currentModel: string): void {
+  const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;
+  if (!select) return;
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = models.length === 0
+    ? "— No models returned —"
+    : "— Select a model —";
+  select.appendChild(placeholder);
+  for (const m of models) {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.displayName && m.displayName !== m.id ? `${m.displayName} (${m.id})` : m.id;
+    select.appendChild(opt);
+  }
+  if (currentModel) {
+    select.value = currentModel;
+  }
+}
+
+async function refreshModelList(force = false): Promise<void> {
+  const provider = getEffectiveProvider();
+  const baseUrl = getEffectiveBaseUrl();
+  const apiKey = (document.getElementById("pref-ai-api-key") as HTMLInputElement | null)?.value || "";
+  const hasApiKey = apiKey.trim().length > 0;
+  const currentModel = (document.getElementById("pref-ai-model") as HTMLInputElement | null)?.value || "";
+
+  if (!baseUrl) {
+    setModelStatus("No base URL configured.", true);
+    return;
+  }
+
+  if (!force) {
+    const cached = getCachedModels(provider, baseUrl, hasApiKey);
+    if (cached) {
+      populateModelSelect(cached, currentModel);
+      setModelStatus(`Showing ${cached.length} cached model(s). Click \u21bb to refresh.`);
+      return;
+    }
+  }
+
+  setModelStatus("Loading models...");
+  try {
+    const models = await listModelsForProvider(provider, baseUrl, apiKey);
+    setCachedModels(provider, baseUrl, hasApiKey, models);
+    populateModelSelect(models, currentModel);
+    setModelStatus(`Loaded ${models.length} model(s) from ${provider}.`);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[ModelListing]", error);
+    populateModelSelect([], currentModel);
+    setModelStatus(`Failed: ${msg}`, true);
   }
 }
 
@@ -745,9 +836,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("pref-ai-provider")?.addEventListener("change", () => {
     updateApiKeyGroupVisibility();
+    refreshModelList();
   });
   document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", () => {
     updateApiKeyGroupVisibility();
+    refreshModelList();
+  });
+  document.getElementById("pref-ai-base-url")?.addEventListener("change", () => {
+    refreshModelList();
+  });
+  document.getElementById("pref-ai-api-key")?.addEventListener("change", () => {
+    refreshModelList();
+  });
+  document.getElementById("pref-ai-model-refresh")?.addEventListener("click", () => {
+    refreshModelList(true);
+  });
+  document.getElementById("pref-ai-model-select")?.addEventListener("change", (e) => {
+    const value = (e.target as HTMLSelectElement).value;
+    if (value) {
+      const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
+      if (modelInput) modelInput.value = value;
+    }
   });
 
   function migrateOldAISettings(): void {

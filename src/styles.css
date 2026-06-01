@@ -1254,6 +1254,54 @@ body {
   margin-bottom: var(--spacing-xs);
 }
 
+.model-picker-row {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.model-picker-row .model-select {
+  flex: 1 1 auto;
+}
+
+.model-refresh-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  line-height: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.model-refresh-btn:hover {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.model-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+#pref-ai-model-status {
+  display: block;
+  margin-top: var(--spacing-xs);
+}
+
+#pref-ai-model-status.model-status-ok {
+  color: var(--color-text-muted);
+}
+
+#pref-ai-model-status.model-status-error {
+  color: #c0392b;
+}
+
 .preference-group select,
 .preference-group input[type="number"],
 .preference-group input[type="text"],

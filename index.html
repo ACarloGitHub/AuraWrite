@@ -350,7 +350,14 @@
               <div class="preference-group">
                 <label>Model</label>
                 <span class="preference-hint">Model name as recognized by the provider</span>
+                <div class="model-picker-row">
+                  <select id="pref-ai-model-select" class="model-select">
+                    <option value="">— Refresh to load models —</option>
+                  </select>
+                  <button type="button" id="pref-ai-model-refresh" class="model-refresh-btn" title="Refresh model list from provider">&#x21bb;</button>
+                </div>
                 <input type="text" id="pref-ai-model" placeholder="e.g. kimi-k2.5:cloud" />
+                <span class="preference-hint" id="pref-ai-model-status">Select a model from the list, or type a custom name above.</span>
               </div>
               <div class="preference-group" id="api-key-group">
                 <label>API Key</label>
