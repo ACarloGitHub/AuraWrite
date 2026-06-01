@@ -33,6 +33,7 @@ interface Preferences {
   incrementalEnabled: boolean;
   incrementalMax: number;
   aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+  aiOllamaMode: "local" | "cloud";
   aiModel: string;
   aiApiKey: string;
   aiBaseUrl: string;
@@ -136,6 +137,7 @@ const defaultPreferences: Preferences = {
   incrementalEnabled: false,
   incrementalMax: 10,
   aiProvider: "ollama",
+  aiOllamaMode: "local",
   aiModel: "kimi-k2.5:cloud",
   aiApiKey: "",
   aiBaseUrl: "",
@@ -300,6 +302,8 @@ function openPreferencesModal(): void {
   ).value = prefs.customTextButtons;
   (document.getElementById("pref-ai-provider") as HTMLSelectElement).value =
     prefs.aiProvider;
+  (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement).value =
+    prefs.aiOllamaMode;
   (document.getElementById("pref-ai-model") as HTMLInputElement).value =
     prefs.aiModel;
   (document.getElementById("pref-ai-api-key") as HTMLInputElement).value =
@@ -412,13 +416,20 @@ function makeModalDraggable(): void {
 
 function updateApiKeyGroupVisibility(): void {
   const provider = (document.getElementById("pref-ai-provider") as HTMLSelectElement)?.value;
+  const ollamaModeGroup = document.getElementById("ollama-mode-group");
   const apiKeyGroup = document.getElementById("api-key-group");
   const baseUrlGroup = document.getElementById("base-url-group");
   const apiKeyHint = document.getElementById("api-key-hint");
   const baseUrlHint = document.getElementById("base-url-hint");
+  const ollamaModeSelect = document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement | null;
+  const ollamaMode = ollamaModeSelect?.value || "local";
+
+  const isOllamaCloud = provider === "ollama" && ollamaMode === "cloud";
+  const effectiveProvider = isOllamaCloud ? "ollama-cloud" : provider;
 
   const defaultBaseUrls: Record<string, string> = {
     ollama: "http://localhost:11434",
+    "ollama-cloud": "https://ollama.com",
     openai: "https://api.openai.com/v1",
     anthropic: "https://api.anthropic.com/v1",
     deepseek: "https://api.deepseek.com/v1",
@@ -428,6 +439,7 @@ function updateApiKeyGroupVisibility(): void {
 
   const defaultModels: Record<string, string> = {
     ollama: "kimi-k2.5:cloud",
+    "ollama-cloud": "gpt-oss:120b-cloud",
     openai: "gpt-4o",
     anthropic: "claude-sonnet-4-20250514",
     deepseek: "deepseek-chat",
@@ -435,7 +447,13 @@ function updateApiKeyGroupVisibility(): void {
     lmstudio: "loaded-model",
   };
 
-  const apiKeyRequired = provider !== "ollama" && provider !== "lmstudio";
+  if (ollamaModeGroup) {
+    if (provider === "ollama") {
+      ollamaModeGroup.classList.remove("hidden");
+    } else {
+      ollamaModeGroup.classList.add("hidden");
+    }
+  }
 
   if (apiKeyGroup) {
     apiKeyGroup.classList.remove("hidden");
@@ -444,8 +462,10 @@ function updateApiKeyGroupVisibility(): void {
     baseUrlGroup.classList.remove("hidden");
   }
   if (apiKeyHint) {
-    if (provider === "ollama") {
-      apiKeyHint.textContent = "Required for cloud models (leave empty for local models).";
+    if (isOllamaCloud) {
+      apiKeyHint.textContent = "Required for Ollama Cloud. Use your OLLAMA_API_KEY from ollama.com.";
+    } else if (provider === "ollama") {
+      apiKeyHint.textContent = "Optional. Only needed if you ran `ollama signin` to use cloud models through your local Ollama.";
     } else if (provider === "lmstudio") {
       apiKeyHint.textContent = "Not required for LM Studio.";
     } else {
@@ -453,17 +473,22 @@ function updateApiKeyGroupVisibility(): void {
     }
   }
   if (baseUrlHint) {
-    baseUrlHint.textContent = `Default: ${defaultBaseUrls[provider] || ""}. Leave empty to use default.`;
+    baseUrlHint.textContent = `Default: ${defaultBaseUrls[effectiveProvider] || ""}. Leave empty to use default.`;
   }
 
   const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
-  if (modelInput && defaultModels[provider]) {
-    modelInput.placeholder = defaultModels[provider];
+  if (modelInput && defaultModels[effectiveProvider]) {
+    modelInput.placeholder = defaultModels[effectiveProvider];
   }
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
-  if (baseUrlInput && !baseUrlInput.value.trim()) {
-    baseUrlInput.placeholder = defaultBaseUrls[provider] || "";
+  const knownDefaultUrls = Object.values(defaultBaseUrls);
+  const currentBaseUrl = baseUrlInput?.value.trim().replace(/\/+$/, "") || "";
+  if (baseUrlInput) {
+    baseUrlInput.placeholder = defaultBaseUrls[effectiveProvider] || "";
+    if (currentBaseUrl === "" || knownDefaultUrls.includes(currentBaseUrl)) {
+      baseUrlInput.value = defaultBaseUrls[effectiveProvider] || "";
+    }
   }
 }
 
@@ -513,6 +538,7 @@ function savePreferencesFromModal(): void {
     incrementalEnabled: chk("pref-incremental-enabled"),
     incrementalMax: parseInt(inp("pref-incremental-max"), 10) || 10,
     aiProvider: sel("pref-ai-provider") as Preferences["aiProvider"] || "ollama",
+    aiOllamaMode: (sel("pref-ai-ollama-mode") as Preferences["aiOllamaMode"]) || "local",
     aiModel: inp("pref-ai-model"),
     aiApiKey: inp("pref-ai-api-key"),
     aiBaseUrl: inp("pref-ai-base-url"),
@@ -718,6 +744,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("pref-ai-provider")?.addEventListener("change", () => {
+    updateApiKeyGroupVisibility();
+  });
+  document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", () => {
     updateApiKeyGroupVisibility();
   });
 

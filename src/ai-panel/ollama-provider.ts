@@ -1,21 +1,44 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
 
+export type OllamaMode = "local" | "cloud";
+
+const OLLAMA_LOCAL_BASE_URL = "http://localhost:11434";
+const OLLAMA_CLOUD_BASE_URL = "https://ollama.com";
+
 export class OllamaProvider implements AIProvider {
   name = "ollama";
-  displayName = "Ollama";
-  isLocal = true;
+  displayName: string;
+  isLocal: boolean;
 
   private baseUrl: string;
   private model: string;
+  private mode: OllamaMode;
+  private apiKey: string;
   private abortController: AbortController | null = null;
 
   constructor(
     model: string = "kimi-k2.5:cloud",
-    baseUrl: string = "http://localhost:11434",
+    baseUrl?: string,
+    mode: OllamaMode = "local",
+    apiKey: string = "",
   ) {
+    this.mode = mode;
+    this.apiKey = apiKey;
     this.model = model;
-    this.baseUrl = baseUrl;
+    if (mode === "cloud") {
+      this.baseUrl = (baseUrl && baseUrl.trim() !== "")
+        ? baseUrl.replace(/\/+$/, "")
+        : OLLAMA_CLOUD_BASE_URL;
+      this.isLocal = false;
+      this.displayName = "Ollama (Cloud)";
+    } else {
+      this.baseUrl = (baseUrl && baseUrl.trim() !== "")
+        ? baseUrl.replace(/\/+$/, "")
+        : OLLAMA_LOCAL_BASE_URL;
+      this.isLocal = true;
+      this.displayName = "Ollama (Local)";
+    }
   }
 
   setModel(model: string): void {
@@ -26,15 +49,42 @@ export class OllamaProvider implements AIProvider {
     this.baseUrl = baseUrl;
   }
 
+  setMode(mode: OllamaMode, apiKey: string = ""): void {
+    this.mode = mode;
+    this.apiKey = apiKey;
+    if (mode === "cloud") {
+      this.baseUrl = OLLAMA_CLOUD_BASE_URL;
+      this.isLocal = false;
+      this.displayName = "Ollama (Cloud)";
+    } else {
+      this.baseUrl = OLLAMA_LOCAL_BASE_URL;
+      this.isLocal = true;
+      this.displayName = "Ollama (Local)";
+    }
+  }
+
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (this.mode === "cloud" && !this.apiKey.trim()) {
+      return {
+        content: "",
+        done: false,
+        error: "Ollama Cloud requires an API key. Add your OLLAMA_API_KEY in Preferences > AI Provider.",
+      };
+    }
+
     this.abortController = new AbortController();
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (this.mode === "cloud" && this.apiKey.trim()) {
+        headers["Authorization"] = `Bearer ${this.apiKey.trim()}`;
+      }
+
       const response = await tauriFetch(`${this.baseUrl}/api/generate`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           model: this.model,
           prompt: this.buildPrompt(prompt, context),

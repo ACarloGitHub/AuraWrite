@@ -331,12 +331,20 @@
                 <label>AI Provider</label>
                 <span class="preference-hint">Select which AI service to use</span>
                 <select id="pref-ai-provider">
-                  <option value="ollama">Ollama (Local)</option>
+                  <option value="ollama">Ollama</option>
                   <option value="openai">OpenAI</option>
                   <option value="anthropic">Anthropic</option>
                   <option value="deepseek">DeepSeek</option>
                   <option value="openrouter">OpenRouter</option>
                   <option value="lmstudio">LM Studio (Local)</option>
+                </select>
+              </div>
+              <div class="preference-group hidden" id="ollama-mode-group">
+                <label>Ollama Mode</label>
+                <span class="preference-hint">Local: connect to your running Ollama. Cloud: connect directly to ollama.com (requires API key).</span>
+                <select id="pref-ai-ollama-mode">
+                  <option value="local">Local (http://localhost:11434)</option>
+                  <option value="cloud">Cloud (https://ollama.com — requires API key)</option>
                 </select>
               </div>
               <div class="preference-group">

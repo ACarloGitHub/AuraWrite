@@ -5,18 +5,21 @@ import {
   getProviderBaseUrl,
   PROVIDER_DEFAULT_MODELS,
 } from "./providers";
-import { OllamaProvider } from "./ollama-provider";
+import { OllamaProvider, type OllamaMode } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider } from "./remote-providers";
 import { buildToolSystemPrompt } from "./tools";
 import { getEditorView } from "../editor/toolbar";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 
+type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+
 interface PreferencesAI {
-  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+  aiProvider: ProviderName;
   aiModel: string;
   aiApiKey: string;
   aiBaseUrl: string;
+  aiOllamaMode: OllamaMode;
 }
 
 function loadAIFromPreferences(): PreferencesAI {
@@ -24,19 +27,24 @@ function loadAIFromPreferences(): PreferencesAI {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
-      const provider = parsed.aiProvider || "ollama";
+      const storedProvider = parsed.aiProvider || "ollama";
+      const ollamaMode: OllamaMode = parsed.aiOllamaMode || "local";
+      const provider: ProviderName = (storedProvider === "ollama" && ollamaMode === "cloud")
+        ? "ollama-cloud"
+        : (storedProvider as ProviderName);
       const defaultModel = PROVIDER_DEFAULT_MODELS[provider] || "";
       return {
         aiProvider: provider,
         aiModel: parsed.aiModel || defaultModel,
         aiApiKey: parsed.aiApiKey || "",
         aiBaseUrl: parsed.aiBaseUrl || "",
+        aiOllamaMode: ollamaMode,
       };
     } catch {
-      return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "" };
+      return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "", aiOllamaMode: "local" };
     }
   }
-  return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "" };
+  return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "", aiOllamaMode: "local" };
 }
 
 let currentProvider: AIProvider | null = null;
@@ -51,15 +59,21 @@ function createProvider(settings: PreferencesAI): AIProvider {
   const baseUrl = getProviderBaseUrl(settings.aiProvider, settings.aiBaseUrl);
   switch (settings.aiProvider) {
     case "ollama":
-      return new OllamaProvider(settings.aiModel, baseUrl);
+    case "ollama-cloud":
+      return new OllamaProvider(
+        settings.aiModel,
+        baseUrl,
+        settings.aiOllamaMode,
+        settings.aiApiKey,
+      );
     case "openai":
       return new OpenAIProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     case "anthropic":
       return new AnthropicProvider(settings.aiApiKey, settings.aiModel, baseUrl);
-    case "deepseek":
-      return new DeepSeekProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     case "openrouter":
       return new OpenRouterProvider(settings.aiApiKey, settings.aiModel, baseUrl);
+    case "deepseek":
+      return new DeepSeekProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     case "lmstudio":
       return new LMStudioProvider(settings.aiModel, baseUrl);
     default:
@@ -89,7 +103,7 @@ export async function sendToAI(
 
   // Check if the current provider requires an API key
   const settings = loadAIFromPreferences();
-  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter"];
+  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud"];
   if (providersRequiringKey.includes(settings.aiProvider) && !settings.aiApiKey.trim()) {
     const msg =
       `Missing API key for ${settings.aiProvider}. Please add your API key in Preferences > AI Provider.`;

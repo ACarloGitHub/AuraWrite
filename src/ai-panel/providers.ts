@@ -42,6 +42,7 @@ export interface AIProviderConfig {
 
 export const PROVIDER_BASE_URLS: Record<string, string> = {
   ollama: "http://localhost:11434",
+  "ollama-cloud": "https://ollama.com",
   openai: "https://api.openai.com/v1",
   anthropic: "https://api.anthropic.com/v1",
   deepseek: "https://api.deepseek.com/v1",
@@ -51,6 +52,7 @@ export const PROVIDER_BASE_URLS: Record<string, string> = {
 
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
   ollama: "kimi-k2.5:cloud",
+  "ollama-cloud": "gpt-oss:120b-cloud",
   openai: "gpt-4o",
   anthropic: "claude-sonnet-4-20250514",
   deepseek: "deepseek-chat",
