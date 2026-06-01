@@ -1,3 +1,4 @@
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
 
 export class OllamaProvider implements AIProvider {
@@ -29,7 +30,7 @@ export class OllamaProvider implements AIProvider {
     this.abortController = new AbortController();
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/generate`, {
+      const response = await tauriFetch(`${this.baseUrl}/api/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

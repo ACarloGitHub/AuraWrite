@@ -1,3 +1,4 @@
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
 
 function buildOpenAICompatibleMessages(
@@ -107,7 +108,7 @@ export class OpenAIProvider implements AIProvider {
     this.abortController = new AbortController();
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -196,7 +197,7 @@ export class AnthropicProvider implements AIProvider {
       const systemPrompt = this.buildSystemPrompt(context);
       const userMessages = this.buildUserMessages(prompt, context);
 
-      const response = await fetch(`${this.baseUrl}/messages`, {
+      const response = await tauriFetch(`${this.baseUrl}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -352,7 +353,7 @@ export class DeepSeekProvider implements AIProvider {
     this.abortController = new AbortController();
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -410,7 +411,7 @@ export class OpenRouterProvider implements AIProvider {
     this.abortController = new AbortController();
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -472,7 +473,7 @@ export class LMStudioProvider implements AIProvider {
         model: this.model || "local-model",
       };
 
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
