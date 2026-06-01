@@ -479,13 +479,9 @@ function updateApiKeyGroupVisibility(): void {
   }
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
-  const knownDefaultUrls = Object.values(PROVIDER_BASE_URLS);
-  const currentBaseUrl = baseUrlInput?.value.trim().replace(/\/+$/, "") || "";
   if (baseUrlInput) {
     baseUrlInput.placeholder = PROVIDER_BASE_URLS[effectiveProvider] || "";
-    if (currentBaseUrl === "" || knownDefaultUrls.includes(currentBaseUrl)) {
-      baseUrlInput.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
-    }
+    baseUrlInput.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
   }
 }
 
