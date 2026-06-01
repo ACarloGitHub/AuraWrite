@@ -31,6 +31,7 @@ export interface AIResponse {
   content: string;
   done: boolean;
   error?: string;
+  thinking?: string;
 }
 
 export interface AIProviderConfig {

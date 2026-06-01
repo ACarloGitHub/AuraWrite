@@ -1,5 +1,6 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
+import { withRetry, isValidHttpUrl } from "./fetch-retry";
 
 export type OllamaMode = "local" | "cloud";
 
@@ -64,6 +65,9 @@ export class OllamaProvider implements AIProvider {
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `Ollama: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
     if (this.mode === "cloud" && !this.apiKey.trim()) {
       return {
         content: "",
@@ -71,8 +75,12 @@ export class OllamaProvider implements AIProvider {
         error: "Ollama Cloud requires an API key. Add your OLLAMA_API_KEY in Preferences > AI Provider.",
       };
     }
+    if (!this.model.trim()) {
+      return { content: "", done: false, error: "Ollama: missing model name." };
+    }
 
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     try {
       const headers: Record<string, string> = {
@@ -82,16 +90,19 @@ export class OllamaProvider implements AIProvider {
         headers["Authorization"] = `Bearer ${this.apiKey.trim()}`;
       }
 
-      const response = await tauriFetch(`${this.baseUrl}/api/generate`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: this.model,
-          prompt: this.buildPrompt(prompt, context),
-          stream: false,
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/api/generate`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: this.model,
+            prompt: this.buildPrompt(prompt, context),
+            stream: false,
+          }),
+          signal,
         }),
-        signal: this.abortController.signal,
-      });
+        { signal },
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -103,9 +114,14 @@ export class OllamaProvider implements AIProvider {
       }
 
       const data = await response.json();
+      const content = data.response || "";
+      const thinking = typeof data.thinking === "string" && data.thinking.trim()
+        ? data.thinking
+        : undefined;
       return {
-        content: data.response || "",
+        content,
         done: true,
+        ...(thinking ? { thinking } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {

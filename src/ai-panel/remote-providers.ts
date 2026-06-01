@@ -1,5 +1,27 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
+import { withRetry, isValidHttpUrl } from "./fetch-retry";
+
+function extractOpenAIStyleReasoning(data: any): string | undefined {
+  const message = data?.choices?.[0]?.message;
+  if (!message || typeof message !== "object") return undefined;
+  const candidates = [message.reasoning, message.reasoning_content];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function extractAnthropicThinking(data: any): string | undefined {
+  if (!data || !Array.isArray(data.content)) return undefined;
+  const parts: string[] = [];
+  for (const block of data.content) {
+    if (block && typeof block === "object" && block.type === "thinking" && typeof block.thinking === "string") {
+      parts.push(block.thinking);
+    }
+  }
+  return parts.length > 0 ? parts.join("\n") : undefined;
+}
 
 function buildOpenAICompatibleMessages(
   prompt: string,
@@ -105,22 +127,32 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `OpenAI: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.apiKey.trim()) {
+      return { content: "", done: false, error: "OpenAI: missing API key." };
+    }
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     try {
-      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: buildOpenAICompatibleMessages(prompt, context),
-          stream: false,
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: buildOpenAICompatibleMessages(prompt, context),
+            stream: false,
+          }),
+          signal,
         }),
-        signal: this.abortController.signal,
-      });
+        { signal },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -133,10 +165,12 @@ export class OpenAIProvider implements AIProvider {
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
+      const thinking = extractOpenAIStyleReasoning(data);
 
       return {
         content,
         done: true,
+        ...(thinking ? { thinking } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
@@ -192,27 +226,37 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `Anthropic: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.apiKey.trim()) {
+      return { content: "", done: false, error: "Anthropic: missing API key." };
+    }
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     try {
       const systemPrompt = this.buildSystemPrompt(context);
       const userMessages = this.buildUserMessages(prompt, context);
 
-      const response = await tauriFetch(`${this.baseUrl}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: userMessages,
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": this.apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: this.model,
+            max_tokens: 4096,
+            system: systemPrompt,
+            messages: userMessages,
+          }),
+          signal,
         }),
-        signal: this.abortController.signal,
-      });
+        { signal },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -225,10 +269,12 @@ export class AnthropicProvider implements AIProvider {
 
       const data = await response.json();
       const content = data.content?.[0]?.text || "";
+      const thinking = extractAnthropicThinking(data);
 
       return {
         content,
         done: true,
+        ...(thinking ? { thinking } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
@@ -352,22 +398,32 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `DeepSeek: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.apiKey.trim()) {
+      return { content: "", done: false, error: "DeepSeek: missing API key." };
+    }
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     try {
-      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: buildOpenAICompatibleMessages(prompt, context),
-          stream: false,
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: buildOpenAICompatibleMessages(prompt, context),
+            stream: false,
+          }),
+          signal,
         }),
-        signal: this.abortController.signal,
-      });
+        { signal },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -375,7 +431,9 @@ export class DeepSeekProvider implements AIProvider {
       }
 
       const data = await response.json();
-      return { content: data.choices?.[0]?.message?.content || "", done: true };
+      const content = data.choices?.[0]?.message?.content || "";
+      const thinking = extractOpenAIStyleReasoning(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
@@ -411,23 +469,33 @@ export class OpenRouterProvider implements AIProvider {
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `OpenRouter: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.apiKey.trim()) {
+      return { content: "", done: false, error: "OpenRouter: missing API key." };
+    }
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     try {
-      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-          "HTTP-Referer": "https://aurawrite.app",
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: buildOpenAICompatibleMessages(prompt, context),
-          stream: false,
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+            "HTTP-Referer": "https://aurawrite.app",
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: buildOpenAICompatibleMessages(prompt, context),
+            stream: false,
+          }),
+          signal,
         }),
-        signal: this.abortController.signal,
-      });
+        { signal },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -435,7 +503,9 @@ export class OpenRouterProvider implements AIProvider {
       }
 
       const data = await response.json();
-      return { content: data.choices?.[0]?.message?.content || "", done: true };
+      const content = data.choices?.[0]?.message?.content || "";
+      const thinking = extractOpenAIStyleReasoning(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
@@ -476,7 +546,14 @@ export class LMStudioProvider implements AIProvider {
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `LM Studio: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.model.trim()) {
+      return { content: "", done: false, error: "LM Studio: missing model name. Type the model id exposed by your local server." };
+    }
     this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     try {
       const body: Record<string, unknown> = {
@@ -485,12 +562,15 @@ export class LMStudioProvider implements AIProvider {
         model: this.model || "local-model",
       };
 
-      const response = await tauriFetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: this.abortController.signal,
-      });
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal,
+        }),
+        { signal },
+      );
 
       const data = await response.json().catch(() => null);
       if (!data) {
@@ -510,7 +590,9 @@ export class LMStudioProvider implements AIProvider {
       if (!response.ok) {
         return { content: "", done: false, error: `LM Studio error: HTTP ${response.status} ${response.statusText}` };
       }
-      return { content: data.choices?.[0]?.message?.content || "", done: true };
+      const content = data.choices?.[0]?.message?.content || "";
+      const thinking = extractOpenAIStyleReasoning(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
