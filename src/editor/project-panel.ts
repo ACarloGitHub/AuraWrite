@@ -1025,6 +1025,35 @@ function applyIndexStatus(btn: HTMLButtonElement, status: IndexStatus): void {
   btn.title = tooltips[status.status] || "Index entities";
 }
 
+// Strumento diagnostico: logga su console lo stato di indicizzazione
+// di progetto, sezioni e documenti, leggendolo direttamente dal DB.
+async function debugIndexStatus(projectId: string): Promise<void> {
+  try {
+    const projectStatus = await getEntityIndexStatus("project", projectId);
+    console.log(`[DEBUG-INDEX-STATUS] Project ${projectId}:`, projectStatus);
+
+    const allSections = await getSections(projectId);
+    for (const section of allSections) {
+      const sectionStatus = await getEntityIndexStatus("section", section.id);
+      console.log(
+        `[DEBUG-INDEX-STATUS]   Section "${section.name}" (${section.id}):`,
+        sectionStatus,
+      );
+
+      const sectionDocs = await getDocuments(section.id);
+      for (const doc of sectionDocs) {
+        const docStatus = await getEntityIndexStatus("document", doc.id);
+        console.log(
+          `[DEBUG-INDEX-STATUS]     Doc "${doc.title}" (${doc.id}):`,
+          docStatus,
+        );
+      }
+    }
+  } catch (error) {
+    console.error("[DEBUG-INDEX-STATUS] Error:", error);
+  }
+}
+
 async function handleNewSection(projectId: string): Promise<void> {
   const name = prompt("Section name:");
   if (!name) return;
@@ -1221,6 +1250,17 @@ function createActiveProjectElement(project: Project): HTMLElement {
     handleIndexProject(project);
   });
   actionsEl.appendChild(indexBtn);
+
+  // Pulsante diagnostico: logga su console lo stato di indicizzazione del DB.
+  const debugBtn = document.createElement("button");
+  debugBtn.className = "item-action-btn";
+  debugBtn.textContent = "🔍";
+  debugBtn.title = "Log index status to console (open DevTools to see output)";
+  debugBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    debugIndexStatus(project.id);
+  });
+  actionsEl.appendChild(debugBtn);
 
   // Pulsante elimina
   const deleteBtn = document.createElement("button");
