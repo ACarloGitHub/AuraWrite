@@ -219,7 +219,25 @@ async function searchEntities(
     projectId
   });
 
-  const queryLower = query.toLowerCase();
+  const queryLower = query.toLowerCase().trim();
+
+  // Euristica: se la query è una singola parola che corrisponde (anche
+  // parzialmente) al nome di un tipo di entità noto, redirigiamo a
+  // listEntitiesByType. Esempi: query="characters" → tipo "Character",
+  // query="places" → tipo "Place", query="luoghi" → "Location".
+  // Non si applica se l'AI ha già passato esplicitamente entity_type.
+  if (!entityTypeName) {
+    const queryWord = queryLower.split(/\s+/)[0];
+    const matchingType = entityTypes.find((et) => {
+      const n = et.name.toLowerCase().trim();
+      return n === queryWord || n.includes(queryWord) || queryWord.includes(n);
+    });
+    if (matchingType) {
+      return entities
+        .filter((e) => e.entity_type_id === matchingType.id)
+        .slice(0, limit);
+    }
+  }
 
   let results = entities.filter((entity) => {
     const nameMatch = entity.name.toLowerCase().includes(queryLower);
@@ -231,10 +249,12 @@ async function searchEntities(
 
   // Filter by entity type if specified
   if (entityTypeName) {
-    const typeLower = entityTypeName.toLowerCase();
-    const matchingTypes = entityTypes.filter(
-      (et) => et.name.toLowerCase() === typeLower
-    );
+    const typeLower = entityTypeName.toLowerCase().trim();
+    // Fuzzy match: esatto, contiene, o è contenuto (gestisce plurali/varianti).
+    const matchingTypes = entityTypes.filter((et) => {
+      const n = et.name.toLowerCase().trim();
+      return n === typeLower || n.includes(typeLower) || typeLower.includes(n);
+    });
     const typeIds = matchingTypes.map((t) => t.id);
     results = results.filter((e) =>
       typeIds.includes(e.entity_type_id || "")
@@ -263,10 +283,13 @@ async function listEntitiesByType(
     projectId
   });
 
-  const typeLower = entityType.toLowerCase();
-  const matchingType = entityTypes.find(
-    (et) => et.name.toLowerCase() === typeLower
-  );
+  const typeLower = entityType.toLowerCase().trim();
+  // Fuzzy match: esatto, contiene, o è contenuto (gestisce plurali, varianti,
+  // e casi come "Place" vs "Places", "Location" vs "Locations").
+  const matchingType = entityTypes.find((et) => {
+    const n = et.name.toLowerCase().trim();
+    return n === typeLower || n.includes(typeLower) || typeLower.includes(n);
+  });
 
   if (!matchingType) {
     return [];
@@ -639,13 +662,30 @@ To use a tool, include this tag in your response:
 
 You can use multiple tools in one response.
 
-Example: If the user asks "Who are the characters?", respond with:
-<tool name="search_entities">{"project_id": "${projectId || "PROJECT_ID"}", "query": "character"}</tool>
+=== EXAMPLES (use these patterns) ===
 
-Example: If the user asks "Which characters appear in chapter 1?", respond with:
-<tool name="entities_in_document">{"document_id": "DOCUMENT_ID"}</tool>
+Example 1 — User asks "Who are the characters?" (or "list characters", "elenca personaggi"):
+<tool name="list_entities_by_type">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "Character"}</tool>
 
-After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.`;
+Example 2 — User asks "List the locations" (or "elenca i luoghi", "where does the story take place?"):
+<tool name="list_entities_by_type">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "Location"}</tool>
+
+Example 3 — User asks "Tell me about Pippo" (or "describe X", "chi è Y?"):
+<tool name="search_entities">{"project_id": "${projectId || "PROJECT_ID"}", "query": "Pippo"}</tool>
+Then, if you need the full description, follow up with:
+<tool name="get_entity_details">{"entity_id": "<id from the previous result>"}</tool>
+
+Example 4 — User asks "Which characters appear in chapter 1?":
+<tool name="entities_in_document">{"document_id": "DOCUMENT_ID", "project_id": "${projectId || "PROJECT_ID"}"}</tool>
+
+Example 5 — User asks "Search the document for the word 'dragon'":
+<tool name="search_documents">{"project_id": "${projectId || "PROJECT_ID"}", "query": "dragon"}</tool>
+
+=== CRITICAL RULES ===
+- When the query mentions a TYPE of entity (characters, locations, places, objects, events), ALWAYS prefer list_entities_by_type with the appropriate entity_type.
+- When the query mentions a SPECIFIC NAME (a person, a place name), use search_entities with that name as query.
+- Entity type names in this project may be plural ("Characters") or singular ("Character"). The tool accepts both forms.
+- After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.`;
 }
 
 
