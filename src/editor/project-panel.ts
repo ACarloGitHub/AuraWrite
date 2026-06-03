@@ -296,7 +296,15 @@ async function saveCurrentDocument(content: string, createVersion: boolean = fal
     
     // Index for semantic search
     await indexDocumentForSearch(currentProject.id, updatedDoc.id, content);
-    
+
+    // Aggiorna gli indicatori di indicizzazione (rosso/giallo/verde).
+    // try/catch separato: un errore qui non deve bloccare il save del documento.
+    try {
+      await updateIndexIndicators();
+    } catch (statusError) {
+      console.warn("Failed to update index indicators:", statusError);
+    }
+
     return true;
   } catch (error) {
     console.error("Failed to save document:", error);
@@ -365,6 +373,14 @@ async function handleSaveToDatabase(): Promise<void> {
     showNotification(`Project saved (${savedCount} document${savedCount !== 1 ? "s" : ""}, ${indexedCount} indexed)`, "success");
   } else {
     showNotification("Nothing to save", "error");
+  }
+
+  // Aggiorna gli indicatori di indicizzazione per riflettere lo stato reale del DB.
+  // try/catch separato: un errore qui non deve mascherare l'esito del save.
+  try {
+    await updateIndexIndicators();
+  } catch (statusError) {
+    console.warn("Failed to update index indicators:", statusError);
   }
 }
 
