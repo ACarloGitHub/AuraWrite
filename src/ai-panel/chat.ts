@@ -488,10 +488,21 @@ async function sendMessage(text: string): Promise<void> {
   const documentText = getDocumentText();
   const prefs = getPreferences();
 
+  // Se l'editor è vuoto, NON passiamo documentText: l'AI tenderebbe a
+  // rispondere attingendo dalla history della chat, replicando la risposta
+  // precedente. Passando undefined, l'AI sa che non c'è contesto testo
+  // e si affida solo ai tool del database (se c'è un progetto aperto).
+  const hasDocumentContent = documentText.trim().length > 0;
+  const effectiveDocumentText = chunkText
+    ? chunkText
+    : hasDocumentContent
+    ? documentText
+    : undefined;
+
   let context: AIContext = {
     selectedText: currentSelection?.text || undefined,
     documentTitle: document.title.replace(" - AuraWrite", ""),
-    documentText: chunkText || documentText || undefined,
+    documentText: effectiveDocumentText,
     projectId: currentProject?.id || undefined,
     assistantName: prefs.aiAssistantName || undefined,
     userName: prefs.aiUserName || undefined,
@@ -528,9 +539,30 @@ async function sendMessage(text: string): Promise<void> {
 
     if (context.projectId && aiContent) {
       let iteration = 0;
+      let forcedToolRetry = false;
 
       while (iteration < MAX_TOOL_ITERATIONS) {
         const toolCalls = parseToolCalls(aiContent);
+
+        // Se l'AI non ha chiamato nessun tool e siamo nel primo giro,
+        // forziamo un retry: l'AI deve passare per i tool quando c'è
+        // un progetto aperto, altrimenti replica la risposta precedente
+        // attingendo dalla history della chat.
+        if (toolCalls.length === 0 && iteration === 0 && !forcedToolRetry) {
+          forcedToolRetry = true;
+          const forcePrompt = `The user asked: "${text}". A project is currently open. You MUST call at least one database tool (e.g. list_entities_by_type, search_entities, get_entity_details, entities_in_document) before answering. Do not answer from the chat history alone.
+
+To call a tool, include this tag in your response:
+<tool name="TOOL_NAME">{"param1": "value1", "param2": "value2"}</tool>`;
+          const forceContext = { ...context };
+          const forceResponse = await sendToAI(forcePrompt, forceContext);
+          if (forceResponse.error || !forceResponse.content) {
+            // Se il retry fallisce, esci e usa la risposta precedente
+            break;
+          }
+          aiContent = forceResponse.content;
+          continue;
+        }
 
         if (toolCalls.length === 0) {
           break;
@@ -571,7 +603,15 @@ async function sendMessage(text: string): Promise<void> {
 
         const cleanResponse = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
 
-        const followUpPrompt = `Here are the results from the database tools you requested:\n${toolResultsText}\n\nBased on these results, please provide your final response to the user. If the user asked you to modify the document, use the AURA_EDIT format. If they just asked for information, summarize it naturally.`;
+        const followUpPrompt = `The user originally asked: "${text}"
+
+You called the following database tool(s):
+${toolNames.map((n) => `- ${n}`).join("\n")}
+
+Here are the results from the database tools:
+${toolResultsText}
+
+Based on these results, provide your final response to the user's question. ${hasDocumentContent ? "You may also reference the document text that was provided." : "Answer ONLY based on the tool results above. If the tools returned empty results, say so clearly rather than answering from chat history."}`;
 
         iteration++;
 
