@@ -609,8 +609,10 @@ async function loadSections(projectId: string): Promise<void> {
     for (const section of sections) {
       const sectionDocs = await getDocuments(section.id);
       documents.push(...sectionDocs);
-      expandedSections.add(section.id);
     }
+    // Lo stato di espansione è deciso interamente dall'utente tramite
+    // il toggle ▼/▶ o il click sulla sezione. Non forziamo nulla qui.
+    // Al primo caricamento di un progetto le sezioni appaiono collassate.
     renderProjectsList();
   } catch (error) {
     console.error("Failed to load sections:", error);
@@ -645,6 +647,7 @@ async function handleNewProject(): Promise<void> {
     sections = projectResult.sections || [];
     documents = [];
     lastSavedContent = null;
+    expandedSections.clear();
     clearEditor();
     renderProjectsList();
 
@@ -1045,6 +1048,9 @@ async function handleNewSection(projectId: string): Promise<void> {
 
     await createSection(section);
     sections.push(section);
+    // Nuova sezione nasce espansa: l'utente l'ha appena creata, vuole vederla.
+    expandedSections.add(section.id);
+    currentSection = section;
     renderProjectsList();
 
     console.log("Created section:", section.name);
@@ -1074,6 +1080,8 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 
     await createDocument(document);
     documents.push(document);
+    // Espande la sezione padre: il nuovo documento deve essere visibile.
+    expandedSections.add(sectionId);
     renderProjectsList();
 
     console.log("Created document:", document.title);
@@ -1859,6 +1867,9 @@ function selectProject(project: Project): void {
   currentSection = null;
   currentDocument = null;
   lastSavedContent = null; // Reset per nuovo progetto
+  // Pulisce lo stato di espansione per evitare ID orfani di un progetto
+  // precedente che colliderebbero con sezioni del nuovo progetto.
+  expandedSections.clear();
   // Espone globalmente per debug
   (window as any).auraProject = project;
   (window as any).auraSection = null;
@@ -1878,8 +1889,16 @@ function selectProject(project: Project): void {
 
 function selectSection(section: Section): void {
   currentSection = section;
-  // Auto-expand on click
-  expandedSections.add(section.id);
+  // Toggle espansione: se la sezione era espansa, collassa; altrimenti espandi.
+  // Questo permette al click sull'header/nome della sezione di fare toggle,
+  // coerentemente con il toggle ▼/▶ (che resta l'unica via se l'header non è
+  // visibile o accessibile). Più sezioni possono essere aperte
+  // contemporaneamente.
+  if (expandedSections.has(section.id)) {
+    expandedSections.delete(section.id);
+  } else {
+    expandedSections.add(section.id);
+  }
 
   loadDocuments(section.id);
 
