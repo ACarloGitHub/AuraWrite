@@ -619,15 +619,6 @@ async function loadSections(projectId: string): Promise<void> {
   }
 }
 
-async function loadDocuments(sectionId: string): Promise<void> {
-  try {
-    documents = await getDocuments(sectionId);
-    renderProjectsList();
-  } catch (error) {
-    console.error("Failed to load documents:", error);
-  }
-}
-
 async function handleNewProject(): Promise<void> {
   const action = await handleCloseDocument();
   if (action === 'cancel') {
@@ -1094,6 +1085,10 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 async function selectDocument(doc: Document): Promise<void> {
   (window as any).__aurawrite_loading = true;
   currentDocument = doc;
+  // Sincronizza currentSection con la sezione del doc, così il title bar
+  // e altre UI non restano con un currentSection stantio.
+  const docSection = sections.find((s) => s.id === doc.section_id) || null;
+  if (docSection) currentSection = docSection;
   // Espone globalmente per debug
   (window as any).auraDocument = doc;
   // Read fresh document from DB to get latest content
@@ -1376,29 +1371,17 @@ function createProjectElement(project: Project): HTMLElement {
   header.appendChild(nameEl);
   header.appendChild(colorBtnProjectList);
   header.appendChild(actionsEl);
-   
-  let projectListClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Click sull'header del progetto attivo: idempotente (se è già il progetto
+  // corrente, non fa nulla). Il rename è gestito esclusivamente da nameEl
+  // (dblclick), quindi qui niente timer.
   header.addEventListener("click", async () => {
-    if (projectListClickTimer) {
-      clearTimeout(projectListClickTimer);
-      projectListClickTimer = null;
-      return;
-    }
-    projectListClickTimer = setTimeout(async () => {
-      projectListClickTimer = null;
-      const action = await handleCloseDocument();
-      if (action === 'proceed') {
-        selectProject(project);
-      }
-    }, 300);
-  });
-  header.addEventListener("dblclick", () => {
-    if (projectListClickTimer) {
-      clearTimeout(projectListClickTimer);
-      projectListClickTimer = null;
+    if (currentProject?.id === project.id) return;
+    const action = await handleCloseDocument();
+    if (action === 'proceed') {
+      selectProject(project);
     }
   });
-   
   div.appendChild(header);
 
   applyItemColors(header, project.bg_color, project.text_color, "project");
@@ -1430,12 +1413,7 @@ function createSectionElement(section: Section): HTMLElement {
   toggleBtn.title = isExpanded ? "Collapse section" : "Expand section";
   toggleBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (expandedSections.has(section.id)) {
-      expandedSections.delete(section.id);
-    } else {
-      expandedSections.add(section.id);
-    }
-    renderProjectsList();
+    toggleAndSelectSection(section);
   });
 
   const nameEl = document.createElement("div");
@@ -1523,26 +1501,14 @@ function createSectionElement(section: Section): HTMLElement {
   header.appendChild(colorBtnSection);
 
   header.appendChild(actionsEl);
-  let sectionClickTimer: ReturnType<typeof setTimeout> | null = null;
-  header.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (sectionClickTimer) {
-      clearTimeout(sectionClickTimer);
-      sectionClickTimer = null;
-      return;
-    }
-    sectionClickTimer = setTimeout(() => {
-      sectionClickTimer = null;
-      selectSection(section);
-    }, 300);
+
+  // Click sull'header (escluso toggle, actions, color button che hanno
+  // stopPropagation) = toggle espansione + selezione. Niente timer, niente
+  // dblclick handler qui: il rename è gestito esclusivamente da nameEl.
+  header.addEventListener("click", () => {
+    toggleAndSelectSection(section);
   });
-  header.addEventListener("dblclick", (e) => {
-    e.stopPropagation();
-    if (sectionClickTimer) {
-      clearTimeout(sectionClickTimer);
-      sectionClickTimer = null;
-    }
-  });
+
   div.appendChild(header);
 
   // Lista documenti — target di SortableJS "documents"
@@ -1887,20 +1853,18 @@ function selectProject(project: Project): void {
   }
 }
 
-function selectSection(section: Section): void {
+function toggleAndSelectSection(section: Section): void {
   currentSection = section;
   // Toggle espansione: se la sezione era espansa, collassa; altrimenti espandi.
-  // Questo permette al click sull'header/nome della sezione di fare toggle,
-  // coerentemente con il toggle ▼/▶ (che resta l'unica via se l'header non è
-  // visibile o accessibile). Più sezioni possono essere aperte
-  // contemporaneamente.
+  // Unico entry point per modificare lo stato di una sezione (chiamato sia dal
+  // click sull'header che dal toggle ▼/▶). Niente timer, niente loadDocuments
+  // parziale: la lista `documents` contiene già tutti i documenti del progetto
+  // grazie a `loadSections`.
   if (expandedSections.has(section.id)) {
     expandedSections.delete(section.id);
   } else {
     expandedSections.add(section.id);
   }
-
-  loadDocuments(section.id);
 
   const titleEl = document.getElementById("document-title");
   if (titleEl && currentProject) {
