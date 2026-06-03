@@ -635,6 +635,8 @@ function appendMessage(
 
   messages.push({ role, content, timestamp: Date.now() });
 
+  console.log(`[AI-CHAT ${new Date().toISOString()}] ${role}: ${content}`);
+
   const msgEl = document.createElement("div");
   msgEl.className = `ai-message ai-message--${role === "tool_result" ? "system" : role}`;
   msgEl.textContent = content;
