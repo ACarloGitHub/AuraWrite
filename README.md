@@ -443,6 +443,31 @@ AuraWrite **currently uses only system fonts** (no bundled `.ttf`/`.otf` files, 
 
 ---
 
+## 📏 Headings (H1/H2/H3) — non prevedibili
+
+Le dimensioni dei titoli nell'editor sono **non prevedibili**: a volte H1 produce caratteri molto grandi, altre volte sono H3 a farlo.
+
+**Causa:** in `src/styles.css` ci sono **due set di regole** con la stessa specificità CSS per `.ProseMirror h1/h2/h3`:
+- `src/styles.css:425-433` — h1=2em, h2=1.5em (nessuna definizione per h3)
+- `src/styles.css:2833-2855` — h1=2em/700, h2=1.5em/600, h3=1.25em/600
+
+Entrambi hanno specificità identica (un selettore classe + un selettore tag), quindi l'ultimo caricato vince per cascade order. Tuttavia il primo set non definisce h3, quindi in alcuni contesti h3 cade sul default del browser (1.17em) o sul 1.25em del secondo set, causando un flip visibile.
+
+**Fix proposto per v0.4:**
+- Rimuovere il set duplicato a linee 425-433
+- Definire esplicitamente H1-H6 in un'unica sezione con dimensioni monotoniche standard:
+  - H1 = 2em / 700
+  - H2 = 1.5em / 600
+  - H3 = 1.17em / 600
+  - H4 = 1em / 600
+  - H5 = 0.83em / 600
+  - H6 = 0.67em / 600
+- Aggiungere un test visivo: aprire un documento con tutti i livelli e verificare che siano decrescenti
+
+**Workaround attuale:** ricaricare l'app — temporaneamente il rendering potrebbe stabilizzarsi, ma il bug si ripresenta al primo refresh del theme toggle o dell'A4 pagination.
+
+---
+
 ## 🙏 Acknowledgments
 
 **AuraWrite** was born from an idea by **Carlo** and developed through **vibecoding** with:
