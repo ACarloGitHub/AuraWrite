@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="../Logo&Animazione/aurawrite_logo.png" alt="AuraWrite Logo" width="80" style="vertical-align: middle; border-radius: 16px;">
+  <img src="assets/aurawrite_logo.png" alt="AuraWrite Logo" width="80" style="vertical-align: middle; border-radius: 16px;">
   &nbsp;AuraWrite
 </h1>
 
@@ -31,20 +31,14 @@
 
 ---
 
-<img src="assets/banner_Aurawrite.png" alt="AuraWrite Banner" style="max-width: 100%; display: inline-block;">
-
----
-
-## 🎬 Presentation Video
-
 <p align="center">
   <a href="https://youtu.be/knWIYa8g9QI">
-    <img src="https://img.youtube.com/vi/knWIYa8g9QI/maxresdefault.jpg" alt="AuraWrite Presentation Video" width="640">
+    <img src="https://img.youtube.com/vi/knWIYa8g9QI/maxresdefault.jpg" alt="AuraWrite Presentation Video" width="800" style="max-width: 100%; border-radius: 12px;">
   </a>
 </p>
 
 <p align="center">
-  ▶️ <a href="https://youtu.be/knWIYa8g9QI">Watch on YouTube</a>
+  🎬 <strong>Watch the presentation video on <a href="https://youtu.be/knWIYa8g9QI">YouTube</a></strong>
 </p>
 
 ---
