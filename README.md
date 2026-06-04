@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="assets/Aurawrite_Logo.png" alt="AuraWrite Logo" width="80" style="vertical-align: middle; border-radius: 16px;">
+  <img src="../Logo&Animazione/aurawrite_logo.png" alt="AuraWrite Logo" width="80" style="vertical-align: middle; border-radius: 16px;">
   &nbsp;AuraWrite
 </h1>
 
@@ -32,6 +32,20 @@
 ---
 
 <img src="assets/banner_Aurawrite.png" alt="AuraWrite Banner" style="max-width: 100%; display: inline-block;">
+
+---
+
+## 🎬 Presentation Video
+
+<p align="center">
+  <a href="https://youtu.be/knWIYa8g9QI">
+    <img src="https://img.youtube.com/vi/knWIYa8g9QI/maxresdefault.jpg" alt="AuraWrite Presentation Video" width="640">
+  </a>
+</p>
+
+<p align="center">
+  ▶️ <a href="https://youtu.be/knWIYa8g9QI">Watch on YouTube</a>
+</p>
 
 ---
 
@@ -125,34 +139,73 @@ npm run tauri:build    # Production build
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **📝 Rich Text Editor** | ProseMirror-based with bold, italic, undo/redo | ✅ Ready |
-| **🤖 AI Suggestions Panel** | Proactive sentence analysis triggered on "." | ✅ Ready |
-| **💬 AI Assistant Panel** | Conversational AI with full document context | ✅ Ready |
-| **🧩 Chunk System** | Handles large documents via intelligent splitting | ✅ Ready |
-| **🌐 Multi-Provider AI** | Ollama (local), OpenAI, Anthropic | ✅ Ready |
+| **📝 Rich Text Editor** | ProseMirror-based with bold, italic, headings, lists, tables, undo/redo, find & replace | ✅ Ready |
+| **📄 A4 Pagination** | Page-by-page view with DOM-based split/merge, paged/scroll toggle, page breaks | ✅ Ready |
+| **🤖 AI Suggestions Panel** | Proactive sentence analysis triggered on `.` `!` `?` `:` (Accept / Switch / Reject) | ✅ Ready |
+| **💬 AI Assistant Panel** | Conversational AI with full document context, AURA_EDIT modifications, tool calling | ✅ Ready |
+| **🔀 Ollama Dual-Mode** | Local (http://localhost:11434) **or** Cloud (https://ollama.com) with API key — toggle in Preferences | ✅ Ready |
+| **🧩 Chunk System** | Handles large documents via intelligent sentence-based splitting | ✅ Ready |
+| **🌐 6 AI Providers** | Ollama (Local/Cloud), OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio | ✅ Ready |
+| **📡 Model Auto-Discovery** | Auto-populated model list per provider, manual refresh, 1h cache | ✅ Ready |
+| **🛠️ Tool Calling** | 7 tools for AI to query project DB (entities, documents, semantic search) | ✅ Ready |
+| **🗄️ Project System** | Project → Section → Document hierarchy in SQLite, per-doc save | ✅ Ready |
+| **🧠 Semantic Search** | Vector embeddings via `nomic-embed-text-v2-moe` (Ollama), cosine similarity in Rust | ✅ Ready |
 | **💾 File Operations** | Save, Save As, Open, Export with native dialogs | ✅ Ready |
 | **📄 Multiple Formats** | JSON, Markdown, TXT, HTML, DOCX | ✅ Ready |
 | **🎨 Custom Themes** | Light, Dark, and fully customizable colors | ✅ Ready |
-| **🔒 Privacy-First** | Works offline, no telemetry, no tracking | ✅ Ready |
+| **🔒 Privacy-First** | Works offline, no telemetry, no tracking, 100% local data | ✅ Ready |
+| **⌨️ Keyboard Help** | Modal with all shortcuts (`?` or ⌨ button) | ✅ Ready |
+| **🛡️ Error Boundaries** | Global error toast notifications | ✅ Ready |
 | **📊 Incremental Save** | Versioning system with database | 📅 Roadmap |
-| **🗄️ Vector DB** | Semantic search across documents | ✅ Ready |
-| **🤖 Internal AI Agent** | Character/world memory, continuation | 📅 Future |
+| **🤖 Internal AI Agent** | Character/world memory, continuation UI | 📅 Future |
+| **🧩 Plugin System** | Extensible architecture for v1.0 | 📅 Future |
 
 **Tech Stack:**
 - **Frontend:** TypeScript, Vite
-- **Editor:** ProseMirror
-- **Backend:** Rust (Tauri)
+- **Editor:** ProseMirror (with A4 pagination plugin)
+- **Backend:** Rust (Tauri v2)
 - **UI:** Plain CSS, HTML5
-- **AI Integration:** Ollama API, OpenAI API, Anthropic API
-- **Vector Search:** SQLite with custom cosine similarity (nomic-embed-text-v2-moe via Ollama)
+- **AI Integration:** Ollama API, OpenAI API, Anthropic API, DeepSeek API, OpenRouter API, LM Studio (all via `tauri-plugin-http`)
+- **Database:** SQLite via `rusqlite` (bundled, no external service)
+- **Vector Search:** SQLite + custom Rust cosine similarity (`nomic-embed-text-v2-moe` via Ollama, 768-dim)
+- **HTTP Layer:** `tauri-plugin-http` (bypasses browser CORS preflight, required for LM Studio / local Ollama)
 
 ---
 
 ## 🤖 AI Configuration
 
-AuraWrite supports multiple AI providers. Configure in the app's settings panel (⚙️).
+AuraWrite supports **6 AI providers** through a unified interface. Configure them in the app's settings panel (⚙️). All HTTP calls go through `tauri-plugin-http`, which bypasses browser CORS preflight — this is what makes local servers (LM Studio, Ollama) work reliably.
 
-### Ollama (Local) - Required for Semantic Search
+### Supported Providers
+
+| Provider | Endpoint | API Key | Mode | Default Model | Notes |
+|----------|----------|---------|------|---------------|-------|
+| **Ollama (Local)** | `http://localhost:11434` | Not required | Local | — | Self-hosted, no auth needed |
+| **Ollama (Cloud)** | `https://ollama.com` | `OLLAMA_API_KEY` required | Cloud | `gpt-oss:120b-cloud` | Direct cloud, no local Ollama needed |
+| **OpenAI** | `https://api.openai.com/v1` | Required | Cloud | `gpt-4o` | Also `gpt-4o-mini`, `gpt-4-turbo` |
+| **Anthropic** | `https://api.anthropic.com/v1` | Required | Cloud | `claude-sonnet-4-20250514` | Native thinking blocks support |
+| **DeepSeek** | `https://api.deepseek.com` | Required | Cloud | `deepseek-chat` | Also `deepseek-reasoner` |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | Required | Cloud | `openai/gpt-4o` | Aggregator, 300+ models |
+| **LM Studio** | `http://localhost:1234/v1` | Not required | Local | (auto-detect) | Self-hosted, loads any GGUF |
+
+**Ollama dual-mode:** In Preferences, when "Ollama" is selected, you can toggle between **Local** (no auth, runs on your machine) and **Cloud** (requires API key, connects to `ollama.com`).
+
+### Model Auto-Discovery
+
+Every provider supports auto-discovery of available models:
+
+| Provider | Endpoint | Auth |
+|----------|----------|------|
+| LM Studio | `GET /v1/models` | None |
+| Ollama (Local/Cloud) | `GET /api/tags` | None / Bearer |
+| OpenAI | `GET /v1/models` | Bearer |
+| Anthropic | `GET /v1/models` | `x-api-key` header |
+| DeepSeek | `GET /models` | Bearer |
+| OpenRouter | `GET /models` | Bearer |
+
+The model dropdown auto-refreshes when you change provider, base URL, or API key. Results are cached for 1 hour. You can always type a custom model name in the free-text input.
+
+### Ollama (Local) — Required for Semantic Search
 
 For local models running on your machine:
 
@@ -161,6 +214,7 @@ For local models running on your machine:
 2. Pull a model: `ollama pull llama3`
 3. In AuraWrite settings:
    - **Provider:** Ollama
+   - **Mode:** Local
    - **Model:** `llama3` (or your preferred model)
 
 **For semantic search (embeddings):**
@@ -171,7 +225,7 @@ For local models running on your machine:
    ```
 3. The app will automatically use this model for semantic search
 
-**Why nomic-embed-text-v2-moe?**
+**Why `nomic-embed-text-v2-moe`?**
 - 768-dimensional embeddings
 - Supports 100+ languages
 - State-of-the-art multilingual performance
@@ -186,11 +240,12 @@ For local models running on your machine:
 
 **Note:** If Ollama is not installed, semantic search features will be disabled, but all other app features continue to work normally.
 
-### Ollama (Cloud / Custom Endpoint)
-For remote Ollama instances:
+### Ollama (Cloud)
+For `https://ollama.com` direct cloud access (no local Ollama needed):
 - **Provider:** Ollama
-- **Model:** `model-name`
-- **Base URL:** `http://your-server:11434`
+- **Mode:** Cloud
+- **API Key:** your `OLLAMA_API_KEY`
+- **Base URL:** auto-filled to `https://ollama.com`
 
 ### OpenAI
 1. Get an API key from [OpenAI](https://platform.openai.com/api-keys)
@@ -206,8 +261,48 @@ For remote Ollama instances:
    - **Model:** `claude-sonnet-4-20250514`
    - **API Key:** `sk-ant-...`
 
+### DeepSeek
+1. Get an API key from [DeepSeek](https://platform.deepseek.com/)
+2. In AuraWrite settings:
+   - **Provider:** DeepSeek
+   - **Model:** `deepseek-chat` (or `deepseek-reasoner`)
+   - **API Key:** `sk-...`
+   - **Base URL:** auto-filled to `https://api.deepseek.com` (no `/v1`)
+
+### OpenRouter
+1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
+2. In AuraWrite settings:
+   - **Provider:** OpenRouter
+   - **Model:** `openai/gpt-4o` (or any of 300+ models)
+   - **API Key:** `sk-or-...`
+
+### LM Studio
+For local GGUF models loaded in LM Studio:
+1. Start LM Studio's local server (default `http://localhost:1234`)
+2. Load a model in LM Studio
+3. In AuraWrite settings:
+   - **Provider:** LM Studio
+   - **Model:** click 🔄 Refresh to auto-detect loaded models
+   - **Base URL:** `http://localhost:1234/v1`
+
 ### Privacy Note
 AI settings are stored in browser's `localStorage` as `aurawrite-ai-settings`. They persist across sessions and are **NEVER uploaded or shared**.
+
+### Tool Calling
+
+The AI Assistant can autonomously query your project database using **7 tools**:
+
+| Tool | Purpose |
+|------|---------|
+| `search_entities` | Find entities by name and type (characters, places, etc.) |
+| `get_entity_details` | Get full details for a specific entity |
+| `list_entities_by_type` | List all entities of a given type |
+| `search_documents` | Full-text search across all documents in the project |
+| `get_document_content` | Retrieve a specific document's full text |
+| `get_project_structure` | Get the project → section → document tree |
+| `semantic_search` | Vector similarity search across indexed content |
+
+Tool calls are read-only — the AI **cannot** modify your database, only query it.
 
 ### Chunk Size
 For long documents, AuraWrite automatically splits text into chunks based on the model's context limit. Default: 8,000 tokens per chunk. Adjustable in AI Assistant panel settings.
@@ -215,7 +310,7 @@ For long documents, AuraWrite automatically splits text into chunks based on the
 ### Semantic Search Settings
 Configure semantic search behavior in the app's settings panel:
 
-- **Enable semantic search indexing** — Default: ON. When enabled, AuraWrite automatically indexes document content for semantic search using nomic-embed-text-v2-moe via Ollama. If disabled, documents are saved without indexing, and semantic search features will not be available.
+- **Enable semantic search indexing** — Default: ON. When enabled, AuraWrite automatically indexes document content for semantic search using `nomic-embed-text-v2-moe` via Ollama. If disabled, documents are saved without indexing, and semantic search features will not be available.
 
 **Note:** Indexing occurs automatically when saving documents. It is optional and can be disabled if you prefer not to use Ollama or semantic search.
 
@@ -245,6 +340,56 @@ macOS:   ~/Library/Application Support/aurawrite/
 | 🎁 **v1.0** | Plugin system, Polish | Future |
 
 See detailed roadmap in [documentation/06-roadmap/](documentation/06-roadmap/).
+
+---
+
+## 🛡️ Security & Trust — About the Installers
+
+AuraWrite is **not yet code-signed**. This means your operating system will show a security warning the first time you run the installer. **This is completely normal for unsigned open-source software** — it does **not** mean the software is malicious.
+
+### Why this happens
+
+- **Windows:** SmartScreen shows *"Windows protected your PC"* because the publisher is unknown. AuraWrite is open source under MIT License and the entire codebase is auditable on [GitHub](https://github.com/ACarloGitHub/AuraWrite).
+- **macOS:** Gatekeeper blocks the `.dmg` because it lacks a Developer ID signature.
+- **Linux:** `.deb` and `.rpm` packages install without warnings (no signing required).
+
+### How to install — step by step
+
+#### Windows (`.msi` or `.exe`)
+1. Download the installer from the [Releases](https://github.com/ACarloGitHub/AuraWrite/releases) page
+2. Double-click the installer
+3. If SmartScreen appears: click **"More info"** → **"Run anyway"**
+4. Follow the installer prompts
+
+#### macOS (`.dmg`)
+1. Download the `.dmg` file
+2. If macOS blocks it: **right-click** the `.dmg` → **"Open"** from the context menu
+3. Confirm with **"Open"** in the dialog
+4. Drag **AuraWrite** to the **Applications** folder
+
+#### Linux (`.deb` / `.rpm` / `.AppImage`)
+```bash
+# Debian / Ubuntu
+sudo dpkg -i aurawrite_0.3.0_amd64.deb
+sudo apt install -f  # resolve dependencies if needed
+
+# Fedora / RHEL
+sudo rpm -i aurawrite-0.3.0-1.x86_64.rpm
+
+# AppImage (any distro)
+chmod +x AuraWrite_0.3.0_amd64.AppImage
+./AuraWrite_0.3.0_amd64.AppImage
+```
+
+### Verify the source
+
+You don't have to trust us — you can **verify, audit, and build from source**:
+
+- 🔍 All code is public: https://github.com/ACarloGitHub/AuraWrite
+- 🏗️ Build instructions: see the **Quick Start → Build from Source** section above
+- 📜 License: [MIT](LICENSE) — you can read every line, modify it, redistribute it
+
+Code signing certificates cost $200–$400/year from Apple/Windows and are planned for a future release once the project is more mature. In the meantime, the warnings above are the only "cost" of running an unsigned open-source app.
 
 ---
 
