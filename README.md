@@ -416,6 +416,33 @@ When opening issues:
 
 ---
 
+## 🔤 Fonts — to investigate
+
+AuraWrite **currently uses only system fonts** (no bundled `.ttf`/`.otf` files, no `@font-face` declarations, no `assets/fonts/` directory). The font stack is defined as CSS custom properties in `src/styles.css`:
+
+```css
+--font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+--font-editor: Georgia, "Times New Roman", serif;
+```
+
+**Consequences:**
+- On Windows the UI renders in Segoe UI, the editor in Georgia (if available) or Times New Roman fallback
+- On macOS the UI renders in San Francisco, the editor in Georgia
+- On Linux the UI renders in the distro's default sans-serif (e.g. Cantarell on Fedora, Noto Sans on Ubuntu), the editor in whatever serif is installed
+- **Missing font = fallback font is used** without warning, which may make the editor look inconsistent across systems
+
+**To investigate for v0.4:**
+- Whether to ship a `public/fonts/` (or `assets/fonts/`) directory with bundled `.woff2` files (Lora, Source Serif Pro, Inter, etc.) and register them via `@font-face` in `src/styles.css`
+- Whether to expose font selection in Preferences (similar to Word/LibreOffice font picker: font family, size, line height — all already supported in the editor)
+- Whether to allow user-installed fonts (drop a `.ttf` in `%APPDATA%\aurawrite\fonts\` on Windows, `~/.config/aurawrite/fonts/` on Linux, `~/Library/Application Support/aurawrite/fonts/` on macOS) and dynamically load them at startup
+- Licensing: any bundled font must be OFL/Apache-2.0/MIT to stay MIT-compatible
+
+**Related files:**
+- `src/styles.css:1-4` — `--font-family` and `--font-editor` declarations
+- `src/editor/toolbar.ts` — font family selector (already exposes a dropdown for font change in editor)
+
+---
+
 ## 🙏 Acknowledgments
 
 **AuraWrite** was born from an idea by **Carlo** and developed through **vibecoding** with:
