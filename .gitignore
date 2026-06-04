@@ -38,3 +38,7 @@ config.local.*
 
 # Rust build output
 src-tauri/target/
+
+# Tauri icon generator: produces iOS/Android assets we don't need (desktop-only)
+src-tauri/icons/ios/
+src-tauri/icons/android/
