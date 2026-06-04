@@ -84,7 +84,7 @@ AuraWrite exists to channel that lightning. A spark of an idea, caught in the ri
 - 🤖 **Dual AI panels** — Proactive suggestions + conversational assistant
 - 🔒 **100% offline capable** — Your data never leaves your machine
 - 🎨 **Custom themes** — Light, Dark, and fully personalized color schemes
-- 🗄️ **Multiple formats** — JSON, Markdown, TXT, HTML, DOCX
+- 🗄️ **Multiple formats** — JSON, Markdown, TXT, HTML, DOCX (see note below)
 - ♾️ **Life-long** — Download once, use forever. No cloud to cancel.
 
 ---
@@ -145,7 +145,7 @@ npm run tauri:build    # Production build
 | **🗄️ Project System** | Project → Section → Document hierarchy in SQLite, per-doc save | ✅ Ready |
 | **🧠 Semantic Search** | Vector embeddings via `nomic-embed-text-v2-moe` (Ollama), cosine similarity in Rust | ✅ Ready |
 | **💾 File Operations** | Save, Save As, Open, Export with native dialogs | ✅ Ready |
-| **📄 Multiple Formats** | JSON, Markdown, TXT, HTML, DOCX | ✅ Ready |
+| **📄 Multiple Formats** | JSON, Markdown, TXT, HTML, DOCX (see note below) | ✅ Ready |
 | **🎨 Custom Themes** | Light, Dark, and fully customizable colors | ✅ Ready |
 | **🔒 Privacy-First** | Works offline, no telemetry, no tracking, 100% local data | ✅ Ready |
 | **⌨️ Keyboard Help** | Modal with all shortcuts (`?` or ⌨ button) | ✅ Ready |
@@ -321,6 +321,23 @@ macOS:   ~/Library/Application Support/aurawrite/
 
 **Backup:** Export to JSON, Markdown, or DOCX anytime. Your data, your control.
 
+### ⚠️ Note on DOCX Export
+
+The DOCX format exported by AuraWrite is **not equivalent to a standard word processor's output** (Microsoft Word, LibreOffice Writer, OnlyOffice). Opening an exported `.docx` in Word/LibreOffice may show plain flowing text without the original AuraWrite formatting (A4 pagination, custom styles, layout, header/footer).
+
+**Why:**
+- AuraWrite uses a simplified ProseMirror schema (bold, italic, underline, headings H1–H3, lists, blockquote, code, alignment, colors, highlights)
+- DOCX natively supports much more: tables, images, advanced styles, track changes, custom margins, page headers/footers, etc.
+- The converter (`src/formats/docx.ts`, based on the `docx` library v9) maps only a subset of ProseMirror nodes to DOCX
+- Page-level A4 metadata (margins, headers, footers) is not preserved in the roundtrip
+
+**Recommendation:**
+- For preserving **complete formatting** (including A4 pagination), use **JSON** (the native AuraWrite format) or **Markdown**
+- For sharing with people who don't have AuraWrite, use **DOCX for content only** (the text and basic formatting will be intact; the page layout will not)
+- Roadmap item: full DOCX roundtrip with table/image support and page metadata preservation
+
+**Roundtrip warning:** AuraWrite → DOCX → AuraWrite may lose information (A4 pagination, custom colors not in standard palette, custom line heights, etc.).
+
 ---
 
 ## 🗺️ Roadmap
@@ -329,8 +346,8 @@ macOS:   ~/Library/Application Support/aurawrite/
 |-------|---------|--------|
 | ✅ **v0.1** | Editor, AI panels, File operations | Complete |
 | ✅ **v0.2** | SQLite + Vector DB (semantic search), Project system | Complete |
-| 🚧 **v0.3** | Tooltip plugin, Synonyms, Continuation, Tool Calling | In Progress |
-| 📅 **v0.4** | Character/place memory, Internet search | Planned |
+| ✅ **v0.3** | Cross-platform installers, Tooltip plugin, Synonyms, Continuation, Tool Calling | **Complete (released 2026-06-04)** |
+| 📅 **v0.4** | Character/place memory, Internet search, **full DOCX roundtrip** (see [⚠️ Note on DOCX Export](#️-note-on-docx-export)) | Planned |
 | 🎁 **v1.0** | Plugin system, Polish | Future |
 
 See detailed roadmap in [documentation/06-roadmap/](documentation/06-roadmap/).
