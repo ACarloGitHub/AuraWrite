@@ -47,7 +47,7 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Setup Rust (macOS, both arches)
+      - name: Setup Rust targets (macOS universal)
         if: matrix.os == 'macos-latest'
         run: |
           rustup target add aarch64-apple-darwin
@@ -61,22 +61,63 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build application
+      - name: Build application (no release)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "AuraWrite ${{ github.ref_name }}"
-          releaseBody: "Cross-platform installers for AuraWrite v${{ github.ref_name }}.
-
-## Downloads
-- **Windows:** `.msi` and `.exe` (NSIS) installers
-- **macOS:** Universal `.dmg` (Intel + Apple Silicon)
-- **Linux:** `.deb`, `.rpm`, and AppImage
-
-## About unsigned installers
-AuraWrite is open source (MIT) but not yet code-signed. You may see a SmartScreen warning on Windows or Gatekeeper block on macOS — see the README's 'Security & Trust' section for how to proceed."
-          releaseDraft: true
+          releaseName: ""
+          releaseBody: ""
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurawrite-${{ matrix.os }}
+          path: |
+            src-tauri/target/*/release/bundle/msi/*.msi
+            src-tauri/target/*/release/bundle/nsis/*.exe
+            src-tauri/target/*/release/bundle/dmg/*.dmg
+            src-tauri/target/*/release/bundle/macos/*.app
+            src-tauri/target/*/release/bundle/deb/*.deb
+            src-tauri/target/*/release/bundle/rpm/*.rpm
+            src-tauri/target/*/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub release with all bundles
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "AuraWrite ${{ github.ref_name }}"
+          body: |
+            Cross-platform installers for AuraWrite v${{ github.ref_name }}.
+
+            ## Downloads
+            - **Windows:** `.msi` (WiX) and `.exe` (NSIS) installers
+            - **macOS:** Universal `.dmg` (Intel + Apple Silicon)
+            - **Linux:** `.deb`, `.rpm`, and AppImage
+
+            ## About unsigned installers
+            AuraWrite is open source (MIT) but not yet code-signed.
+            You may see a SmartScreen warning on Windows or Gatekeeper
+            block on macOS — see the README's "Security & Trust" section
+            for how to proceed.
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
