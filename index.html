@@ -284,6 +284,7 @@
             <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
             <button class="pref-tab" data-tab="fonts">Fonts</button>
+            <button class="pref-tab" data-tab="maintenance">Maintenance</button>
           </div>
           <div class="modal-body">
             <!-- TAB: General -->
@@ -548,6 +549,22 @@
                   <option value="Inter">Inter (bundled, default)</option>
                   <option value="system-ui">System default</option>
                 </select>
+              </div>
+            </div>
+            <!-- TAB: Maintenance -->
+            <div class="pref-tab-content" data-tab="maintenance">
+              <div class="preference-group">
+                <label>Data Maintenance</label>
+                <span class="preference-hint">
+                  <strong>Clean orphan links</strong> removes records in the
+                  <code>links</code> table whose source or target document or entity
+                  no longer exists. This can happen with older versions of AuraWrite
+                  that did not cascade deletions to the links table. Safe to run
+                  any time &mdash; it only affects orphaned records.
+                </span>
+                <div class="folder-row">
+                  <button id="pref-maintenance-clean-links" class="btn-small">Clean orphan links</button>
+                </div>
               </div>
             </div>
           </div>

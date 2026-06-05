@@ -905,8 +905,6 @@ async function handleIndexDocument(doc: Document): Promise<void> {
   isIndexing = true;
 
   try {
-    console.log("[DEBUG-HANDLER] Starting handleIndexDocument for:", doc.title, "project:", currentProject.id, "type:", currentProject.type);
-    console.log(`[IndexDoc] start docId=${doc.id} title="${doc.title}" projectId=${currentProject.id}`);
     showNotification("🗂 Indexing entities...", "indexing");
     const result = await extractEntitiesFromDocument(
       doc.id,
@@ -914,12 +912,8 @@ async function handleIndexDocument(doc: Document): Promise<void> {
       currentProject.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
-    console.log("[DEBUG-HANDLER] Result from extractEntitiesFromDocument:", result);
-    console.log(`[IndexDoc] end docId=${doc.id} created=${result.created} updated=${result.updated}`);
     showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
-    console.error("[DEBUG-HANDLER] Error in handleIndexDocument:", error);
-    console.error(`[IndexDoc] end docId=${doc.id} error=${error instanceof Error ? error.message : String(error)}`);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
@@ -936,8 +930,6 @@ async function handleIndexSection(section: Section): Promise<void> {
   isIndexing = true;
 
   try {
-    console.log("[IndexSection] Starting for:", section.name);
-    console.log(`[IndexSection] start sectionId=${section.id} name="${section.name}" projectId=${currentProject.id}`);
     showNotification("🗂 Indexing section...", "indexing");
     const result = await extractEntitiesFromSection(
       section.id,
@@ -945,12 +937,8 @@ async function handleIndexSection(section: Section): Promise<void> {
       currentProject.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
-    console.log("[IndexSection] Result:", result);
-    console.log(`[IndexSection] end sectionId=${section.id} created=${result.created} updated=${result.updated}`);
     showNotification(`✓ ${section.name}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
-    console.error("[IndexSection] Error:", error);
-    console.error(`[IndexSection] end sectionId=${section.id} error=${error instanceof Error ? error.message : String(error)}`);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
@@ -966,20 +954,14 @@ async function handleIndexProject(project: Project): Promise<void> {
   isIndexing = true;
 
   try {
-    console.log("[IndexProject] Starting for:", project.name);
-    console.log(`[IndexProject] start projectId=${project.id} name="${project.name}" type=${project.type || "novel"}`);
     showNotification("🗂 Indexing project...", "indexing");
     const result = await extractEntitiesFromProject(
       project.id,
       project.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
-    console.log("[IndexProject] Result:", result);
-    console.log(`[IndexProject] end projectId=${project.id} created=${result.created} updated=${result.updated}`);
     showNotification(`✓ Project indexed: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
-    console.error("[IndexProject] Error:", error);
-    console.error(`[IndexProject] end projectId=${project.id} error=${error instanceof Error ? error.message : String(error)}`);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;

@@ -5,7 +5,6 @@ import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries, showErrorToast } from "./error-boundary";
-import { installFileLogger } from "./file-logger";
 import { checkForUpdatesOnStartup } from "./updates";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
@@ -739,7 +738,6 @@ function savePreferencesFromModal(): void {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  installFileLogger();
   initErrorBoundaries();
   initTheme();
   initZoom();
@@ -911,6 +909,24 @@ document.addEventListener("DOMContentLoaded", () => {
     void loadUserFonts();
   });
   void loadUserFonts(); // initial load
+
+  // Maintenance tab: clean orphan links (v0.4.2+)
+  const btnCleanLinks = document.getElementById("pref-maintenance-clean-links");
+  btnCleanLinks?.addEventListener("click", async () => {
+    btnCleanLinks.setAttribute("disabled", "true");
+    try {
+      const removed = await invoke<number>("db_cleanup_orphan_links");
+      if (removed > 0) {
+        showErrorToast(`Cleaned ${removed} orphan link(s).`, 5000);
+      } else {
+        showErrorToast("No orphan links found. Database is clean.", 5000);
+      }
+    } catch (e) {
+      showErrorToast(`Cleanup failed: ${String(e)}`, 5000);
+    } finally {
+      btnCleanLinks.removeAttribute("disabled");
+    }
+  });
 
   makeModalDraggable();
 
