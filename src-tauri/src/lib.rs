@@ -3,6 +3,7 @@
 use std::sync::Mutex;
 use rusqlite::Connection;
 use tauri::State;
+use tauri::Manager;
 
 // Import modules
 mod database;
@@ -486,6 +487,42 @@ fn embedding_delete_for_project(
 }
 
 // ============================================================================
+// FILE LOGGER (DEBUG-ONLY)
+// ============================================================================
+//
+// Temporary logger that writes selected console output to a file on disk.
+// Used to diagnose build-vs-dev differences when Chrome DevTools are
+// not visible. Writes are best-effort; failures are silently ignored.
+//
+// The log file lives at app_data_dir()/aurawrite.log. Each line is
+// prefixed with a Unix timestamp in seconds. This is meant for local
+// debugging only and will be REMOVED before the next public release.
+
+#[tauri::command]
+fn write_log_line(app: tauri::AppHandle, line: String) -> Result<(), String> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("aurawrite.log");
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| e.to_string())?;
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    writeln!(file, "[{}] {}", ts, line).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ============================================================================
 // APP SETUP
 // ============================================================================
 
@@ -514,6 +551,8 @@ pub fn run() {
             load_binary_file,
             save_binary_file,
             get_app_version,
+            // File logger (DEBUG-ONLY)
+            write_log_line,
             // Project commands
             db_create_project,
             db_get_projects,
