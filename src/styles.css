@@ -3350,6 +3350,14 @@ kbd {
   color: var(--color-text, #222);
 }
 
+.error-toast--info {
+  background: #2b6cb0;
+}
+
+.error-toast--success {
+  background: #2f855a;
+}
+
 
 /* FIX-EDITOR-OVERRIDE */
 /* Gestione del layout dell'editor e protezione contro duplicazioni visive dell'interfaccia */
