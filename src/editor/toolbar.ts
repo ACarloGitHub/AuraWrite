@@ -291,11 +291,13 @@ async function saveFile(
 
 async function handleOpen(): Promise<void> {
   const filters = [
-    { name: "ProseMirror JSON", extensions: ["json"] },
+    { name: "Tutti i files supportati", extensions: ["json", "md", "txt", "html", "htm", "docx"] },
+    { name: "AuraWrite JSON", extensions: ["json"] },
     { name: "Markdown", extensions: ["md"] },
     { name: "Word Document", extensions: ["docx"] },
+    { name: "HTML", extensions: ["html", "htm"] },
     { name: "Plain Text", extensions: ["txt"] },
-    { name: "All Files", extensions: ["*"] },
+    { name: "Tutti i files", extensions: ["*"] },
   ];
 
   const path = await getFilePath({
@@ -409,9 +411,10 @@ async function openTXT(path: string): Promise<void> {
 async function handleExport(): Promise<void> {
   const filters = [
     { name: "Markdown", extensions: ["md"] },
-    { name: "HTML", extensions: ["html"] },
+    { name: "HTML", extensions: ["html", "htm"] },
     { name: "Word Document", extensions: ["docx"] },
     { name: "Plain Text", extensions: ["txt"] },
+    { name: "AuraWrite JSON", extensions: ["json"] },
   ];
 
   const path = await getFilePath({
