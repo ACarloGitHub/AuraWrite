@@ -1011,6 +1011,48 @@ pub fn delete_links_by_source(conn: &Connection, source_type: &str, source_id: &
     )?)
 }
 
+pub fn delete_links_by_target(conn: &Connection, target_type: &str, target_id: &str) -> SqliteResult<usize> {
+    Ok(conn.execute(
+        "DELETE FROM links WHERE target_type = ?1 AND target_id = ?2",
+        params![target_type, target_id],
+    )?)
+}
+
+pub fn delete_links_for_entity(conn: &Connection, entity_type: &str, entity_id: &str) -> SqliteResult<usize> {
+    let s = delete_links_by_source(conn, entity_type, entity_id)?;
+    let t = delete_links_by_target(conn, entity_type, entity_id)?;
+    Ok(s + t)
+}
+
+/// Remove orphan links: records whose source/target document or entity no longer exists.
+/// Returns the number of removed rows.
+pub fn cleanup_orphan_links(conn: &Connection) -> SqliteResult<usize> {
+    let mut total = 0usize;
+
+    // links where source is a document that no longer exists
+    total += conn.execute(
+        "DELETE FROM links WHERE source_type = 'document' AND source_id NOT IN (SELECT id FROM documents)",
+        [],
+    )?;
+    // links where target is a document that no longer exists
+    total += conn.execute(
+        "DELETE FROM links WHERE target_type = 'document' AND target_id NOT IN (SELECT id FROM documents)",
+        [],
+    )?;
+    // links where source is an entity that no longer exists
+    total += conn.execute(
+        "DELETE FROM links WHERE source_type = 'entity' AND source_id NOT IN (SELECT id FROM entities)",
+        [],
+    )?;
+    // links where target is an entity that no longer exists
+    total += conn.execute(
+        "DELETE FROM links WHERE target_type = 'entity' AND target_id NOT IN (SELECT id FROM entities)",
+        [],
+    )?;
+
+    Ok(total)
+}
+
 pub fn delete_links_for_project(conn: &Connection, project_id: &str) -> SqliteResult<usize> {
     let section_ids: Vec<String> = conn.prepare(
         "SELECT id FROM sections WHERE project_id = ?1"
@@ -1029,7 +1071,7 @@ pub fn delete_links_for_project(conn: &Connection, project_id: &str) -> SqliteRe
         .collect();
 
         for doc_id in &doc_ids {
-            total_deleted += delete_links_by_source(conn, "document", doc_id)?;
+            total_deleted += delete_links_for_entity(conn, "document", doc_id)?;
         }
     }
 

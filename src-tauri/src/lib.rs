@@ -3,7 +3,6 @@
 use std::sync::Mutex;
 use rusqlite::Connection;
 use tauri::State;
-use tauri::Manager;
 
 // Import modules
 mod database;
@@ -11,7 +10,6 @@ mod embeddings;
 mod updates;
 mod fonts;
 use database::*;
-use embeddings::*;
 use updates::*;
 use fonts::*;
 
@@ -84,7 +82,7 @@ fn db_delete_section(state: State<AppState>, id: String) -> Result<(), String> {
     let docs = get_documents_by_section(&*conn, &id).map_err(|e| e.to_string())?;
     for doc in &docs {
         embeddings::delete_embeddings_for_entity(&*conn, "document", &doc.id).map_err(|e| e.to_string())?;
-        delete_links_by_source(&*conn, "document", &doc.id).map_err(|e| e.to_string())?;
+        delete_links_for_entity(&*conn, "document", &doc.id).map_err(|e| e.to_string())?;
     }
     delete_section(&*conn, &id).map_err(|e| e.to_string())
 }
@@ -121,7 +119,7 @@ fn db_update_document(state: State<AppState>, document: Document) -> Result<(), 
 fn db_delete_document(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     embeddings::delete_embeddings_for_entity(&*conn, "document", &id).map_err(|e| e.to_string())?;
-    delete_links_by_source(&*conn, "document", &id).map_err(|e| e.to_string())?;
+    delete_links_for_entity(&*conn, "document", &id).map_err(|e| e.to_string())?;
     delete_document(&*conn, &id).map_err(|e| e.to_string())
 }
 
@@ -176,7 +174,15 @@ fn db_update_entity(state: State<AppState>, entity: Entity) -> Result<(), String
 #[tauri::command]
 fn db_delete_entity(state: State<AppState>, id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_embeddings_for_entity(&*conn, "entity", &id).map_err(|e| e.to_string())?;
+    delete_links_for_entity(&*conn, "entity", &id).map_err(|e| e.to_string())?;
     delete_entity(&*conn, &id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_cleanup_orphan_links(state: State<AppState>) -> Result<usize, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    cleanup_orphan_links(&*conn).map_err(|e| e.to_string())
 }
 
 // ============================================================================
@@ -487,42 +493,6 @@ fn embedding_delete_for_project(
 }
 
 // ============================================================================
-// FILE LOGGER (DEBUG-ONLY)
-// ============================================================================
-//
-// Temporary logger that writes selected console output to a file on disk.
-// Used to diagnose build-vs-dev differences when Chrome DevTools are
-// not visible. Writes are best-effort; failures are silently ignored.
-//
-// The log file lives at app_data_dir()/aurawrite.log. Each line is
-// prefixed with a Unix timestamp in seconds. This is meant for local
-// debugging only and will be REMOVED before the next public release.
-
-#[tauri::command]
-fn write_log_line(app: tauri::AppHandle, line: String) -> Result<(), String> {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("aurawrite.log");
-
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .map_err(|e| e.to_string())?;
-
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
-    writeln!(file, "[{}] {}", ts, line).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// ============================================================================
 // APP SETUP
 // ============================================================================
 
@@ -533,6 +503,15 @@ pub fn run() {
 
     // Initialize embeddings table
     embeddings::init_embeddings_table(&conn).expect("Failed to initialize embeddings table");
+
+    // One-shot cleanup: remove orphan links left over from older versions
+    // where deleting a document/section/project/entity did not cascade to the
+    // `links` table. Idempotent and safe to run on every startup.
+    match cleanup_orphan_links(&conn) {
+        Ok(n) if n > 0 => println!("[Maintenance] Removed {} orphan link(s) from previous runs.", n),
+        Ok(_) => {}
+        Err(e) => eprintln!("[Maintenance] Orphan link cleanup failed: {}", e),
+    }
 
     let app_state = AppState {
         db: Mutex::new(conn),
@@ -551,8 +530,6 @@ pub fn run() {
             load_binary_file,
             save_binary_file,
             get_app_version,
-            // File logger (DEBUG-ONLY)
-            write_log_line,
             // Project commands
             db_create_project,
             db_get_projects,
@@ -593,6 +570,8 @@ pub fn run() {
             db_get_links_by_target,
             db_delete_links_by_source,
             db_get_entity_index_status,
+            // Maintenance (v0.4.2+)
+            db_cleanup_orphan_links,
             // Embedding commands
             embedding_check_ollama,
             embedding_generate,
