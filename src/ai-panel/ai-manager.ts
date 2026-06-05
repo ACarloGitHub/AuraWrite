@@ -8,7 +8,6 @@ import {
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider } from "./remote-providers";
 import { buildToolSystemPrompt } from "./tools";
-import { getEditorView } from "../editor/toolbar";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 

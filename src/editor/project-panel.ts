@@ -42,12 +42,10 @@ let sections: Section[] = [];
 let documents: Document[] = [];
 let lastSavedContent: string | null = null;
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-let showingProjectList = false;
 
 // Callbacks (set by main.ts)
 let onDocumentSelect: ((doc: Document) => void) | null = null;
 let onProjectChange: ((project: Project | null) => void) | null = null;
-let onContentChange: ((content: string) => void) | null = null;
 let getEditorContent: (() => string | null) | null = null;
 
 // Config
@@ -61,13 +59,11 @@ export function initProjectPanel(
   callbacks: {
     onDocumentSelect?: (doc: Document) => void;
     onProjectChange?: (project: Project | null) => void;
-    onContentChange?: (content: string) => void;
     getEditorContent?: () => string | null;
   } = {}
 ): void {
   onDocumentSelect = callbacks.onDocumentSelect || null;
   onProjectChange = callbacks.onProjectChange || null;
-  onContentChange = callbacks.onContentChange || null;
   getEditorContent = callbacks.getEditorContent || null;
 
   const btnNewProject = document.getElementById("btn-new-project");
@@ -77,7 +73,6 @@ export function initProjectPanel(
   btnBackProjects?.addEventListener("click", async () => {
     const action = await handleCloseDocument();
     if (action === 'proceed') {
-      showingProjectList = true;
       currentProject = null;
       currentSection = null;
       currentDocument = null;
@@ -92,7 +87,6 @@ export function initProjectPanel(
     const action = await handleCloseDocument();
     if (action === 'proceed') {
       // Nessuna modifica o utente ha gestito, apri lista progetti
-      showingProjectList = true;
       currentProject = null;
       currentSection = null;
       currentDocument = null;
@@ -446,7 +440,7 @@ async function indexDocumentForSearch(
       baseUrl,
     });
     console.log(`Document ${documentId} indexed for search`);
-  } catch (error) {
+  } catch {
     console.log(`Document ${documentId} not indexed (Ollama may not be available)`);
   }
 }
@@ -477,7 +471,7 @@ async function handleSaveDocument(doc: Document): Promise<void> {
   await handleSaveToDatabase();
 }
 
-function showNotification(message: string, type: "success" | "error" | "indexing" = "success"): void {
+function showNotification(message: string, type: "success" | "error" | "indexing" | "info" = "success"): void {
   if (type === "indexing") {
     document.querySelectorAll(".project-toast.indexing").forEach((t) => t.remove());
   } else {
@@ -487,10 +481,11 @@ function showNotification(message: string, type: "success" | "error" | "indexing
   const toast = document.createElement("div");
   toast.className = `project-toast ${type}`;
   toast.textContent = message;
-  const bgMap = {
+  const bgMap: Record<string, string> = {
     success: "#228822",
     error: "#cc0000",
     indexing: "#0066cc",
+    info: "#d4a017",
   };
   toast.style.cssText = `
     position: fixed;
@@ -912,7 +907,16 @@ async function handleIndexDocument(doc: Document): Promise<void> {
       currentProject.type || "novel",
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
-    showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
+    if (result.skipped) {
+      const reasonMsg = {
+        empty: "document is empty",
+        no_text: "document has no text",
+        error: "extraction failed",
+      }[result.reason || "empty"];
+      showNotification(`⏭ ${doc.title}: ${reasonMsg}, nothing to index`, "info");
+    } else {
+      showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
+    }
   } catch (error) {
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
@@ -1867,12 +1871,6 @@ function toggleAndSelectSection(section: Section): void {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 function showError(message: string): void {
   alert(message);

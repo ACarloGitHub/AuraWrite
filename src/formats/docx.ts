@@ -1,5 +1,5 @@
 import mammoth from "mammoth";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
+import { Document, Packer, Paragraph, TextRun } from "docx";
 
 export async function fromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
   const result = await mammoth.convertToHtml({ arrayBuffer });

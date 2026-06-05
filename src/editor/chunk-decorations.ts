@@ -10,10 +10,6 @@ interface ChunkDecorationsState {
 }
 
 function createChunkMarker(chunk: Chunk, isStart: boolean): Decoration {
-  const markerHtml = isStart
-    ? `<span class="chunk-marker chunk-marker--start" data-chunk-id="${chunk.id}" data-chunk-title="${chunk.title}">&#8592; ${chunk.title}</span>`
-    : `<span class="chunk-marker chunk-marker--end" data-chunk-id="${chunk.id}"></span>`;
-
   return Decoration.widget(
     isStart ? chunk.startOffset : chunk.endOffset,
     () => {
@@ -38,7 +34,7 @@ export const chunkDecorationsPlugin = new Plugin<ChunkDecorationsState>({
     init(): ChunkDecorationsState {
       return { chunks: [], activeChunkId: null };
     },
-    apply(tr, set, _oldState, newState): ChunkDecorationsState {
+    apply(tr, set, _oldState, _newState): ChunkDecorationsState {
       const meta = tr.getMeta(chunkDecorationsPluginKey);
 
       if (meta === "clear") {

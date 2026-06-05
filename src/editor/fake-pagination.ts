@@ -9,7 +9,7 @@
  */
 
 import type { EditorView } from "prosemirror-view";
-import { setPluginEnabled, getPluginEnabled } from "./page-break-plugin";
+import { setPluginEnabled } from "./page-break-plugin";
 
 let autoPaginationEnabled = false;
 let editorView: EditorView | null = null;

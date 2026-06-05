@@ -223,12 +223,19 @@ async function upsertEntity(
   return { result: "created", entityId: newId };
 }
 
+export type ExtractionResult = {
+  created: number;
+  updated: number;
+  skipped: boolean;
+  reason?: "empty" | "no_text" | "error";
+};
+
 export async function extractEntitiesFromDocument(
   documentId: string,
   projectId: string,
   projectType: string,
   onProgress?: (message: string) => void,
-): Promise<{ created: number; updated: number }> {
+): Promise<ExtractionResult> {
   try {
     try {
       await deleteLinksBySource("document", documentId);
@@ -244,14 +251,14 @@ export async function extractEntitiesFromDocument(
 
     if (!doc || !doc.content_json) {
       onProgress?.(`Skipping empty document: ${doc?.title || documentId}`);
-      return { created: 0, updated: 0 };
+      return { created: 0, updated: 0, skipped: true, reason: "empty" };
     }
 
     const text = extractTextFromProseMirror(doc.content_json);
 
     if (!text.trim()) {
       onProgress?.(`Skipping document with no text: ${doc.title}`);
-      return { created: 0, updated: 0 };
+      return { created: 0, updated: 0, skipped: true, reason: "no_text" };
     }
 
     const existingEntities = await getExistingEntities(projectId);
@@ -300,11 +307,11 @@ export async function extractEntitiesFromDocument(
       }
     }
 
-    return { created, updated };
-  } catch (err: any) {
+    return { created, updated, skipped: false };
+  } catch (err) {
     console.error("Catastrophic error in extractEntitiesFromDocument:", err);
-    onProgress?.(`Fatal error: ${err?.message || String(err)}`);
-    return { created: 0, updated: 0 };
+    onProgress?.(`Fatal error: ${err instanceof Error ? err.message : String(err)}`);
+    return { created: 0, updated: 0, skipped: true, reason: "error" };
   }
 }
 

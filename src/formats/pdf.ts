@@ -19,14 +19,14 @@
  * - pdf-lib: https://pdf-lib.com/
  */
 
-export async function fromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
+export async function fromPDF(_arrayBuffer: ArrayBuffer): Promise<string> {
   throw new Error(
     "PDF import not yet implemented. " +
     "This is a placeholder for future enhancement."
   );
 }
 
-export function toPDF(doc: any): any {
+export function toPDF(_doc: any): any {
   throw new Error(
     "PDF export not yet implemented. " +
     "This is a placeholder for future enhancement."

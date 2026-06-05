@@ -126,11 +126,6 @@ function selectActiveResult(view: EditorView): void {
 export function replaceOne(view: EditorView, replacement: string): void {
   if (findState.results.length === 0 || findState.activeIndex < 0) return;
   const r = findState.results[findState.activeIndex];
-  const replacedFrom = r.from;
-  const replacedLen = r.to - r.from;
-  const newLen = replacement.length;
-  const diff = newLen - replacedLen;
-
   const tr = view.state.tr.replaceWith(r.from, r.to, view.state.schema.text(replacement));
   view.dispatch(tr);
 
@@ -140,9 +135,10 @@ export function replaceOne(view: EditorView, replacement: string): void {
     findState.activeIndex = -1;
   } else {
     let nextIndex = -1;
+    const replacedEnd = r.from + replacement.length;
     for (let i = 0; i < findState.results.length; i++) {
       const res = findState.results[i];
-      if (res.from >= replacedFrom + newLen) {
+      if (res.from >= replacedEnd) {
         nextIndex = i;
         break;
       }

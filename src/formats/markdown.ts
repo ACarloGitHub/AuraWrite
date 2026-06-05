@@ -1,5 +1,3 @@
-import { schema as basicSchema } from "prosemirror-schema-basic";
-
 export function toMarkdown(doc: any): string {
   let result = "";
   doc.forEach((node: any) => {
@@ -10,18 +8,21 @@ export function toMarkdown(doc: any): string {
 
 function nodeToMarkdown(node: any): string {
   switch (node.type.name) {
-    case "paragraph":
+    case "paragraph": {
       const text = node.content?.map(inlineToMarkdown).join("") || "";
       const pageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return pageBreak + text + "\n\n";
-    case "heading":
+    }
+    case "heading": {
       const level = node.attrs.level || 1;
       const hText = node.content?.map(inlineToMarkdown).join("") || "";
       const hPageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return hPageBreak + "#".repeat(level) + " " + hText + "\n\n";
-    case "blockquote":
+    }
+    case "blockquote": {
       const quote = node.content?.map(nodeToMarkdown).join("") || "";
       return "> " + quote.replace(/\n/g, "\n> ");
+    }
     case "code_block":
       return "```\n" + (node.textContent || "") + "\n```\n\n";
     case "bullet_list":

@@ -6,7 +6,6 @@
  */
 
 import { prepare, layout, prepareWithSegments, layoutWithLines } from '@chenglou/pretext';
-import { EditorView } from 'prosemirror-view';
 import { Node as PMNode, Fragment } from 'prosemirror-model';
 
 // A4 dimensions in mm
@@ -288,7 +287,6 @@ export function renderPages(
     contentEl.className = 'aw-page-content';
     
     // Render each node in the page
-    const fragment = Fragment.empty;
     pageBreakpoints.forEach(({ node }) => {
       const dom = serializer.serializeFragment(Fragment.from(node));
       contentEl.appendChild(dom);

@@ -106,6 +106,83 @@ jobs:
           echo "=== File sizes ==="
           find artifacts -type f -exec ls -lh {} \;
 
+      - name: Generate changelog from Conventional Commits
+        id: changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const currentTag = context.ref.replace(/^refs\/tags\//, '');
+
+            // 1. Find previous tag (skip prereleases)
+            const { data: tags } = await github.rest.repos.listTags({
+              owner, repo, per_page: 10,
+            });
+            const stableTags = tags
+              .map(t => t.name)
+              .filter(n => /^v\d+\.\d+\.\d+$/.test(n))
+              .filter(n => n !== currentTag)
+              .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+            const previousTag = stableTags[0] || null;
+
+            // 2. Get commits between previous tag and current
+            let commits = [];
+            if (previousTag) {
+              const { data } = await github.rest.repos.compareCommits({
+                owner, repo, base: previousTag, head: currentTag,
+              });
+              commits = data.commits;
+            } else {
+              // No previous tag: take the last 50 commits
+              const { data } = await github.rest.repos.listCommits({
+                owner, repo, per_page: 50,
+              });
+              commits = data;
+            }
+
+            // 3. Categorize commits by Conventional Commits prefix
+            const whatsnew = [];
+            const improvements = [];
+            const breaking = [];
+            for (const c of commits) {
+              const msg = c.commit.message.split('\n')[0];
+              if (/^[a-zA-Z0-9_-]+!:/.test(msg) || /BREAKING CHANGE:/i.test(c.commit.message)) {
+                breaking.push(msg);
+              } else if (/^(feat|fix)(\([^)]+\))?!?:/i.test(msg)) {
+                whatsnew.push(msg);
+              } else if (/^(refactor|perf|docs)(\([^)]+\))?!?:/i.test(msg)) {
+                improvements.push(msg);
+              }
+            }
+
+            // 4. Build body
+            const fmt = (arr) => arr.length
+              ? arr.map(m => '- ' + m).join('\n')
+              : '_No changes in this category — see commits on GitHub._';
+            const sections = [
+              "## What's new",
+              fmt(whatsnew),
+              "## Improvements",
+              fmt(improvements),
+            ];
+            if (breaking.length > 0) {
+              sections.push("## \u26A0\uFE0F Breaking changes");
+              sections.push(fmt(breaking));
+            }
+            sections.push("## Notes");
+            sections.push('- **Data preservation**: your data is preserved across this upgrade.');
+            sections.push('- **Uninstall**: removing the app does not delete `%APPDATA%\\aurawrite\\` (Windows), `~/Library/Application Support/aurawrite/` (macOS), or `~/.config/aurawrite/` (Linux).');
+            sections.push('- **No code signing**: AuraWrite is open source (MIT) but not yet code-signed. You may see a SmartScreen warning on Windows or Gatekeeper block on macOS — see the README\'s Security & Trust section.');
+            sections.push("## Downloads");
+            sections.push('- **Windows:** `.msi` (WiX) and `.exe` (NSIS) installers');
+            sections.push('- **macOS:** Universal `.dmg` (Intel + Apple Silicon), `.app.tar.gz`');
+            sections.push('- **Linux:** `.deb`, `.rpm`, and AppImage');
+
+            const body = sections.join('\n\n');
+            require('fs').writeFileSync('release_body.md', body);
+            core.setOutput('has_commits', whatsnew.length + improvements.length + breaking.length);
+
       - name: Create or update release and attach all artifacts
         uses: softprops/action-gh-release@v2
         with:
@@ -114,19 +191,7 @@ jobs:
           draft: true
           prerelease: false
           generate_release_notes: false
-          body: |
-            Cross-platform installers for AuraWrite ${{ github.ref_name }}.
-
-            ## Downloads
-            - **Windows:** `.msi` (WiX) and `.exe` (NSIS) installers
-            - **macOS:** Universal `.dmg` (Intel + Apple Silicon)
-            - **Linux:** `.deb`, `.rpm`, and AppImage
-
-            ## About unsigned installers
-            AuraWrite is open source (MIT) but not yet code-signed.
-            You may see a SmartScreen warning on Windows or Gatekeeper
-            block on macOS — see the README's 'Security & Trust' section
-            for how to proceed.
+          body_path: release_body.md
           files: |
             artifacts/**/*.msi
             artifacts/**/*-setup.exe

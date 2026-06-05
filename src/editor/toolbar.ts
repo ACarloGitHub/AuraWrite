@@ -1,7 +1,7 @@
 import { undo, redo } from "prosemirror-history";
 import { toggleMark, wrapIn, lift, setBlockType } from "prosemirror-commands";
 import type { EditorView } from "prosemirror-view";
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 import type { NodeType } from "prosemirror-model";
 
@@ -10,11 +10,12 @@ import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { schema } from "./editor";
+import { populateUserFontsInToolbar } from "./fonts-ui";
 import {
   initPagination,
   updateOnTextChange,
 } from "./fake-pagination";
-import { setPagedMode, getPagedMode } from "./pagination-state";
+import { getPagedMode } from "./pagination-state";
 import { togglePagedMode as toggleDocPagedMode } from "./editor";
 import {
   currentProject,
@@ -50,7 +51,7 @@ export function setupToolbar(view: EditorView): void {
   setupHeadingControl();
   setupListControls();
   setupAlignmentControls();
-  setupStyleControls();
+  void setupStyleControls();
   setupTopLevelButtons();
   setupWidthControl();
   setupDirtyTracking();
@@ -67,7 +68,7 @@ function setupDirtyTracking(): void {
       editorView.updateState(newState);
 
       if (transaction.docChanged) {
-        const isLoading = (window as any).__aurawrite_loading === true;
+        const isLoading = (window as Window & { __aurawrite_loading?: boolean }).__aurawrite_loading === true;
         const newContent = JSON.stringify(newState.doc.toJSON());
         if (documentState.lastSavedContent !== newContent) {
           documentState.isDirty = true;
@@ -137,7 +138,7 @@ function loadPreferences(): void {
       if (p.incrementalEnabled) {
         startIncrementalSave(p.incrementalMax || 10);
       }
-    } catch (_e) {
+    } catch {
       // Ignore preference parse errors
     }
   }
@@ -264,7 +265,7 @@ async function getContentByFormat(format: string): Promise<string> {
   }
 }
 
-async function docxToBase64(doc: any): Promise<string> {
+async function docxToBase64(doc: unknown): Promise<string> {
   const docxDoc = toDocx(doc);
   const buffer = await Packer.toBuffer(docxDoc);
   const bytes = new Uint8Array(buffer);
@@ -685,7 +686,8 @@ function setAlignment(align: "left" | "center" | "right" | "justify"): void {
 // STYLE CONTROLS — Font, Size, Color, Highlight, Line Height
 // ============================================================================
 
-function setupStyleControls(): void {
+async function setupStyleControls(): Promise<void> {
+  await populateUserFontsInToolbar();
   const selFont = document.getElementById("sel-font-family") as HTMLSelectElement | null;
   const selSize = document.getElementById("sel-font-size") as HTMLSelectElement | null;
   const btnTextColor = document.getElementById("btn-text-color") as HTMLInputElement | null;
@@ -790,18 +792,6 @@ function applyTextMarkOrStored(markName: string, attrs: Record<string, string>):
     const tr = state.tr.addMark(from, to, markType.create(attrs));
     editorView.dispatch(tr);
   }
-}
-
-function applyTextMark(markName: string, attrs: Record<string, string>): void {
-  const { state } = editorView;
-  const markType = state.schema.marks[markName];
-  if (!markType) return;
-
-  const { from, to } = state.selection;
-  if (from === to) return;
-
-  const tr = state.tr.addMark(from, to, markType.create(attrs));
-  editorView.dispatch(tr);
 }
 
 function setLineHeight(lineHeight: string): void {
@@ -913,11 +903,6 @@ const MARGIN_KEY = "aurawrite-editor-margin-pct";
 const MARGIN_MIN = 0;
 const MARGIN_MAX = 100;
 const MARGIN_DEFAULT = 20; // ≈ 9% actual padding each side
-
-function userToActualPct(userVal: number): number {
-  // Linear map: 0 → 0%, 100 → 45%
-  return (userVal / 100) * 45;
-}
 
 function getEditorMargin(): number {
   const saved = localStorage.getItem(MARGIN_KEY);

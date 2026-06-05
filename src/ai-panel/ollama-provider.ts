@@ -1,5 +1,5 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
+import type { AIProvider, AIContext, AIResponse } from "./providers";
 import { withRetry, isValidHttpUrl } from "./fetch-retry";
 
 export type OllamaMode = "local" | "cloud";

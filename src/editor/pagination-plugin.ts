@@ -52,14 +52,6 @@ function measurePageScrollHeight(view: EditorView, pagePos: number): number {
   return 0;
 }
 
-function rebuildPageNumbers(view: EditorView): void {
-  const { doc } = view.state;
-  let pageNum = 0;
-  doc.forEach((node) => {
-    if (node.type.name === "page") pageNum++;
-  });
-}
-
 function rebalancePages(view: EditorView): boolean {
   const { state } = view;
   const { doc, schema } = state;

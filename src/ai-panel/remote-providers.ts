@@ -1,9 +1,9 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import type { AIProvider, AIContext, AIResponse, ChatMessage } from "./providers";
+import type { AIProvider, AIContext, AIResponse } from "./providers";
 import { withRetry, isValidHttpUrl } from "./fetch-retry";
 
-function extractOpenAIStyleReasoning(data: any): string | undefined {
-  const message = data?.choices?.[0]?.message;
+function extractOpenAIStyleReasoning(data: unknown): string | undefined {
+  const message = (data as { choices?: Array<{ message?: { reasoning?: string; reasoning_content?: string } }> })?.choices?.[0]?.message;
   if (!message || typeof message !== "object") return undefined;
   const candidates = [message.reasoning, message.reasoning_content];
   for (const value of candidates) {
@@ -12,10 +12,11 @@ function extractOpenAIStyleReasoning(data: any): string | undefined {
   return undefined;
 }
 
-function extractAnthropicThinking(data: any): string | undefined {
-  if (!data || !Array.isArray(data.content)) return undefined;
+function extractAnthropicThinking(data: unknown): string | undefined {
+  const blocks = (data as { content?: Array<{ type?: string; thinking?: string }> })?.content;
+  if (!Array.isArray(blocks)) return undefined;
   const parts: string[] = [];
-  for (const block of data.content) {
+  for (const block of blocks) {
     if (block && typeof block === "object" && block.type === "thinking" && typeof block.thinking === "string") {
       parts.push(block.thinking);
     }

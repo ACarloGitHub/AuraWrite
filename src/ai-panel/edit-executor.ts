@@ -1,5 +1,5 @@
 import type { EditorView } from "prosemirror-view";
-import type { AuraEdit, ContentNode, TextNode, MarkType } from "./operations";
+import type { ContentNode, TextNode, MarkType } from "./operations";
 import { parseAuraEdit, hasValidOperations } from "./edit-parser";
 import { findTextInDoc } from "../editor/text-utils";
 import { notifyDocumentChange } from "./modification-hub";

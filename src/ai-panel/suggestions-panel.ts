@@ -1,9 +1,6 @@
-/* global setTimeout */
-
 import type { EditorView } from "prosemirror-view";
 import { Decoration } from "prosemirror-view";
 import { sendToAI, extractJson } from "./ai-manager";
-import { getEditorContent } from "../editor/editor";
 import { notifyDocumentChange } from "./modification-hub";
 import {
   suggestionsMarkerPluginKey,
@@ -56,11 +53,9 @@ interface SentenceSlot {
 let suggestions: SentenceSuggestion[] = [];
 let slots: SentenceSlot[] = [];
 let editorViewRef: EditorView | null = null;
-let contextUnderstood: string = "";
 let acceptedOriginals: Map<string, string> = new Map();
 let closedSentences: Set<string> = new Set();
 let isCurrentlyProcessing: boolean = false;
-let currentProcessingSlotId: string | null = null;
 
 const DEBUG_LOG_MAX = 100;
 const DEBUG_LOG: string[] = [];
@@ -233,7 +228,6 @@ function startSuggestionsMode(): void {
 function stopSuggestionsMode(): void {
   slots = [];
   isCurrentlyProcessing = false;
-  currentProcessingSlotId = null;
 }
 
 function setupDotTrigger(view: EditorView): void {
@@ -375,7 +369,6 @@ async function processNextSlot(): Promise<void> {
 
   if (slotIndex === -1) {
     isCurrentlyProcessing = false;
-    currentProcessingSlotId = null;
     updateAnalysisStatus("Analysis complete");
     return;
   }
@@ -383,7 +376,6 @@ async function processNextSlot(): Promise<void> {
   const slot = slots[slotIndex];
   const wasDiscarded = slot.state === "discarded";
   slot.state = "processing";
-  currentProcessingSlotId = slot.id;
   isCurrentlyProcessing = true;
 
   const suggestionBox = suggestions.find((b) => b.id === slot.id);
@@ -481,7 +473,6 @@ Remember: DO NOT output any thinking, reasoning, explanation, or <thought>/<thin
   }
 
   isCurrentlyProcessing = false;
-  currentProcessingSlotId = null;
 
   const processingBox = suggestions.find((b) => b.isProcessing);
   if (processingBox) {
@@ -512,7 +503,7 @@ function processAIResponse(content: string, slot: SentenceSlot): void {
     const response: AISuggestionResponse = JSON.parse(jsonStr);
 
     if (response.context_understood) {
-      contextUnderstood = response.context_understood;
+      // context_understood is now handled by the AI status indicator only
     }
 
     let suggestionFound = false;
@@ -1004,7 +995,6 @@ export function clearSuggestions(): void {
   acceptedOriginals.clear();
   closedSentences.clear();
   isCurrentlyProcessing = false;
-  currentProcessingSlotId = null;
   renderSuggestions();
 }
 

@@ -2,7 +2,7 @@ import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
-import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "./editor/project-panel";
+import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries, showErrorToast } from "./error-boundary";
 import { checkForUpdatesOnStartup } from "./updates";
@@ -10,7 +10,11 @@ import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openBrowser } from "@tauri-apps/plugin-shell";
+import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
+import {
+  populateUserFontsInToolbar,
+  setupFontsReloadListener,
+} from "./editor/fonts-ui";
 import {
   setFindQuery,
   findNext,
@@ -753,12 +757,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const editorView = createEditor(editorElement);
   syncDocumentPaginationState(editorView);
-  let isLoadingDocument = false;
 
   // Esponi flag globale per toolbar.ts
   (window as any).__aurawrite_loading = false;
   function setLoading(val: boolean) {
-    isLoadingDocument = val;
     (window as any).__aurawrite_loading = val;
   }
 
@@ -825,7 +827,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const findBar = document.getElementById("find-bar");
   const findInput = document.getElementById("find-input") as HTMLInputElement | null;
   const replaceInput = document.getElementById("replace-input") as HTMLInputElement | null;
-  const findCountEl = document.getElementById("find-count");
 
   function openFindBar(replaceVisible = false): void {
     findBar?.classList.remove("hidden");
@@ -899,7 +900,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fontsOpenDir?.addEventListener("click", async () => {
     try {
       const dir = await invoke<string>("get_user_fonts_dir");
-      await openBrowser(dir);
+      await openLocalPath(dir);
     } catch (e) {
       showErrorToast(`Could not open folder: ${String(e)}`, 5000);
     }
@@ -907,8 +908,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const fontsReload = document.getElementById("pref-fonts-reload");
   fontsReload?.addEventListener("click", () => {
     void loadUserFonts();
+    void populateUserFontsInToolbar();
+    window.dispatchEvent(new CustomEvent("aurawrite:fonts-reloaded"));
   });
   void loadUserFonts(); // initial load
+  void populateUserFontsInToolbar(); // initial toolbar population
+  setupFontsReloadListener();
 
   // Maintenance tab: clean orphan links (v0.4.2+)
   const btnCleanLinks = document.getElementById("pref-maintenance-clean-links");

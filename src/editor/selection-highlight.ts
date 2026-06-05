@@ -9,7 +9,7 @@ export const selectionHighlightPlugin = new Plugin({
     init(): DecorationSet {
       return DecorationSet.empty;
     },
-    apply(tr, set, oldState, newState): DecorationSet {
+    apply(tr, set, _oldState, _newState): DecorationSet {
       const meta = tr.getMeta(selectionHighlightPluginKey);
       if (meta === "clear") {
         return DecorationSet.empty;

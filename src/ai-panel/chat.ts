@@ -19,8 +19,6 @@ import { applyAuraEdit } from "./edit-executor";
 import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject } from "../editor/project-panel";
 
-/* global setTimeout */
-
 const MAX_TOOL_ITERATIONS = 3;
 
 interface Message {
@@ -314,7 +312,7 @@ function updateChunkSelector(): void {
       <select id="ai-chunk-select" class="ai-chunk-selector__select">
         ${chunks
           .map(
-            (c, i) => `
+            (c) => `
           <option value="${c.id}" ${c.id === selectedChunkId ? "selected" : ""}>
             ${c.title} (~${estimateTokenCount(c.content)} tokens)
           </option>

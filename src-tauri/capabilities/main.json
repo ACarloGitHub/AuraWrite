@@ -12,6 +12,12 @@
     "fs:allow-write-text-file",
     "shell:default",
     "shell:allow-open",
+    "opener:default",
+    "opener:allow-open-path",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    },
     {
       "identifier": "http:default",
       "allow": [

@@ -13,6 +13,7 @@ import type {
   DocumentVersion,
   Link,
   IndexStatus,
+  ProjectType,
 } from "../types/database";
 
 // ============================================================================
@@ -163,7 +164,6 @@ import {
   createProject as makeProject,
   createSection as makeSection,
   createDocument as makeDocument,
-  createEntity as makeEntity,
   DEFAULT_ENTITY_TYPES,
 } from "../types/database";
 
@@ -173,7 +173,7 @@ export async function createProjectWithDefaults(
   description?: string
 ): Promise<{ project: Project; sections: Section[]; entityTypes: EntityType[] }> {
   // Create project
-  const project = makeProject(name, type as any, description);
+  const project = makeProject(name, type as ProjectType, description);
   await createProject(project);
 
   // Create default sections (Book → Parts → Chapters structure placeholder)
@@ -184,7 +184,7 @@ export async function createProjectWithDefaults(
   const entityTypes: EntityType[] = [];
   if (type === "novel") {
     for (const et of DEFAULT_ENTITY_TYPES) {
-      const entityType = { ...et, project_id: project.id, id: undefined as any };
+      const entityType: EntityType = { ...et, project_id: project.id, id: undefined as unknown as string };
       entityType.id = crypto.randomUUID();
       await createEntityType(entityType);
       entityTypes.push(entityType);

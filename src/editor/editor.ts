@@ -172,7 +172,7 @@ const pageSpec: NodeSpec = {
     pageNumber: { default: 1 },
   },
   parseDOM: [{ tag: "div[data-page-node]" }],
-  toDOM(node) {
+  toDOM() {
     return ["div", { "data-page-node": "true", class: "pm-page-wrapper" }, 0];
   },
 };
@@ -375,7 +375,7 @@ const wordCountPlugin = new Plugin({
   view: () => ({
     update(view, prevState) {
       if (view.state.doc !== prevState.doc) {
-        const updateFn = (window as any).updateWordCount;
+        const updateFn = (window as Window & { updateWordCount?: (view: EditorView) => void }).updateWordCount;
         if (updateFn) {
           updateFn(view);
         }
@@ -466,7 +466,7 @@ export function getSelectedText(view: EditorViewType): string {
   return view.state.doc.textBetween(from, to);
 }
 
-export function parseHTML(html: string): any {
+export function parseHTML(html: string): PMNode {
   const parser = new window.DOMParser();
   const doc = parser.parseFromString(html, "text/html");
   const body = doc.body;
@@ -507,7 +507,7 @@ export function wrapInPages(view: EditorView): void {
 }
 
 export function unwrapPages(view: EditorView): void {
-  const { doc, schema, tr } = view.state;
+  const { doc, tr } = view.state;
 
   let hasPages = false;
   doc.forEach((node) => {

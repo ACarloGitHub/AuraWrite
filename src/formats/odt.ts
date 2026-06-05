@@ -7,14 +7,14 @@
  * Alternativa: usare JSZip per creare manualmente il file ODT (formato ZIP)
  */
 
-export function toOdt(doc: any): any {
+export function toOdt(_doc: any): any {
   throw new Error(
     "ODT export not yet implemented. " +
     "This is a placeholder for future enhancement."
   );
 }
 
-export async function fromOdt(arrayBuffer: ArrayBuffer): Promise<string> {
+export async function fromOdt(_arrayBuffer: ArrayBuffer): Promise<string> {
   throw new Error(
     "ODT import not yet implemented. " +
     "This is a placeholder for future enhancement."
