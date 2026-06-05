@@ -584,6 +584,28 @@ To call a tool, include this tag in your response:
 
         const toolResults: ToolResult[] = [];
         for (const call of enrichedToolCalls) {
+          // Defensive: refuse to execute a tool without a valid project_id
+          // unless it's a global tool (none today, all are project-scoped).
+          const args = call.arguments as Record<string, unknown>;
+          if (args.project_id !== undefined) {
+            if (
+              typeof args.project_id !== "string" ||
+              args.project_id.trim() === "" ||
+              (context.projectId && args.project_id !== context.projectId)
+            ) {
+              console.warn(
+                `[tools] refused call '${call.name}' with project_id=${JSON.stringify(args.project_id)} (expected ${context.projectId})`
+              );
+              toolResults.push({
+                tool: call.name,
+                result: "",
+                error:
+                  "Tool call refused: project_id is missing, empty, or does not match the currently open project. " +
+                  "This prevents leaking entities from other projects.",
+              });
+              continue;
+            }
+          }
           const result = await executeTool(call);
           toolResults.push(result);
         }

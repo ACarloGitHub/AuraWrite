@@ -651,6 +651,8 @@ export function buildToolSystemPrompt(projectId?: string): string {
 ${projectInfo}
 IMPORTANT: When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering. Do NOT say "no entities found" without actually calling the tools first.
 
+CRITICAL: Rispondi sempre mostrando entities relative al progetto aperto. Non includere entities di altri progetti. Ogni tool ha un parametro project_id: usalo SEMPRE con il project_id del progetto aperto, MAI lasciarlo vuoto o usare un altro ID.
+
 Available tools:
 ${AVAILABLE_TOOLS.map((tool) => `
 - ${tool.name}: ${tool.description}
