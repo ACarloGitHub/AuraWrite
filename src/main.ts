@@ -5,6 +5,7 @@ import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries } from "./error-boundary";
+import { checkForUpdatesOnStartup } from "./updates";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
 import { EditorState } from "prosemirror-state";
@@ -54,6 +55,7 @@ interface Preferences {
   deselectOnDocumentClick: boolean;
   semanticSearchEnabled: boolean;
   selectionHighlightColor: string;
+  updatesCheckEnabled: boolean;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -159,6 +161,7 @@ const defaultPreferences: Preferences = {
   deselectOnDocumentClick: true,
   semanticSearchEnabled: true,
   selectionHighlightColor: "#ffff00",
+  updatesCheckEnabled: true,
 };
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -362,6 +365,9 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-selection-highlight") as HTMLInputElement
   ).value = prefs.selectionHighlightColor || "#ffff00";
+  (
+    document.getElementById("pref-updates-check-enabled") as HTMLInputElement
+  ).checked = prefs.updatesCheckEnabled !== false;
 
   updateCustomColorsVisibility();
   updateApiKeyGroupVisibility();
@@ -630,6 +636,7 @@ function savePreferencesFromModal(): void {
     deselectOnDocumentClick: chk("pref-deselect-on-click"),
     semanticSearchEnabled: chk("pref-semantic-search-enabled"),
     selectionHighlightColor: inp("pref-selection-highlight") || "#ffff00",
+    updatesCheckEnabled: chk("pref-updates-check-enabled"),
   };
 
   savePreferences(prefs);
@@ -872,7 +879,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);
@@ -928,6 +935,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  // Check for new releases at startup (silent if disabled or offline)
+  void checkForUpdatesOnStartup();
 });
 
 function updateWordCount(view: any): void {
