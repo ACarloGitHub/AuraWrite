@@ -54,11 +54,11 @@ export async function checkForUpdatesNow(): Promise<void> {
     if (release) {
       showUpdateAvailableToast(release);
     } else {
-      showInfoToast("AuraWrite è aggiornato all'ultima versione.", 3000);
+      showInfoToast("AuraWrite is up to date.", 3000);
     }
   } catch (error) {
     console.warn("[updates] check failed:", error);
-    showInfoToast("Impossibile controllare gli aggiornamenti (offline?).", 3000);
+    showInfoToast("Could not check for updates (offline?).", 3000);
   }
 }
 
@@ -101,7 +101,7 @@ export async function checkForUpdatesOnStartup(): Promise<void> {
 function showUpdateAvailableToast(release: ReleaseInfo): void {
   const isPrerelease = release.prerelease ? " (pre-release)" : "";
   showInfoToast(
-    `🆕 AuraWrite v${release.version}${isPrerelease} disponibile. Click per aprire la pagina release.`,
+    `🆕 AuraWrite v${release.version}${isPrerelease} is available. Click to open the release page.`,
     12000
   );
 

@@ -23,7 +23,6 @@ import {
   updateDocumentsOrder,
 } from "../database/db";
 import { invoke } from "@tauri-apps/api/core";
-import { showErrorToast, showInfoToast, showSuccessToast } from "../error-boundary";
 import type { Project, Section, Document, IndexStatus } from "../types/database";
 import {
   extractEntitiesFromDocument,
@@ -430,21 +429,14 @@ async function indexDocumentForSearch(
   const prefs = saved ? JSON.parse(saved) : {};
   const semanticEnabled = prefs.semanticSearchEnabled !== false;
   console.log(`[SemanticSearch] enabled=${semanticEnabled}, saved pref=${prefs.semanticSearchEnabled}`);
-  if (!semanticEnabled) {
-    showInfoToast("Indicizzazione disabilitata (Preferences → Privacy).", 4000);
-    return;
-  }
+  if (!semanticEnabled) return;
 
   try {
     const text = extractTextFromContent(contentJson);
-    if (!text.trim()) {
-      showInfoToast("Documento vuoto, niente da indicizzare.", 3000);
-      return;
-    }
+    if (!text.trim()) return;
 
     const baseUrl = prefs.aiBaseUrl || undefined;
 
-    showInfoToast("Indicizzazione in corso…", 2500);
     await invoke("embedding_save_document", {
       projectId,
       documentId,
@@ -454,19 +446,8 @@ async function indexDocumentForSearch(
       baseUrl,
     });
     console.log(`Document ${documentId} indexed for search`);
-    showSuccessToast("Indicizzazione completata.", 3000);
-    // Refresh the per-document index indicator (BUG-IDX-001)
-    try {
-      await updateIndexIndicators();
-    } catch (e) {
-      console.warn("[SemanticSearch] failed to refresh index indicators:", e);
-    }
   } catch (error) {
-    console.warn(`Document ${documentId} not indexed:`, error);
-    showErrorToast(
-      `Indicizzazione non riuscita. Ollama disponibile? (${(error as Error)?.message ?? "errore sconosciuto"})`,
-      6000
-    );
+    console.log(`Document ${documentId} not indexed (Ollama may not be available)`);
   }
 }
 
@@ -925,6 +906,7 @@ async function handleIndexDocument(doc: Document): Promise<void> {
 
   try {
     console.log("[DEBUG-HANDLER] Starting handleIndexDocument for:", doc.title, "project:", currentProject.id, "type:", currentProject.type);
+    console.log(`[IndexDoc] start docId=${doc.id} title="${doc.title}" projectId=${currentProject.id}`);
     showNotification("🗂 Indexing entities...", "indexing");
     const result = await extractEntitiesFromDocument(
       doc.id,
@@ -933,9 +915,11 @@ async function handleIndexDocument(doc: Document): Promise<void> {
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
     console.log("[DEBUG-HANDLER] Result from extractEntitiesFromDocument:", result);
+    console.log(`[IndexDoc] end docId=${doc.id} created=${result.created} updated=${result.updated}`);
     showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
     console.error("[DEBUG-HANDLER] Error in handleIndexDocument:", error);
+    console.error(`[IndexDoc] end docId=${doc.id} error=${error instanceof Error ? error.message : String(error)}`);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
@@ -953,6 +937,7 @@ async function handleIndexSection(section: Section): Promise<void> {
 
   try {
     console.log("[IndexSection] Starting for:", section.name);
+    console.log(`[IndexSection] start sectionId=${section.id} name="${section.name}" projectId=${currentProject.id}`);
     showNotification("🗂 Indexing section...", "indexing");
     const result = await extractEntitiesFromSection(
       section.id,
@@ -961,9 +946,11 @@ async function handleIndexSection(section: Section): Promise<void> {
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
     console.log("[IndexSection] Result:", result);
+    console.log(`[IndexSection] end sectionId=${section.id} created=${result.created} updated=${result.updated}`);
     showNotification(`✓ ${section.name}: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
     console.error("[IndexSection] Error:", error);
+    console.error(`[IndexSection] end sectionId=${section.id} error=${error instanceof Error ? error.message : String(error)}`);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;
@@ -980,6 +967,7 @@ async function handleIndexProject(project: Project): Promise<void> {
 
   try {
     console.log("[IndexProject] Starting for:", project.name);
+    console.log(`[IndexProject] start projectId=${project.id} name="${project.name}" type=${project.type || "novel"}`);
     showNotification("🗂 Indexing project...", "indexing");
     const result = await extractEntitiesFromProject(
       project.id,
@@ -987,9 +975,11 @@ async function handleIndexProject(project: Project): Promise<void> {
       (msg) => showNotification(`🗂 ${msg}`, "indexing"),
     );
     console.log("[IndexProject] Result:", result);
+    console.log(`[IndexProject] end projectId=${project.id} created=${result.created} updated=${result.updated}`);
     showNotification(`✓ Project indexed: ${result.created} created, ${result.updated} updated`, "success");
   } catch (error) {
     console.error("[IndexProject] Error:", error);
+    console.error(`[IndexProject] end projectId=${project.id} error=${error instanceof Error ? error.message : String(error)}`);
     showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
   } finally {
     isIndexing = false;

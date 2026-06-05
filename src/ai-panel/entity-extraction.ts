@@ -290,7 +290,7 @@ export async function extractEntitiesFromDocument(
       console.log("[DEBUG-EXTRACTION] sendToAI response:", { error: response.error, content_length: response.content?.length, content_preview: response.content?.substring(0, 300) });
 
       if (response.error || !response.content) {
-        console.error(`[DEBUG-EXTRACTION] AI error on chunk ${i + 1}:`, response.error || "empty response");
+        console.error(`[IndexDoc] doc="${doc.title}" chunk=${i + 1}/${chunks.length} AI error: ${response.error || "empty response"}`);
         onProgress?.(`Error on chunk ${i + 1}: ${response.error || "empty response"}`);
         continue;
       }
@@ -329,9 +329,11 @@ export async function extractEntitiesFromDocument(
     }
 
     console.log(`[DEBUG-EXTRACTION] ====== FINISHED created:${created}, updated:${updated} ======`);
+    console.log(`[IndexDoc] doc="${doc.title}" docId=${doc.id} chunks=${chunks.length} created=${created} updated=${updated}`);
     return { created, updated };
   } catch (err: any) {
     console.error("[DEBUG-EXTRACTION] Catastrophic error:", err);
+    console.error(`[IndexDoc] docId=${documentId} catastrophic error: ${err?.message || String(err)}`);
     onProgress?.(`Fatal error: ${err?.message || String(err)}`);
     return { created: 0, updated: 0 };
   }

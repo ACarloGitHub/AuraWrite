@@ -901,7 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const dir = await invoke<string>("get_user_fonts_dir");
       await openBrowser(dir);
     } catch (e) {
-      showErrorToast(`Impossibile aprire la cartella: ${String(e)}`, 5000);
+      showErrorToast(`Could not open folder: ${String(e)}`, 5000);
     }
   });
   const fontsReload = document.getElementById("pref-fonts-reload");

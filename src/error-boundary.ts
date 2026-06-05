@@ -60,7 +60,3 @@ export function showErrorToast(message: string, duration = 5000): void {
 export function showInfoToast(message: string, duration = 5000): void {
   showToast(message, "info", duration);
 }
-
-export function showSuccessToast(message: string, duration = 5000): void {
-  showToast(message, "success", duration);
-}
