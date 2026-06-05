@@ -280,6 +280,7 @@
             <button class="pref-tab" data-tab="ai-behavior">AI Behavior</button>
             <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
+            <button class="pref-tab" data-tab="fonts">Fonts</button>
           </div>
           <div class="modal-body">
             <!-- TAB: General -->
@@ -503,6 +504,47 @@
                   <textarea id="pref-tool-calling-prompt" rows="4"></textarea>
                   <button class="btn-reset-prompt" data-default="toolcalling">↺ Reset</button>
                 </div>
+              </div>
+            </div>
+            <!-- TAB: Fonts -->
+            <div class="pref-tab-content" data-tab="fonts">
+              <div class="preference-group">
+                <label>
+                  <input type="checkbox" id="pref-fonts-use-bundled" checked />
+                  Use bundled fonts (Lora, Inter, JetBrains Mono)
+                </label>
+                <span class="preference-hint">When enabled, AuraWrite uses the bundled SIL OFL fonts above the system fonts. Disable to use only system fonts (smaller download, but inconsistent cross-OS).</span>
+              </div>
+              <div class="preference-group">
+                <label>My fonts folder</label>
+                <span class="preference-hint">Drop .ttf / .otf / .woff / .woff2 files here to add them to the font list.</span>
+                <div class="folder-row">
+                  <code id="pref-fonts-user-dir">(loading...)</code>
+                  <button id="pref-fonts-open-dir" class="btn-small">Open in Explorer</button>
+                  <button id="pref-fonts-reload" class="btn-small">Reload</button>
+                </div>
+                <div id="pref-fonts-user-list" class="font-list">
+                  <em>Click "Reload" to scan the folder.</em>
+                </div>
+                <p class="preference-disclaimer">
+                  ⚠ Fonts dropped here are loaded as-is. By dropping fonts you confirm
+                  you have the right to use them. AuraWrite does not redistribute them.
+                </p>
+              </div>
+              <div class="preference-group">
+                <label>Editor font (prose)</label>
+                <select id="pref-fonts-editor">
+                  <option value="Lora">Lora (bundled, default)</option>
+                  <option value="Georgia">Georgia (system)</option>
+                  <option value="Times New Roman">Times New Roman (system)</option>
+                </select>
+              </div>
+              <div class="preference-group">
+                <label>UI font (interface)</label>
+                <select id="pref-fonts-ui">
+                  <option value="Inter">Inter (bundled, default)</option>
+                  <option value="system-ui">System default</option>
+                </select>
               </div>
             </div>
           </div>
