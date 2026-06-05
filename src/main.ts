@@ -4,11 +4,13 @@ import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, triggerSaveStatusCheck, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
-import { initErrorBoundaries } from "./error-boundary";
+import { initErrorBoundaries, showErrorToast } from "./error-boundary";
+import { checkForUpdatesOnStartup } from "./updates";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openBrowser } from "@tauri-apps/plugin-shell";
 import {
   setFindQuery,
   findNext,
@@ -54,6 +56,10 @@ interface Preferences {
   deselectOnDocumentClick: boolean;
   semanticSearchEnabled: boolean;
   selectionHighlightColor: string;
+  updatesCheckEnabled: boolean;
+  fontsUseBundled: boolean;
+  fontEditor: string;
+  fontUi: string;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -159,6 +165,10 @@ const defaultPreferences: Preferences = {
   deselectOnDocumentClick: true,
   semanticSearchEnabled: true,
   selectionHighlightColor: "#ffff00",
+  updatesCheckEnabled: true,
+  fontsUseBundled: true,
+  fontEditor: "Lora",
+  fontUi: "Inter",
 };
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -217,6 +227,26 @@ function applyPreferences(prefs: Preferences): void {
   const hlColor = prefs.selectionHighlightColor || "#ffff00";
   root.style.setProperty("--selection-highlight", hexToRgba(hlColor, 0.4));
   root.style.setProperty("--selection-highlight-flash", hexToRgba(hlColor, 0.6));
+
+  // Apply font preferences (v0.4.0+)
+  if (prefs.fontsUseBundled) {
+    // Use bundled Lora/Inter; CSS fallbacks still resolve to system
+    root.style.setProperty(
+      "--font-editor",
+      `"${prefs.fontEditor || "Lora"}", Georgia, "Times New Roman", serif`
+    );
+    root.style.setProperty(
+      "--font-family",
+      `"${prefs.fontUi || "Inter"}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+    );
+  } else {
+    // Skip bundled, go straight to system stack
+    root.style.setProperty("--font-editor", `Georgia, "Times New Roman", serif`);
+    root.style.setProperty(
+      "--font-family",
+      `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+    );
+  }
 }
 
 function initTheme(): void {
@@ -362,6 +392,16 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-selection-highlight") as HTMLInputElement
   ).value = prefs.selectionHighlightColor || "#ffff00";
+  (
+    document.getElementById("pref-updates-check-enabled") as HTMLInputElement
+  ).checked = prefs.updatesCheckEnabled !== false;
+  (
+    document.getElementById("pref-fonts-use-bundled") as HTMLInputElement
+  ).checked = prefs.fontsUseBundled !== false;
+  (document.getElementById("pref-fonts-editor") as HTMLSelectElement).value =
+    prefs.fontEditor || "Lora";
+  (document.getElementById("pref-fonts-ui") as HTMLSelectElement).value =
+    prefs.fontUi || "Inter";
 
   updateCustomColorsVisibility();
   updateApiKeyGroupVisibility();
@@ -419,6 +459,46 @@ function makeModalDraggable(): void {
   document.addEventListener("mouseup", () => {
     isDragging = false;
   });
+}
+
+function loadUserFonts(): void {
+  const listEl = document.getElementById("pref-fonts-user-list");
+  const dirEl = document.getElementById("pref-fonts-user-dir");
+  if (!listEl || !dirEl) return;
+
+  listEl.innerHTML = "<em>Scansione in corso…</em>";
+
+  void (async () => {
+    try {
+      const dir = await invoke<string>("get_user_fonts_dir");
+      dirEl.textContent = dir;
+      const fonts = await invoke<
+        { path: string; filename: string; family_guess: string; size_bytes: number }[]
+      >("list_user_fonts");
+
+      if (fonts.length === 0) {
+        listEl.innerHTML =
+          "<em>Nessun font trovato. Trascina file .ttf / .otf / .woff / .woff2 nella cartella e clicca 'Reload'.</em>";
+        return;
+      }
+
+      listEl.innerHTML = "";
+      for (const f of fonts) {
+        const entry = document.createElement("div");
+        entry.className = "font-entry";
+        const left = document.createElement("span");
+        left.textContent = `${f.family_guess} (${(f.size_bytes / 1024).toFixed(1)} KB)`;
+        const right = document.createElement("span");
+        right.className = "font-source";
+        right.textContent = "user folder";
+        entry.appendChild(left);
+        entry.appendChild(right);
+        listEl.appendChild(entry);
+      }
+    } catch (e) {
+      listEl.innerHTML = `<em>Errore: ${String(e)}</em>`;
+    }
+  })();
 }
 
 function updateApiKeyGroupVisibility(): void {
@@ -630,6 +710,10 @@ function savePreferencesFromModal(): void {
     deselectOnDocumentClick: chk("pref-deselect-on-click"),
     semanticSearchEnabled: chk("pref-semantic-search-enabled"),
     selectionHighlightColor: inp("pref-selection-highlight") || "#ffff00",
+    updatesCheckEnabled: chk("pref-updates-check-enabled"),
+    fontsUseBundled: chk("pref-fonts-use-bundled"),
+    fontEditor: sel("pref-fonts-editor") || "Lora",
+    fontUi: sel("pref-fonts-ui") || "Inter",
   };
 
   savePreferences(prefs);
@@ -797,6 +881,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalOverlay = document.querySelector(".modal-overlay");
   modalOverlay?.addEventListener("click", closePreferencesModal);
 
+  // Fonts tab: open in explorer / reload list (v0.4.0+)
+  const fontsOpenDir = document.getElementById("pref-fonts-open-dir");
+  fontsOpenDir?.addEventListener("click", async () => {
+    try {
+      const dir = await invoke<string>("get_user_fonts_dir");
+      await openBrowser(dir);
+    } catch (e) {
+      showErrorToast(`Impossibile aprire la cartella: ${String(e)}`, 5000);
+    }
+  });
+  const fontsReload = document.getElementById("pref-fonts-reload");
+  fontsReload?.addEventListener("click", () => {
+    void loadUserFonts();
+  });
+  void loadUserFonts(); // initial load
+
   makeModalDraggable();
 
   document.querySelectorAll(".pref-tab").forEach((tab) => {
@@ -872,7 +972,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);
@@ -928,6 +1028,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  // Check for new releases at startup (silent if disabled or offline)
+  void checkForUpdatesOnStartup();
 });
 
 function updateWordCount(view: any): void {

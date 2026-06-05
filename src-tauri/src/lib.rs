@@ -7,8 +7,12 @@ use tauri::State;
 // Import modules
 mod database;
 mod embeddings;
+mod updates;
+mod fonts;
 use database::*;
 use embeddings::*;
+use updates::*;
+use fonts::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -501,6 +505,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             // File commands
@@ -558,6 +563,11 @@ pub fn run() {
             embedding_search_documents,
             embedding_delete_for_entity,
             embedding_delete_for_project,
+            // Update notification (v0.4.0+)
+            check_for_updates,
+            // Fonts (v0.4.0+)
+            get_user_fonts_dir,
+            list_user_fonts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

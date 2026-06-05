@@ -1,7 +1,10 @@
 :root {
+  /* v0.4.0+: bundled open-source fonts registered below (Lora, Inter, JetBrains Mono) */
   --font-family:
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-editor: Georgia, "Times New Roman", serif;
+    "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-editor: "Lora", Georgia, "Times New Roman", serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
 
   --color-primary: #4a90d9;
   --color-primary-hover: #3a7bc8;
@@ -27,6 +30,46 @@
   --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.15);
   --selection-highlight: rgba(255, 255, 0, 0.4);
   --selection-highlight-flash: rgba(255, 200, 0, 0.6);
+}
+
+/* ============================================================================
+   v0.4.0+: Bundled fonts (SIL OFL 1.1) - Lora, Inter, JetBrains Mono
+   Served from /fonts/* (public/fonts/) via Vite static asset handling.
+   The font-face declarations use font-display: swap so the app
+   renders with system fonts first, then swaps to bundled fonts once
+   loaded. See public/fonts/README.md for license details.
+   ============================================================================ */
+
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Lora-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Lora-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Variable.ttf") format("truetype-variations");
 }
 
 [data-theme="dark"] {
@@ -420,16 +463,6 @@ body {
 
 .ProseMirror p {
   margin-bottom: 1em;
-}
-
-.ProseMirror h1 {
-  font-size: 2em;
-  margin-bottom: 0.5em;
-}
-
-.ProseMirror h2 {
-  font-size: 1.5em;
-  margin-bottom: 0.5em;
 }
 
 .ProseMirror strong {
@@ -1321,6 +1354,81 @@ body {
   font-size: 12px;
   color: var(--color-text-muted);
   margin-bottom: var(--spacing-xs);
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+  margin: var(--spacing-xs) 0;
+}
+.folder-row code {
+  flex: 1 1 auto;
+  min-width: 200px;
+  padding: 6px 10px;
+  background: var(--color-background, #f0f0f0);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  word-break: break-all;
+}
+.btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--color-border, #ccc);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #222);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-small:hover {
+  background: var(--color-primary, #4a90d9);
+  color: white;
+  border-color: var(--color-primary, #4a90d9);
+}
+.font-list {
+  margin-top: var(--spacing-xs);
+  padding: 8px 12px;
+  background: var(--color-background, #f0f0f0);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  font-size: 12px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.font-list em {
+  color: var(--color-text-muted);
+}
+.font-list .font-entry {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px dotted var(--color-border, #ccc);
+}
+.font-list .font-entry:last-child {
+  border-bottom: none;
+}
+.font-list .font-entry .font-source {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.preference-disclaimer {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: rgba(0, 0, 0, 0.03);
+  border-left: 3px solid #e0a800;
+  padding: 8px 10px;
+  margin: var(--spacing-sm) 0 0 0;
+  border-radius: 0 4px 4px 0;
+}
+[data-theme="dark"] .folder-row code,
+[data-theme="dark"] .font-list {
+  background: rgba(255, 255, 255, 0.05);
+}
+[data-theme="dark"] .preference-disclaimer {
+  background: rgba(224, 168, 0, 0.1);
 }
 
 .model-picker-row {
@@ -2829,7 +2937,7 @@ kbd {
    PROSEMIRROR EDITOR STYLES FOR NEW NODES/MARKS
    ============================================================================ */
 
-/* Headings */
+/* Headings — single source of truth (BUG-HEADINGS-001 fix) */
 .ProseMirror h1 {
   font-size: 2em;
   font-weight: 700;
@@ -2845,28 +2953,31 @@ kbd {
 }
 
 .ProseMirror h3 {
-  font-size: 1.25em;
+  font-size: 1.17em;
   font-weight: 600;
   margin-bottom: 0.5em;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .ProseMirror h4 {
-  font-size: 1.1em;
-  font-weight: 600;
-  margin-bottom: 0.5em;
-}
-
-.ProseMirror h5 {
   font-size: 1em;
   font-weight: 600;
   margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+.ProseMirror h5 {
+  font-size: 0.83em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  line-height: 1.4;
 }
 
 .ProseMirror h6 {
-  font-size: 0.9em;
+  font-size: 0.67em;
   font-weight: 600;
   margin-bottom: 0.5em;
+  line-height: 1.4;
 }
 
 /* Lists */
@@ -3355,6 +3466,14 @@ kbd {
 
 .error-toast-close:hover {
   color: var(--color-text, #222);
+}
+
+.error-toast--info {
+  background: #2b6cb0;
+}
+
+.error-toast--success {
+  background: #2f855a;
 }
 
 

@@ -13,7 +13,13 @@ export function initErrorBoundaries(): void {
   });
 }
 
-export function showErrorToast(message: string, duration = 5000): void {
+type ToastKind = "error" | "info" | "success";
+
+export function showToast(
+  message: string,
+  kind: ToastKind = "info",
+  duration = 5000
+): void {
   let container = document.getElementById("error-toast-container");
   if (!container) {
     container = document.createElement("div");
@@ -22,7 +28,7 @@ export function showErrorToast(message: string, duration = 5000): void {
   }
 
   const toast = document.createElement("div");
-  toast.className = "error-toast";
+  toast.className = `error-toast error-toast--${kind}`;
   toast.textContent = message;
 
   const closeBtn = document.createElement("button");
@@ -45,4 +51,16 @@ export function showErrorToast(message: string, duration = 5000): void {
     toast.classList.add("error-toast--fade");
     setTimeout(() => toast.remove(), 300);
   }, duration);
+}
+
+export function showErrorToast(message: string, duration = 5000): void {
+  showToast(message, "error", duration);
+}
+
+export function showInfoToast(message: string, duration = 5000): void {
+  showToast(message, "info", duration);
+}
+
+export function showSuccessToast(message: string, duration = 5000): void {
+  showToast(message, "success", duration);
 }

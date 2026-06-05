@@ -23,6 +23,7 @@ import {
   updateDocumentsOrder,
 } from "../database/db";
 import { invoke } from "@tauri-apps/api/core";
+import { showErrorToast, showInfoToast, showSuccessToast } from "../error-boundary";
 import type { Project, Section, Document, IndexStatus } from "../types/database";
 import {
   extractEntitiesFromDocument,
@@ -429,15 +430,21 @@ async function indexDocumentForSearch(
   const prefs = saved ? JSON.parse(saved) : {};
   const semanticEnabled = prefs.semanticSearchEnabled !== false;
   console.log(`[SemanticSearch] enabled=${semanticEnabled}, saved pref=${prefs.semanticSearchEnabled}`);
-  if (!semanticEnabled) return;
+  if (!semanticEnabled) {
+    showInfoToast("Indicizzazione disabilitata (Preferences → Privacy).", 4000);
+    return;
+  }
 
   try {
     const text = extractTextFromContent(contentJson);
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      showInfoToast("Documento vuoto, niente da indicizzare.", 3000);
+      return;
+    }
 
-    const prefs = saved ? JSON.parse(saved) : {};
     const baseUrl = prefs.aiBaseUrl || undefined;
 
+    showInfoToast("Indicizzazione in corso…", 2500);
     await invoke("embedding_save_document", {
       projectId,
       documentId,
@@ -447,8 +454,19 @@ async function indexDocumentForSearch(
       baseUrl,
     });
     console.log(`Document ${documentId} indexed for search`);
+    showSuccessToast("Indicizzazione completata.", 3000);
+    // Refresh the per-document index indicator (BUG-IDX-001)
+    try {
+      await updateIndexIndicators();
+    } catch (e) {
+      console.warn("[SemanticSearch] failed to refresh index indicators:", e);
+    }
   } catch (error) {
-    console.log(`Document ${documentId} not indexed (Ollama may not be available)`);
+    console.warn(`Document ${documentId} not indexed:`, error);
+    showErrorToast(
+      `Indicizzazione non riuscita. Ollama disponibile? (${(error as Error)?.message ?? "errore sconosciuto"})`,
+      6000
+    );
   }
 }
 
