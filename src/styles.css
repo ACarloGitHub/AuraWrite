@@ -1,7 +1,10 @@
 :root {
+  /* v0.4.0+: bundled open-source fonts registered below (Lora, Inter, JetBrains Mono) */
   --font-family:
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-editor: Georgia, "Times New Roman", serif;
+    "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-editor: "Lora", Georgia, "Times New Roman", serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
 
   --color-primary: #4a90d9;
   --color-primary-hover: #3a7bc8;
@@ -27,6 +30,46 @@
   --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.15);
   --selection-highlight: rgba(255, 255, 0, 0.4);
   --selection-highlight-flash: rgba(255, 200, 0, 0.6);
+}
+
+/* ============================================================================
+   v0.4.0+: Bundled fonts (SIL OFL 1.1) - Lora, Inter, JetBrains Mono
+   Served from /fonts/* (public/fonts/) via Vite static asset handling.
+   The font-face declarations use font-display: swap so the app
+   renders with system fonts first, then swaps to bundled fonts once
+   loaded. See public/fonts/README.md for license details.
+   ============================================================================ */
+
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Lora-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Lora-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Variable.ttf") format("truetype-variations");
 }
 
 [data-theme="dark"] {
