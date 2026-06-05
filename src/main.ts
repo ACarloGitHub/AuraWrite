@@ -464,7 +464,11 @@ function makeModalDraggable(): void {
 function loadUserFonts(): void {
   const listEl = document.getElementById("pref-fonts-user-list");
   const dirEl = document.getElementById("pref-fonts-user-dir");
-  if (!listEl || !dirEl) return;
+  if (!listEl || !dirEl) {
+    console.warn("[fonts] UI elements missing - tab not in DOM? listEl:", listEl, "dirEl:", dirEl);
+    return;
+  }
+  console.log("[fonts] loadUserFonts called");
 
   listEl.innerHTML = "<em>Scansione in corso…</em>";
 
@@ -646,12 +650,21 @@ async function refreshModelList(force = false): Promise<void> {
 }
 
 function switchPreferencesTab(tabName: string): void {
+  console.log(`[prefs] switchPreferencesTab('${tabName}')`);
   document.querySelectorAll(".pref-tab").forEach((tab) => {
     tab.classList.toggle("active", (tab as HTMLElement).dataset.tab === tabName);
   });
   document.querySelectorAll(".pref-tab-content").forEach((content) => {
     content.classList.toggle("active", (content as HTMLElement).dataset.tab === tabName);
   });
+  // Diagnostic: log if the Fonts tab was requested but the content element is missing
+  if (tabName === "fonts") {
+    const el = document.querySelector('.pref-tab-content[data-tab="fonts"]');
+    console.log("[prefs] Fonts content element:", el);
+    if (!el) {
+      console.error("[prefs] Fonts tab is in the tab bar but the content is missing from the DOM");
+    }
+  }
 }
 
 function resetPrompt(promptType: string): void {
