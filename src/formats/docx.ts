@@ -1,6 +1,6 @@
 import mammoth from "mammoth";
 import JSZip from "jszip";
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from "docx";
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, ExternalHyperlink } from "docx";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -69,12 +69,26 @@ function alignToDocx(a: string | undefined): (typeof AlignmentType)[keyof typeof
   }
 }
 
+const MAMMOTH_STYLE_MAP = [
+  "p[style-name='Intense Quote'] => blockquote:fresh",
+  "p[style-name='Title'] => h1.title:fresh",
+  "p[style-name='Heading 1'] => h1:fresh",
+  "p[style-name='Heading 2'] => h2:fresh",
+  "p[style-name='Heading 3'] => h3:fresh",
+  "p[style-name='Heading 4'] => h4:fresh",
+  "p[style-name='Heading 5'] => h5:fresh",
+  "p[style-name='Heading 6'] => h6:fresh",
+  "p[style-name='List Bullet'] => ul li:fresh",
+  "p[style-name='List Bullet 2'] => ul li:fresh",
+  "p[style-name='List Number'] => ol li:fresh",
+];
+
 export async function fromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
   // mammoth in Node requires `buffer` (Node Buffer); in browser it accepts `arrayBuffer`
   const mammothInput: any = (globalThis as any).Buffer
     ? { buffer: (globalThis as any).Buffer.from(arrayBuffer) }
     : { arrayBuffer };
-  const result = await mammoth.convertToHtml(mammothInput);
+  const result = await mammoth.convertToHtml(mammothInput, { styleMap: MAMMOTH_STYLE_MAP });
   const enriched = await enrichHtml(arrayBuffer, result.value);
   return enriched;
 }
@@ -183,16 +197,24 @@ function postProcessBlocks(container: any, wParagraphs: any[], htmlBlocks: any[]
     } else {
       flushCode();
       if (isBlockquoteParagraph(wP)) {
-        wrapInContainer(el, container.ownerDocument || container, "blockquote", "blockquote");
+        // mammoth styleMap may have already produced <blockquote>; only wrap if not.
+        if ((el.tagName || "").toUpperCase() !== "BLOCKQUOTE") {
+          wrapInContainer(el, container.ownerDocument || container, "blockquote", "blockquote");
+        }
       } else if (isTitleParagraph(wP)) {
-        const ownerDoc = container.ownerDocument || container;
-        const h = createWrapper(ownerDoc, "h1");
-        h.setAttribute("class", "title");
-        const parent = el.parentNode;
-        if (parent) {
-          parent.insertBefore(h, el);
-          h.appendChild(el);
-          flattenPreChildren(h, ownerDoc);
+        // mammoth styleMap may have already produced <h1 class="title">; only wrap if not.
+        const elTag = (el.tagName || "").toUpperCase();
+        const elClass = el.getAttribute?.("class") || "";
+        if (!(elTag === "H1" && elClass.includes("title"))) {
+          const ownerDoc = container.ownerDocument || container;
+          const h = createWrapper(ownerDoc, "h1");
+          h.setAttribute("class", "title");
+          const parent = el.parentNode;
+          if (parent) {
+            parent.insertBefore(h, el);
+            h.appendChild(el);
+            flattenPreChildren(h, ownerDoc);
+          }
         }
       }
       if (hasPageBreak(wP)) {
@@ -650,6 +672,39 @@ export function toDocx(doc: any): Document {
         children,
       },
     ],
+    styles: {
+      paragraphStyles: [
+        {
+          id: "IntenseQuote",
+          name: "Intense Quote",
+          basedOn: "Normal",
+          next: "Normal",
+          paragraph: {
+            indent: { left: 720 },
+            border: {
+              left: { color: "2E74B5", size: 24, space: 4, style: "single" },
+              bottom: { color: "2E74B5", size: 8, space: 1, style: "single" },
+            },
+            spacing: { before: 200, after: 200 },
+          },
+          run: { color: "2E74B5", bold: true, italics: true },
+        },
+        {
+          id: "Title",
+          name: "Title",
+          basedOn: "Normal",
+          next: "Normal",
+          paragraph: {
+            alignment: AlignmentType.CENTER,
+            border: {
+              bottom: { color: "2E74B5", size: 8, space: 4, style: "single" },
+            },
+            spacing: { after: 240 },
+          },
+          run: { bold: true, size: 56, color: "2E74B5" },
+        },
+      ],
+    },
     numbering: {
       config: [
         {
@@ -685,20 +740,45 @@ export function toDocx(doc: any): Document {
   });
 }
 
+function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
+  // ProseMirror: list_item content: "paragraph block*"
+  // The first child is always a paragraph. Subsequent blocks (nested lists) are
+  // not supported by the schema yet, so we take only the first paragraph.
+  const paragraphs: Paragraph[] = [];
+  let firstPara: any = null;
+  item.content?.forEach((child: any) => {
+    if (!firstPara && child.type?.name === "paragraph") {
+      firstPara = child;
+    }
+  });
+  if (firstPara) {
+    paragraphs.push(
+      new Paragraph({
+        children: nodeContentToRuns(firstPara),
+        numbering: { reference: numberingRef, level: 0 },
+      }),
+    );
+  }
+  return paragraphs;
+}
+
 function nodeToParagraphs(node: any): Paragraph[] {
   switch (node.type.name) {
     case "paragraph":
       return [paragraphFromNode(node, { align: node.attrs?.align })];
     case "heading": {
+      // Title style: heading level 1 with center alignment (set by schema toDOM)
+      const isTitle = node.attrs?.level === 1 && node.attrs?.align === "center";
       const p = paragraphFromNode(node, {
-        heading: getHeadingLevel(node.attrs.level),
+        heading: isTitle ? HeadingLevel.TITLE : getHeadingLevel(node.attrs.level),
+        style: isTitle ? "Title" : undefined,
         align: node.attrs?.align,
       });
       return [p];
     }
     case "blockquote":
       return contentToArray(node.content).map((child: any) =>
-        paragraphFromNode(child, { indent: { left: 720 }, italic: true }),
+        paragraphFromNode(child, { style: "IntenseQuote" }),
       );
     case "code_block":
       return contentToArray(node.content).map((child: any) => {
@@ -711,19 +791,9 @@ function nodeToParagraphs(node: any): Paragraph[] {
         });
       });
     case "bullet_list":
-      return contentToArray(node.content).map((item: any) =>
-        new Paragraph({
-          children: nodeContentToRuns(item),
-          numbering: { reference: "aw-bullet", level: 0 },
-        }),
-      );
+      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-bullet"));
     case "ordered_list":
-      return contentToArray(node.content).map((item: any) =>
-        new Paragraph({
-          children: nodeContentToRuns(item),
-          numbering: { reference: "aw-ordered", level: 0 },
-        }),
-      );
+      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-ordered"));
     case "horizontal_rule":
       return [
         new Paragraph({
@@ -748,6 +818,7 @@ interface ParagraphExtras {
   heading?: (typeof HeadingLevel)[keyof typeof HeadingLevel];
   indent?: { left?: number; right?: number };
   italic?: boolean;
+  style?: string;
 }
 
 function paragraphFromNode(node: any, extras: ParagraphExtras = {}): Paragraph {
@@ -755,9 +826,10 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}): Paragraph {
   const opts: any = { children: runs };
 
   if (extras.heading) opts.heading = extras.heading;
+  if (extras.style) opts.style = extras.style;
   if (extras.indent) opts.indent = extras.indent;
   if (extras.italic) {
-    runs.forEach((r: TextRun) => {
+    runs.forEach((r: RunOrLink) => {
       const o: any = (r as any).options;
       if (o) o.italics = true;
     });
@@ -774,20 +846,6 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}): Paragraph {
   }
 
   return new Paragraph(opts);
-}
-
-function nodeContentToRuns(node: any): TextRun[] {
-  if (!node.content) {
-    const text = node.text || "";
-    return text ? [new TextRun({ text })] : [];
-  }
-
-  return contentToArray(node.content).map((child: any) => {
-    if (child.type.name !== "text") {
-      return new TextRun({ text: getTextContent(child) });
-    }
-    return makeRun(child.text || "", child.marks || []);
-  });
 }
 
 function makeRun(text: string, marks: any[]): TextRun {
@@ -846,6 +904,44 @@ function makeRun(text: string, marks: any[]): TextRun {
   }
 
   return new TextRun(opts);
+}
+
+type RunOrLink = TextRun | ExternalHyperlink;
+
+function nodeContentToRuns(node: any): RunOrLink[] {
+  if (!node.content) {
+    const text = node.text || "";
+    return text ? [new TextRun({ text })] : [];
+  }
+
+  return contentToArray(node.content).map((child: any) => {
+    if (child.type.name !== "text") {
+      return new TextRun({ text: getTextContent(child) });
+    }
+    const marks = child.marks || [];
+    const linkMark = marks.find((m: any) => m.type.name === "link");
+    if (linkMark && linkMark.attrs?.href) {
+      const innerRun = makeRun(child.text || "", marks.filter((m: any) => m.type.name !== "link"));
+      const innerText = (innerRun as any).options?.text ?? child.text ?? "";
+      const run = new TextRun({
+        text: innerText,
+        color: "0563C1",
+        underline: { type: "single" },
+        bold: (innerRun as any).options?.bold,
+        italics: (innerRun as any).options?.italics,
+        size: (innerRun as any).options?.size,
+        font: (innerRun as any).options?.font,
+        shading: (innerRun as any).options?.shading,
+        highlight: (innerRun as any).options?.highlight,
+        strike: (innerRun as any).options?.strike,
+      });
+      return new ExternalHyperlink({
+        link: linkMark.attrs.href,
+        children: [run],
+      });
+    }
+    return makeRun(child.text || "", marks);
+  });
 }
 
 function getTextContent(node: any): string {
