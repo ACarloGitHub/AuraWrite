@@ -239,7 +239,7 @@ jobs:
                 console.log(`[sync] fixing tag_name from "${target.tag_name}" to "${currentTag}"`);
                 patch.tag_name = currentTag;
               }
-              const { data: updated } = await github.rest.releases.updateRelease(patch);
+              const { data: updated } = await github.rest.repos.updateRelease(patch);
               console.log(`[sync] updated release id=${updated.id} tag_name=${updated.tag_name} bodyLength=${updated.body.length}`);
             } catch (err) {
               console.error(`[sync] FAILED: ${err.message}`);
