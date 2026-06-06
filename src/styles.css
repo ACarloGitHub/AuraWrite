@@ -2928,6 +2928,28 @@ kbd {
   color: var(--color-text);
 }
 
+/* Inline font preview next to the toolbar font-family dropdown */
+.toolbar .font-preview {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  padding: 0 var(--spacing-sm);
+  height: 30px;
+  min-width: 120px;
+  max-width: 200px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  font-family: inherit;
+}
+
 /* Dark theme select */
 [data-theme="dark"] .toolbar select.toolbar__select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23aaa' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");

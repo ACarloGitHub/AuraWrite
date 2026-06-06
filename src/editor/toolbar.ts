@@ -694,11 +694,20 @@ async function setupStyleControls(): Promise<void> {
   const btnHighlightToggle = document.getElementById("btn-highlight-toggle");
   const btnHighlightColor = document.getElementById("btn-highlight") as HTMLInputElement | null;
   const selLineHeight = document.getElementById("sel-line-height") as HTMLSelectElement | null;
+  const fontPreview = document.getElementById("font-family-preview") as HTMLSpanElement | null;
+
+  const updateFontPreview = () => {
+    if (!fontPreview || !selFont) return;
+    const font = selFont.value;
+    fontPreview.style.fontFamily = font || "inherit";
+  };
+  updateFontPreview();
 
   selFont?.addEventListener("change", () => {
     const font = selFont.value;
     if (!font) return;
     applyTextMarkOrStored("fontFamily", { font });
+    updateFontPreview();
     selFont.blur();
     editorView.focus();
   });

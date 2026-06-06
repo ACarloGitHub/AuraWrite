@@ -51,6 +51,7 @@ export async function populateUserFontsInToolbar(): Promise<void> {
       const opt = document.createElement("option");
       opt.value = f.family_guess;
       opt.textContent = `\u{1F4C1} ${f.family_guess}`;
+      opt.style.fontFamily = `"${f.family_guess}", sans-serif`;
       opt.dataset.userFont = "true";
       sel.appendChild(opt);
     }
