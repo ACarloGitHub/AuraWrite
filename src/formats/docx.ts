@@ -23,6 +23,26 @@ function stripHash(color: string): string {
   return color.replace(/^#/, "");
 }
 
+function normalizeColor(color: string | undefined | null): string | undefined {
+  if (!color) return undefined;
+  const s = String(color).trim();
+  if (!s) return undefined;
+  const rgbMatch = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgbMatch) {
+    const hex =
+      Number(rgbMatch[1]).toString(16).padStart(2, "0") +
+      Number(rgbMatch[2]).toString(16).padStart(2, "0") +
+      Number(rgbMatch[3]).toString(16).padStart(2, "0");
+    return hex.toUpperCase();
+  }
+  const hexClean = s.replace(/^#/, "");
+  if (/^[0-9A-Fa-f]{6}$/.test(hexClean)) return hexClean.toUpperCase();
+  if (/^[0-9A-Fa-f]{3}$/.test(hexClean)) {
+    return (hexClean[0] + hexClean[0] + hexClean[1] + hexClean[1] + hexClean[2] + hexClean[2]).toUpperCase();
+  }
+  return undefined;
+}
+
 function hexToHighlightName(hex: string): string | null {
   const m = hex.replace(/^#/, "").toLowerCase();
   const map: Record<string, string> = {
@@ -867,16 +887,19 @@ function makeRun(text: string, marks: any[]): TextRun {
         break;
       case "textColor":
         if (mark.attrs?.color) {
-          opts.color = stripHash(mark.attrs.color);
+          const c = normalizeColor(mark.attrs.color);
+          if (c) opts.color = c;
         }
         break;
       case "highlight":
         if (mark.attrs?.color) {
-          const name = hexToHighlightName(mark.attrs.color);
+          const c = normalizeColor(mark.attrs.color);
+          if (!c) break;
+          const name = hexToHighlightName(c);
           if (name) {
             opts.highlight = name;
           } else {
-            opts.shading = { fill: stripHash(mark.attrs.color) };
+            opts.shading = { fill: c };
           }
         }
         break;
