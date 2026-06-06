@@ -111,77 +111,97 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const currentTag = context.ref.replace(/^refs\/tags\//, '');
+            const fs = require('fs');
+            const path = require('path');
+            const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+            console.log(`[changelog] workspace: ${workspace}`);
+            console.log(`[changelog] cwd: ${process.cwd()}`);
 
-            // 1. Find previous tag (skip prereleases)
-            const { data: tags } = await github.rest.repos.listTags({
-              owner, repo, per_page: 10,
-            });
-            const stableTags = tags
-              .map(t => t.name)
-              .filter(n => /^v\d+\.\d+\.\d+$/.test(n))
-              .filter(n => n !== currentTag)
-              .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-            const previousTag = stableTags[0] || null;
+            try {
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const currentTag = context.ref.replace(/^refs\/tags\//, '');
+              console.log(`[changelog] current tag: ${currentTag}`);
 
-            // 2. Get commits between previous tag and current
-            let commits = [];
-            if (previousTag) {
-              const { data } = await github.rest.repos.compareCommits({
-                owner, repo, base: previousTag, head: currentTag,
+              // 1. Find previous stable tag
+              const { data: tags } = await github.rest.repos.listTags({
+                owner, repo, per_page: 10,
               });
-              commits = data.commits;
-            } else {
-              // No previous tag: take the last 50 commits
-              const { data } = await github.rest.repos.listCommits({
-                owner, repo, per_page: 50,
-              });
-              commits = data;
-            }
+              const stableTags = tags
+                .map(t => t.name)
+                .filter(n => /^v\d+\.\d+\.\d+$/.test(n))
+                .filter(n => n !== currentTag)
+                .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+              const previousTag = stableTags[0] || null;
+              console.log(`[changelog] previous tag: ${previousTag || '(none)'}`);
 
-            // 3. Categorize commits by Conventional Commits prefix
-            const whatsnew = [];
-            const improvements = [];
-            const breaking = [];
-            for (const c of commits) {
-              const msg = c.commit.message.split('\n')[0];
-              if (/^[a-zA-Z0-9_-]+!:/.test(msg) || /BREAKING CHANGE:/i.test(c.commit.message)) {
-                breaking.push(msg);
-              } else if (/^(feat|fix)(\([^)]+\))?!?:/i.test(msg)) {
-                whatsnew.push(msg);
-              } else if (/^(refactor|perf|docs)(\([^)]+\))?!?:/i.test(msg)) {
-                improvements.push(msg);
+              // 2. Get commits
+              let commits = [];
+              if (previousTag) {
+                const { data } = await github.rest.repos.compareCommits({
+                  owner, repo, base: previousTag, head: currentTag,
+                });
+                commits = data.commits;
+              } else {
+                const { data } = await github.rest.repos.listCommits({
+                  owner, repo, per_page: 50,
+                });
+                commits = data;
               }
-            }
+              console.log(`[changelog] commits in range: ${commits.length}`);
 
-            // 4. Build body
-            const fmt = (arr) => arr.length
-              ? arr.map(m => '- ' + m).join('\n')
-              : '_No changes in this category — see commits on GitHub._';
-            const sections = [
-              "## What's new",
-              fmt(whatsnew),
-              "## Improvements",
-              fmt(improvements),
-            ];
-            if (breaking.length > 0) {
-              sections.push("## \u26A0\uFE0F Breaking changes");
-              sections.push(fmt(breaking));
-            }
-            sections.push("## Notes");
-            sections.push('- **Data preservation**: your data is preserved across this upgrade.');
-            sections.push('- **Uninstall**: removing the app does not delete `%APPDATA%\\aurawrite\\` (Windows), `~/Library/Application Support/aurawrite/` (macOS), or `~/.config/aurawrite/` (Linux).');
-            sections.push('- **No code signing**: AuraWrite is open source (MIT) but not yet code-signed. You may see a SmartScreen warning on Windows or Gatekeeper block on macOS — see the README\'s Security & Trust section.');
-            sections.push("## Downloads");
-            sections.push('- **Windows:** `.msi` (WiX) and `.exe` (NSIS) installers');
-            sections.push('- **macOS:** Universal `.dmg` (Intel + Apple Silicon), `.app.tar.gz`');
-            sections.push('- **Linux:** `.deb`, `.rpm`, and AppImage');
+              // 3. Categorize by Conventional Commits prefix
+              const whatsnew = [];
+              const improvements = [];
+              const breaking = [];
+              for (const c of commits) {
+                const msg = c.commit.message.split('\n')[0];
+                if (/^[a-zA-Z0-9_-]+!:/.test(msg) || /BREAKING CHANGE:/i.test(c.commit.message)) {
+                  breaking.push(msg);
+                } else if (/^(feat|fix)(\([^)]+\))?!?:/i.test(msg)) {
+                  whatsnew.push(msg);
+                } else if (/^(refactor|perf|docs)(\([^)]+\))?!?:/i.test(msg)) {
+                  improvements.push(msg);
+                }
+              }
+              console.log(`[changelog] whatsnew=${whatsnew.length} improvements=${improvements.length} breaking=${breaking.length}`);
 
-            const body = sections.join('\n\n');
-            require('fs').writeFileSync('release_body.md', body);
-            core.setOutput('has_commits', whatsnew.length + improvements.length + breaking.length);
+              // 4. Build body
+              const fmt = (arr) => arr.length
+                ? arr.map(m => '- ' + m).join('\n')
+                : '_No changes in this category — see commits on GitHub._';
+              const sections = [
+                "## What's new",
+                fmt(whatsnew),
+                "## Improvements",
+                fmt(improvements),
+              ];
+              if (breaking.length > 0) {
+                sections.push("## \u26A0\uFE0F Breaking changes");
+                sections.push(fmt(breaking));
+              }
+              sections.push("## Notes");
+              sections.push('- **Data preservation**: your data is preserved across this upgrade.');
+              sections.push('- **Uninstall**: removing the app does not delete `%APPDATA%\\aurawrite\\` (Windows), `~/Library/Application Support/aurawrite/` (macOS), or `~/.config/aurawrite/` (Linux).');
+              sections.push('- **No code signing**: AuraWrite is open source (MIT) but not yet code-signed. You may see a SmartScreen warning on Windows or Gatekeeper block on macOS — see the README\'s Security & Trust section.');
+              sections.push("## Downloads");
+              sections.push('- **Windows:** `.msi` (WiX) and `.exe` (NSIS) installers');
+              sections.push('- **macOS:** Universal `.dmg` (Intel + Apple Silicon), `.app.tar.gz`');
+              sections.push('- **Linux:** `.deb`, `.rpm`, and AppImage');
+
+              const body = sections.join('\n\n');
+
+              // 5. Write body to file (absolute path to avoid CWD issues)
+              const bodyPath = path.join(workspace, 'release_body.md');
+              fs.writeFileSync(bodyPath, body, 'utf8');
+              console.log(`[changelog] wrote body to ${bodyPath} (${body.length} chars)`);
+              core.setOutput('has_commits', whatsnew.length + improvements.length + breaking.length);
+              core.setOutput('body_path', bodyPath);
+            } catch (err) {
+              console.error(`[changelog] FAILED: ${err.message}`);
+              console.error(err.stack);
+              core.setFailed(`Generate changelog failed: ${err.message}`);
+            }
 
       - name: Create or update release and attach all artifacts
         uses: softprops/action-gh-release@v2
