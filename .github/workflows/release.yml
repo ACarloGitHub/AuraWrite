@@ -69,7 +69,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "AuraWrite ${{ github.ref_name }}"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
@@ -230,26 +230,29 @@ jobs:
               );
 
               if (target) {
-                console.log(`[sync] deleting pre-existing release id=${target.id} tag=${target.tag_name} (draft=${target.draft}) so we can recreate it with clean URL`);
-                await github.rest.repos.deleteRelease({
-                  owner: context.repo.owner, repo: context.repo.repo, release_id: target.id,
+                console.log(`[sync] updating pre-existing release id=${target.id} tag=${target.tag_name} (draft=${target.draft}) with changelog body`);
+                const { data: updated } = await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: target.id,
+                  body: body,
+                  draft: false,
                 });
-                console.log(`[sync] deleted release id=${target.id}`);
+                console.log(`[sync] updated release id=${updated.id} bodyLength=${updated.body.length}`);
               } else {
-                console.log(`[sync] no existing release for tag ${currentTag} / sha ${context.sha.slice(0,7)}`);
+                console.log(`[sync] no existing release for tag ${currentTag} / sha ${context.sha.slice(0,7)} - creating one`);
+                const { data: created } = await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: currentTag,
+                  name: `AuraWrite ${currentTag}`,
+                  body: body,
+                  draft: false,
+                  prerelease: false,
+                  target_commitish: context.sha,
+                });
+                console.log(`[sync] created release id=${created.id} tag_name=${created.tag_name} url=${created.html_url} bodyLength=${created.body.length}`);
               }
-
-              const { data: created } = await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: currentTag,
-                name: `AuraWrite ${currentTag}`,
-                body: body,
-                draft: true,
-                prerelease: false,
-                target_commitish: context.sha,
-              });
-              console.log(`[sync] created release id=${created.id} tag_name=${created.tag_name} url=${created.html_url} bodyLength=${created.body.length}`);
             } catch (err) {
               console.error(`[sync] FAILED: ${err.message}`);
               console.error(err.stack);
@@ -261,7 +264,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "AuraWrite ${{ github.ref_name }}"
-          draft: true
+          draft: false
           prerelease: false
           generate_release_notes: false
           body_path: release_body.md
