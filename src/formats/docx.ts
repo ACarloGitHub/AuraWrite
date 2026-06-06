@@ -134,7 +134,176 @@ async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<strin
     }
   }
 
+  postProcessBlocks(container, wParagraphs, htmlBlocks);
+
   return serializeContainer(container);
+}
+
+function postProcessBlocks(container: any, wParagraphs: any[], htmlBlocks: any[]): void {
+  const blockByWPara = new Map<number, any>();
+  for (let i = 0; i < Math.min(wParagraphs.length, htmlBlocks.length); i++) {
+    blockByWPara.set(i, htmlBlocks[i]);
+  }
+  for (let i = htmlBlocks.length; i < wParagraphs.length; i++) {
+    const wText = wParagraphText(wParagraphs[i]).trim();
+    if (!wText) continue;
+    const el = findHtmlBlockByText(container, wText, htmlBlocksConsumed);
+    if (el) blockByWPara.set(i, el);
+  }
+
+  const codeMono = /Consolas|Courier|JetBrains|Menlo|Monaco|monospace/i;
+  const codeGroup: { wIdx: number; el: any }[] = [];
+  const flushCode = () => {
+    if (codeGroup.length < 1) return;
+    if (codeGroup.length >= 2 || isExplicitCodeBlock(wParagraphs[codeGroup[0].wIdx])) {
+      const ownerDoc = container.ownerDocument || container;
+      const wrapper = createWrapper(ownerDoc, "pre");
+      wrapper.setAttribute("class", "code-block");
+      const first = codeGroup[0].el;
+      const parent = first?.parentNode;
+      if (parent) {
+        parent.insertBefore(wrapper, first);
+        for (const g of codeGroup) {
+          stripCodeStyling(g.el);
+          wrapper.appendChild(g.el);
+        }
+        flattenPreChildren(wrapper, ownerDoc);
+      }
+    }
+    codeGroup.length = 0;
+  };
+
+  for (let i = 0; i < wParagraphs.length; i++) {
+    const wP = wParagraphs[i];
+    const el = blockByWPara.get(i);
+    if (!el) continue;
+
+    if (isCodeBlockParagraph(wP, codeMono)) {
+      codeGroup.push({ wIdx: i, el });
+    } else {
+      flushCode();
+      if (isBlockquoteParagraph(wP)) {
+        wrapInContainer(el, container.ownerDocument || container, "blockquote", "blockquote");
+      } else if (isTitleParagraph(wP)) {
+        const ownerDoc = container.ownerDocument || container;
+        const h = createWrapper(ownerDoc, "h1");
+        h.setAttribute("class", "title");
+        const parent = el.parentNode;
+        if (parent) {
+          parent.insertBefore(h, el);
+          h.appendChild(el);
+          flattenPreChildren(h, ownerDoc);
+        }
+      }
+      if (hasPageBreak(wP)) {
+        addClass(el, "page-break-before");
+      }
+    }
+  }
+  flushCode();
+}
+
+function isCodeBlockParagraph(wP: any, monoRe: RegExp): boolean {
+  const wRuns = Array.from(wP.getElementsByTagNameNS(W_NS, "r") || []);
+  if (wRuns.length === 0) return false;
+  for (const r of wRuns) {
+    const rPr = (r as any).getElementsByTagNameNS(W_NS, "rPr")?.[0];
+    if (!rPr) continue;
+    const rFonts = rPr.getElementsByTagNameNS(W_NS, "rFonts")?.[0];
+    const font = attrValue(rFonts, W_NS, "ascii") || attrValue(rFonts, W_NS, "cs");
+    if (font && monoRe.test(font)) return true;
+  }
+  return false;
+}
+
+function isExplicitCodeBlock(wP: any): boolean {
+  const pPr = wP.getElementsByTagNameNS(W_NS, "pPr")?.[0];
+  return !!pPr?.getElementsByTagNameNS(W_NS, "ind")?.[0];
+}
+
+function stripCodeStyling(el: any): void {
+  const style = el.getAttribute?.("style") || "";
+  const next = style
+    .replace(/\bfont-family\s*:[^;]*;?/gi, "")
+    .replace(/\bbackground-color\s*:[^;]*;?/gi, "")
+    .replace(/^\s*;\s*/, "")
+    .trim();
+  if (next) el.setAttribute("style", next);
+  else el.removeAttribute("style");
+}
+
+function isBlockquoteParagraph(wP: any): boolean {
+  const pPr = wP.getElementsByTagNameNS(W_NS, "pPr")?.[0];
+  if (!pPr) return false;
+  const pStyle = pPr.getElementsByTagNameNS(W_NS, "pStyle")?.[0];
+  const styleVal = attrValue(pStyle, W_NS, "val") || "";
+  if (/quote/i.test(styleVal)) return true;
+  const ind = pPr.getElementsByTagNameNS(W_NS, "ind")?.[0];
+  const left = parseInt(attrValue(ind, W_NS, "left") || "0", 10);
+  const wRuns = Array.from(wP.getElementsByTagNameNS(W_NS, "r") || []);
+  const allItalic = wRuns.length > 0 && wRuns.every((r: any) => {
+    const rPr = (r as any).getElementsByTagNameNS(W_NS, "rPr")?.[0];
+    if (!rPr) return false;
+    return !!rPr.getElementsByTagNameNS(W_NS, "i")?.[0];
+  });
+  return allItalic && left > 0;
+}
+
+function isTitleParagraph(wP: any): boolean {
+  const pPr = wP.getElementsByTagNameNS(W_NS, "pPr")?.[0];
+  if (!pPr) return false;
+  const pStyle = pPr.getElementsByTagNameNS(W_NS, "pStyle")?.[0];
+  return (attrValue(pStyle, W_NS, "val") || "").toLowerCase() === "title";
+}
+
+function hasPageBreak(wP: any): boolean {
+  const wBr = wP.getElementsByTagNameNS(W_NS, "br")?.[0];
+  if (wBr && (attrValue(wBr, W_NS, "type") || "") === "page") return true;
+  const pPr = wP.getElementsByTagNameNS(W_NS, "pPr")?.[0];
+  return !!pPr?.getElementsByTagNameNS(W_NS, "pageBreakBefore")?.[0];
+}
+
+function addClass(el: any, cls: string): void {
+  if (!el) return;
+  if (el.classList && !el.classList.contains(cls)) {
+    el.classList.add(cls);
+    return;
+  }
+  const cur = el.getAttribute?.("class") || "";
+  if (!cur.split(/\s+/).includes(cls)) {
+    el.setAttribute("class", cur ? cur + " " + cls : cls);
+  }
+}
+
+function wrapInContainer(el: any, ownerDoc: any, tag: string, cls: string): void {
+  const parent = el.parentNode;
+  if (!parent) return;
+  const wrapper = createWrapper(ownerDoc, tag);
+  wrapper.setAttribute("class", cls);
+  parent.insertBefore(wrapper, el);
+  wrapper.appendChild(el);
+}
+
+function flattenPreChildren(pre: any, ownerDoc: any): void {
+  // Replace child <p> with their text content joined by newlines, so the
+  // pre contains only text nodes (matching ProseMirror code_block content
+  // model "text*").
+  const doc = ownerDoc;
+  const paragraphs = Array.from(pre.childNodes || []).filter(
+    (n: any) => n.nodeType === 1 && (n.tagName || "").toUpperCase() === "P",
+  );
+  if (paragraphs.length === 0) return;
+  for (const p of paragraphs) pre.removeChild(p);
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p: any = paragraphs[i];
+    if (i > 0) {
+      pre.appendChild(doc.createTextNode("\n"));
+    }
+    const children = Array.from(p.childNodes || []);
+    for (let j = 0; j < children.length; j++) {
+      pre.appendChild((children[j] as any).cloneNode(true));
+    }
+  }
 }
 
 const htmlBlocksConsumed = new WeakSet();
@@ -206,49 +375,121 @@ function applyParagraphMeta(wP: any, el: any): void {
 
 function applyRunMeta(wP: any, el: any): void {
   const wRuns: any[] = Array.from(wP.getElementsByTagNameNS(W_NS, "r") || []);
-  const inlineLeaves = collectInlineLeaves(el);
-  const limit = Math.min(wRuns.length, inlineLeaves.length);
-  for (let i = 0; i < limit; i++) {
-    applyRunProperties(wRuns[i], inlineLeaves[i]);
+  const ownerDoc = el.ownerDocument || el;
+
+  for (const wR of wRuns) {
+    const rPr = wR.getElementsByTagNameNS(W_NS, "rPr")?.[0];
+    if (!rPr) continue;
+    const rText = runText(wR);
+    if (!rText) continue;
+
+    const targetLeaf = findLeafForText(el, rText);
+    const dbg = (globalThis as any).__DBG_RUN;
+    if (dbg) dbg.push(`run="${rText.substring(0, 20)}" leaf=${targetLeaf ? (targetLeaf.nodeType + "/" + (targetLeaf.textContent || "").substring(0, 20)) : "null"}`);
+    if (!targetLeaf) continue;
+
+    const styles = collectRunStyles(rPr);
+    const vertAlign = vertAlignOf(rPr);
+    if (vertAlign) {
+      wrapVertAlign(targetLeaf, vertAlign, ownerDoc);
+    }
+    if (Object.keys(styles).length > 0) {
+      wrapWithStyles(targetLeaf, styles, ownerDoc);
+    }
   }
 }
 
-function collectInlineLeaves(el: any): any[] {
-  const leaves: any[] = [];
+function runText(wR: any): string {
+  const texts = Array.from(wR.getElementsByTagNameNS(W_NS, "t") || []);
+  return texts.map((t: any) => t.textContent || "").join("");
+}
+
+function vertAlignOf(rPr: any): "superscript" | "subscript" | null {
+  const v = rPr.getElementsByTagNameNS(W_NS, "vertAlign")?.[0];
+  if (!v) return null;
+  const val = attrValue(v, W_NS, "val");
+  if (val === "superscript") return "superscript";
+  if (val === "subscript") return "subscript";
+  return null;
+}
+
+function findLeafForText(el: any, text: string): any {
+  const allNodes: any[] = [];
   const walk = (node: any) => {
     if (!node) return;
-    const childNodes = Array.from(node.childNodes || []);
-    let hasElementChild = false;
-    for (const child of childNodes) {
-      if ((child as any).nodeType === 1) {
-        hasElementChild = true;
-        walk(child);
-      }
+    if (node === el) {
+      for (let i = 0; i < (node.childNodes || []).length; i++) walk(node.childNodes[i]);
+      return;
     }
-    if (!hasElementChild && node !== el && (node.nodeType === 3 || isInlineTag(node))) {
-      leaves.push(node);
+    if (node.nodeType === 3) {
+      allNodes.push(node);
+      return;
+    }
+    if (node.nodeType === 1) {
+      if (isInlineTag(node)) allNodes.push(node);
+      for (let i = 0; i < (node.childNodes || []).length; i++) walk(node.childNodes[i]);
     }
   };
   walk(el);
-  return leaves;
+
+  for (const n of allNodes) {
+    if (n.nodeType === 1) {
+      const t = n.textContent || "";
+      if (!t) continue;
+      if (t === text || t.includes(text)) {
+        return n;
+      }
+    } else if (n.nodeType === 3) {
+      const t = n.textContent || "";
+      if (!t) continue;
+      if (t === text) return n;
+      const idx = t.indexOf(text);
+      if (idx >= 0) {
+        const split = splitTextNode(n, idx, text.length);
+        return split;
+      }
+    }
+  }
+  return null;
+}
+
+function splitTextNode(textNode: any, idx: number, len: number): any {
+  const fullText = textNode.textContent || "";
+  const before = fullText.substring(0, idx);
+  const after = fullText.substring(idx + len);
+  const parent = textNode.parentNode;
+  if (!parent) return textNode;
+
+  if (before) {
+    const beforeNode = textNode.cloneNode(false);
+    beforeNode.textContent = before;
+    parent.insertBefore(beforeNode, textNode);
+  }
+  if (after) {
+    const afterNode = textNode.cloneNode(false);
+    afterNode.textContent = after;
+    if (textNode.nextSibling) {
+      parent.insertBefore(afterNode, textNode.nextSibling);
+    } else {
+      parent.appendChild(afterNode);
+    }
+  }
+  textNode.textContent = fullText.substring(idx, idx + len);
+  return textNode;
 }
 
 function isInlineTag(node: any): boolean {
-  const inlineTags = new Set(["SPAN", "STRONG", "EM", "A", "B", "I", "U", "S", "CODE"]);
+  const inlineTags = new Set(["SPAN", "STRONG", "EM", "A", "B", "I", "U", "S", "CODE", "SUB", "SUP"]);
   return inlineTags.has((node.tagName || "").toUpperCase());
 }
 
-function applyRunProperties(wR: any, leaf: any): void {
-  const rPr = wR.getElementsByTagNameNS(W_NS, "rPr")?.[0];
-  if (!rPr) return;
-
-  const target = leaf.nodeType === 1 ? leaf : leaf.parentNode;
-  if (!target || target.nodeType !== 1) return;
+function collectRunStyles(rPr: any): Record<string, string> {
+  const styles: Record<string, string> = {};
 
   const color = rPr.getElementsByTagNameNS(W_NS, "color")?.[0];
   if (color) {
     const v = attrValue(color, W_NS, "val");
-    if (v && v !== "auto") setStyle(target, "color", "#" + v);
+    if (v && v !== "auto") styles["color"] = "#" + v;
   }
 
   const sz = rPr.getElementsByTagNameNS(W_NS, "sz")?.[0];
@@ -256,14 +497,14 @@ function applyRunProperties(wR: any, leaf: any): void {
     const v = attrValue(sz, W_NS, "val");
     if (v) {
       const px = Math.round((parseInt(v, 10) / 2) * 1.333);
-      setStyle(target, "font-size", px + "px");
+      styles["font-size"] = px + "px";
     }
   }
 
   const rFonts = rPr.getElementsByTagNameNS(W_NS, "rFonts")?.[0];
   if (rFonts) {
     const v = attrValue(rFonts, W_NS, "ascii") || attrValue(rFonts, W_NS, "cs");
-    if (v) setStyle(target, "font-family", v);
+    if (v) styles["font-family"] = v;
   }
 
   const highlight = rPr.getElementsByTagNameNS(W_NS, "highlight")?.[0];
@@ -271,19 +512,72 @@ function applyRunProperties(wR: any, leaf: any): void {
     const v = attrValue(highlight, W_NS, "val");
     if (v && v !== "none") {
       const css = highlightToCss(v);
-      if (css) setStyle(target, "background-color", css);
+      if (css) styles["background-color"] = css;
+    }
+  }
+
+  const shd = rPr.getElementsByTagNameNS(W_NS, "shd")?.[0];
+  if (shd) {
+    const fill = attrValue(shd, W_NS, "fill");
+    if (fill && fill !== "auto" && fill !== "FFFFFF") {
+      styles["background-color"] = "#" + fill;
     }
   }
 
   const u = rPr.getElementsByTagNameNS(W_NS, "u")?.[0];
-  if (u) {
-    setStyle(target, "text-decoration", "underline");
+  const strike = rPr.getElementsByTagNameNS(W_NS, "strike")?.[0];
+  if (u || strike) {
+    const parts: string[] = [];
+    if (u) parts.push("underline");
+    if (strike) parts.push("line-through");
+    styles["text-decoration"] = parts.join(" ");
   }
 
-  const strike = rPr.getElementsByTagNameNS(W_NS, "strike")?.[0];
-  if (strike) {
-    setStyle(target, "text-decoration", "line-through");
+  return styles;
+}
+
+function wrapWithStyles(leaf: any, styles: Record<string, string>, ownerDoc: any): void {
+  if (leaf.nodeType === 1) {
+    for (const [k, v] of Object.entries(styles)) setStyle(leaf, k, v);
+    return;
   }
+  const parent = leaf.parentNode;
+  if (!parent) return;
+
+  const span = createSpan(ownerDoc);
+  for (const [k, v] of Object.entries(styles)) {
+    const cur = span.getAttribute("style") || "";
+    span.setAttribute("style", cur + `${k}: ${v}; `);
+  }
+  parent.replaceChild(span, leaf);
+  span.appendChild(leaf);
+}
+
+function wrapVertAlign(leaf: any, kind: "superscript" | "subscript", ownerDoc: any): void {
+  if (leaf.nodeType === 1) {
+    const tag = (leaf.tagName || "").toUpperCase();
+    if (tag === "SUB" || tag === "SUP") return;
+  }
+  const parent = leaf.parentNode;
+  if (!parent) return;
+
+  const wrapper = createWrapper(ownerDoc, kind === "superscript" ? "sup" : "sub");
+  parent.replaceChild(wrapper, leaf);
+  wrapper.appendChild(leaf);
+}
+
+function createSpan(ownerDoc: any): any {
+  if (ownerDoc.createElementNS) {
+    return ownerDoc.createElementNS("http://www.w3.org/1999/xhtml", "span");
+  }
+  return ownerDoc.createElement("span");
+}
+
+function createWrapper(ownerDoc: any, tag: string): any {
+  if (ownerDoc.createElementNS) {
+    return ownerDoc.createElementNS("http://www.w3.org/1999/xhtml", tag);
+  }
+  return ownerDoc.createElement(tag);
 }
 
 function attrValue(node: any, ns: string, name: string): string | null {
