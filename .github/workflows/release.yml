@@ -203,6 +203,50 @@ jobs:
               core.setFailed(`Generate changelog failed: ${err.message}`);
             }
 
+      - name: Sync release body and tag from changelog file
+        id: sync
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+            const bodyPath = path.join(workspace, 'release_body.md');
+            const currentTag = context.ref.replace(/^refs\/tags\//, '');
+
+            try {
+              if (!fs.existsSync(bodyPath)) {
+                console.log(`[sync] no changelog file at ${bodyPath}, skipping`);
+                return;
+              }
+              const body = fs.readFileSync(bodyPath, 'utf8');
+              console.log(`[sync] read body (${body.length} chars) from ${bodyPath}`);
+
+              const { data: releases } = await github.rest.repos.listReleases({
+                owner: context.repo.owner, repo: context.repo.repo, per_page: 20,
+              });
+              const target = releases.find(r =>
+                r.tag_name === currentTag || r.target_commitish === context.sha
+              );
+              if (!target) {
+                console.log(`[sync] no existing release for tag ${currentTag} / sha ${context.sha.slice(0,7)}, softprops will create one`);
+                return;
+              }
+              console.log(`[sync] found release id=${target.id} tag_name=${target.tag_name} draft=${target.draft}`);
+
+              const patch = { owner: context.repo.owner, repo: context.repo.repo, release_id: target.id, body };
+              if (target.tag_name !== currentTag) {
+                console.log(`[sync] fixing tag_name from "${target.tag_name}" to "${currentTag}"`);
+                patch.tag_name = currentTag;
+              }
+              const { data: updated } = await github.rest.releases.updateRelease(patch);
+              console.log(`[sync] updated release id=${updated.id} tag_name=${updated.tag_name} bodyLength=${updated.body.length}`);
+            } catch (err) {
+              console.error(`[sync] FAILED: ${err.message}`);
+              console.error(err.stack);
+              core.setFailed(`Sync release body failed: ${err.message}`);
+            }
+
       - name: Create or update release and attach all artifacts
         uses: softprops/action-gh-release@v2
         with:
