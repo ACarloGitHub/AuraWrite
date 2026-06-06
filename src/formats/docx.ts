@@ -19,10 +19,6 @@ function contentToArray(content: any): any[] {
   return result;
 }
 
-function stripHash(color: string): string {
-  return color.replace(/^#/, "");
-}
-
 function normalizeColor(color: string | undefined | null): string | undefined {
   if (!color) return undefined;
   const s = String(color).trim();
