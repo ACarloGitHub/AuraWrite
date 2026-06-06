@@ -228,19 +228,28 @@ jobs:
               const target = releases.find(r =>
                 r.tag_name === currentTag || r.target_commitish === context.sha
               );
-              if (!target) {
-                console.log(`[sync] no existing release for tag ${currentTag} / sha ${context.sha.slice(0,7)}, softprops will create one`);
-                return;
-              }
-              console.log(`[sync] found release id=${target.id} tag_name=${target.tag_name} draft=${target.draft}`);
 
-              const patch = { owner: context.repo.owner, repo: context.repo.repo, release_id: target.id, body };
-              if (target.tag_name !== currentTag) {
-                console.log(`[sync] fixing tag_name from "${target.tag_name}" to "${currentTag}"`);
-                patch.tag_name = currentTag;
+              if (target) {
+                console.log(`[sync] deleting pre-existing release id=${target.id} tag=${target.tag_name} (draft=${target.draft}) so we can recreate it with clean URL`);
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner, repo: context.repo.repo, release_id: target.id,
+                });
+                console.log(`[sync] deleted release id=${target.id}`);
+              } else {
+                console.log(`[sync] no existing release for tag ${currentTag} / sha ${context.sha.slice(0,7)}`);
               }
-              const { data: updated } = await github.rest.repos.updateRelease(patch);
-              console.log(`[sync] updated release id=${updated.id} tag_name=${updated.tag_name} bodyLength=${updated.body.length}`);
+
+              const { data: created } = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: currentTag,
+                name: `AuraWrite ${currentTag}`,
+                body: body,
+                draft: true,
+                prerelease: false,
+                target_commitish: context.sha,
+              });
+              console.log(`[sync] created release id=${created.id} tag_name=${created.tag_name} url=${created.html_url} bodyLength=${created.body.length}`);
             } catch (err) {
               console.error(`[sync] FAILED: ${err.message}`);
               console.error(err.stack);
