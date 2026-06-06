@@ -69,7 +69,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "AuraWrite ${{ github.ref_name }}"
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
 
@@ -222,15 +222,27 @@ jobs:
               const body = fs.readFileSync(bodyPath, 'utf8');
               console.log(`[sync] read body (${body.length} chars) from ${bodyPath}`);
 
-              const { data: releases } = await github.rest.repos.listReleases({
-                owner: context.repo.owner, repo: context.repo.repo, per_page: 20,
-              });
-              const target = releases.find(r =>
-                r.tag_name === currentTag || r.target_commitish === context.sha
-              );
+              // Use getReleaseByTag which returns the release (published or draft)
+              // for the given tag, or 404 if it doesn't exist.
+              let target = null;
+              try {
+                const { data: found } = await github.rest.repos.getReleaseByTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag: currentTag,
+                });
+                target = found;
+                console.log(`[sync] found existing release id=${target.id} tag=${target.tag_name} draft=${target.draft}`);
+              } catch (e) {
+                if (e.status === 404) {
+                  console.log(`[sync] no existing release for tag ${currentTag} - will create one`);
+                } else {
+                  throw e;
+                }
+              }
 
               if (target) {
-                console.log(`[sync] updating pre-existing release id=${target.id} tag=${target.tag_name} (draft=${target.draft}) with changelog body`);
+                console.log(`[sync] updating release id=${target.id} with changelog body and publishing`);
                 const { data: updated } = await github.rest.repos.updateRelease({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -238,9 +250,9 @@ jobs:
                   body: body,
                   draft: false,
                 });
-                console.log(`[sync] updated release id=${updated.id} bodyLength=${updated.body.length}`);
+                console.log(`[sync] updated release id=${updated.id} draft=${updated.draft} bodyLength=${updated.body.length}`);
               } else {
-                console.log(`[sync] no existing release for tag ${currentTag} / sha ${context.sha.slice(0,7)} - creating one`);
+                console.log(`[sync] creating release for ${currentTag}`);
                 const { data: created } = await github.rest.repos.createRelease({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
