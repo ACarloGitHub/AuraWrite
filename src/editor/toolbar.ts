@@ -267,13 +267,7 @@ async function getContentByFormat(format: string): Promise<string> {
 
 async function docxToBase64(doc: unknown): Promise<string> {
   const docxDoc = toDocx(doc);
-  const buffer = await Packer.toBuffer(docxDoc);
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+  return await Packer.toBase64String(docxDoc);
 }
 
 async function saveFile(

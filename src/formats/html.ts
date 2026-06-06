@@ -1,3 +1,12 @@
+function contentToArray(content: any): any[] {
+  if (!content) return [];
+  const result: any[] = [];
+  if (typeof content.forEach === "function") {
+    content.forEach((node: any) => result.push(node));
+  }
+  return result;
+}
+
 export function toHTML(doc: any): string {
   let html = "";
 
@@ -11,36 +20,36 @@ export function toHTML(doc: any): string {
 function nodeToHTML(node: any): string {
   switch (node.type.name) {
     case "paragraph": {
-      const content = node.content?.map(inlineToHTML).join("") || "";
+      const content = contentToArray(node.content).map(inlineToHTML).join("") || "";
       const pageBreakAttr = node.attrs?.pageBreakBefore;
       const pageBreakStyle = pageBreakAttr ? ' style="break-before: page"' : "";
       const pageBreakClass = pageBreakAttr ? ' class="page-break-before"' : "";
       return `<p${pageBreakClass}${pageBreakStyle}>${content}</p>`;
     }
     case "heading": {
-      const hContent = node.content?.map(inlineToHTML).join("") || "";
+      const hContent = contentToArray(node.content).map(inlineToHTML).join("") || "";
       const hPageBreak = node.attrs?.pageBreakBefore;
       const hStyle = hPageBreak ? ' style="break-before: page"' : "";
       const hClass = hPageBreak ? ' class="page-break-before"' : "";
       return `<h${node.attrs.level}${hClass}${hStyle}>${hContent}</h${node.attrs.level}>`;
     }
     case "blockquote":
-      return `<blockquote>${node.content?.map(nodeToHTML).join("") || ""}</blockquote>`;
+      return `<blockquote>${contentToArray(node.content).map(nodeToHTML).join("") || ""}</blockquote>`;
     case "code_block":
       return `<pre><code>${escapeHTML(node.textContent || "")}</code></pre>`;
     case "bullet_list": {
-      const items = node.content
-        ?.map((item: any) => {
-          const itemContent = item.content?.map(nodeToHTML).join("") || "";
+      const items = contentToArray(node.content)
+        .map((item: any) => {
+          const itemContent = contentToArray(item.content).map(nodeToHTML).join("") || "";
           return `<li>${itemContent}</li>`;
         })
         .join("");
       return `<ul>${items}</ul>`;
     }
     case "ordered_list": {
-      const orderedItems = node.content
-        ?.map((item: any) => {
-          const itemContent = item.content?.map(nodeToHTML).join("") || "";
+      const orderedItems = contentToArray(node.content)
+        .map((item: any) => {
+          const itemContent = contentToArray(item.content).map(nodeToHTML).join("") || "";
           return `<li>${itemContent}</li>`;
         })
         .join("");
@@ -50,7 +59,7 @@ function nodeToHTML(node: any): string {
       return "<hr/>";
     default: {
       if (node.isBlock && node.content) {
-        return node.content.map(nodeToHTML).join("");
+        return contentToArray(node.content).map(nodeToHTML).join("");
       }
       return "";
     }

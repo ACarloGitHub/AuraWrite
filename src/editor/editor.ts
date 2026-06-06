@@ -73,39 +73,74 @@ const headingSpec: NodeSpec = {
   },
   parseDOM: [
     {
+      tag: "h1.title",
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 1, align: styleAlign || "center" };
+      },
+    },
+    {
       tag: "h1",
-      getAttrs: () => ({ level: 1, align: "left" }),
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 1, align: styleAlign || "left" };
+      },
     },
     {
       tag: "h2",
-      getAttrs: () => ({ level: 2, align: "left" }),
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 2, align: styleAlign || "left" };
+      },
     },
     {
       tag: "h3",
-      getAttrs: () => ({ level: 3, align: "left" }),
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 3, align: styleAlign || "left" };
+      },
     },
     {
       tag: "h4",
-      getAttrs: () => ({ level: 4, align: "left" }),
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 4, align: styleAlign || "left" };
+      },
     },
     {
       tag: "h5",
-      getAttrs: () => ({ level: 5, align: "left" }),
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 5, align: styleAlign || "left" };
+      },
     },
     {
       tag: "h6",
-      getAttrs: () => ({ level: 6, align: "left" }),
+      getAttrs: (node) => {
+        const el = node as HTMLElement;
+        const styleAlign = (el.style?.textAlign || "").trim();
+        return { level: 6, align: styleAlign || "left" };
+      },
     },
   ],
   toDOM(node) {
     const headingTag = `h${node.attrs.level}`;
-    return [
-      headingTag,
-      {
-        "data-align": node.attrs.align as string,
-      },
-      0,
-    ];
+    const attrs: Record<string, string> = {
+      "data-align": node.attrs.align as string,
+    };
+    if (node.attrs.align === "center") {
+      attrs.style = "text-align: center";
+    }
+    if (node.attrs.level === 1 && node.attrs.align === "center") {
+      attrs.class = "title";
+    }
+    return [headingTag, attrs, 0];
   },
 };
 

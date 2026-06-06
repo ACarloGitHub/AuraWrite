@@ -1,3 +1,12 @@
+function contentToArray(content: any): any[] {
+  if (!content) return [];
+  const result: any[] = [];
+  if (typeof content.forEach === "function") {
+    content.forEach((node: any) => result.push(node));
+  }
+  return result;
+}
+
 export function toMarkdown(doc: any): string {
   let result = "";
   doc.forEach((node: any) => {
@@ -9,38 +18,38 @@ export function toMarkdown(doc: any): string {
 function nodeToMarkdown(node: any): string {
   switch (node.type.name) {
     case "paragraph": {
-      const text = node.content?.map(inlineToMarkdown).join("") || "";
+      const text = contentToArray(node.content).map(inlineToMarkdown).join("") || "";
       const pageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return pageBreak + text + "\n\n";
     }
     case "heading": {
       const level = node.attrs.level || 1;
-      const hText = node.content?.map(inlineToMarkdown).join("") || "";
+      const hText = contentToArray(node.content).map(inlineToMarkdown).join("") || "";
       const hPageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return hPageBreak + "#".repeat(level) + " " + hText + "\n\n";
     }
     case "blockquote": {
-      const quote = node.content?.map(nodeToMarkdown).join("") || "";
+      const quote = contentToArray(node.content).map(nodeToMarkdown).join("") || "";
       return "> " + quote.replace(/\n/g, "\n> ");
     }
     case "code_block":
       return "```\n" + (node.textContent || "") + "\n```\n\n";
     case "bullet_list":
       return (
-        node.content
-          ?.map((item: any) => {
+        contentToArray(node.content)
+          .map((item: any) => {
             const itemContent =
-              item.content?.map(nodeToMarkdown).join("") || "";
+              contentToArray(item.content).map(nodeToMarkdown).join("") || "";
             return "- " + itemContent.replace(/\n\n/g, "\n");
           })
           .join("\n") + "\n\n"
       );
     case "ordered_list":
       return (
-        node.content
-          ?.map((item: any, index: number) => {
+        contentToArray(node.content)
+          .map((item: any, index: number) => {
             const itemContent =
-              item.content?.map(nodeToMarkdown).join("") || "";
+              contentToArray(item.content).map(nodeToMarkdown).join("") || "";
             return index + 1 + ". " + itemContent.replace(/\n\n/g, "\n");
           })
           .join("\n") + "\n\n"
