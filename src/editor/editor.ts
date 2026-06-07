@@ -260,6 +260,20 @@ const strikethroughMark: MarkSpec = {
   },
 };
 
+const subscriptMark: MarkSpec = {
+  parseDOM: [{ tag: "sub" }],
+  toDOM() {
+    return ["sub", 0];
+  },
+};
+
+const superscriptMark: MarkSpec = {
+  parseDOM: [{ tag: "sup" }],
+  toDOM() {
+    return ["sup", 0];
+  },
+};
+
 const textColorMark: MarkSpec = {
   attrs: {
     color: { default: "" },
@@ -387,6 +401,8 @@ const marks = basicSchema.spec.marks.append({
   highlight: highlightMark,
   fontSize: fontSizeMark,
   fontFamily: fontFamilyMark,
+  subscript: subscriptMark,
+  superscript: superscriptMark,
 });
 
 const editorSchema = new Schema({

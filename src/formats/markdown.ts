@@ -32,8 +32,14 @@ function nodeToMarkdown(node: any): string {
       const quote = contentToArray(node.content).map(nodeToMarkdown).join("") || "";
       return "> " + quote.replace(/\n/g, "\n> ");
     }
-    case "code_block":
-      return "```\n" + (node.textContent || "") + "\n```\n\n";
+    case "code_block": {
+      const codeText = node.textContent || "";
+      let fence = "```";
+      while (codeText.includes(fence)) {
+        fence += "`";
+      }
+      return fence + "\n" + codeText + "\n" + fence + "\n\n";
+    }
     case "bullet_list":
       return (
         contentToArray(node.content)
@@ -77,7 +83,19 @@ function inlineToMarkdown(node: any): string {
             text = "*" + text + "*";
             break;
           case "code":
-            text = "`" + text + "`";
+            text = "`" + text.replace(/`/g, "\u200b`") + "`";
+            break;
+          case "strikethrough":
+            text = "~~" + text + "~~";
+            break;
+          case "underline":
+            text = "<u>" + text + "</u>";
+            break;
+          case "subscript":
+            text = "<sub>" + text + "</sub>";
+            break;
+          case "superscript":
+            text = "<sup>" + text + "</sup>";
             break;
           case "link":
             text = "[" + text + "](" + (mark.attrs?.href || "") + ")";

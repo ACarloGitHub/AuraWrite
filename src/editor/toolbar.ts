@@ -176,6 +176,9 @@ function setupTopLevelButtons(): void {
       const action = (item as HTMLElement).dataset.action;
       fileMenu?.classList.add("hidden");
       switch (action) {
+        case "new":
+          handleNew();
+          break;
         case "save":
           handleSave();
           break;
@@ -207,6 +210,38 @@ function setupTopLevelButtons(): void {
 
   const btnPrint = document.getElementById("btn-print");
   btnPrint?.addEventListener("click", () => window.print());
+}
+
+async function handleNew(): Promise<void> {
+  if (documentState.isDirty) {
+    const ok = window.confirm(
+      "Ci sono modifiche non salvate. Vuoi davvero creare un nuovo documento? Le modifiche verranno perse."
+    );
+    if (!ok) return;
+  }
+
+  (window as Window & { __aurawrite_loading?: boolean }).__aurawrite_loading = true;
+
+  const newState = EditorState.create({
+    schema: editorView.state.schema,
+    plugins: editorView.state.plugins,
+  });
+  editorView.updateState(newState);
+
+  const { syncDocumentPaginationState } = await import("./editor");
+  syncDocumentPaginationState(editorView);
+
+  documentState.path = null;
+  documentState.format = null;
+  documentState.isDirty = false;
+  documentState.lastSavedContent = JSON.stringify(newState.doc.toJSON());
+  updateWindowTitle();
+  updateDocumentTitleBar();
+
+  (window as Window & { __aurawrite_loading?: boolean }).__aurawrite_loading = false;
+
+  const { showToast } = await import("../error-boundary");
+  showToast("New document created", "success", 2500);
 }
 
 async function handleSave(): Promise<void> {

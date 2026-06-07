@@ -1021,6 +1021,14 @@ document.addEventListener("DOMContentLoaded", () => {
   btnZoomOut?.addEventListener("click", () => setZoom(-10));
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+      e.preventDefault();
+      const newBtn = document.querySelector(
+        '.dropdown-item[data-action="new"]'
+      ) as HTMLButtonElement | null;
+      newBtn?.click();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
       handleSaveToDatabase();
