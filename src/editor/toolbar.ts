@@ -214,8 +214,10 @@ function setupTopLevelButtons(): void {
 
 async function handleNew(): Promise<void> {
   if (documentState.isDirty) {
-    const ok = window.confirm(
-      "Ci sono modifiche non salvate. Vuoi davvero creare un nuovo documento? Le modifiche verranno perse."
+    const { confirm } = await import("@tauri-apps/plugin-dialog");
+    const ok = await confirm(
+      "Ci sono modifiche non salvate. Vuoi davvero creare un nuovo documento? Le modifiche verranno perse.",
+      { title: "AuraWrite", kind: "warning", okLabel: "Crea nuovo", cancelLabel: "Annulla" }
     );
     if (!ok) return;
   }
