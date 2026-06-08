@@ -2761,6 +2761,13 @@ kbd {
   color: var(--color-text-muted);
 }
 
+.project-type-dialog .form-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  font-style: italic;
+}
+
 .project-type-dialog input[type="text"],
 .project-type-dialog select {
   width: 100%;

@@ -38,7 +38,7 @@ export function openColorPicker(options: ColorPickerOptions): void {
   let selectedBg: string | undefined = currentBg ?? undefined;
   let selectedText: string | undefined = currentText ?? undefined;
   let selectedStyle: string | undefined = currentStyle ?? undefined;
-  const showStyle = itemType === "section" && styles && styles.length > 0;
+  const showStyle = (itemType === "section" || itemType === "document") && styles && styles.length > 0;
 
   const overlay = document.createElement("div");
   overlay.className = "color-picker-overlay active";

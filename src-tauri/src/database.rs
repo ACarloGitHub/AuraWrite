@@ -62,6 +62,7 @@ pub struct Document {
     pub bg_color: Option<String>,
     pub text_color: Option<String>,
     pub recipe_entity_id: Option<String>,
+    pub selected_style: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -268,6 +269,15 @@ fn run_migrations(conn: &Connection) -> SqliteResult<()> {
         conn.execute_batch("ALTER TABLE sections ADD COLUMN selected_style TEXT;")?;
     }
 
+    // M2.5: selected_style per documenti (override granulare per singolo doc)
+    let has_doc_selected_style: bool = conn
+        .prepare("SELECT selected_style FROM documents LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_doc_selected_style {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN selected_style TEXT;")?;
+    }
+
     Ok(())
 }
 
@@ -341,6 +351,7 @@ fn get_schema() -> String {
         bg_color TEXT,
         text_color TEXT,
         recipe_entity_id TEXT REFERENCES entities(id) ON DELETE SET NULL,
+        selected_style TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
@@ -720,8 +731,8 @@ pub fn delete_section(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, selected_style, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             document.id,
             document.section_id,
@@ -734,6 +745,7 @@ pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.bg_color,
             document.text_color,
             document.recipe_entity_id,
+            document.selected_style,
             document.created_at,
             document.updated_at
         ],
@@ -746,7 +758,7 @@ pub fn get_documents_by_section(
     section_id: &str,
 ) -> SqliteResult<Vec<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, selected_style, created_at, updated_at 
          FROM documents WHERE section_id = ?1 ORDER BY order_index, created_at"
     )?;
 
@@ -763,8 +775,9 @@ pub fn get_documents_by_section(
             bg_color: row.get(8)?,
             text_color: row.get(9)?,
             recipe_entity_id: row.get(10)?,
-            created_at: row.get(11)?,
-            updated_at: row.get(12)?,
+            selected_style: row.get(11)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
         })
     })?;
 
@@ -773,7 +786,7 @@ pub fn get_documents_by_section(
 
 pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, selected_style, created_at, updated_at 
          FROM documents WHERE id = ?1"
     )?;
 
@@ -792,8 +805,9 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
             bg_color: row.get(8)?,
             text_color: row.get(9)?,
             recipe_entity_id: row.get(10)?,
-            created_at: row.get(11)?,
-            updated_at: row.get(12)?,
+            selected_style: row.get(11)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
         }))
     } else {
         Ok(None)
@@ -802,8 +816,8 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
 
 pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, bg_color = ?8, text_color = ?9, recipe_entity_id = ?10, updated_at = ?11 
-         WHERE id = ?12",
+        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, bg_color = ?8, text_color = ?9, recipe_entity_id = ?10, selected_style = ?11, updated_at = ?12 
+         WHERE id = ?13",
         params![
             document.section_id,
             document.title,
@@ -815,6 +829,7 @@ pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.bg_color,
             document.text_color,
             document.recipe_entity_id,
+            document.selected_style,
             document.updated_at,
             document.id
         ],

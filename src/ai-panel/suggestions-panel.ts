@@ -2,7 +2,7 @@ import type { EditorView } from "prosemirror-view";
 import { Decoration } from "prosemirror-view";
 import { sendToAI, extractJson } from "./ai-manager";
 import { notifyDocumentChange } from "./modification-hub";
-import { currentProject, currentSection } from "../editor/project-panel";
+import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
 import {
   suggestionsMarkerPluginKey,
@@ -446,7 +446,7 @@ Remember: DO NOT output any thinking, reasoning, explanation, or <thought>/<thin
     const response = await sendToAI(prompt, {
       documentTitle: document.title.replace(" - AuraWrite", ""),
       writingStyleFragment: currentProject && currentSection
-        ? resolveWritingStyleFragment(currentSection, currentProject)
+        ? resolveWritingStyleFragment(currentSection, currentProject, currentDocument)
         : undefined,
     });
     log(

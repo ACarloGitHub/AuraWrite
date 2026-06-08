@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { applyTemplate, createProject } from "../database/db";
-import type { Project, Section } from "../types/database";
+import type { Project, Section, Document } from "../types/database";
 import { customTemplate } from "./custom";
 import { bookTemplate } from "./book";
 import { chefTemplate, chefTemplateBMultibranch } from "./chef";
@@ -55,21 +55,28 @@ export function listTemplates(): Template[] {
 }
 
 /**
- * Resolve the effective writing style fragment for a section.
- * Fallback chain: section.selected_style → project.selected_style → template defaultStyleName.
- * Returns the fragment text from the template's styles array, or undefined if none.
+ * Resolve the effective writing style fragment for a section/document.
+ * Fallback chain: document.selected_style → section.selected_style →
+ * project.selected_style → template defaultStyleName.
+ * Returns the fragment text from the template's styles array, or undefined.
  */
 export function resolveWritingStyleFragment(
   section: Section,
   project: Project,
+  document?: Pick<Document, "selected_style"> | null
 ): string | undefined {
   const tpl = getTemplate(project.template_type || "");
   if (!tpl) return undefined;
 
-  const styleName = section.selected_style || project.selected_style || tpl.defaultStyleName || undefined;
+  const styleName =
+    document?.selected_style ||
+    section.selected_style ||
+    project.selected_style ||
+    tpl.defaultStyleName ||
+    undefined;
   if (!styleName) return undefined;
 
-  const styleSpec = tpl.styles.find(s => s.name === styleName);
+  const styleSpec = tpl.styles.find((s) => s.name === styleName);
   return styleSpec?.fragment;
 }
 

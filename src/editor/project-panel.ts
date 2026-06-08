@@ -715,6 +715,9 @@ function showTemplateDialog(): Promise<TemplateDialogResult | null> {
         <div class="form-group" id="tpl-style-group" style="display:none;">
           <label for="tpl-style">Writing style</label>
           <select id="tpl-style"></select>
+          <p class="form-hint" id="tpl-style-hint" style="display:none;">
+            Each document can have its own style, configurable from the Customize Document panel.
+          </p>
         </div>
         <div class="project-type-dialog-buttons">
           <button class="save-dialog-btn" data-action="cancel">Cancel</button>
@@ -729,6 +732,7 @@ function showTemplateDialog(): Promise<TemplateDialogResult | null> {
     const typeSelect = overlay.querySelector('#tpl-type') as HTMLSelectElement;
     const styleGroup = overlay.querySelector('#tpl-style-group') as HTMLDivElement;
     const styleSelect = overlay.querySelector('#tpl-style') as HTMLSelectElement;
+    const styleHint = overlay.querySelector('#tpl-style-hint') as HTMLParagraphElement;
     const chefVariantGroup = overlay.querySelector('#tpl-chef-variant-group') as HTMLDivElement;
     const chefVariantSelect = overlay.querySelector('#tpl-chef-variant') as HTMLSelectElement;
 
@@ -736,11 +740,13 @@ function showTemplateDialog(): Promise<TemplateDialogResult | null> {
       const tpl = getTemplate(typeSelect.value);
       if (tpl && tpl.requiresStyleChoice && tpl.styles.length > 0) {
         styleGroup.style.display = '';
+        styleHint.style.display = '';
         styleSelect.innerHTML = tpl.styles.map((s) =>
           `<option value="${s.name}"${s.name === tpl.defaultStyleName ? ' selected' : ''}>${s.name}</option>`
         ).join('');
       } else {
         styleGroup.style.display = 'none';
+        styleHint.style.display = 'none';
         styleSelect.innerHTML = '';
       }
       if (typeSelect.value === 'chef') {
@@ -1903,16 +1909,21 @@ function createDocumentElement(doc: Document): HTMLElement {
   const colorBtnDoc = createColorBtn();
   colorBtnDoc.addEventListener("click", (e) => {
     e.stopPropagation();
+    const tpl = currentProject?.template_type ? getTemplate(currentProject.template_type) : null;
+    const tplStyles = tpl?.styles?.map(s => s.name) || [];
     openColorPicker({
       itemType: "document",
       itemId: doc.id,
       currentName: doc.title,
       currentBg: doc.bg_color,
       currentText: doc.text_color,
-      onSave: async (newName, bg, text) => {
+      currentStyle: doc.selected_style,
+      styles: tplStyles.length > 0 ? tplStyles : undefined,
+      onSave: async (newName, bg, text, style) => {
         doc.title = newName;
         doc.bg_color = bg;
         doc.text_color = text;
+        doc.selected_style = style || null;
         doc.updated_at = Date.now();
         await updateDocument(doc);
         nameEl.textContent = newName;
@@ -1921,6 +1932,7 @@ function createDocumentElement(doc: Document): HTMLElement {
       onReset: async () => {
         doc.bg_color = undefined;
         doc.text_color = undefined;
+        doc.selected_style = null;
         doc.updated_at = Date.now();
         await updateDocument(doc);
         applyItemColors(header, undefined, undefined, "document");

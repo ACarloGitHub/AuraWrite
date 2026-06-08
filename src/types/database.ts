@@ -60,6 +60,7 @@ export interface Document {
   bg_color?: string | null;
   text_color?: string | null;
   recipe_entity_id?: string | null;
+  selected_style?: string | null;
   created_at: number;
   updated_at: number;
 }
