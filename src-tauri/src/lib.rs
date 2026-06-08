@@ -186,6 +186,7 @@ fn apply_template_section_recursive(
             order_index: 0,
             bg_color: None,
             text_color: None,
+            recipe_entity_id: None,
             created_at: now,
             updated_at: now,
         };
@@ -203,6 +204,7 @@ fn apply_template_section_recursive(
             order_index: i as i32,
             bg_color: None,
             text_color: None,
+            recipe_entity_id: None,
             created_at: now,
             updated_at: now,
         };
