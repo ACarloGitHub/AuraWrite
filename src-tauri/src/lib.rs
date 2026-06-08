@@ -224,7 +224,10 @@ fn apply_template_section_recursive(
 }
 
 fn document_to_prosemirror_json(text: &str) -> String {
-    // Wrap plain text in a minimal ProseMirror doc. Empty string = empty doc.
+    // Wrap plain text in a ProseMirror doc. Empty string = empty doc.
+    // The editor schema has `doc.content = "(page | block)+"`, so we MUST
+    // wrap blocks in a `page` node, otherwise `nodeFromJSON` throws and the
+    // catch in main.ts silently clears the editor (making the doc appear empty).
     if text.is_empty() {
         return String::new();
     }
@@ -237,7 +240,11 @@ fn document_to_prosemirror_json(text: &str) -> String {
             format!(r#"{{"type":"paragraph","content":[{{"type":"text","text":"{}"}}]}}"#, escaped)
         })
         .collect();
-    format!(r#"{{"type":"doc","content":[{}]}}"#, paragraphs.join(","))
+    let inner = paragraphs.join(",");
+    format!(
+        r#"{{"type":"doc","content":[{{"type":"page","attrs":{{"pageNumber":1}},"content":[{}]}}]}}"#,
+        inner
+    )
 }
 
 #[tauri::command]
