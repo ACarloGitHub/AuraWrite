@@ -60,6 +60,7 @@ pub struct Document {
     pub order_index: i32,
     pub bg_color: Option<String>,
     pub text_color: Option<String>,
+    pub recipe_entity_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -73,6 +74,7 @@ pub struct Entity {
     pub description: Option<String>,
     pub image_path: Option<String>,
     pub metadata_json: Option<String>,
+    pub document_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -239,6 +241,23 @@ fn run_migrations(conn: &Connection) -> SqliteResult<()> {
         conn.execute_batch("ALTER TABLE projects ADD COLUMN selected_style TEXT;")?;
     }
 
+    // M2.3: recipe ibrida — link bidirezionale entity ↔ document
+    let has_doc_recipe_entity: bool = conn
+        .prepare("SELECT recipe_entity_id FROM documents LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_doc_recipe_entity {
+        conn.execute_batch("ALTER TABLE documents ADD COLUMN recipe_entity_id TEXT REFERENCES entities(id) ON DELETE SET NULL;")?;
+    }
+
+    let has_entity_document_id: bool = conn
+        .prepare("SELECT document_id FROM entities LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_entity_document_id {
+        conn.execute_batch("ALTER TABLE entities ADD COLUMN document_id TEXT REFERENCES documents(id) ON DELETE SET NULL;")?;
+    }
+
     Ok(())
 }
 
@@ -310,6 +329,7 @@ fn get_schema() -> String {
         order_index INTEGER NOT NULL DEFAULT 0,
         bg_color TEXT,
         text_color TEXT,
+        recipe_entity_id TEXT REFERENCES entities(id) ON DELETE SET NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
@@ -317,6 +337,16 @@ fn get_schema() -> String {
     -- Entities (characters, locations, etc.)
     CREATE TABLE IF NOT EXISTS entities (
         id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        entity_type_id TEXT REFERENCES entity_types(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        image_path TEXT,
+        metadata_json TEXT,
+        document_id TEXT REFERENCES documents(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
         project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         entity_type_id TEXT REFERENCES entity_types(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
@@ -685,8 +715,8 @@ pub fn delete_section(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT INTO documents (id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             document.id,
             document.section_id,
@@ -698,6 +728,7 @@ pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.order_index,
             document.bg_color,
             document.text_color,
+            document.recipe_entity_id,
             document.created_at,
             document.updated_at
         ],
@@ -710,7 +741,7 @@ pub fn get_documents_by_section(
     section_id: &str,
 ) -> SqliteResult<Vec<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, created_at, updated_at 
          FROM documents WHERE section_id = ?1 ORDER BY order_index, created_at"
     )?;
 
@@ -726,8 +757,9 @@ pub fn get_documents_by_section(
             order_index: row.get(7)?,
             bg_color: row.get(8)?,
             text_color: row.get(9)?,
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
+            recipe_entity_id: row.get(10)?,
+            created_at: row.get(11)?,
+            updated_at: row.get(12)?,
         })
     })?;
 
@@ -736,7 +768,7 @@ pub fn get_documents_by_section(
 
 pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Document>> {
     let mut stmt = conn.prepare(
-        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, created_at, updated_at 
+        "SELECT id, section_id, title, content_json, status, word_count, tags, order_index, bg_color, text_color, recipe_entity_id, created_at, updated_at 
          FROM documents WHERE id = ?1"
     )?;
 
@@ -754,8 +786,9 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
             order_index: row.get(7)?,
             bg_color: row.get(8)?,
             text_color: row.get(9)?,
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
+            recipe_entity_id: row.get(10)?,
+            created_at: row.get(11)?,
+            updated_at: row.get(12)?,
         }))
     } else {
         Ok(None)
@@ -764,8 +797,8 @@ pub fn get_document_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Do
 
 pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, bg_color = ?8, text_color = ?9, updated_at = ?10 
-         WHERE id = ?11",
+        "UPDATE documents SET section_id = ?1, title = ?2, content_json = ?3, status = ?4, word_count = ?5, tags = ?6, order_index = ?7, bg_color = ?8, text_color = ?9, recipe_entity_id = ?10, updated_at = ?11 
+         WHERE id = ?12",
         params![
             document.section_id,
             document.title,
@@ -776,6 +809,7 @@ pub fn update_document(conn: &Connection, document: &Document) -> SqliteResult<(
             document.order_index,
             document.bg_color,
             document.text_color,
+            document.recipe_entity_id,
             document.updated_at,
             document.id
         ],
@@ -814,8 +848,8 @@ pub fn delete_document(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_entity(conn: &Connection, entity: &Entity) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO entities (id, project_id, entity_type_id, name, description, image_path, metadata_json, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO entities (id, project_id, entity_type_id, name, description, image_path, metadata_json, document_id, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             entity.id,
             entity.project_id,
@@ -824,6 +858,7 @@ pub fn create_entity(conn: &Connection, entity: &Entity) -> SqliteResult<()> {
             entity.description,
             entity.image_path,
             entity.metadata_json,
+            entity.document_id,
             entity.created_at,
             entity.updated_at
         ],
@@ -833,7 +868,7 @@ pub fn create_entity(conn: &Connection, entity: &Entity) -> SqliteResult<()> {
 
 pub fn get_entities_by_project(conn: &Connection, project_id: &str) -> SqliteResult<Vec<Entity>> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, entity_type_id, name, description, image_path, metadata_json, created_at, updated_at 
+        "SELECT id, project_id, entity_type_id, name, description, image_path, metadata_json, document_id, created_at, updated_at 
          FROM entities WHERE project_id = ?1 ORDER BY name"
     )?;
 
@@ -846,8 +881,9 @@ pub fn get_entities_by_project(conn: &Connection, project_id: &str) -> SqliteRes
             description: row.get(4)?,
             image_path: row.get(5)?,
             metadata_json: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+            document_id: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     })?;
 
@@ -856,7 +892,7 @@ pub fn get_entities_by_project(conn: &Connection, project_id: &str) -> SqliteRes
 
 pub fn get_entity_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Entity>> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, entity_type_id, name, description, image_path, metadata_json, created_at, updated_at 
+        "SELECT id, project_id, entity_type_id, name, description, image_path, metadata_json, document_id, created_at, updated_at 
          FROM entities WHERE id = ?1"
     )?;
 
@@ -869,8 +905,9 @@ pub fn get_entity_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Enti
             description: row.get(4)?,
             image_path: row.get(5)?,
             metadata_json: row.get(6)?,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+            document_id: row.get(7)?,
+            created_at: row.get(8)?,
+            updated_at: row.get(9)?,
         })
     })?;
 
@@ -882,14 +919,15 @@ pub fn get_entity_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Enti
 
 pub fn update_entity(conn: &Connection, entity: &Entity) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE entities SET name = ?1, entity_type_id = ?2, description = ?3, image_path = ?4, metadata_json = ?5, updated_at = ?6 
-         WHERE id = ?7",
+        "UPDATE entities SET name = ?1, entity_type_id = ?2, description = ?3, image_path = ?4, metadata_json = ?5, document_id = ?6, updated_at = ?7 
+         WHERE id = ?8",
         params![
             entity.name,
             entity.entity_type_id,
             entity.description,
             entity.image_path,
             entity.metadata_json,
+            entity.document_id,
             entity.updated_at,
             entity.id
         ],

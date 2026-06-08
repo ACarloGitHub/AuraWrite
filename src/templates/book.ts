@@ -191,6 +191,8 @@ export const bookTemplate: Template = {
     { name: "Pushkin", fragment: "Russian classic, elegant, fluid and ironic narration. Versatile (poetry, prose, theatre), terse and light prose, lively characters in few strokes. Balance between lyricism and wit." },
     { name: "Dostoevsky", fragment: "Psychological, intense, philosophical dialogues. Exploration of inner torment, deep moral conflicts. Dramatic tone, long interior monologues, vocation for analysing motivations." },
     { name: "Custom", fragment: "" },
+    { name: "User", fragment: "Adapt to the user's personal writing style. Observe the existing text and match its tone, rhythm and vocabulary." },
+    { name: "None", fragment: "" },
   ],
   defaultStyleName: "Hemingway",
   prompts: {

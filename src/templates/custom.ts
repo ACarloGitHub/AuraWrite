@@ -8,7 +8,10 @@ export const customTemplate: Template = {
   requiresStyleChoice: false,
   sections: [],
   entityTypes: [],
-  styles: [],
+  styles: [
+    { name: "User", fragment: "Adapt to the user's personal writing style. Observe the existing text and match its tone, rhythm and vocabulary." },
+    { name: "None", fragment: "" },
+  ],
   defaultStyleName: null,
   prompts: {
     suggestions: "You are a helpful writing assistant.",

@@ -58,6 +58,7 @@ export interface Document {
   order_index: number;
   bg_color?: string | null;
   text_color?: string | null;
+  recipe_entity_id?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -70,6 +71,7 @@ export interface Entity {
   description?: string | null;
   image_path?: string | null;
   metadata_json?: string | null;
+  document_id?: string | null;
   created_at: number;
   updated_at: number;
 }

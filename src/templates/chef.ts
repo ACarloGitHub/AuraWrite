@@ -535,6 +535,8 @@ const chefStyles: { name: string; fragment: string }[] = [
   { name: "Modern cookbook", fragment: "Contemporary high-end cookbook style. Short sentences, visual pacing, focus on technique and precision. For the reader who wants to understand and replicate." },
   { name: "Family tradition", fragment: "Warm, affectionate, personal anecdotes and memories. Oral transmission from mother to child. For family recipe books, regional traditions, culinary memoirs." },
   { name: "Custom", fragment: "" },
+  { name: "User", fragment: "Adapt to the user's personal writing style. Observe the existing text and match its tone, rhythm and vocabulary." },
+  { name: "None", fragment: "" },
 ];
 
 const chefPrompts = {
