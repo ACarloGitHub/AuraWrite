@@ -1912,16 +1912,55 @@ function initSortable(): void {
         clearDropIndicators();
         pendingChild = null;
         const draggedId = evt.dragged.dataset.id!;
+
+        // Walk-up al .section-item antenato (evt.related è spesso un
+        // discendente: .item-header, .drag-handle, .item-name, .item-action-btn,
+        // ecc.). Senza walk-up, onMove esce subito e il top-half 50/50
+        // non viene mai intercettato.
         const relatedEl = evt.related as HTMLElement | null;
-        if (!relatedEl || !relatedEl.classList.contains("section-item")) return true;
-        const relatedId = relatedEl.dataset.id!;
+        let relatedSectionEl: HTMLElement | null = null;
+        if (relatedEl) {
+          let cur: HTMLElement | null = relatedEl;
+          while (cur && cur !== document.body) {
+            if (cur.classList && cur.classList.contains("section-item")) {
+              relatedSectionEl = cur;
+              break;
+            }
+            cur = cur.parentElement;
+          }
+        }
+        if (!relatedEl) {
+          console.log("[multibranch] onMove: relatedEl=null");
+          return true;
+        }
+        if (!relatedSectionEl) {
+          console.log(
+            "[multibranch] onMove: walk-up failed, relatedEl=",
+            relatedEl.tagName,
+            relatedEl.className
+          );
+          return true;
+        }
+        const relatedId = relatedSectionEl.dataset.id!;
 
         // Geometria 50/50: meta' alta dell'header del target = intento FIGLIO
-        const headerEl = relatedEl.querySelector(".item-header") as HTMLElement | null;
+        const headerEl = relatedSectionEl.querySelector(".item-header") as HTMLElement | null;
         if (!headerEl) return true;
         const rect = headerEl.getBoundingClientRect();
         const y = (originalEvent as MouseEvent).clientY;
         const topHalf = y - rect.top < rect.height / 2;
+        console.log(
+          "[multibranch] onMove: relatedSectionId=",
+          relatedId,
+          "topHalf=",
+          topHalf,
+          "y=",
+          y,
+          "rect.top=",
+          rect.top,
+          "h=",
+          rect.height
+        );
 
         if (topHalf) {
           // Validazioni LIVE (feedback col bordo, non a fine drop)
@@ -1929,10 +1968,21 @@ function initSortable(): void {
           const cycle =
             draggedId === relatedId || isDescendantOf(draggedId, relatedId);
           if (wouldDepth > MAX_DEPTH || cycle) {
-            relatedEl.classList.add("drop-blocked");
+            console.log(
+              "[multibranch] onMove: BLOCKED (depth=",
+              wouldDepth,
+              "cycle=",
+              cycle,
+              ")"
+            );
+            relatedSectionEl.classList.add("drop-blocked");
             return false;
           }
-          relatedEl.classList.add("drop-as-child");
+          console.log(
+            "[multibranch] onMove: child intent set, pendingChild=",
+            relatedId
+          );
+          relatedSectionEl.classList.add("drop-as-child");
           pendingChild = relatedId;
           return false;
         }
@@ -1945,6 +1995,10 @@ function initSortable(): void {
         clearDropIndicators();
 
         if (pendingChild) {
+          console.log(
+            "[multibranch] onEnd: CHILD branch, parentId=",
+            pendingChild
+          );
           const parentId = pendingChild;
           pendingChild = null;
           const ok = await persistMove(draggedId, parentId, 0);
@@ -1962,6 +2016,12 @@ function initSortable(): void {
         const parentRaw = toEl.dataset.parent ?? "";
         const newParent: string | null = parentRaw === "" ? null : parentRaw;
         const newIndex = evt.newIndex ?? 0;
+        console.log(
+          "[multibranch] onEnd: SIBLING branch, to=",
+          parentRaw,
+          "newIndex=",
+          newIndex
+        );
 
         if (
           newParent &&
