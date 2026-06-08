@@ -55,6 +55,25 @@ export function listTemplates(): Template[] {
 }
 
 /**
+ * Resolve the effective writing style fragment for a section.
+ * Fallback chain: section.selected_style → project.selected_style → template defaultStyleName.
+ * Returns the fragment text from the template's styles array, or undefined if none.
+ */
+export function resolveWritingStyleFragment(
+  section: Section,
+  project: Project,
+): string | undefined {
+  const tpl = getTemplate(project.template_type || "");
+  if (!tpl) return undefined;
+
+  const styleName = section.selected_style || project.selected_style || tpl.defaultStyleName || undefined;
+  if (!styleName) return undefined;
+
+  const styleSpec = tpl.styles.find(s => s.name === styleName);
+  return styleSpec?.fragment;
+}
+
+/**
  * Convert the in-memory template tree to the JSON spec expected by the
  * Rust `apply_template` command. The Rust side is a thin pass-through;
  * conversion happens here so the templates files stay clean.

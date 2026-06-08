@@ -24,6 +24,7 @@ export interface AIContext {
   writingLanguage?: string;
   customAssistantPrompt?: string;
   customSuggestionsPrompt?: string;
+  writingStyleFragment?: string;
   messageHistory?: ChatMessage[];
 }
 

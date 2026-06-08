@@ -3436,6 +3436,23 @@ kbd {
   border-color: var(--color-primary, #4a90d9);
 }
 
+.cp-style-select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #ccc);
+  background: var(--color-bg-tertiary, #f8f8f8);
+  color: var(--color-text, #333);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: auto;
+}
+.cp-style-select:focus {
+  border-color: var(--color-primary, #4a90d9);
+  outline: none;
+}
+
 .color-picker-preview {
   margin-top: 12px;
   padding-top: 12px;

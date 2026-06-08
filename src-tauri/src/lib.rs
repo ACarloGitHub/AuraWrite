@@ -169,6 +169,7 @@ fn apply_template_section_recursive(
         bg_color: None,
         text_color: None,
         section_type: Some("chapter".to_string()),
+        selected_style: None,
         created_at: now,
         updated_at: now,
     };

@@ -655,6 +655,11 @@ async function handleNewProject(): Promise<void> {
     currentDocument = null;
     sections = projectResult.sections || [];
     documents = [];
+    // Load documents for all sections created by the template
+    for (const section of sections) {
+      const sectionDocs = await getDocuments(section.id);
+      documents.push(...sectionDocs);
+    }
     lastSavedContent = null;
     expandedSections.clear();
     clearEditor();
@@ -1747,16 +1752,21 @@ function createSectionElement(section: Section): HTMLElement {
   const colorBtnSection = createColorBtn();
   colorBtnSection.addEventListener("click", (e) => {
     e.stopPropagation();
+    const tpl = currentProject?.template_type ? getTemplate(currentProject.template_type) : null;
+    const tplStyles = tpl?.styles?.map(s => s.name) || [];
     openColorPicker({
       itemType: "section",
       itemId: section.id,
       currentName: section.name,
       currentBg: section.bg_color,
       currentText: section.text_color,
-      onSave: async (newName, bg, text) => {
+      currentStyle: section.selected_style,
+      styles: tplStyles.length > 0 ? tplStyles : undefined,
+      onSave: async (newName, bg, text, style) => {
         section.name = newName;
         section.bg_color = bg;
         section.text_color = text;
+        section.selected_style = style || null;
         section.updated_at = Date.now();
         await updateSection(section);
         nameEl.textContent = newName;
@@ -1765,6 +1775,7 @@ function createSectionElement(section: Section): HTMLElement {
       onReset: async () => {
         section.bg_color = undefined;
         section.text_color = undefined;
+        section.selected_style = null;
         section.updated_at = Date.now();
         await updateSection(section);
         applyItemColors(header, undefined, undefined, "section");

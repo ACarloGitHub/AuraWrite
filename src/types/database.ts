@@ -43,6 +43,7 @@ export interface Section {
   bg_color?: string | null;
   text_color?: string | null;
   section_type?: string | null;
+  selected_style?: string | null;
   created_at: number;
   updated_at: number;
 }

@@ -44,6 +44,7 @@ pub struct Section {
     pub bg_color: Option<String>,
     pub text_color: Option<String>,
     pub section_type: Option<String>,
+    pub selected_style: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -258,6 +259,15 @@ fn run_migrations(conn: &Connection) -> SqliteResult<()> {
         conn.execute_batch("ALTER TABLE entities ADD COLUMN document_id TEXT REFERENCES documents(id) ON DELETE SET NULL;")?;
     }
 
+    // M2.4: selected_style per sezioni (override stile writing per singola sezione)
+    let has_section_selected_style: bool = conn
+        .prepare("SELECT selected_style FROM sections LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_section_selected_style {
+        conn.execute_batch("ALTER TABLE sections ADD COLUMN selected_style TEXT;")?;
+    }
+
     Ok(())
 }
 
@@ -313,6 +323,7 @@ fn get_schema() -> String {
         bg_color TEXT,
         text_color TEXT,
         section_type TEXT DEFAULT 'chapter',
+        selected_style TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
@@ -635,8 +646,8 @@ pub fn delete_user_style(conn: &Connection, id: &str) -> SqliteResult<()> {
 
 pub fn create_section(conn: &Connection, section: &Section) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO sections (id, project_id, parent_id, name, order_index, bg_color, text_color, section_type, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT INTO sections (id, project_id, parent_id, name, order_index, bg_color, text_color, section_type, selected_style, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             section.id,
             section.project_id,
@@ -646,6 +657,7 @@ pub fn create_section(conn: &Connection, section: &Section) -> SqliteResult<()> 
             section.bg_color,
             section.text_color,
             section.section_type,
+            section.selected_style,
             section.created_at,
             section.updated_at
         ],
@@ -655,7 +667,7 @@ pub fn create_section(conn: &Connection, section: &Section) -> SqliteResult<()> 
 
 pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteResult<Vec<Section>> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, parent_id, name, order_index, bg_color, text_color, section_type, created_at, updated_at 
+        "SELECT id, project_id, parent_id, name, order_index, bg_color, text_color, section_type, selected_style, created_at, updated_at 
          FROM sections WHERE project_id = ?1 ORDER BY order_index, created_at"
     )?;
 
@@ -669,8 +681,9 @@ pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteRes
             bg_color: row.get(5)?,
             text_color: row.get(6)?,
             section_type: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
+            selected_style: row.get(8)?,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
         })
     })?;
 
@@ -679,8 +692,8 @@ pub fn get_sections_by_project(conn: &Connection, project_id: &str) -> SqliteRes
 
 pub fn update_section(conn: &Connection, section: &Section) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE sections SET name = ?1, parent_id = ?2, order_index = ?3, bg_color = ?4, text_color = ?5, section_type = ?6, updated_at = ?7 
-         WHERE id = ?8",
+        "UPDATE sections SET name = ?1, parent_id = ?2, order_index = ?3, bg_color = ?4, text_color = ?5, section_type = ?6, selected_style = ?7, updated_at = ?8 
+         WHERE id = ?9",
         params![
             section.name,
             section.parent_id,
@@ -688,6 +701,7 @@ pub fn update_section(conn: &Connection, section: &Section) -> SqliteResult<()> 
             section.bg_color,
             section.text_color,
             section.section_type,
+            section.selected_style,
             section.updated_at,
             section.id
         ],

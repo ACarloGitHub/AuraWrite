@@ -17,7 +17,8 @@ import {
 import { getEditorContent } from "../editor/editor";
 import { applyAuraEdit } from "./edit-executor";
 import { parseToolCalls, executeTool, type ToolResult } from "./tools";
-import { currentProject } from "../editor/project-panel";
+import { currentProject, currentSection } from "../editor/project-panel";
+import { resolveWritingStyleFragment } from "../templates/apply";
 
 const MAX_TOOL_ITERATIONS = 3;
 
@@ -507,6 +508,9 @@ async function sendMessage(text: string): Promise<void> {
     interfaceLanguage: prefs.aiInterfaceLanguage || undefined,
     writingLanguage: prefs.aiWritingLanguage || undefined,
     customAssistantPrompt: prefs.aiAssistantPrompt || undefined,
+    writingStyleFragment: currentProject && currentSection
+      ? resolveWritingStyleFragment(currentSection, currentProject)
+      : undefined,
     messageHistory: messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(0, -1)

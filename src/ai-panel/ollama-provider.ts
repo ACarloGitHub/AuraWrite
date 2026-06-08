@@ -188,6 +188,10 @@ export class OllamaProvider implements AIProvider {
         parts.push(`Document: ${context.documentTitle}`);
       }
 
+      if (context.writingStyleFragment) {
+        parts.push(`WRITING STYLE:\n${context.writingStyleFragment}`);
+      }
+
       if (context.projectType) {
         parts.push(`Project type: ${context.projectType}`);
       }

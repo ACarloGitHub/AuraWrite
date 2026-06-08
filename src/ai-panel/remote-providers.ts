@@ -79,6 +79,10 @@ function buildOpenAICompatibleSystemPrompt(context?: AIContext): string {
     parts.push(`The current document is titled: ${context.documentTitle}`);
   }
 
+  if (context?.writingStyleFragment) {
+    parts.push(`WRITING STYLE:\n${context.writingStyleFragment}`);
+  }
+
   if (context?.documentText) {
     parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
   }
@@ -334,6 +338,10 @@ export class AnthropicProvider implements AIProvider {
 
     if (context?.documentTitle) {
       parts.push(`The current document is titled: ${context.documentTitle}`);
+    }
+
+    if (context?.writingStyleFragment) {
+      parts.push(`WRITING STYLE:\n${context.writingStyleFragment}`);
     }
 
     if (context?.documentText) {

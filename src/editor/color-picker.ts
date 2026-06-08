@@ -26,15 +26,19 @@ export interface ColorPickerOptions {
   currentName: string;
   currentBg?: string | null;
   currentText?: string | null;
-  onSave: (newName: string, bgColor: string | undefined, textColor: string | undefined) => Promise<void>;
+  currentStyle?: string | null;
+  styles?: string[];
+  onSave: (newName: string, bgColor: string | undefined, textColor: string | undefined, selectedStyle?: string | undefined) => Promise<void>;
   onReset: () => Promise<void>;
 }
 
 export function openColorPicker(options: ColorPickerOptions): void {
-  const { itemType, currentName, currentBg, currentText, onSave, onReset } = options;
+  const { itemType, currentName, currentBg, currentText, currentStyle, styles, onSave, onReset } = options;
 
   let selectedBg: string | undefined = currentBg ?? undefined;
   let selectedText: string | undefined = currentText ?? undefined;
+  let selectedStyle: string | undefined = currentStyle ?? undefined;
+  const showStyle = itemType === "section" && styles && styles.length > 0;
 
   const overlay = document.createElement("div");
   overlay.className = "color-picker-overlay active";
@@ -69,6 +73,15 @@ export function openColorPicker(options: ColorPickerOptions): void {
             <span class="color-custom-label">Custom</span>
           </div>
         </div>
+        ${showStyle ? `
+        <div class="color-picker-section">
+          <label>Writing Style</label>
+          <select id="cp-style" class="cp-style-select">
+            <option value="" ${!selectedStyle ? 'selected' : ''}>Template default</option>
+            ${(styles || []).map(s => `<option value="${escapeAttr(s)}" ${selectedStyle === s ? 'selected' : ''}>${escapeAttr(s)}</option>`).join('')}
+          </select>
+        </div>
+        ` : ''}
         <div class="color-picker-preview" id="cp-preview">
           <div class="color-picker-preview-label">Preview</div>
           <div class="color-picker-preview-box" id="cp-preview-box">
@@ -146,6 +159,14 @@ export function openColorPicker(options: ColorPickerOptions): void {
     updatePreview();
   });
 
+  // Style dropdown (sections only)
+  if (showStyle) {
+    const styleSelect = overlay.querySelector("#cp-style") as HTMLSelectElement;
+    styleSelect.addEventListener("change", () => {
+      selectedStyle = styleSelect.value || undefined;
+    });
+  }
+
   // Preview
   function updatePreview(): void {
     const box = overlay.querySelector("#cp-preview-box") as HTMLDivElement;
@@ -175,7 +196,7 @@ export function openColorPicker(options: ColorPickerOptions): void {
   overlay.querySelector("#cp-save")?.addEventListener("click", async (e) => {
     e.stopPropagation();
     const newName = nameInput.value.trim();
-    await onSave(newName || currentName, selectedBg, selectedText);
+    await onSave(newName || currentName, selectedBg, selectedText, showStyle ? selectedStyle : undefined);
     overlay.remove();
   });
 
