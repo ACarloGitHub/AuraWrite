@@ -15,6 +15,9 @@ import { history, undo, redo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
+import { tableNodes, tableEditing, columnResizing } from "prosemirror-tables";
+import "prosemirror-tables/style/tables.css";
+import { createTableMonitorPlugin } from "./table-toolbar";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
@@ -382,6 +385,22 @@ function rgbToHex(rgb: string): string | null {
 // Build the Extended Schema
 // ============================================================================
 
+const tableNodeSpecs = tableNodes({
+  tableGroup: "block",
+  cellContent: "block+",
+  cellAttributes: {
+    backgroundColor: {
+      default: null,
+      getFromDOM(dom) {
+        return (dom as HTMLElement).style.backgroundColor || null;
+      },
+      setDOMAttr(value, attrs) {
+        if (value) attrs.style = `background-color: ${value}`;
+      },
+    },
+  },
+});
+
 let nodes = basicSchema.spec.nodes.update("paragraph", paragraphWithPageBreak);
 nodes = nodes
   .update("doc", { content: "(page | block)+" })
@@ -393,6 +412,7 @@ nodes = nodes
     blockquote: blockquoteSpec,
     page: pageSpec,
     code_block: codeBlockSpec,
+    ...tableNodeSpecs,
   });
 
 const marks = basicSchema.spec.marks.append({
@@ -473,6 +493,9 @@ export function createEditor(element: HTMLElement): EditorViewType {
       findReplacePlugin,
       paginationPluginInstance,
       linkPopoverPlugin,
+      columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
+      tableEditing(),
+      createTableMonitorPlugin(),
     ],
   });
 

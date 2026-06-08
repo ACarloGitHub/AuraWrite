@@ -11,6 +11,7 @@ import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
+import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import {
   initPagination,
@@ -556,12 +557,23 @@ function setupFormattingButtons(): void {
   const btnCodeBlock = document.getElementById("btn-code-block");
   const btnPageBreak = document.getElementById("btn-page-break");
   const btnLink = document.getElementById("btn-link");
+  const btnTable = document.getElementById("btn-table");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
   btnUnderline?.addEventListener("click", () => toggleMarkWithStored("underline"));
   btnStrikethrough?.addEventListener("click", () => toggleMarkWithStored("strikethrough"));
   btnLink?.addEventListener("click", () => openLinkPopover(editorView));
+  btnTable?.addEventListener("click", () => toggleTableDropdown());
+
+  setupTableToolbar(editorView);
+
+  document.addEventListener("click", (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest("#btn-table") && !target.closest(".table-dropdown")) {
+      hideTableDropdown();
+    }
+  });
 
   btnBlockquote?.addEventListener("click", () => {
     const { state } = editorView;
