@@ -14,12 +14,102 @@ const legalTutorial = (title: string, explanation: string, example: string, prom
 });
 
 const clientBlockDocs = [
-  { title: "Case metadata" },
-  { title: "Facts and evidence" },
-  { title: "Law" },
-  { title: "Correspondence and filings" },
-  { title: "Strategic notes" },
-  { title: "Hearings calendar" },
+  {
+    title: "Case metadata",
+    body: [
+      "This document captures the essential information about the case: parties, court, judge, case number (RG), subject matter, value, current phase, and status. Keep it updated as the case progresses.",
+      "",
+      "## Example",
+      "Client: Mario Rossi (individual)\nCounterparty: Bianchi S.r.l.\nMatter: Civil — contractual dispute\nCourt: Tribunale di Milano, Sezione III Civile\nRG: 1234/2025\nJudge: Dott. Bianchi\nCase value: €85,000\nPhase: First instance\nStatus: Active\nNext hearing: 15 March 2026",
+      "",
+      "## Case metadata\n[Fill in the details of your case]",
+      "",
+      "## Suggested prompts",
+      '- Ask the AI: "Draft the case metadata sheet for a {matter} dispute between {client} and {counterparty}"',
+      '- Ask the AI: "What information do I need to file a {type} claim in Italy?"',
+      '- Ask the AI: "Summarise the current status of this case in 3 sentences"',
+    ].join("\n"),
+  },
+  {
+    title: "Facts and evidence",
+    body: [
+      "This document is the narrative of what happened: the factual background, the timeline of events, the evidence you have and the evidence you still need. Write it in chronological order. The AI uses this to draft pleadings and identify weaknesses.",
+      "",
+      "## Example",
+      "Facts:\n- January 2025: Rossi签订 a supply contract with Bianchi S.r.l. for €85,000.\n- March 2025: First delivery is 3 weeks late and 40% of goods are defective.\n- April 2025: Rossi sends formal notice (diffida) requesting replacement within 15 days.\n- May 2025: Bianchi replaces only 60% of defective goods. Rossi withholds payment.\n- June 2025: Bianchi terminates the contract and files for payment.\n\nEvidence:\n- Contract signed 15 January 2025 (original available)\n- Delivery note 3 March 2025 (photos of defective goods)\n- Diffida sent 10 April 2025 (PEC receipt)\n- Email correspondence (exhibits D1-D8)\n\nEvidence still needed:\n- Expert assessment of defective goods\n- Bianchi's internal quality control records",
+      "",
+      "## Facts and evidence\n[Describe the factual background of your case]",
+      "",
+      "## Suggested prompts",
+      '- Ask the AI: "Draft a chronological summary of the facts for {NOME_PRATICA}"',
+      '- Ask the AI: "What evidence am I missing to support my claim?"',
+      '- Ask the AI: "Identify the strongest and weakest points in my factual narrative"',
+    ].join("\n"),
+  },
+  {
+    title: "Law",
+    body: [
+      "This document lists the applicable legal provisions: code articles, regulations, case law, and legal principles that support your position. Organise by legal issue. The AI uses this to cite accurately in pleadings.",
+      "",
+      "## Example",
+      "Applicable law:\n- Art. 1453 c.c. — Risoluzione del contratto per inadempimento\n- Art. 1454 c.c. — Diffida ad adempiere\n- Art. 1218 c.c. — Responsabilità del debitore per ritardo\n- Art. 1176 c.c. — Diligenza nell'adempimento\n\nKey case law:\n- Cass. civ. n. 12345/2024: Onere della prova dell'inadempimento grava sul creditore.\n- Cass. civ. n. 67890/2023: La diffida ex art. 1454 c.c. non richiede forma specifica.\n\nLegal argument:\nBianchi's late and partial delivery constitutes inadempimento ex art. 1453 c.c. The diffida was validly sent via PEC. Rossi's withholding of payment is justified under art. 1460 c.c. (eccezione di inadempimento).",
+      "",
+      "## Law\n[List the applicable code articles and case law]",
+      "",
+      "## Suggested prompts",
+      '- Ask the AI: "Find case law on {MATERIA_PRATICA} from the last 3 years"',
+      '- Ask the AI: "Cite the relevant Italian Civil Code articles for a breach of contract claim"',
+      '- Ask the AI: "What is the legal standard for {legal issue} in Italian law?"',
+    ].join("\n"),
+  },
+  {
+    title: "Correspondence and filings",
+    body: [
+      "This document tracks all formal communications: letters, PECs, court filings, and their dates. Keep a chronological log. The AI uses this to draft new communications and track response deadlines.",
+      "",
+      "## Example",
+      "10 January 2025 — Contract signed by both parties.\n15 March 2025 — Rossi notifies Bianchi of defective goods (PEC).\n10 April 2025 — Rossi sends diffida ad adempiere (PEC, receipt confirmed).\n25 April 2025 — Bianchi responds, acknowledges partial defect.\n15 May 2025 — Bianchi delivers replacement (partial).\n20 June 2025 — Bianchi files for payment (Tribunale di Milano, RG 1234/2025).\n1 July 2025 — Rossi files defence (memoria di costituzione).",
+      "",
+      "## Correspondence and filings\n[Log your formal communications and court filings]",
+      "",
+      "## Suggested prompts",
+      '- Ask the AI: "Draft a PEC to {counterparty} regarding {NOME_PRATICA}"',
+      '- Ask the AI: "What is the next filing deadline in {NOME_PRATICA}?"',
+      '- Ask the AI: "Summarise all correspondence in this case chronologically"',
+    ].join("\n"),
+  },
+  {
+    title: "Strategic notes",
+    body: [
+      "This document is your private strategic workspace: risks, opportunities, settlement options, leverage points, and next steps. Write freely — this is not a court document.",
+      "",
+      "## Example",
+      "Strengths:\n- Clear documentary evidence of late/defective delivery.\n- Diffida was validly served.\n- Bianchi's partial replacement weakens their position.\n\nWeaknesses:\n- Rossi's withholding of payment could be challenged as unreasonable if the defect was minor.\n- No independent expert report on the goods yet.\n\nSettlement options:\n- Accept 50% reduction in price + keep the goods as-is.\n- Bianchi delivers remaining replacement + €5,000 compensation for delay.\n\nLeverage:\n- Bianchi wants to keep Rossi as a long-term client.\n- Rossi prefers to avoid the reputational cost of litigation.\n\nNext steps:\n1. Commission expert report on defective goods.\n2. Evaluate settlement vs. proceeding to hearing.\n3. Prepare witnesses for cross-examination.",
+      "",
+      "## Strategic notes\n[Map your strategy, risks, and settlement options]",
+      "",
+      "## Suggested prompts",
+      '- Ask the AI: "Analyse the strengths and weaknesses of my position in {NOME_PRATICA}"',
+      '- Ask the AI: "Suggest 3 settlement options for {NOME_PRATICA}"',
+      '- Ask the AI: "What leverage does my client have in this dispute?"',
+    ].join("\n"),
+  },
+  {
+    title: "Hearings calendar",
+    body: [
+      "This document tracks all upcoming and past hearings for this specific case. For a cross-case view, use the 'Cross-case deadlines' section.",
+      "",
+      "## Example",
+      "Upcoming:\n- 15 March 2026, h 9:30 — First hearing (Trib. Milano, Sez. III Civ., courtroom 4)\n  Judge: Dott. Bianchi\n  Purpose: Admissions and evidence requests\n  Bring: Original contract, PEC receipts, photos of defective goods\n\nPast:\n- 10 November 2025 — Filing of defence (memoria di costituzione)\n- 1 July 2025 — Bianchi filed for payment",
+      "",
+      "## Hearings calendar\n[Track upcoming and past hearings for this case]",
+      "",
+      "## Suggested prompts",
+      '- Ask the AI: "Prepare a hearing preparation checklist for {NOME_PRATICA}"',
+      '- Ask the AI: "What should I expect at the first hearing in a civil case?"',
+      '- Ask the AI: "Draft a summary of this case for the judge at the upcoming hearing"',
+    ].join("\n"),
+  },
 ];
 
 export const legalTemplate: Template = {
@@ -31,7 +121,7 @@ export const legalTemplate: Template = {
   sections: [
     {
       name: "Client 1",
-      documents: clientBlockDocs.map((d) => ({ title: d.title, body: "" })),
+      documents: clientBlockDocs,
     },
     {
       name: "Cross-case deadlines",

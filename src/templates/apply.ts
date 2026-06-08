@@ -12,6 +12,28 @@ import type {
   TemplateStyleSpec,
 } from "./_types";
 
+// Fixed palette of 12 harmonious bg+text color combinations
+const PROJECT_COLORS: Array<{ bg: string; text: string }> = [
+  { bg: "#E8F4FD", text: "#1A3A5C" },  // blu chiaro
+  { bg: "#FFF3E0", text: "#5D4037" },  // arancione caldo
+  { bg: "#E8F5E9", text: "#1B5E20" },  // verde
+  { bg: "#F3E5F5", text: "#4A148C" },  // viola
+  { bg: "#FFF8E1", text: "#F57F17" },  // giallo
+  { bg: "#FFEBEE", text: "#B71C1C" },  // rosso
+  { bg: "#E0F2F1", text: "#004D40" },  // teal
+  { bg: "#EDE7F6", text: "#311B92" },  // indaco
+  { bg: "#FBE9E7", text: "#BF360C" },  // arancione bruno
+  { bg: "#F1F8E9", text: "#33691E" },  // verde chiaro
+  { bg: "#E1F5FE", text: "#01579B" },  // azzurro
+  { bg: "#FCE4EC", text: "#880E4F" },  // rosa
+];
+
+/** Return a random harmonious bg+text color pair for a new project. */
+export function randomProjectColors(): { bg_color: string; text_color: string } {
+  const pair = PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
+  return { bg_color: pair.bg, text_color: pair.text };
+}
+
 /**
  * Registry of all available templates (top-level, for the dropdown).
  * Chef B is NOT listed here — it's accessed via the variant picker.
@@ -99,14 +121,15 @@ export async function createProjectFromTemplate(opts: {
   // 1) Create the project (no sections, no entity types yet).
   const projectId = "proj-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
   const now = Date.now();
+  const colors = randomProjectColors();
   const project: Project = {
     id: projectId,
     name: opts.name,
     type: "generic", // legacy field
     template_type: effectiveTemplate.type,
     description: undefined,
-    bg_color: undefined,
-    text_color: undefined,
+    bg_color: colors.bg_color,
+    text_color: colors.text_color,
     suggestions_prompt_override: undefined,
     chat_prompt_override: undefined,
     selected_style: opts.selectedStyle || effectiveTemplate.defaultStyleName || undefined,

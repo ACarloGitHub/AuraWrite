@@ -179,16 +179,38 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
+// Fixed palette of 12 harmonious bg+text color combinations for new projects
+const PROJECT_COLORS: Array<{ bg: string; text: string }> = [
+  { bg: "#E8F4FD", text: "#1A3A5C" },
+  { bg: "#FFF3E0", text: "#5D4037" },
+  { bg: "#E8F5E9", text: "#1B5E20" },
+  { bg: "#F3E5F5", text: "#4A148C" },
+  { bg: "#FFF8E1", text: "#F57F17" },
+  { bg: "#FFEBEE", text: "#B71C1C" },
+  { bg: "#E0F2F1", text: "#004D40" },
+  { bg: "#EDE7F6", text: "#311B92" },
+  { bg: "#FBE9E7", text: "#BF360C" },
+  { bg: "#F1F8E9", text: "#33691E" },
+  { bg: "#E1F5FE", text: "#01579B" },
+  { bg: "#FCE4EC", text: "#880E4F" },
+];
+
+function randomProjectColors(): { bg_color: string; text_color: string } {
+  const pair = PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
+  return { bg_color: pair.bg, text_color: pair.text };
+}
+
 export function createProject(name: string, type: ProjectType = "novel", description?: string): Project {
   const now = Date.now();
+  const colors = randomProjectColors();
   return {
     id: generateId(),
     name,
     type,
     description,
     template_type: "custom",
-    bg_color: undefined,
-    text_color: undefined,
+    bg_color: colors.bg_color,
+    text_color: colors.text_color,
     suggestions_prompt_override: undefined,
     chat_prompt_override: undefined,
     selected_style: undefined,
