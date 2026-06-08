@@ -2409,6 +2409,73 @@ kbd {
   flex-direction: column;
 }
 
+/* ============================================================================
+   MULTIBRANCH — container sezioni nidificate
+   ============================================================================ */
+.section-children {
+  display: flex;
+  flex-direction: column;
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 1px dashed var(--color-border, #ccc);
+}
+.section-children.root {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+/* Clone compatto durante il drag: nascondi sottoalbero nel fantasma */
+.sortable-drag .section-children { display: none !important; }
+
+/* Indicatore intento FIGLIO (meta' alta header) */
+.section-item.drop-as-child > .item-header {
+  border-color: #38c172 !important;
+  box-shadow: inset 0 0 0 1px #38c172, 0 0 0 3px rgba(56,193,114,.18);
+}
+.section-item.drop-as-child > .item-header::after {
+  content: "↳ figlio";
+  position: absolute;
+  right: 8px;
+  font-size: 10px;
+  color: #38c172;
+  font-weight: 600;
+}
+
+/* Indicatore intento NON valido (ciclo o profondita' > 4) */
+.section-item.drop-blocked > .item-header {
+  border-color: #e74c3c !important;
+  cursor: not-allowed;
+}
+.section-item.drop-blocked > .item-header::after {
+  content: "🚫 max 4 / ciclo";
+  position: absolute;
+  right: 8px;
+  font-size: 10px;
+  color: #e74c3c;
+}
+
+/* Lampeggio 1s sul drop-figlio */
+@keyframes child-flash {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px rgba(74,144,217,.6); }
+}
+.section-item.child-flash > .item-header { animation: child-flash 0.25s 4; }
+
+/* Label floating durante il drag */
+#drag-label {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  display: none;
+  white-space: nowrap;
+}
+
 .docs-list {
   display: flex;
   flex-direction: column;
