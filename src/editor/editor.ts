@@ -26,6 +26,7 @@ import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
 import { createPaginationPlugin, requestPaginationRecalc } from "./pagination-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
+import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { PageNodeView } from "./page-node-view";
 import { initPagedMode, getPagedMode, setPagedMode } from "./pagination-state";
 
@@ -242,6 +243,50 @@ const codeBlockSpec: NodeSpec = {
   },
 };
 
+const imageSpec: NodeSpec = {
+  inline: false,
+  group: "block",
+  draggable: true,
+  selectable: true,
+  attrs: {
+    src: { default: "" },
+    alt: { default: "" },
+    title: { default: "" },
+    width: { default: null },
+    height: { default: null },
+    align: { default: "center" },
+  },
+  parseDOM: [
+    {
+      tag: "img[src]",
+      getAttrs: (dom: HTMLElement | string) => {
+        if (typeof dom === "string") return false;
+        const w = dom.getAttribute("width");
+        const h = dom.getAttribute("height");
+        return {
+          src: dom.getAttribute("src") || "",
+          alt: dom.getAttribute("alt") || "",
+          title: dom.getAttribute("title") || "",
+          width: w ? parseInt(w, 10) || null : null,
+          height: h ? parseInt(h, 10) || null : null,
+          align: dom.getAttribute("data-align") || "center",
+        };
+      },
+    },
+  ],
+  toDOM(node) {
+    const attrs: Record<string, string> = {
+      src: node.attrs.src as string,
+      alt: node.attrs.alt as string,
+    };
+    if (node.attrs.title) attrs.title = node.attrs.title as string;
+    if (node.attrs.width) attrs.width = String(node.attrs.width);
+    if (node.attrs.height) attrs.height = String(node.attrs.height);
+    attrs["data-align"] = node.attrs.align as string;
+    return ["img", attrs];
+  },
+};
+
 const underlineMark: MarkSpec = {
   parseDOM: [
     { tag: "u" },
@@ -412,6 +457,7 @@ nodes = nodes
     blockquote: blockquoteSpec,
     page: pageSpec,
     code_block: codeBlockSpec,
+    image: imageSpec,
     ...tableNodeSpecs,
   });
 
@@ -493,6 +539,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
       findReplacePlugin,
       paginationPluginInstance,
       linkPopoverPlugin,
+      createImageDropPlugin(),
+      createImagePastePlugin(),
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
       tableEditing(),
       createTableMonitorPlugin(),

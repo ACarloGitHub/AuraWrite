@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State};
 
 // Import modules
 mod database;
@@ -577,6 +577,49 @@ fn save_binary_file(path: String, base64_content: String) -> Result<(), String> 
 }
 
 #[tauri::command]
+fn save_image_to_assets(
+    app: tauri::AppHandle,
+    filename: String,
+    base64_content: String,
+) -> Result<String, String> {
+    let bytes = base64_decode(&base64_content).map_err(|e| e.to_string())?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?;
+    let images_dir = app_data.join("images");
+    std::fs::create_dir_all(&images_dir).map_err(|e| e.to_string())?;
+    let safe_name = filename
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+        .collect::<String>();
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let final_name = format!("{}-{}", unique, safe_name);
+    let dest = images_dir.join(&final_name);
+    std::fs::write(&dest, bytes).map_err(|e| e.to_string())?;
+    Ok(format!("images/{}", final_name))
+}
+
+#[tauri::command]
+fn read_image_asset(
+    app: tauri::AppHandle,
+    relative_path: String,
+) -> Result<Vec<u8>, String> {
+    if relative_path.contains("..") {
+        return Err("Invalid path".into());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?;
+    let full = app_data.join(&relative_path);
+    std::fs::read(&full).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
@@ -806,6 +849,8 @@ pub fn run() {
             load_document,
             load_binary_file,
             save_binary_file,
+            save_image_to_assets,
+            read_image_asset,
             get_app_version,
             // Project commands
             db_create_project,

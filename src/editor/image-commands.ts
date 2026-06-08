@@ -1,0 +1,141 @@
+import type { EditorView } from "prosemirror-view";
+import { Node as PMNode } from "prosemirror-model";
+import { uploadImageFile, resolveImageSrc, type UploadedImage } from "./image-uploader";
+
+export function createImageNode(
+  view: EditorView,
+  uploaded: UploadedImage
+): PMNode | null {
+  const { state } = view;
+  const imageType = state.schema.nodes.image;
+  if (!imageType) return null;
+
+  const attrs: Record<string, unknown> = {
+    src: uploaded.src,
+    alt: uploaded.filename,
+    title: uploaded.filename,
+    width: uploaded.width,
+    height: uploaded.height,
+    align: "center",
+  };
+  return imageType.create(attrs);
+}
+
+function findInsertPos(view: EditorView): { pos: number; depth: number } | null {
+  const { $from } = view.state.selection;
+  for (let d = $from.depth; d >= 0; d--) {
+    const parent = $from.node(d);
+    const match = parent.contentMatchAt($from.index(d)).matchType(
+      view.state.schema.nodes.image
+    );
+    if (match) {
+      return { pos: $from.end(d), depth: d };
+    }
+  }
+  return null;
+}
+
+export async function insertImageFromFile(
+  view: EditorView,
+  file: File
+): Promise<boolean> {
+  try {
+    const uploaded = await uploadImageFile(file);
+    const node = createImageNode(view, uploaded);
+    if (!node) return false;
+    const insert = findInsertPos(view);
+    if (!insert) return false;
+    const tr = view.state.tr.insert(insert.pos, node);
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  } catch (e) {
+    console.error("[image] insert from file failed:", e);
+    return false;
+  }
+}
+
+export function insertImageFromSrc(
+  view: EditorView,
+  src: string,
+  alt: string = ""
+): boolean {
+  const { state } = view;
+  const imageType = state.schema.nodes.image;
+  if (!imageType) return false;
+  const insert = findInsertPos(view);
+  if (!insert) return false;
+  const node = imageType.create({
+    src,
+    alt,
+    title: alt,
+    width: null,
+    height: null,
+    align: "center",
+  });
+  const tr = state.tr.insert(insert.pos, node);
+  view.dispatch(tr);
+  view.focus();
+  return true;
+}
+
+export interface SelectedImageInfo {
+  pos: number;
+  node: PMNode;
+  resolvedSrc: string;
+}
+
+export function getSelectedImage(view: EditorView): SelectedImageInfo | null {
+  const { $from } = view.state.selection;
+  if ($from.parent.type.spec.inline) return null;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === "image") {
+      const pos = $from.before(d);
+      return {
+        pos,
+        node,
+        resolvedSrc: resolveImageSrc(node.attrs.src as string),
+      };
+    }
+  }
+  return null;
+}
+
+export function setImageAlignment(
+  view: EditorView,
+  align: "left" | "center" | "right" | "inline"
+): boolean {
+  const info = getSelectedImage(view);
+  if (!info) return false;
+  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
+    ...info.node.attrs,
+    align,
+  });
+  view.dispatch(tr);
+  return true;
+}
+
+export function setImageSize(
+  view: EditorView,
+  width: number | null,
+  height: number | null
+): boolean {
+  const info = getSelectedImage(view);
+  if (!info) return false;
+  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
+    ...info.node.attrs,
+    width,
+    height,
+  });
+  view.dispatch(tr);
+  return true;
+}
+
+export function removeImage(view: EditorView): boolean {
+  const info = getSelectedImage(view);
+  if (!info) return false;
+  const tr = view.state.tr.delete(info.pos, info.pos + info.node.nodeSize);
+  view.dispatch(tr);
+  return true;
+}

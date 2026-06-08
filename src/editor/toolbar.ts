@@ -13,6 +13,9 @@ import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
+import { insertImageFromFile } from "./image-commands";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import {
   initPagination,
   updateOnTextChange,
@@ -44,6 +47,66 @@ let documentState: DocumentState = {
 };
 
 let incrementalTimer: ReturnType<typeof globalThis.setInterval> | null = null;
+
+async function openImagePicker(view: EditorView): Promise<void> {
+  try {
+    const selected = await openDialog({
+      multiple: false,
+      filters: [
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"],
+        },
+      ],
+    });
+    if (!selected || typeof selected !== "string") return;
+    const fileName = selected.split(/[\\/]/).pop() || "image";
+    const bytes = await invoke<number[]>("read_binary_file", { path: selected });
+    const arr = new Uint8Array(bytes);
+    const mime = mimeFromFilename(fileName);
+    let binary = "";
+    for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+    const base64 = btoa(binary);
+    const { uploadImageFile } = await import("./image-uploader");
+    const uploaded = await uploadImageFile({
+      name: fileName,
+      type: mime,
+      size: arr.length,
+    } as File);
+    void base64;
+    const { createImageNode } = await import("./image-commands");
+    const node = createImageNode(view, uploaded);
+    if (!node) return;
+    const $from = view.state.selection.$from;
+    let insertPos = $from.pos;
+    for (let d = $from.depth; d >= 0; d--) {
+      const parent = $from.node(d);
+      const match = parent
+        .contentMatchAt($from.index(d))
+        .matchType(view.state.schema.nodes.image);
+      if (match) {
+        insertPos = $from.end(d);
+        break;
+      }
+    }
+    const tr = view.state.tr.insert(insertPos, node);
+    view.dispatch(tr);
+    view.focus();
+  } catch (e) {
+    console.error("[image] openImagePicker failed:", e);
+  }
+}
+
+function mimeFromFilename(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  return "application/octet-stream";
+}
 
 export function setupToolbar(view: EditorView): void {
   editorView = view;
@@ -558,6 +621,7 @@ function setupFormattingButtons(): void {
   const btnPageBreak = document.getElementById("btn-page-break");
   const btnLink = document.getElementById("btn-link");
   const btnTable = document.getElementById("btn-table");
+  const btnImage = document.getElementById("btn-image");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
@@ -565,6 +629,7 @@ function setupFormattingButtons(): void {
   btnStrikethrough?.addEventListener("click", () => toggleMarkWithStored("strikethrough"));
   btnLink?.addEventListener("click", () => openLinkPopover(editorView));
   btnTable?.addEventListener("click", () => toggleTableDropdown());
+  btnImage?.addEventListener("click", () => openImagePicker(editorView));
 
   setupTableToolbar(editorView);
 
