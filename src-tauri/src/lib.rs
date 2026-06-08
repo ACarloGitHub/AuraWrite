@@ -2,6 +2,7 @@
 
 use std::sync::Mutex;
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 // Import modules
@@ -55,8 +56,266 @@ fn db_delete_project(state: State<AppState>, id: String) -> Result<(), String> {
 }
 
 // ============================================================================
+// USER STYLES COMMANDS
+// ============================================================================
+
+#[tauri::command]
+fn db_list_user_styles(state: State<AppState>) -> Result<Vec<database::UserStyle>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    database::list_user_styles(&*conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_create_user_style(
+    state: State<AppState>,
+    style: database::UserStyle,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    database::create_user_style(&*conn, &style).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn db_delete_user_style(state: State<AppState>, id: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    database::delete_user_style(&*conn, &id).map_err(|e| e.to_string())
+}
+
+// ============================================================================
 // SECTION COMMANDS
 // ============================================================================
+
+// ============================================================================
+// TEMPLATE SYSTEM COMMANDS
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TemplateDocumentSpec {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TemplateSectionSpec {
+    pub name: String,
+    pub children: Vec<TemplateSectionSpec>,
+    pub tutorial: Option<TemplateDocumentSpec>,
+    pub documents: Vec<TemplateDocumentSpec>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TemplateEntityTypeFieldSpec {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub required: Option<bool>,
+    pub enum_values: Option<Vec<String>>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TemplateEntityTypeSpec {
+    pub name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+    pub fields: Vec<TemplateEntityTypeFieldSpec>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TemplateSpec {
+    pub template_type: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub description: Option<String>,
+    pub sections: Vec<TemplateSectionSpec>,
+    pub entity_types: Vec<TemplateEntityTypeSpec>,
+    pub suggestions_prompt: Option<String>,
+    pub chat_prompt: Option<String>,
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn generate_id(prefix: &str) -> String {
+    format!("{}-{}", prefix, uuid_v4_like())
+}
+
+fn uuid_v4_like() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{:x}-{:x}", nanos, (nanos >> 16) as u64)
+}
+
+fn apply_template_section_recursive(
+    conn: &Connection,
+    project_id: &str,
+    section_spec: &TemplateSectionSpec,
+    parent_id: Option<&str>,
+    now: i64,
+) -> Result<String, String> {
+    let section_id = generate_id("sec");
+    let section = Section {
+        id: section_id.clone(),
+        project_id: project_id.to_string(),
+        parent_id: parent_id.map(|s| s.to_string()),
+        name: section_spec.name.clone(),
+        order_index: 0,
+        bg_color: None,
+        text_color: None,
+        section_type: Some("chapter".to_string()),
+        created_at: now,
+        updated_at: now,
+    };
+    create_section(conn, &section).map_err(|e| format!("create_section: {}", e))?;
+
+    if let Some(tut) = &section_spec.tutorial {
+        let doc = Document {
+            id: generate_id("doc"),
+            section_id: section_id.clone(),
+            title: tut.title.clone(),
+            content_json: document_to_prosemirror_json(&tut.body),
+            status: Some("draft".to_string()),
+            word_count: 0,
+            tags: None,
+            order_index: 0,
+            bg_color: None,
+            text_color: None,
+            created_at: now,
+            updated_at: now,
+        };
+        create_document(conn, &doc).map_err(|e| format!("create_document: {}", e))?;
+    }
+    for (i, d) in section_spec.documents.iter().enumerate() {
+        let mut doc = Document {
+            id: generate_id("doc"),
+            section_id: section_id.clone(),
+            title: d.title.clone(),
+            content_json: document_to_prosemirror_json(&d.body),
+            status: Some("draft".to_string()),
+            word_count: 0,
+            tags: None,
+            order_index: i as i32,
+            bg_color: None,
+            text_color: None,
+            created_at: now,
+            updated_at: now,
+        };
+        // empty body documents keep empty content_json
+        if d.body.is_empty() {
+            doc.content_json = String::new();
+        }
+        create_document(conn, &doc).map_err(|e| format!("create_document: {}", e))?;
+    }
+
+    for child in &section_spec.children {
+        apply_template_section_recursive(conn, project_id, child, Some(&section_id), now)?;
+    }
+
+    Ok(section_id)
+}
+
+fn document_to_prosemirror_json(text: &str) -> String {
+    // Wrap plain text in a minimal ProseMirror doc. Empty string = empty doc.
+    if text.is_empty() {
+        return String::new();
+    }
+    let paragraphs: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let escaped = line
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
+            format!(r#"{{"type":"paragraph","content":[{{"type":"text","text":"{}"}}]}}"#, escaped)
+        })
+        .collect();
+    format!(r#"{{"type":"doc","content":[{}]}}"#, paragraphs.join(","))
+}
+
+#[tauri::command]
+fn apply_template(
+    state: State<AppState>,
+    project_id: String,
+    template: TemplateSpec,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let now = now_ms();
+
+    // Wrap everything in a transaction. Either the whole template applies or nothing.
+    conn.execute_batch("BEGIN").map_err(|e| format!("begin: {}", e))?;
+
+    let result: Result<(), String> = (|| {
+        // 1) Create entity types
+        for et in &template.entity_types {
+            let fields_json = serde_json::to_string(
+                &et.fields.iter().map(|f| {
+                    serde_json::json!({
+                        "name": f.name,
+                        "type": f.field_type,
+                        "required": f.required.unwrap_or(false),
+                        "enum_values": f.enum_values,
+                        "note": f.note,
+                    })
+                }).collect::<Vec<_>>()
+            ).map_err(|e| format!("entity_type fields json: {}", e))?;
+            let entity_type = database::EntityType {
+                id: generate_id("et"),
+                project_id: project_id.clone(),
+                name: et.name.clone(),
+                icon: et.icon.clone(),
+                color: et.color.clone(),
+                fields_json: Some(fields_json),
+                created_at: now,
+            };
+            create_entity_type(&conn, &entity_type)
+                .map_err(|e| format!("create_entity_type: {}", e))?;
+        }
+
+        // 2) Create sections (recursively)
+        for (i, section_spec) in template.sections.iter().enumerate() {
+            apply_template_section_recursive(
+                &conn,
+                &project_id,
+                section_spec,
+                None,
+                now,
+            )?;
+            // order_index of roots tracked via parent order: we use index i.
+            let _ = i;
+        }
+
+        // 3) Store prompts on the project by re-reading + updating
+        let project = get_project_by_id(&conn, &project_id)
+            .map_err(|e| format!("get_project: {}", e))?
+            .ok_or_else(|| "Project not found".to_string())?;
+        let updated = database::Project {
+            template_type: template.template_type.clone(),
+            suggestions_prompt_override: None,
+            chat_prompt_override: None,
+            selected_style: None,
+            ..project
+        };
+        update_project(&conn, &updated).map_err(|e| format!("update_project: {}", e))?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT").map_err(|e| format!("commit: {}", e))?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
 
 #[tauri::command]
 fn db_create_section(state: State<AppState>, section: Section) -> Result<(), String> {
@@ -537,6 +796,12 @@ pub fn run() {
             db_get_project,
             db_update_project,
             db_delete_project,
+            // User styles commands
+            db_list_user_styles,
+            db_create_user_style,
+            db_delete_user_style,
+            // Template commands
+            apply_template,
             // Section commands
             db_create_section,
             db_get_sections,

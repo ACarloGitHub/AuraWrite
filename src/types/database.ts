@@ -9,9 +9,30 @@ export interface Project {
   description?: string;
   bg_color?: string;
   text_color?: string;
+  template_type: string;
+  suggestions_prompt_override?: string;
+  chat_prompt_override?: string;
+  selected_style?: string;
   created_at: number;
   updated_at: number;
 }
+
+export interface UserStyle {
+  id: string;
+  name: string;
+  prompt_fragment: string;
+  created_at: number;
+}
+
+export type TemplateType =
+  | "custom"
+  | "book"
+  | "chef"
+  | "legal"
+  | "developer"
+  | "notes"
+  | "article"
+  | "thesis";
 
 export interface Section {
   id: string;

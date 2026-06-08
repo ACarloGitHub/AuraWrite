@@ -18,8 +18,20 @@ pub struct Project {
     pub description: Option<String>,
     pub bg_color: Option<String>,
     pub text_color: Option<String>,
+    pub template_type: String,
+    pub suggestions_prompt_override: Option<String>,
+    pub chat_prompt_override: Option<String>,
+    pub selected_style: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UserStyle {
+    pub id: String,
+    pub name: String,
+    pub prompt_fragment: String,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -194,6 +206,39 @@ fn run_migrations(conn: &Connection) -> SqliteResult<()> {
         conn.execute_batch("ALTER TABLE documents ADD COLUMN text_color TEXT;")?;
     }
 
+    // Migration M2.2: add template columns to projects
+    let has_template_type: bool = conn
+        .prepare("SELECT template_type FROM projects LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_template_type {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN template_type TEXT NOT NULL DEFAULT 'custom';")?;
+    }
+
+    let has_suggestions_override: bool = conn
+        .prepare("SELECT suggestions_prompt_override FROM projects LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_suggestions_override {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN suggestions_prompt_override TEXT;")?;
+    }
+
+    let has_chat_override: bool = conn
+        .prepare("SELECT chat_prompt_override FROM projects LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_chat_override {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN chat_prompt_override TEXT;")?;
+    }
+
+    let has_selected_style: bool = conn
+        .prepare("SELECT selected_style FROM projects LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if !has_selected_style {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN selected_style TEXT;")?;
+    }
+
     Ok(())
 }
 
@@ -212,8 +257,20 @@ fn get_schema() -> String {
         description TEXT,
         bg_color TEXT,
         text_color TEXT,
+        template_type TEXT NOT NULL DEFAULT 'custom',
+        suggestions_prompt_override TEXT,
+        chat_prompt_override TEXT,
+        selected_style TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
+    );
+
+    -- User-defined writing styles (global, available across all projects)
+    CREATE TABLE IF NOT EXISTS user_styles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        prompt_fragment TEXT NOT NULL,
+        created_at INTEGER NOT NULL
     );
 
     -- Entity types per project (user-definable)
@@ -422,8 +479,8 @@ mod tests {
 
 pub fn create_project(conn: &Connection, project: &Project) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO projects (id, name, type, description, bg_color, text_color, created_at, updated_at) 
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO projects (id, name, type, description, bg_color, text_color, template_type, suggestions_prompt_override, chat_prompt_override, selected_style, created_at, updated_at) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             project.id,
             project.name,
@@ -431,6 +488,10 @@ pub fn create_project(conn: &Connection, project: &Project) -> SqliteResult<()> 
             project.description,
             project.bg_color,
             project.text_color,
+            project.template_type,
+            project.suggestions_prompt_override,
+            project.chat_prompt_override,
+            project.selected_style,
             project.created_at,
             project.updated_at
         ],
@@ -440,7 +501,7 @@ pub fn create_project(conn: &Connection, project: &Project) -> SqliteResult<()> 
 
 pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, type, description, bg_color, text_color, created_at, updated_at FROM projects ORDER BY updated_at DESC"
+        "SELECT id, name, type, description, bg_color, text_color, template_type, suggestions_prompt_override, chat_prompt_override, selected_style, created_at, updated_at FROM projects ORDER BY updated_at DESC"
     )?;
 
     let projects = stmt.query_map([], |row| {
@@ -451,8 +512,12 @@ pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
             description: row.get(3)?,
             bg_color: row.get(4)?,
             text_color: row.get(5)?,
-            created_at: row.get(6)?,
-            updated_at: row.get(7)?,
+            template_type: row.get(6)?,
+            suggestions_prompt_override: row.get(7)?,
+            chat_prompt_override: row.get(8)?,
+            selected_style: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         })
     })?;
 
@@ -461,7 +526,7 @@ pub fn get_projects(conn: &Connection) -> SqliteResult<Vec<Project>> {
 
 pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, type, description, bg_color, text_color, created_at, updated_at FROM projects WHERE id = ?1",
+        "SELECT id, name, type, description, bg_color, text_color, template_type, suggestions_prompt_override, chat_prompt_override, selected_style, created_at, updated_at FROM projects WHERE id = ?1",
     )?;
 
     let mut rows = stmt.query(params![id])?;
@@ -474,8 +539,12 @@ pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Pro
             description: row.get(3)?,
             bg_color: row.get(4)?,
             text_color: row.get(5)?,
-            created_at: row.get(6)?,
-            updated_at: row.get(7)?,
+            template_type: row.get(6)?,
+            suggestions_prompt_override: row.get(7)?,
+            chat_prompt_override: row.get(8)?,
+            selected_style: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         }))
     } else {
         Ok(None)
@@ -484,13 +553,17 @@ pub fn get_project_by_id(conn: &Connection, id: &str) -> SqliteResult<Option<Pro
 
 pub fn update_project(conn: &Connection, project: &Project) -> SqliteResult<()> {
     conn.execute(
-        "UPDATE projects SET name = ?1, type = ?2, description = ?3, bg_color = ?4, text_color = ?5, updated_at = ?6 WHERE id = ?7",
+        "UPDATE projects SET name = ?1, type = ?2, description = ?3, bg_color = ?4, text_color = ?5, template_type = ?6, suggestions_prompt_override = ?7, chat_prompt_override = ?8, selected_style = ?9, updated_at = ?10 WHERE id = ?11",
         params![
             project.name,
             project.project_type,
             project.description,
             project.bg_color,
             project.text_color,
+            project.template_type,
+            project.suggestions_prompt_override,
+            project.chat_prompt_override,
+            project.selected_style,
             project.updated_at,
             project.id
         ],
@@ -500,6 +573,38 @@ pub fn update_project(conn: &Connection, project: &Project) -> SqliteResult<()> 
 
 pub fn delete_project(conn: &Connection, id: &str) -> SqliteResult<()> {
     conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+// ============================================================================
+// USER STYLES (global, available across all projects)
+// ============================================================================
+
+pub fn create_user_style(conn: &Connection, style: &UserStyle) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO user_styles (id, name, prompt_fragment, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![style.id, style.name, style.prompt_fragment, style.created_at],
+    )?;
+    Ok(())
+}
+
+pub fn list_user_styles(conn: &Connection) -> SqliteResult<Vec<UserStyle>> {
+    let mut stmt = conn.prepare("SELECT id, name, prompt_fragment, created_at FROM user_styles ORDER BY name ASC")?;
+    let styles = stmt
+        .query_map([], |row| {
+            Ok(UserStyle {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                prompt_fragment: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?
+        .collect::<SqliteResult<Vec<_>>>()?;
+    Ok(styles)
+}
+
+pub fn delete_user_style(conn: &Connection, id: &str) -> SqliteResult<()> {
+    conn.execute("DELETE FROM user_styles WHERE id = ?1", params![id])?;
     Ok(())
 }
 
