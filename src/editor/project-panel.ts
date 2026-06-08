@@ -223,23 +223,25 @@ function checkUnsavedChanges(): boolean {
   if (!currentDocument) return false;
   const currentContent = getEditorContent ? getEditorContent() : null;
   if (!currentContent) return false;
-  
-  if (lastSavedContent === null) {
-    try {
-      const parsed = JSON.parse(currentContent);
-      if (parsed.content && parsed.content.length > 0) {
-        const hasText = parsed.content.some((node: any) => 
-          node.content && node.content.some((child: any) => child.text && child.text.length > 0)
-        );
-        return hasText;
-      }
-      return false;
-    } catch {
-      return currentContent !== "";
-    }
+
+  // Compare extracted plain text, not raw JSON. ProseMirror normalizes the
+  // loaded doc (adds attrs, reorders content) so editorView.state.doc.toJSON()
+  // often differs in shape from the stored content_json, even when the text
+  // is identical. Comparing text avoids false-positive "unsaved changes"
+  // dialogs when the user navigates between template documents.
+  const currentText = extractTextFromContent(currentContent).trim();
+  const lastSavedText = lastSavedContent
+    ? extractTextFromContent(lastSavedContent).trim()
+    : null;
+
+  if (lastSavedText === null) {
+    // No prior saved snapshot: editor has been loaded with a fresh doc that
+    // has text content. Treat as "saved" — the user hasn't typed anything
+    // and shouldn't be prompted on next switch.
+    return currentText.length > 0;
   }
-  
-  return currentContent !== lastSavedContent;
+
+  return currentText !== lastSavedText;
 }
 
 function markContentSaved(content: string): void {

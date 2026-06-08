@@ -810,8 +810,7 @@ document.addEventListener("DOMContentLoaded", () => {
         syncDocumentPaginationState(editorView);
       }
       setTimeout(() => setLoading(false), 50);
-    },
-    onProjectChange: (project) => {
+    },    onProjectChange: (project) => {
       console.log("Project changed:", project?.name || "none");
     },
     getEditorContent: () => {

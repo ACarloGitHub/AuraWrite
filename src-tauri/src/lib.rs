@@ -234,6 +234,11 @@ fn document_to_prosemirror_json(text: &str) -> String {
     let paragraphs: Vec<String> = text
         .lines()
         .map(|line| {
+            // Empty lines must produce an empty paragraph (no text node) —
+            // ProseMirror throws "Empty text nodes are not allowed" otherwise.
+            if line.is_empty() {
+                return r#"{"type":"paragraph"}"#.to_string();
+            }
             let escaped = line
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"");
