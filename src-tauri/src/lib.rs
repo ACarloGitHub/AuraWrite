@@ -632,8 +632,8 @@ fn get_image_asset_url(
         .app_data_dir()
         .map_err(|e| format!("app_data_dir error: {}", e))?;
     let full = app_data.join(&relative_path);
-    let url = format!("asset://localhost/{}", full.to_string_lossy().replace('\\', "/"));
-    Ok(url)
+    let path_str = full.to_string_lossy().to_string();
+    Ok(path_str)
 }
 
 #[tauri::command]

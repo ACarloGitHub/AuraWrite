@@ -64,19 +64,21 @@ export async function resolveImageSrc(relativePath: string): Promise<string> {
     relativePath.startsWith("data:") ||
     relativePath.startsWith("file:") ||
     relativePath.startsWith("blob:") ||
-    relativePath.startsWith("asset://")
+    relativePath.startsWith("tauri:") ||
+    relativePath.startsWith("asset:")
   ) {
     return relativePath;
   }
-  if (relativePath.includes(":") && !relativePath.startsWith("images/")) {
-    return relativePath;
+  if (relativePath.match(/^[a-zA-Z]:[\\\/]/) || relativePath.startsWith("/")) {
+    return convertFileSrc(relativePath);
   }
   try {
-    return await invoke<string>("get_image_asset_url", {
+    const absolutePath = await invoke<string>("get_image_asset_url", {
       relativePath,
     });
+    return convertFileSrc(absolutePath);
   } catch (e) {
-    console.warn("[image] get_image_asset_url failed, using convertFileSrc:", e);
+    console.warn("[image] get_image_asset_url failed:", e);
     return convertFileSrc(relativePath);
   }
 }
