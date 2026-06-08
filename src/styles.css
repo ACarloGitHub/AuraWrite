@@ -3977,6 +3977,79 @@ kbd {
   background: transparent;
 }
 
+/* Image node wrapper with resize handles */
+.image-node-wrapper {
+  position: relative;
+  display: block;
+  margin: 8px 0;
+}
+
+.image-node-wrapper[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.image-node-wrapper[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.image-node-wrapper[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.image-node-wrapper img {
+  display: block;
+  max-width: 100%;
+}
+
+.image-node-wrapper--selected {
+  outline: 2px solid var(--color-primary, #4a90d9);
+  outline-offset: 2px;
+}
+
+.image-resize-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--color-primary, #4a90d9);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: none;
+}
+
+.image-node-wrapper--selected .image-resize-handle {
+  display: block;
+}
+
+.image-resize-handle--tl {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+
+.image-resize-handle--tr {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+
+.image-resize-handle--bl {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
+}
+
+.image-resize-handle--br {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+
 /* ============================================================================
    TABLE WARNING BANNER
    ============================================================================ */

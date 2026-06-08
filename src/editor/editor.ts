@@ -555,7 +555,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
     },
     nodeViews: {
       page: (node, view, getPos) => new PageNodeView(node, view, getPos),
-      image: (node) => new ImageNodeView(node),
+      image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
     },
   });
 
