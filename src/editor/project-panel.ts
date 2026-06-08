@@ -31,6 +31,7 @@ import {
 } from "../ai-panel/entity-extraction";
 import Sortable from "sortablejs";
 import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
+import { listTemplates, getTemplate, createProjectFromTemplate } from "../templates/apply";
 
 // State
 let currentProject: Project | null = null;
@@ -623,12 +624,25 @@ async function handleNewProject(): Promise<void> {
     return; // Utente ha annullato
   }
 
-  // Show project type dialog with dropdown
-  const result = await showProjectTypeDialog();
+  // Show template dialog
+  const result = await showTemplateDialog();
   if (!result) return;
 
   try {
-    const projectResult = await createProjectWithDefaults(result.name, result.type);
+    let projectResult: { project: Project; sections: Section[] };
+    if (result.templateType === "custom") {
+      // Custom: use the legacy createProjectWithDefaults (empty project)
+      const customResult = await createProjectWithDefaults(result.name, "custom");
+      projectResult = { project: customResult.project, sections: [] };
+    } else {
+      // Template-based: use the new applyTemplate flow
+      projectResult = await createProjectFromTemplate({
+        name: result.name,
+        templateType: result.templateType,
+        chefVariant: result.chefVariant,
+        selectedStyle: result.selectedStyle,
+      });
+    }
     projects.push(projectResult.project);
     currentProject = projectResult.project;
     currentSection = null;
@@ -649,6 +663,122 @@ async function handleNewProject(): Promise<void> {
     console.error("Failed to create project:", error);
     showNotification("Could not create project", "error");
   }
+}
+
+interface TemplateDialogResult {
+  name: string;
+  templateType: string;
+  chefVariant?: "a" | "b";
+  selectedStyle?: string;
+}
+
+function showTemplateDialog(): Promise<TemplateDialogResult | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'project-type-dialog-overlay';
+
+    const templateOptions = listTemplates().map((t) =>
+      `<option value="${t.type}">${t.icon} ${t.displayName}</option>`
+    ).join('');
+
+    overlay.innerHTML = `
+      <div class="project-type-dialog">
+        <h3>Create New Project</h3>
+        <div class="form-group">
+          <label for="tpl-name">Project Name</label>
+          <input type="text" id="tpl-name" placeholder="My Project" autofocus>
+        </div>
+        <div class="form-group">
+          <label for="tpl-type">Template</label>
+          <select id="tpl-type">${templateOptions}</select>
+        </div>
+        <div class="form-group" id="tpl-chef-variant-group" style="display:none;">
+          <label for="tpl-chef-variant">Chef layout</label>
+          <select id="tpl-chef-variant">
+            <option value="a">Variant A (flat, 12 sections)</option>
+            <option value="b">Variant B (multibranch, 3 levels)</option>
+          </select>
+        </div>
+        <div class="form-group" id="tpl-style-group" style="display:none;">
+          <label for="tpl-style">Writing style</label>
+          <select id="tpl-style"></select>
+        </div>
+        <div class="project-type-dialog-buttons">
+          <button class="save-dialog-btn" data-action="cancel">Cancel</button>
+          <button class="save-dialog-btn primary" data-action="create">Create</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const nameInput = overlay.querySelector('#tpl-name') as HTMLInputElement;
+    const typeSelect = overlay.querySelector('#tpl-type') as HTMLSelectElement;
+    const styleGroup = overlay.querySelector('#tpl-style-group') as HTMLDivElement;
+    const styleSelect = overlay.querySelector('#tpl-style') as HTMLSelectElement;
+    const chefVariantGroup = overlay.querySelector('#tpl-chef-variant-group') as HTMLDivElement;
+    const chefVariantSelect = overlay.querySelector('#tpl-chef-variant') as HTMLSelectElement;
+
+    const refreshStyleOptions = () => {
+      const tpl = getTemplate(typeSelect.value);
+      if (tpl && tpl.requiresStyleChoice && tpl.styles.length > 0) {
+        styleGroup.style.display = '';
+        styleSelect.innerHTML = tpl.styles.map((s) =>
+          `<option value="${s.name}"${s.name === tpl.defaultStyleName ? ' selected' : ''}>${s.name}</option>`
+        ).join('');
+      } else {
+        styleGroup.style.display = 'none';
+        styleSelect.innerHTML = '';
+      }
+      if (typeSelect.value === 'chef') {
+        chefVariantGroup.style.display = '';
+      } else {
+        chefVariantGroup.style.display = 'none';
+      }
+    };
+    typeSelect.addEventListener('change', refreshStyleOptions);
+    refreshStyleOptions();
+
+    setTimeout(() => nameInput?.focus(), 10);
+
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        overlay.querySelector('[data-action="create"]')?.dispatchEvent(new Event('click'));
+      }
+    });
+
+    overlay.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.getAttribute('data-action');
+        if (act === 'cancel') {
+          overlay.remove();
+          resolve(null);
+        } else if (act === 'create') {
+          const name = nameInput?.value.trim();
+          if (!name) {
+            nameInput?.focus();
+            return;
+          }
+          const tpl = getTemplate(typeSelect.value);
+          overlay.remove();
+          resolve({
+            name,
+            templateType: typeSelect.value,
+            chefVariant: typeSelect.value === 'chef' ? (chefVariantSelect.value as "a" | "b") : undefined,
+            selectedStyle: (tpl && tpl.requiresStyleChoice && styleSelect.value) ? styleSelect.value : undefined,
+          });
+        }
+      });
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve(null);
+      }
+    });
+  });
 }
 
 interface ProjectTypeResult {

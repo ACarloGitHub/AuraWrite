@@ -6,13 +6,13 @@ export interface Project {
   id: string;
   name: string;
   type: string;
-  description?: string;
-  bg_color?: string;
-  text_color?: string;
+  description?: string | null;
+  bg_color?: string | null;
+  text_color?: string | null;
   template_type: string;
-  suggestions_prompt_override?: string;
-  chat_prompt_override?: string;
-  selected_style?: string;
+  suggestions_prompt_override?: string | null;
+  chat_prompt_override?: string | null;
+  selected_style?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -37,12 +37,12 @@ export type TemplateType =
 export interface Section {
   id: string;
   project_id: string;
-  parent_id?: string;
+  parent_id?: string | null;
   name: string;
   order_index: number;
-  bg_color?: string;
-  text_color?: string;
-  section_type?: string;
+  bg_color?: string | null;
+  text_color?: string | null;
+  section_type?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -52,12 +52,12 @@ export interface Document {
   section_id: string;
   title: string;
   content_json: string;
-  status?: string;
+  status?: string | null;
   word_count: number;
-  tags?: string;
+  tags?: string | null;
   order_index: number;
-  bg_color?: string;
-  text_color?: string;
+  bg_color?: string | null;
+  text_color?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -65,11 +65,11 @@ export interface Document {
 export interface Entity {
   id: string;
   project_id: string;
-  entity_type_id?: string;
+  entity_type_id?: string | null;
   name: string;
-  description?: string;
-  image_path?: string;
-  metadata_json?: string;
+  description?: string | null;
+  image_path?: string | null;
+  metadata_json?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -184,6 +184,12 @@ export function createProject(name: string, type: ProjectType = "novel", descrip
     name,
     type,
     description,
+    template_type: "custom",
+    bg_color: undefined,
+    text_color: undefined,
+    suggestions_prompt_override: undefined,
+    chat_prompt_override: undefined,
+    selected_style: undefined,
     created_at: now,
     updated_at: now,
   };

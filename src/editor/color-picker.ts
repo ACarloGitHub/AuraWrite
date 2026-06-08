@@ -24,8 +24,8 @@ export interface ColorPickerOptions {
   itemType: "project" | "section" | "document";
   itemId: string;
   currentName: string;
-  currentBg?: string;
-  currentText?: string;
+  currentBg?: string | null;
+  currentText?: string | null;
   onSave: (newName: string, bgColor: string | undefined, textColor: string | undefined) => Promise<void>;
   onReset: () => Promise<void>;
 }
@@ -33,8 +33,8 @@ export interface ColorPickerOptions {
 export function openColorPicker(options: ColorPickerOptions): void {
   const { itemType, currentName, currentBg, currentText, onSave, onReset } = options;
 
-  let selectedBg: string | undefined = currentBg;
-  let selectedText: string | undefined = currentText;
+  let selectedBg: string | undefined = currentBg ?? undefined;
+  let selectedText: string | undefined = currentText ?? undefined;
 
   const overlay = document.createElement("div");
   overlay.className = "color-picker-overlay active";
@@ -185,8 +185,8 @@ export function openColorPicker(options: ColorPickerOptions): void {
 
 export function applyItemColors(
   el: HTMLElement,
-  bgColor: string | undefined,
-  textColor: string | undefined,
+  bgColor: string | null | undefined,
+  textColor: string | null | undefined,
   itemType: "project" | "section" | "document"
 ): void {
   const alpha = ALPHA_MAP[itemType] || 0.12;

@@ -1,4 +1,4 @@
-import type { Template, TemplateSectionSpec } from "./_types";
+import type { Template, TemplateSectionSpec, TemplateEntityTypeSpec } from "./_types";
 
 const recipeExampleBody = [
   "## Example recipe",
@@ -435,7 +435,7 @@ const chefBMultibranchSections: TemplateSectionSpec[] = [
   },
 ];
 
-const chefEntityTypes = [
+const chefEntityTypes: TemplateEntityTypeSpec[] = [
   {
     name: "Recipe",
     icon: "🍽️",
@@ -528,7 +528,7 @@ const chefEntityTypes = [
   },
 ];
 
-const chefStyles = [
+const chefStyles: { name: string; fragment: string }[] = [
   { name: "Technical-scientific", fragment: "Objective, precise, exact weights, precise timings, specific temperatures. For professional technical sheets, HACCP manuals, food cost reports." },
   { name: "Narrative-traditional", fragment: "Tells the story of the dish, the geographic origins, the family traditions. More discursive sentences, evocation of memories, cultural references. For cookbooks, personal blogs, storytelling." },
   { name: "Inspired by a great chef", fragment: "Inspired by a great chef (e.g. Marchesi, Cracco, Bottura, Bencini, Locatelli, Ramsay). Technical-accessible language, references to innovative techniques, personal vision." },

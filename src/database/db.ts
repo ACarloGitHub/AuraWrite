@@ -194,6 +194,34 @@ export async function createProjectWithDefaults(
   return { project, sections, entityTypes };
 }
 
+// ============================================================================
+// TEMPLATE SYSTEM
+// ============================================================================
+
+export async function listUserStyles(): Promise<{ id: string; name: string; prompt_fragment: string; created_at: number }[]> {
+  return await invoke("db_list_user_styles");
+}
+
+export async function createUserStyle(style: { id: string; name: string; prompt_fragment: string; created_at: number }): Promise<void> {
+  await invoke("db_create_user_style", { style });
+}
+
+export async function deleteUserStyle(id: string): Promise<void> {
+  await invoke("db_delete_user_style", { id });
+}
+
+/**
+ * Apply a template to a freshly created project. Pass the project_id and the
+ * full template spec. The Rust command runs the whole thing in a single
+ * transaction (entity types + sections + documents + template_type update).
+ */
+export async function applyTemplate(
+  projectId: string,
+  template: unknown
+): Promise<void> {
+  await invoke("apply_template", { projectId, template });
+}
+
 export async function createSectionWithDocuments(
   projectId: string,
   sectionName: string,
