@@ -726,11 +726,7 @@ export function toDocx(doc: any): Document {
   const children: any[] = [];
 
   contentToArray(doc.content).forEach((node: any) => {
-    if (node.type.name === "table") {
-      children.push(tableNodeToDocx(node));
-    } else {
-      children.push(...nodeToParagraphs(node));
-    }
+    children.push(...nodeToChildren(node));
   });
 
   return new Document({
@@ -873,6 +869,62 @@ function nodeToParagraphs(node: any): Paragraph[] {
     case "page":
       return contentToArray(node.content).flatMap((child: any) => nodeToParagraphs(child));
     default:
+      if (node.isBlock) {
+        return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
+      }
+      return [];
+  }
+}
+
+function nodeToChildren(node: any): any[] {
+  switch (node.type.name) {
+    case "table":
+      return [tableNodeToDocx(node)];
+    case "paragraph":
+      return [paragraphFromNode(node, { align: node.attrs?.align })];
+    case "heading": {
+      const isTitle = node.attrs?.level === 1 && node.attrs?.align === "center";
+      return [
+        paragraphFromNode(node, {
+          heading: isTitle ? HeadingLevel.TITLE : getHeadingLevel(node.attrs.level),
+          style: isTitle ? "Title" : undefined,
+          align: node.attrs?.align,
+        }),
+      ];
+    }
+    case "blockquote":
+      return contentToArray(node.content).map((child: any) =>
+        paragraphFromNode(child, { style: "IntenseQuote" })
+      );
+    case "code_block":
+      return contentToArray(node.content).map((child: any) => {
+        const txt = getTextContent(child);
+        return new Paragraph({
+          children: [new TextRun({ text: txt, font: "Courier New", size: 20 })],
+          shading: { fill: "F5F5F5" },
+          indent: { left: 360 },
+          spacing: { before: 80, after: 80, line: 240 },
+        });
+      });
+    case "bullet_list":
+      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-bullet"));
+    case "ordered_list":
+      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-ordered"));
+    case "horizontal_rule":
+      return [
+        new Paragraph({
+          children: [new TextRun("")],
+          border: {
+            bottom: { color: "CCCCCC", size: 1, space: 1, style: "single" },
+          },
+        }),
+      ];
+    case "page":
+      return contentToArray(node.content).flatMap((child: any) => nodeToChildren(child));
+    default:
+      if (node.type?.spec?.tableRole === "table") {
+        return [tableNodeToDocx(node)];
+      }
       if (node.isBlock) {
         return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
       }
