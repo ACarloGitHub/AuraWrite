@@ -1816,18 +1816,10 @@ async function persistMove(
   for (let i = 0; i < oldSiblings.length; i++) oldSiblings[i].order_index = i;
 
   try {
-    // 1) Aggiorna la sezione spostata (parent_id + order_index)
-    // Tauri v2: per strutture annidate, il payload JS usa snake_case
-    // (stesso stile dei campi Rust). Solo i parametri primitivi dei command
-    // sono camelCase.
-    console.log(
-      "[multibranch] persistMove: id=",
-      section.id,
-      "parent_id=",
-      section.parent_id,
-      "order_index=",
-      section.order_index
-    );
+    // 1) Aggiorna la sezione spostata (parent_id + order_index).
+    // NB: Tauri v2 per strutture annidate (section: Section) usa snake_case
+    // di default sul payload JS; solo i parametri primitivi dei command sono
+    // auto-convertiti a camelCase.
     await invoke("db_update_section", {
       section: {
         id: section.id,
@@ -1924,10 +1916,10 @@ function initSortable(): void {
         pendingChild = null;
         const draggedId = evt.dragged.dataset.id!;
 
-        // Walk-up al .section-item antenato (evt.related è spesso un
-        // discendente: .item-header, .drag-handle, .item-name, .item-action-btn,
-        // ecc.). Senza walk-up, onMove esce subito e il top-half 50/50
-        // non viene mai intercettato.
+        // Walk-up al .section-item antenato. evt.related è spesso un
+        // discendente (.item-header, .drag-handle, .item-name, button); senza
+        // walk-up il check classList fallisce e si esce subito, perdendo
+        // l'intento FIGLIO sulla meta' alta dell'header target.
         const relatedEl = evt.related as HTMLElement | null;
         let relatedSectionEl: HTMLElement | null = null;
         if (relatedEl) {
@@ -1940,38 +1932,15 @@ function initSortable(): void {
             cur = cur.parentElement;
           }
         }
-        if (!relatedEl) {
-          console.log("[multibranch] onMove: relatedEl=null");
-          return true;
-        }
-        if (!relatedSectionEl) {
-          console.log(
-            "[multibranch] onMove: walk-up failed, relatedEl=",
-            relatedEl.tagName,
-            relatedEl.className
-          );
-          return true;
-        }
+        if (!relatedEl || !relatedSectionEl) return true;
         const relatedId = relatedSectionEl.dataset.id!;
 
-        // Geometria 50/50: meta' alta dell'header del target = intento FIGLIO
+        // 50/50: meta' alta dell'header del target = intento FIGLIO.
         const headerEl = relatedSectionEl.querySelector(".item-header") as HTMLElement | null;
         if (!headerEl) return true;
         const rect = headerEl.getBoundingClientRect();
         const y = (originalEvent as MouseEvent).clientY;
         const topHalf = y - rect.top < rect.height / 2;
-        console.log(
-          "[multibranch] onMove: relatedSectionId=",
-          relatedId,
-          "topHalf=",
-          topHalf,
-          "y=",
-          y,
-          "rect.top=",
-          rect.top,
-          "h=",
-          rect.height
-        );
 
         if (topHalf) {
           // Validazioni LIVE (feedback col bordo, non a fine drop)
@@ -1979,20 +1948,9 @@ function initSortable(): void {
           const cycle =
             draggedId === relatedId || isDescendantOf(draggedId, relatedId);
           if (wouldDepth > MAX_DEPTH || cycle) {
-            console.log(
-              "[multibranch] onMove: BLOCKED (depth=",
-              wouldDepth,
-              "cycle=",
-              cycle,
-              ")"
-            );
             relatedSectionEl.classList.add("drop-blocked");
             return false;
           }
-          console.log(
-            "[multibranch] onMove: child intent set, pendingChild=",
-            relatedId
-          );
           relatedSectionEl.classList.add("drop-as-child");
           pendingChild = relatedId;
           return false;
@@ -2006,10 +1964,6 @@ function initSortable(): void {
         clearDropIndicators();
 
         if (pendingChild) {
-          console.log(
-            "[multibranch] onEnd: CHILD branch, parentId=",
-            pendingChild
-          );
           const parentId = pendingChild;
           pendingChild = null;
           const ok = await persistMove(draggedId, parentId, 0);
@@ -2027,12 +1981,6 @@ function initSortable(): void {
         const parentRaw = toEl.dataset.parent ?? "";
         const newParent: string | null = parentRaw === "" ? null : parentRaw;
         const newIndex = evt.newIndex ?? 0;
-        console.log(
-          "[multibranch] onEnd: SIBLING branch, to=",
-          parentRaw,
-          "newIndex=",
-          newIndex
-        );
 
         if (
           newParent &&
