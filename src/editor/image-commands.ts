@@ -85,28 +85,25 @@ export interface SelectedImageInfo {
   resolvedSrc: string;
 }
 
-export function getSelectedImage(view: EditorView): SelectedImageInfo | null {
+export async function getSelectedImage(view: EditorView): Promise<SelectedImageInfo | null> {
   const { $from } = view.state.selection;
   if ($from.parent.type.spec.inline) return null;
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d);
     if (node.type.name === "image") {
       const pos = $from.before(d);
-      return {
-        pos,
-        node,
-        resolvedSrc: resolveImageSrc(node.attrs.src as string),
-      };
+      const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
+      return { pos, node, resolvedSrc };
     }
   }
   return null;
 }
 
-export function setImageAlignment(
+export async function setImageAlignment(
   view: EditorView,
   align: "left" | "center" | "right" | "inline"
-): boolean {
-  const info = getSelectedImage(view);
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
   if (!info) return false;
   const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
     ...info.node.attrs,
@@ -116,12 +113,12 @@ export function setImageAlignment(
   return true;
 }
 
-export function setImageSize(
+export async function setImageSize(
   view: EditorView,
   width: number | null,
   height: number | null
-): boolean {
-  const info = getSelectedImage(view);
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
   if (!info) return false;
   const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
     ...info.node.attrs,
@@ -132,8 +129,8 @@ export function setImageSize(
   return true;
 }
 
-export function removeImage(view: EditorView): boolean {
-  const info = getSelectedImage(view);
+export async function removeImage(view: EditorView): Promise<boolean> {
+  const info = await getSelectedImage(view);
   if (!info) return false;
   const tr = view.state.tr.delete(info.pos, info.pos + info.node.nodeSize);
   view.dispatch(tr);

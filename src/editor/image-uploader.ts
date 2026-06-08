@@ -56,18 +56,29 @@ export async function uploadImageFile(file: File): Promise<UploadedImage> {
   };
 }
 
-export function resolveImageSrc(relativePath: string): string {
+export async function resolveImageSrc(relativePath: string): Promise<string> {
   if (!relativePath) return "";
   if (
     relativePath.startsWith("http://") ||
     relativePath.startsWith("https://") ||
     relativePath.startsWith("data:") ||
     relativePath.startsWith("file:") ||
-    relativePath.startsWith("blob:")
+    relativePath.startsWith("blob:") ||
+    relativePath.startsWith("asset://")
   ) {
     return relativePath;
   }
-  return convertFileSrc(relativePath);
+  if (relativePath.includes(":") && !relativePath.startsWith("images/")) {
+    return relativePath;
+  }
+  try {
+    return await invoke<string>("get_image_asset_url", {
+      relativePath,
+    });
+  } catch (e) {
+    console.warn("[image] get_image_asset_url failed, using convertFileSrc:", e);
+    return convertFileSrc(relativePath);
+  }
 }
 
 function getImageDimensionsFromFile(

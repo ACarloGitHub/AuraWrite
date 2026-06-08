@@ -28,6 +28,7 @@ import { createPaginationPlugin, requestPaginationRecalc } from "./pagination-pl
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { PageNodeView } from "./page-node-view";
+import { ImageNodeView } from "./image-node-view";
 import { initPagedMode, getPagedMode, setPagedMode } from "./pagination-state";
 
 // ============================================================================
@@ -554,6 +555,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
     },
     nodeViews: {
       page: (node, view, getPos) => new PageNodeView(node, view, getPos),
+      image: (node) => new ImageNodeView(node),
     },
   });
 
