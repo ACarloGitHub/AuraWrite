@@ -3980,28 +3980,36 @@ kbd {
 /* Image node wrapper with resize handles */
 .image-node-wrapper {
   position: relative;
-  display: block;
+  display: inline-block;
   margin: 8px 0;
+  max-width: 100%;
 }
 
 .image-node-wrapper[data-align="left"] {
+  display: block;
   margin-left: 0;
   margin-right: auto;
+  text-align: left;
 }
 
 .image-node-wrapper[data-align="center"] {
+  display: block;
   margin-left: auto;
   margin-right: auto;
+  text-align: center;
 }
 
 .image-node-wrapper[data-align="right"] {
+  display: block;
   margin-left: auto;
   margin-right: 0;
+  text-align: right;
 }
 
 .image-node-wrapper img {
-  display: block;
+  display: inline-block;
   max-width: 100%;
+  vertical-align: top;
 }
 
 .image-node-wrapper--selected {

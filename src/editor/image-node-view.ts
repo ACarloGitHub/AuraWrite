@@ -1,10 +1,20 @@
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView } from "prosemirror-view";
 import { resolveImageSrc } from "./image-uploader";
-import { setImageSize } from "./image-commands";
+
+type Corner = "tl" | "tr" | "bl" | "br";
 
 interface HandleEl extends HTMLElement {
-  _corner: "tl" | "tr" | "bl" | "br";
+  _corner: Corner;
+}
+
+const ALIGN_VALUES = ["left", "center", "right"] as const;
+type Align = (typeof ALIGN_VALUES)[number];
+
+function nextAlign(current: string): Align {
+  const i = ALIGN_VALUES.indexOf(current as Align);
+  if (i < 0) return "center";
+  return ALIGN_VALUES[(i + 1) % ALIGN_VALUES.length] as Align;
 }
 
 export class ImageNodeView implements NodeView {
@@ -13,10 +23,13 @@ export class ImageNodeView implements NodeView {
   private img: HTMLImageElement;
   private handles: HandleEl[] = [];
   private resolved = false;
-  private naturalWidth = 0;
-  private naturalHeight = 0;
+  private aspect = 1;
 
-  constructor(node: PMNode, private view: EditorView, private getPos: () => number | undefined) {
+  constructor(
+    node: PMNode,
+    private view: EditorView,
+    private getPos: () => number | undefined
+  ) {
     this.wrapper = document.createElement("div");
     this.wrapper.className = "image-node-wrapper";
     const attrs = node.attrs;
@@ -32,6 +45,7 @@ export class ImageNodeView implements NodeView {
 
     this.wrapper.appendChild(this.img);
     this.createHandles();
+    this.bindWrapperDrag();
 
     this.dom = this.wrapper;
     void this.resolveSrc(attrs.src as string);
@@ -55,8 +69,9 @@ export class ImageNodeView implements NodeView {
     return new Promise((resolve) => {
       const probe = new Image();
       probe.onload = () => {
-        this.naturalWidth = probe.naturalWidth;
-        this.naturalHeight = probe.naturalHeight;
+        if (probe.naturalWidth > 0) {
+          this.aspect = probe.naturalHeight / probe.naturalWidth;
+        }
         resolve();
       };
       probe.onerror = () => resolve();
@@ -66,7 +81,7 @@ export class ImageNodeView implements NodeView {
   }
 
   private createHandles(): void {
-    const corners: Array<"tl" | "tr" | "bl" | "br"> = ["tl", "tr", "bl", "br"];
+    const corners: Corner[] = ["tl", "tr", "bl", "br"];
     for (const corner of corners) {
       const handle = document.createElement("div") as unknown as HandleEl;
       handle._corner = corner;
@@ -77,29 +92,69 @@ export class ImageNodeView implements NodeView {
     }
   }
 
-  private onHandleMouseDown(e: MouseEvent, _corner: "tl" | "tr" | "bl" | "br"): void {
+  private bindWrapperDrag(): void {
+    this.wrapper.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void this.cycleAlignment();
+    });
+  }
+
+  private async cycleAlignment(): Promise<void> {
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return;
+    const current = (node.attrs.align as string) || "center";
+    const newAlign = nextAlign(current);
+    const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      align: newAlign,
+    });
+    this.view.dispatch(tr);
+  }
+
+  private onHandleMouseDown(e: MouseEvent, corner: Corner): void {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
     const startY = e.clientY;
     const startWidth = this.img.clientWidth;
     const startHeight = this.img.clientHeight;
-    const aspect = startHeight / startWidth;
+    const aspect = startHeight / startWidth || this.aspect;
+
+    const computeNewSize = (ev: MouseEvent): { width: number; height: number } => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let deltaX = dx;
+      let deltaY = dy;
+      if (corner === "tl" || corner === "bl") deltaX = -dx;
+      if (corner === "tl" || corner === "tr") deltaY = -dy;
+      let newWidth = Math.max(50, startWidth + deltaX);
+      let newHeight = Math.max(20, startHeight + deltaY);
+      if (e.shiftKey) {
+        const ratio = aspect > 0 ? aspect : startHeight / startWidth;
+        if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+          newHeight = Math.round(newWidth * ratio);
+        } else {
+          newWidth = Math.round(newHeight / ratio);
+        }
+      }
+      return { width: newWidth, height: newHeight };
+    };
 
     const onMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - startX;
-      const newWidth = Math.max(50, startWidth + dx);
-      const newHeight = aspect > 0 ? Math.round(newWidth * aspect) : startHeight;
-      this.img.style.width = `${newWidth}px`;
-      this.img.style.height = `${newHeight}px`;
+      const { width, height } = computeNewSize(ev);
+      this.img.style.width = `${width}px`;
+      this.img.style.height = `${height}px`;
     };
     const onUp = (ev: MouseEvent) => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      const dx = ev.clientX - startX;
-      const newWidth = Math.max(50, startWidth + dx);
-      const newHeight = aspect > 0 ? Math.round(newWidth * aspect) : startHeight;
-      void this.persistSize(newWidth, newHeight);
+      const { width, height } = computeNewSize(ev);
+      this.img.style.width = "";
+      this.img.style.height = "";
+      void this.persistSize(width, height);
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
@@ -108,10 +163,12 @@ export class ImageNodeView implements NodeView {
   private async persistSize(width: number, height: number): Promise<void> {
     const pos = this.getPos();
     if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return;
     const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
-      ...this.view.state.doc.nodeAt(pos)?.attrs,
-      width,
-      height,
+      ...node.attrs,
+      width: Math.round(width),
+      height: Math.round(height),
     });
     this.view.dispatch(tr);
   }
