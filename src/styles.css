@@ -85,6 +85,15 @@
   --color-text-buttons: #e0e0e0;
 
   --shadow-editor: 0 2px 12px rgba(0, 0, 0, 0.5);
+
+  /* Tell the browser to render native form controls (select option popups,
+     scrollbars, input highlights) with a dark color scheme so the
+     cp-style-select dropdown doesn't show white-on-white. */
+  color-scheme: dark;
+}
+
+:root {
+  color-scheme: light;
 }
 
 [data-theme="dark"] .preference-group select {
@@ -3448,12 +3457,17 @@ kbd {
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid var(--color-border, #ccc);
-  background: var(--color-bg-tertiary, #f8f8f8);
-  color: var(--color-text, #333);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #222);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
   appearance: auto;
+  color-scheme: light dark;
+}
+.cp-style-select option {
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #222);
 }
 .cp-style-select:focus {
   border-color: var(--color-primary, #4a90d9);
