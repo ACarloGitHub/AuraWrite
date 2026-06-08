@@ -32,6 +32,7 @@ import {
 import Sortable from "sortablejs";
 import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
 import { listTemplates, getTemplate, createProjectFromTemplate } from "../templates/apply";
+import { listUserStyles } from "../database/db";
 
 // State
 let currentProject: Project | null = null;
@@ -104,6 +105,11 @@ export function initProjectPanel(
 
   const btnSaveDb = document.getElementById("btn-save-db");
   btnSaveDb?.addEventListener("click", handleSaveToDatabase);
+
+  const btnAiSettings = document.getElementById("btn-ai-settings");
+  btnAiSettings?.addEventListener("click", () => {
+    if (currentProject) showProjectAISettingsDialog(currentProject);
+  });
 
   const btnProjects = document.getElementById("btn-projects");
   btnProjects?.addEventListener("click", toggleProjectPanel);
@@ -901,6 +907,138 @@ function showProjectTypeDialog(): Promise<ProjectTypeResult | null> {
  * Show a custom confirmation dialog
  * @returns true if confirmed, false otherwise
  */
+function showProjectAISettingsDialog(project: Project): Promise<void> {
+  return new Promise((resolve) => {
+    const tpl = getTemplate(project.template_type);
+    const defaultSuggestions = tpl ? tpl.prompts.suggestions : "You are a helpful writing assistant.";
+    const defaultChat = tpl ? tpl.prompts.chat : "You are a helpful writing assistant.";
+    const styles = tpl ? tpl.styles.map((s) => s.name) : [];
+
+    const overlay = document.createElement("div");
+    overlay.className = "save-dialog-overlay";
+
+    const currentSuggestions = project.suggestions_prompt_override ?? defaultSuggestions;
+    const currentChat = project.chat_prompt_override ?? defaultChat;
+    const currentStyle = project.selected_style ?? tpl?.defaultStyleName ?? "";
+
+    overlay.innerHTML = `
+      <div class="save-dialog" style="max-width: 700px;">
+        <h3>AI Settings — ${escapeHtml(project.name)}</h3>
+        <p style="color: var(--color-text-muted, #888); font-size: 12px; margin: 4px 0 16px;">
+          Template: <strong>${escapeHtml(tpl ? `${tpl.icon} ${tpl.displayName}` : project.template_type)}</strong>.
+          Leave a field empty to use the template default. Click Reset to clear all overrides.
+        </p>
+        <div class="form-group">
+          <label for="ai-suggestions">Suggestions prompt</label>
+          <textarea id="ai-suggestions" rows="4" placeholder="${escapeHtml(defaultSuggestions)}">${escapeHtml(currentSuggestions)}</textarea>
+        </div>
+        <div class="form-group">
+          <label for="ai-chat">Chat prompt</label>
+          <textarea id="ai-chat" rows="4" placeholder="${escapeHtml(defaultChat)}">${escapeHtml(currentChat)}</textarea>
+        </div>
+        ${styles.length > 0 ? `
+        <div class="form-group">
+          <label for="ai-style">Writing style</label>
+          <select id="ai-style">
+            ${styles.map((s) => `<option value="${escapeHtml(s)}"${s === currentStyle ? ' selected' : ''}>${escapeHtml(s)}</option>`).join("")}
+          </select>
+        </div>
+        ` : ""}
+        <div class="save-dialog-buttons">
+          <button class="save-dialog-btn" data-action="cancel">Cancel</button>
+          <button class="save-dialog-btn" data-action="reset" title="Clear all overrides and use the template defaults">Reset</button>
+          <button class="save-dialog-btn primary" data-action="save">Save</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const suggestionsInput = overlay.querySelector("#ai-suggestions") as HTMLTextAreaElement;
+    const chatInput = overlay.querySelector("#ai-chat") as HTMLTextAreaElement;
+    const styleSelect = overlay.querySelector("#ai-style") as HTMLSelectElement | null;
+
+    overlay.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-action");
+        if (action === "cancel") {
+          overlay.remove();
+          resolve();
+        } else if (action === "save") {
+          const newSuggestions = suggestionsInput.value.trim();
+          const newChat = chatInput.value.trim();
+          const newStyle = styleSelect ? styleSelect.value : currentStyle;
+          const updated: Project = {
+            ...project,
+            suggestions_prompt_override: newSuggestions || undefined,
+            chat_prompt_override: newChat || undefined,
+            selected_style: newStyle || undefined,
+            updated_at: Date.now(),
+          };
+          try {
+            await updateProject(updated);
+            // Refresh local state
+            const idx = projects.findIndex((p) => p.id === project.id);
+            if (idx >= 0) projects[idx] = updated;
+            if (currentProject && currentProject.id === project.id) {
+              currentProject = updated;
+            }
+            showNotification("AI settings saved", "success");
+            overlay.remove();
+            resolve();
+          } catch (e) {
+            console.error("Failed to save AI settings:", e);
+            showNotification("Could not save AI settings", "error");
+          }
+        } else if (action === "reset") {
+          const ok = await showConfirmDialog(
+            "Reset AI settings?",
+            "This will clear your custom prompts and writing style, and restore the template defaults."
+          );
+          if (!ok) return;
+          const updated: Project = {
+            ...project,
+            suggestions_prompt_override: undefined,
+            chat_prompt_override: undefined,
+            selected_style: tpl?.defaultStyleName ?? undefined,
+            updated_at: Date.now(),
+          };
+          try {
+            await updateProject(updated);
+            const idx = projects.findIndex((p) => p.id === project.id);
+            if (idx >= 0) projects[idx] = updated;
+            if (currentProject && currentProject.id === project.id) {
+              currentProject = updated;
+            }
+            showNotification("AI settings reset to template defaults", "success");
+            overlay.remove();
+            resolve();
+          } catch (e) {
+            console.error("Failed to reset AI settings:", e);
+            showNotification("Could not reset AI settings", "error");
+          }
+        }
+      });
+    });
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        resolve();
+      }
+    });
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function showConfirmDialog(title: string, message: string): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -1256,6 +1394,10 @@ function renderProjectsList(): void {
   const btnBackProjects = document.getElementById("btn-back-projects");
   if (btnBackProjects) {
     btnBackProjects.style.display = currentProject ? "inline-flex" : "none";
+  }
+  const btnAiSettings = document.getElementById("btn-ai-settings");
+  if (btnAiSettings) {
+    btnAiSettings.style.display = currentProject ? "inline-flex" : "none";
   }
 
   container.innerHTML = "";
