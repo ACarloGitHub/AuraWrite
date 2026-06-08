@@ -1817,11 +1817,22 @@ async function persistMove(
 
   try {
     // 1) Aggiorna la sezione spostata (parent_id + order_index)
+    // Tauri v2: per strutture annidate, il payload JS usa snake_case
+    // (stesso stile dei campi Rust). Solo i parametri primitivi dei command
+    // sono camelCase.
+    console.log(
+      "[multibranch] persistMove: id=",
+      section.id,
+      "parent_id=",
+      section.parent_id,
+      "order_index=",
+      section.order_index
+    );
     await invoke("db_update_section", {
       section: {
         id: section.id,
         project_id: section.project_id,
-        parentId: section.parent_id,
+        parent_id: section.parent_id ?? null,
         name: section.name,
         order_index: section.order_index,
         bg_color: section.bg_color ?? null,
