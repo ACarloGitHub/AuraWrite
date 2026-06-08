@@ -61,22 +61,17 @@ async function openImagePicker(view: EditorView): Promise<void> {
     });
     if (!selected || typeof selected !== "string") return;
     const fileName = selected.split(/[\\/]/).pop() || "image";
-    const bytes = await invoke<number[]>("read_binary_file", { path: selected });
-    const arr = new Uint8Array(bytes);
+    const base64 = await invoke<string>("load_binary_file", { path: selected });
     const mime = mimeFromFilename(fileName);
-    let binary = "";
-    for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
-    const base64 = btoa(binary);
+    const fakeFile = makeFileLike(fileName, mime, base64);
     const { uploadImageFile } = await import("./image-uploader");
-    const uploaded = await uploadImageFile({
-      name: fileName,
-      type: mime,
-      size: arr.length,
-    } as File);
-    void base64;
+    const uploaded = await uploadImageFile(fakeFile);
     const { createImageNode } = await import("./image-commands");
     const node = createImageNode(view, uploaded);
-    if (!node) return;
+    if (!node) {
+      console.error("[image] no image node in schema");
+      return;
+    }
     const $from = view.state.selection.$from;
     let insertPos = $from.pos;
     for (let d = $from.depth; d >= 0; d--) {
@@ -95,6 +90,15 @@ async function openImagePicker(view: EditorView): Promise<void> {
   } catch (e) {
     console.error("[image] openImagePicker failed:", e);
   }
+}
+
+function makeFileLike(name: string, type: string, base64: string): File {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type });
+  return new File([blob], name, { type });
 }
 
 function mimeFromFilename(name: string): string {
