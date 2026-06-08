@@ -10,6 +10,7 @@ import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { schema } from "./editor";
+import { openLinkPopover } from "./link-plugin";
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import {
   initPagination,
@@ -554,11 +555,13 @@ function setupFormattingButtons(): void {
   const btnBlockquote = document.getElementById("btn-blockquote");
   const btnCodeBlock = document.getElementById("btn-code-block");
   const btnPageBreak = document.getElementById("btn-page-break");
+  const btnLink = document.getElementById("btn-link");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
   btnUnderline?.addEventListener("click", () => toggleMarkWithStored("underline"));
   btnStrikethrough?.addEventListener("click", () => toggleMarkWithStored("strikethrough"));
+  btnLink?.addEventListener("click", () => openLinkPopover(editorView));
 
   btnBlockquote?.addEventListener("click", () => {
     const { state } = editorView;

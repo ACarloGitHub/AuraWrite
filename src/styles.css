@@ -3047,6 +3047,108 @@ kbd {
 }
 
 /* ============================================================================
+   LINK POPOVER
+   ============================================================================ */
+
+.link-popover {
+  position: fixed;
+  z-index: 1000;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  min-width: 300px;
+}
+
+.link-popover.hidden {
+  display: none;
+}
+
+.link-popover__row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.link-popover__row:last-child {
+  margin-bottom: 0;
+}
+
+.link-popover__input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text);
+  outline: none;
+}
+
+.link-popover__input:focus {
+  border-color: var(--color-accent, #2e74b5);
+}
+
+.link-popover__input--error {
+  border-color: #e74c3c;
+  background-color: #fdf2f2;
+}
+
+[data-theme="dark"] .link-popover__input--error {
+  background-color: #3d1f1f;
+}
+
+.link-popover__actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.link-popover__btn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.link-popover__btn:hover {
+  background: var(--color-surface-hover, #f0f0f0);
+}
+
+[data-theme="dark"] .link-popover__btn:hover {
+  background: var(--color-surface-hover, #333);
+}
+
+.link-popover__btn--apply {
+  background: var(--color-accent, #2e74b5);
+  color: white;
+  border-color: var(--color-accent, #2e74b5);
+}
+
+.link-popover__btn--apply:hover {
+  background: var(--color-accent-hover, #1a5a96);
+}
+
+.link-popover__btn--remove {
+  color: #e74c3c;
+  border-color: #e74c3c;
+}
+
+.link-popover__btn--remove:hover {
+  background: #fdf2f2;
+}
+
+[data-theme="dark"] .link-popover__btn--remove:hover {
+  background: #3d1f1f;
+}
+
+/* ============================================================================
    PROSEMIRROR EDITOR STYLES FOR NEW NODES/MARKS
    ============================================================================ */
 

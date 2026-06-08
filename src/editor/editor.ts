@@ -22,6 +22,7 @@ import { createPageBreakPlugin } from "./page-break-plugin";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
 import { createPaginationPlugin, requestPaginationRecalc } from "./pagination-plugin";
+import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { PageNodeView } from "./page-node-view";
 import { initPagedMode, getPagedMode, setPagedMode } from "./pagination-state";
 
@@ -457,6 +458,10 @@ export function createEditor(element: HTMLElement): EditorViewType {
         Enter: splitListItem(editorSchema.nodes.list_item),
         "Mod-]": sinkListItem(editorSchema.nodes.list_item),
         "Mod-[": liftListItem(editorSchema.nodes.list_item),
+        "Mod-k": (_state, _dispatch, view) => {
+          if (view) openLinkPopover(view);
+          return true;
+        },
       }),
       keymap(baseKeymap),
       wordCountPlugin,
@@ -467,6 +472,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       suggestionsMarkerPlugin,
       findReplacePlugin,
       paginationPluginInstance,
+      linkPopoverPlugin,
     ],
   });
 
