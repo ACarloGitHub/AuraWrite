@@ -347,15 +347,6 @@ fn get_schema() -> String {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
     );
-        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-        entity_type_id TEXT REFERENCES entity_types(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        description TEXT,
-        image_path TEXT,
-        metadata_json TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-    );
 
     -- Bidirectional links (document ↔ entity, entity ↔ entity)
     CREATE TABLE IF NOT EXISTS links (
