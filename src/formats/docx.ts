@@ -1,6 +1,7 @@
 import mammoth from "mammoth";
 import JSZip from "jszip";
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, ExternalHyperlink } from "docx";
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
+import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -166,7 +167,53 @@ async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<strin
 
   postProcessBlocks(container, wParagraphs, htmlBlocks);
 
+  // Replace mammoth-generated <table> elements with richer tables extracted
+  // directly from word/document.xml (preserves colspan/rowspan/colwidth).
+  await replaceMammothTables(container, arrayBuffer);
+
   return serializeContainer(container);
+}
+
+async function replaceMammothTables(container: any, arrayBuffer: ArrayBuffer): Promise<void> {
+  if (!container) return;
+  const ownerDoc = container.ownerDocument || container;
+  const mammothTables: any[] = [];
+  const walk = (node: any) => {
+    if (!node) return;
+    if (node.nodeType === 1 && node.localName === "table") {
+      mammothTables.push(node);
+    }
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      walk(child);
+    }
+  };
+  walk(container);
+  if (mammothTables.length === 0) return;
+
+  const importedTables = await extractTablesFromDocx(arrayBuffer);
+  if (importedTables.length === 0) return;
+
+  const count = Math.min(mammothTables.length, importedTables.length);
+  for (let i = 0; i < count; i++) {
+    const oldTbl = mammothTables[i];
+    const newHtml = tableToHtml(importedTables[i]);
+    const fragment = ownerDoc.createElement ? ownerDoc.createElement("div") : null;
+    let newTbl: any = null;
+    if (fragment) {
+      fragment.innerHTML = newHtml;
+      newTbl = fragment.firstElementChild;
+    } else {
+      const tmp = (ownerDoc.implementation
+        ? ownerDoc.implementation.createHTMLDocument("")
+        : ownerDoc);
+      const tmpBody = tmp.body || tmp;
+      tmpBody.innerHTML = newHtml;
+      newTbl = tmpBody.firstElementChild;
+    }
+    if (newTbl && oldTbl.parentNode) {
+      oldTbl.parentNode.replaceChild(newTbl, oldTbl);
+    }
+  }
 }
 
 function postProcessBlocks(container: any, wParagraphs: any[], htmlBlocks: any[]): void {
@@ -676,10 +723,14 @@ function serializeContainer(container: any): string {
 }
 
 export function toDocx(doc: any): Document {
-  const children: Paragraph[] = [];
+  const children: any[] = [];
 
   contentToArray(doc.content).forEach((node: any) => {
-    children.push(...nodeToParagraphs(node));
+    if (node.type.name === "table") {
+      children.push(tableNodeToDocx(node));
+    } else {
+      children.push(...nodeToParagraphs(node));
+    }
   });
 
   return new Document({
@@ -827,6 +878,58 @@ function nodeToParagraphs(node: any): Paragraph[] {
       }
       return [];
   }
+}
+
+function tableNodeToDocx(tableNode: any): Table {
+  const rows: TableRow[] = [];
+  const colwidths: number[] = [];
+
+  contentToArray(tableNode.content).forEach((row: any, rowIdx: number) => {
+    if (row.type.name !== "table_row") return;
+    const cells: TableCell[] = [];
+
+    contentToArray(row.content).forEach((cell: any) => {
+      if (cell.type.name !== "table_cell" && cell.type.name !== "table_header") return;
+      const colspan = Math.max(1, cell.attrs?.colspan || 1);
+      const rowspan = Math.max(1, cell.attrs?.rowspan || 1);
+      const colwidth = Array.isArray(cell.attrs?.colwidth) ? cell.attrs.colwidth[0] : null;
+      if (colwidth) colwidths.push(colwidth);
+
+      const paragraphs: Paragraph[] = contentToArray(cell.content).map((child: any) =>
+        paragraphFromNode(child, {})
+      );
+      if (paragraphs.length === 0) {
+        paragraphs.push(new Paragraph({ children: [] }));
+      }
+
+      const cellOpts: any = {
+        children: paragraphs,
+        columnSpan: colspan,
+        rowSpan: rowspan,
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
+          left: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
+          right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
+        },
+      };
+      if (rowIdx === 0 && cell.type.name === "table_header") {
+        cellOpts.shading = { fill: "F5F5F5" };
+      }
+      cells.push(new TableCell(cellOpts));
+    });
+
+    rows.push(new TableRow({ children: cells }));
+  });
+
+  const totalWidth = colwidths.length > 0
+    ? colwidths.reduce((a, b) => a + b, 0)
+    : 9000;
+
+  return new Table({
+    rows,
+    width: { size: totalWidth, type: WidthType.DXA },
+  });
 }
 
 interface ParagraphExtras {
