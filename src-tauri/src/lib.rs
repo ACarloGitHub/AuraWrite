@@ -91,7 +91,7 @@ fn db_delete_user_style(state: State<AppState>, id: String) -> Result<(), String
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TemplateDocumentSpec {
     pub title: String,
-    pub body: String,
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -179,7 +179,7 @@ fn apply_template_section_recursive(
             id: generate_id("doc"),
             section_id: section_id.clone(),
             title: tut.title.clone(),
-            content_json: document_to_prosemirror_json(&tut.body),
+            content_json: document_to_prosemirror_json(tut.body.as_deref().unwrap_or("")),
             status: Some("draft".to_string()),
             word_count: 0,
             tags: None,
@@ -197,7 +197,7 @@ fn apply_template_section_recursive(
             id: generate_id("doc"),
             section_id: section_id.clone(),
             title: d.title.clone(),
-            content_json: document_to_prosemirror_json(&d.body),
+            content_json: document_to_prosemirror_json(d.body.as_deref().unwrap_or("")),
             status: Some("draft".to_string()),
             word_count: 0,
             tags: None,
@@ -209,7 +209,7 @@ fn apply_template_section_recursive(
             updated_at: now,
         };
         // empty body documents keep empty content_json
-        if d.body.is_empty() {
+        if d.body.as_ref().map_or(true, String::is_empty) {
             doc.content_json = String::new();
         }
         create_document(conn, &doc).map_err(|e| format!("create_document: {}", e))?;

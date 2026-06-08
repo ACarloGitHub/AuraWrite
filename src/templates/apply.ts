@@ -13,13 +13,13 @@ import type {
 } from "./_types";
 
 /**
- * Registry of all available templates.
+ * Registry of all available templates (top-level, for the dropdown).
+ * Chef B is NOT listed here — it's accessed via the variant picker.
  */
 export const ALL_TEMPLATES: Template[] = [
   customTemplate,
   bookTemplate,
   chefTemplate,
-  chefTemplateBMultibranch,
   legalTemplate,
 ];
 

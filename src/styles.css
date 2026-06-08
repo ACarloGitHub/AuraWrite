@@ -2208,6 +2208,8 @@ kbd {
   padding: 8px 10px;
   border-radius: 3px;
   cursor: pointer;
+  min-width: 0;
+  overflow: visible;
 }
 
 .section-item .item-header:hover {
@@ -2415,14 +2417,19 @@ kbd {
 .section-children {
   display: flex;
   flex-direction: column;
-  margin-left: 18px;
-  padding-left: 10px;
+  margin-left: 12px;
+  padding-left: 8px;
   border-left: 1px dashed var(--color-border, #ccc);
 }
 .section-children.root {
   margin-left: 0;
   padding-left: 0;
   border-left: none;
+}
+/* Limit indentation at deep levels to keep buttons visible */
+.section-children .section-children .section-children {
+  margin-left: 6px;
+  padding-left: 4px;
 }
 
 /* Clone compatto durante il drag: nascondi sottoalbero nel fantasma */
@@ -2488,6 +2495,7 @@ kbd {
   margin-left: 8px;
   opacity: 0;
   transition: opacity 0.15s ease;
+  flex-shrink: 0;
 }
 
 .item-header:hover .item-actions {
