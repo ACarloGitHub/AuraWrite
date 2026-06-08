@@ -53,33 +53,48 @@ function createDropdown(): HTMLElement {
 }
 
 function createTable(rows: number, cols: number, view: EditorView): void {
+  if (!view || !view.state) return;
+
+  view.focus();
+
   const { state } = view;
   const { table, table_row, table_cell, table_header, paragraph } = state.schema.nodes;
 
   if (!table || !table_row || !table_cell || !table_header) return;
 
-  const { $from } = state.selection;
-  let depth = $from.depth;
-  while (depth > 0) {
-    const parent = $from.node(depth);
-    const match = parent.contentMatchAt($from.index(depth)).matchType(table);
-    if (match) break;
-    depth--;
+  const cellContent = paragraph ? [paragraph.create()] : [];
+  let tableNode;
+  try {
+    const headerCells = Array.from({ length: cols }, () => table_header.create(null, cellContent));
+    const dataCells = Array.from({ length: cols }, () => table_cell.create(null, cellContent));
+    const headerRow = table_row.create(null, headerCells);
+    const dataRows = Array.from({ length: rows - 1 }, () => table_row.create(null, dataCells));
+    tableNode = table.create(null, [headerRow, ...dataRows]);
+  } catch (e) {
+    console.error("[table] FAILED to create tableNode:", e);
+    return;
   }
 
-  if (depth === 0) return;
+  const { $from } = state.selection;
+  let foundDepth = -1;
+  for (let d = $from.depth; d >= 0; d--) {
+    const parent = $from.node(d);
+    const match = parent.contentMatchAt($from.index(d)).matchType(table);
+    if (match) { foundDepth = d; break; }
+  }
 
-  const cellContent = paragraph ? [paragraph.create()] : [];
-  const headerCells = Array.from({ length: cols }, () => table_header.create(null, cellContent));
-  const dataCells = Array.from({ length: cols }, () => table_cell.create(null, cellContent));
-  const headerRow = table_row.create(null, headerCells);
-  const dataRows = Array.from({ length: rows - 1 }, () => table_row.create(null, dataCells));
-  const tableNode = table.create(null, [headerRow, ...dataRows]);
+  if (foundDepth < 0) {
+    console.error("[table] FAILED: no valid depth found");
+    return;
+  }
 
-  const insertPos = $from.end(depth);
+  const insertPos = $from.end(foundDepth);
   const tr = state.tr.insert(insertPos, tableNode);
+  if (tr.doc.content.size <= state.doc.content.size) {
+    console.error("[table] FAILED: insert did not change doc size");
+    return;
+  }
   view.dispatch(tr);
-  view.focus();
 }
 
 function dispatchTableCommand(
