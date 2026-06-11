@@ -284,7 +284,26 @@ async fn download_to_file_async(
         }
     }
     drop(f);
-    fs::rename(&tmp, dest).map_err(|e| format!("rename: {}", e))?;
+    if !tmp.exists() {
+        return Err(format!("Download finished but temp file {} is missing.", tmp.display()));
+    }
+    let tmp_size = file_size(&tmp);
+    if tmp_size == 0 {
+        let _ = fs::remove_file(&tmp);
+        return Err("Download produced an empty file (server returned 0 bytes).".to_string());
+    }
+    if total > 0 && tmp_size < total {
+        return Err(format!(
+            "Incomplete download: got {} bytes, expected {} bytes. The server may have closed the connection early.",
+            tmp_size, total
+        ));
+    }
+    if dest.exists() {
+        let _ = fs::remove_file(dest);
+    }
+    if let Err(e) = fs::rename(&tmp, dest) {
+        return Err(format!("rename: {}", e));
+    }
     Ok(downloaded)
 }
 
