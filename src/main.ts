@@ -755,6 +755,93 @@ function savePreferencesFromModal(): void {
   window.dispatchEvent(new CustomEvent("aurawrite:preferences-changed"));
 }
 
+function setupResizablePanels(): void {
+  const STORAGE_KEY = "aurawrite-preferences";
+  const DEFAULTS = { ai: 360, projects: 280 } as const;
+  const MIN = { ai: 200, projects: 180 } as const;
+  const MAX_RATIO = { ai: 0.8, projects: 0.6 } as const;
+
+  function loadWidths(): { ai: number; projects: number } {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          ai: typeof parsed.aiChatPanelWidth === "number" ? parsed.aiChatPanelWidth : DEFAULTS.ai,
+          projects: typeof parsed.projectPanelWidth === "number" ? parsed.projectPanelWidth : DEFAULTS.projects,
+        };
+      }
+    } catch { /* fall through */ }
+    return { ai: DEFAULTS.ai, projects: DEFAULTS.projects };
+  }
+
+  function saveWidths(ai: number, projects: number): void {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed.aiChatPanelWidth = ai;
+      parsed.projectPanelWidth = projects;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    } catch (e) {
+      console.warn("[resize] failed to save panel widths:", e);
+    }
+  }
+
+  function applyWidths(): void {
+    const { ai, projects } = loadWidths();
+    const root = document.documentElement;
+    const maxAi = window.innerWidth * MAX_RATIO.ai;
+    const maxProjects = window.innerWidth * MAX_RATIO.projects;
+    root.style.setProperty("--ai-panel-width", Math.max(MIN.ai, Math.min(ai, maxAi)) + "px");
+    root.style.setProperty("--project-panel-width", Math.max(MIN.projects, Math.min(projects, maxProjects)) + "px");
+  }
+
+  applyWidths();
+  window.addEventListener("resize", applyWidths);
+
+  let widths = loadWidths();
+
+  document.querySelectorAll<HTMLElement>(".panel-resize-handle").forEach((handle) => {
+    const target = handle.dataset.resize as "ai" | "projects" | undefined;
+    if (!target) return;
+
+    handle.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      widths = { ...widths, [target]: DEFAULTS[target] };
+      applyWidths();
+      saveWidths(widths.ai, widths.projects);
+    });
+
+    handle.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = widths[target];
+      const maxWidth = window.innerWidth * MAX_RATIO[target];
+      const minWidth = MIN[target];
+      handle.classList.add("panel-resize-handle--active");
+
+      const onMove = (ev: MouseEvent) => {
+        const dx = target === "ai" ? startX - ev.clientX : ev.clientX - startX;
+        const next = Math.max(minWidth, Math.min(startWidth + dx, maxWidth));
+        widths = { ...widths, [target]: next };
+        const root = document.documentElement;
+        root.style.setProperty(`--${target === "ai" ? "ai-panel" : "project-panel"}-width`, next + "px");
+      };
+
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        handle.classList.remove("panel-resize-handle--active");
+        saveWidths(widths.ai, widths.projects);
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initErrorBoundaries();
   initTheme();
@@ -803,6 +890,9 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Editor cleared");
     setTimeout(() => setLoading(false), 50);
   });
+
+  // Resizable side panels (AI chat, projects)
+  setupResizablePanels();
 
   // Initialize project panel
   initProjectPanel({

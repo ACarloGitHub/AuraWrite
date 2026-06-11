@@ -25,7 +25,8 @@
 
   --toolbar-height: 48px;
   --statusbar-height: 28px;
-  --ai-panel-width: 320px;
+  --ai-panel-width: 360px;
+  --project-panel-width: 280px;
 
   --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.15);
   --selection-highlight: rgba(255, 255, 0, 0.4);
@@ -492,6 +493,7 @@ body {
     transform 0.2s ease,
     background 0.3s,
     border-color 0.3s;
+  position: relative;
 }
 
 .ai-panel.hidden {
@@ -2037,14 +2039,39 @@ kbd {
    ============================================================================ */
 
 .project-panel {
-  width: 280px;
-  min-width: 250px;
-  max-width: 350px;
+  width: var(--project-panel-width, 280px);
   background: var(--color-surface, #ffffff);
   border-right: 1px solid var(--color-border, #cccccc);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 100;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle--active {
+  background: var(--color-primary, #4a90d9);
+  opacity: 0.35;
+}
+
+.panel-resize-handle--projects {
+  right: -3px;
+}
+
+.panel-resize-handle--ai {
+  left: -3px;
 }
 
 .project-panel.hidden {
