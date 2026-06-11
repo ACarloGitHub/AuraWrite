@@ -3983,10 +3983,21 @@ kbd {
   display: inline-block;
   margin: 8px 0;
   max-width: 100%;
+  transition: transform 120ms ease-out;
+  cursor: move;
+  will-change: transform;
+}
+
+.image-node-wrapper--dragging {
+  transition: none;
+  cursor: grabbing;
+  outline-style: dashed;
 }
 
 .image-node-wrapper[data-align="left"] {
   display: block;
+  width: fit-content;
+  max-width: 100%;
   margin-left: 0;
   margin-right: auto;
   text-align: left;
@@ -3994,6 +4005,8 @@ kbd {
 
 .image-node-wrapper[data-align="center"] {
   display: block;
+  width: fit-content;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
   text-align: center;
@@ -4001,13 +4014,15 @@ kbd {
 
 .image-node-wrapper[data-align="right"] {
   display: block;
+  width: fit-content;
+  max-width: 100%;
   margin-left: auto;
   margin-right: 0;
   text-align: right;
 }
 
 .image-node-wrapper img {
-  display: inline-block;
+  display: block;
   max-width: 100%;
   vertical-align: top;
 }

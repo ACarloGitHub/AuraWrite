@@ -256,6 +256,8 @@ const imageSpec: NodeSpec = {
     width: { default: null },
     height: { default: null },
     align: { default: "center" },
+    offsetX: { default: 0 },
+    offsetY: { default: 0 },
   },
   parseDOM: [
     {
@@ -271,6 +273,8 @@ const imageSpec: NodeSpec = {
           width: w ? parseInt(w, 10) || null : null,
           height: h ? parseInt(h, 10) || null : null,
           align: dom.getAttribute("data-align") || "center",
+          offsetX: parseInt(dom.getAttribute("data-offset-x") || "0", 10) || 0,
+          offsetY: parseInt(dom.getAttribute("data-offset-y") || "0", 10) || 0,
         };
       },
     },
@@ -284,6 +288,10 @@ const imageSpec: NodeSpec = {
     if (node.attrs.width) attrs.width = String(node.attrs.width);
     if (node.attrs.height) attrs.height = String(node.attrs.height);
     attrs["data-align"] = node.attrs.align as string;
+    const offsetX = (node.attrs.offsetX as number) || 0;
+    const offsetY = (node.attrs.offsetY as number) || 0;
+    if (offsetX) attrs["data-offset-x"] = String(offsetX);
+    if (offsetY) attrs["data-offset-y"] = String(offsetY);
     return ["img", attrs];
   },
 };

@@ -1,5 +1,6 @@
 import type { EditorView } from "prosemirror-view";
 import { Node as PMNode } from "prosemirror-model";
+import { TextSelection } from "prosemirror-state";
 import { uploadImageFile, resolveImageSrc, type UploadedImage } from "./image-uploader";
 
 export function createImageNode(
@@ -23,16 +24,23 @@ export function createImageNode(
 
 function findInsertPos(view: EditorView): { pos: number; depth: number } | null {
   const { $from } = view.state.selection;
+  const { image } = view.state.schema.nodes;
+  if (!image) return null;
+  let leafDepth = -1;
   for (let d = $from.depth; d >= 0; d--) {
-    const parent = $from.node(d);
-    const match = parent.contentMatchAt($from.index(d)).matchType(
-      view.state.schema.nodes.image
-    );
-    if (match) {
-      return { pos: $from.end(d), depth: d };
+    if ($from.node(d).isTextblock) {
+      leafDepth = d;
+      break;
     }
   }
-  return null;
+  if (leafDepth < 0) {
+    if ($from.node(0).type === view.state.schema.nodes.doc || $from.node(0).type.spec.content === "block+") {
+      return { pos: 0, depth: 0 };
+    }
+    return null;
+  }
+  const insertAt = leafDepth === 0 ? $from.end(0) : $from.after(leafDepth);
+  return { pos: insertAt, depth: leafDepth };
 }
 
 export async function insertImageFromFile(
@@ -46,6 +54,8 @@ export async function insertImageFromFile(
     const insert = findInsertPos(view);
     if (!insert) return false;
     const tr = view.state.tr.insert(insert.pos, node);
+    const cursorPos = insert.pos + node.nodeSize;
+    tr.setSelection(TextSelection.create(tr.doc, Math.min(cursorPos, tr.doc.content.size)));
     view.dispatch(tr);
     view.focus();
     return true;
@@ -74,6 +84,8 @@ export function insertImageFromSrc(
     align: "center",
   });
   const tr = state.tr.insert(insert.pos, node);
+  const cursorPos = insert.pos + node.nodeSize;
+  tr.setSelection(TextSelection.create(tr.doc, Math.min(cursorPos, tr.doc.content.size)));
   view.dispatch(tr);
   view.focus();
   return true;
