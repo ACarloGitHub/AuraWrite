@@ -1271,13 +1271,21 @@ body {
   position: relative;
   background: var(--color-surface);
   border-radius: 8px;
-  min-width: 760px;
-  max-width: 92vw;
-  max-height: 85vh;
+  min-width: 600px;
+  min-height: 400px;
+  width: 760px;
+  height: auto;
+  max-width: 95vw;
+  max-height: 92vh;
   overflow: auto;
   display: flex;
   flex-direction: column;
+  resize: both;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+#embeddings-onboarding-modal {
+  z-index: 30000;
 }
 
 .modal-header {
@@ -1950,10 +1958,13 @@ body {
   background: var(--color-surface, #fff);
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  max-width: 720px;
-  width: 92%;
-  max-height: 80vh;
-  overflow-y: auto;
+  min-width: 600px;
+  min-height: 400px;
+  width: 760px;
+  max-width: 95vw;
+  max-height: 90vh;
+  resize: both;
+  overflow: auto;
 }
 
 .modal-header {

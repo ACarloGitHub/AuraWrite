@@ -910,6 +910,7 @@ async function setupEmbeddingsTab(): Promise<void> {
   const ollamaPullNomic = document.getElementById("embed-ollama-pull-nomic") as HTMLButtonElement | null;
   const removeAll = document.getElementById("embed-remove-all") as HTMLButtonElement | null;
   const reshowOnboarding = document.getElementById("embed-reshow-onboarding") as HTMLButtonElement | null;
+  const reshowOnboardingTop = document.getElementById("embed-reshow-onboarding-top") as HTMLButtonElement | null;
 
   if (llamaStatus) llamaStatus.textContent = `Status: ${status.llamacpp.present ? "installed" : "not installed"} (${status.platform}/${status.arch})`;
   if (llamaMeta) llamaMeta.textContent = status.llamacpp.present ? `Version: ${status.llamacpp.version} · Size: ${formatBytes(status.llamacpp.size_bytes)}` : `Will download: ${status.llamacpp.download_url}`;
@@ -981,6 +982,10 @@ async function setupEmbeddingsTab(): Promise<void> {
     await setupEmbeddingsTab();
   });
   reshowOnboarding?.addEventListener("click", () => {
+    localStorage.removeItem(EMBED_ONBOARDING_KEY);
+    maybeShowEmbeddingsOnboarding();
+  });
+  reshowOnboardingTop?.addEventListener("click", () => {
     localStorage.removeItem(EMBED_ONBOARDING_KEY);
     maybeShowEmbeddingsOnboarding();
   });
