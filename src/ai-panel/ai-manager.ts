@@ -104,6 +104,29 @@ export async function sendToAI(
 
   // Check if the current provider requires an API key
   const settings = loadAIFromPreferences();
+
+  // Sync the active provider with the latest settings. This is the safety
+  // belt that guarantees the user-selected provider/model/baseUrl/apiKey are
+  // applied to the next request, even if the preferences-changed event
+  // failed to reach handlePreferencesChanged (e.g. listener not yet
+  // attached, event fired before chat panel setup, race condition).
+  const current = currentProvider!;
+  if (current.name !== settings.aiProvider) {
+    currentProvider = createProvider(settings);
+  } else {
+    const providerAny = current as any;
+    if (typeof providerAny.setModel === "function" && settings.aiModel) {
+      providerAny.setModel(settings.aiModel);
+    }
+    if (typeof providerAny.setApiKey === "function") {
+      providerAny.setApiKey(settings.aiApiKey);
+    }
+    if (typeof providerAny.setBaseUrl === "function" && settings.aiBaseUrl) {
+      providerAny.setBaseUrl(settings.aiBaseUrl);
+    }
+  }
+  const active = currentProvider!;
+
   const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud", "minimax"];
   if (providersRequiringKey.includes(settings.aiProvider) && !settings.aiApiKey.trim()) {
     const msg =
@@ -129,7 +152,7 @@ export async function sendToAI(
   }
 
   try {
-    const response = await currentProvider!.stream(prompt, context);
+    const response = await active.stream(prompt, context);
     return response;
   } catch (error) {
     return {
