@@ -1,4 +1,4 @@
-import { createEditor, syncDocumentPaginationState } from "./editor/editor";
+﻿import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
@@ -29,6 +29,25 @@ import "./styles.css";
 const THEME_KEY = "aurawrite-theme";
 const PREFERENCES_KEY = "aurawrite-preferences";
 const ZOOM_KEY = "aurawrite-zoom";
+const EMBED_ONBOARDING_KEY = "aurawrite-embeddings-onboarding-dismissed";
+
+interface ResourceInfo {
+  present: boolean;
+  path: string;
+  size_bytes: number;
+  version: string;
+  license: string;
+  download_url: string;
+}
+interface ResourcesStatus {
+  llamacpp: ResourceInfo;
+  nomic: ResourceInfo;
+  ollama_installed: boolean;
+  ollama_path: string;
+  data_dir: string;
+  platform: string;
+  arch: string;
+}
 
 type ThemeMode = "light" | "dark" | "custom";
 
@@ -275,11 +294,11 @@ function updateThemeIcon(theme: ThemeMode): void {
   const btn = document.getElementById("btn-theme");
   if (btn) {
     if (theme === "light") {
-      btn.textContent = "☀️";
+      btn.textContent = "â˜€ï¸";
     } else if (theme === "dark") {
-      btn.textContent = "🌙";
+      btn.textContent = "ðŸŒ™";
     } else {
-      btn.textContent = "🎨";
+      btn.textContent = "ðŸŽ¨";
     }
   }
 }
@@ -475,7 +494,7 @@ function loadUserFonts(): void {
   }
   console.log("[fonts] loadUserFonts called");
 
-  listEl.innerHTML = "<em>Scansione in corso…</em>";
+  listEl.innerHTML = "<em>Scansione in corsoâ€¦</em>";
 
   void (async () => {
     try {
@@ -618,8 +637,8 @@ function populateModelSelect(models: ModelInfo[], currentModel: string): void {
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = models.length === 0
-    ? "— No models returned —"
-    : "— Select a model —";
+    ? "â€” No models returned â€”"
+    : "â€” Select a model â€”";
   select.appendChild(placeholder);
   for (const m of models) {
     const opt = document.createElement("option");
@@ -858,6 +877,141 @@ function setupResizablePanels(): void {
   });
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+async function refreshEmbeddingsStatus(): Promise<ResourcesStatus | null> {
+  try {
+    return (await invoke("resources_get_status")) as ResourcesStatus;
+  } catch (e) {
+    console.warn("[embeddings] status failed:", e);
+    return null;
+  }
+}
+
+async function setupEmbeddingsTab(): Promise<void> {
+  const status = await refreshEmbeddingsStatus();
+  if (!status) return;
+
+  const llamaStatus = document.getElementById("embed-llamacpp-status");
+  const llamaMeta = document.getElementById("embed-llamacpp-meta");
+  const llamaDownload = document.getElementById("embed-llamacpp-download") as HTMLButtonElement | null;
+  const llamaRemove = document.getElementById("embed-llamacpp-remove") as HTMLButtonElement | null;
+  const nomicStatus = document.getElementById("embed-nomic-status");
+  const nomicMeta = document.getElementById("embed-nomic-meta");
+  const nomicDownload = document.getElementById("embed-nomic-download") as HTMLButtonElement | null;
+  const nomicRemove = document.getElementById("embed-nomic-remove") as HTMLButtonElement | null;
+  const ollamaStatus = document.getElementById("embed-ollama-status");
+  const ollamaInstall = document.getElementById("embed-ollama-install") as HTMLButtonElement | null;
+  const ollamaPullNomic = document.getElementById("embed-ollama-pull-nomic") as HTMLButtonElement | null;
+  const removeAll = document.getElementById("embed-remove-all") as HTMLButtonElement | null;
+
+  if (llamaStatus) llamaStatus.textContent = `Status: ${status.llamacpp.present ? "installed" : "not installed"} (${status.platform}/${status.arch})`;
+  if (llamaMeta) llamaMeta.textContent = status.llamacpp.present ? `Version: ${status.llamacpp.version} · Size: ${formatBytes(status.llamacpp.size_bytes)}` : `Will download: ${status.llamacpp.download_url}`;
+  if (llamaDownload) llamaDownload.style.display = status.llamacpp.present ? "none" : "";
+  if (llamaRemove) llamaRemove.style.display = status.llamacpp.present ? "" : "none";
+
+  if (nomicStatus) nomicStatus.textContent = `Status: ${status.nomic.present ? "installed" : "not installed"}`;
+  if (nomicMeta) nomicMeta.textContent = status.nomic.present ? `Version: ${status.nomic.version} · Size: ${formatBytes(status.nomic.size_bytes)}` : `Will download: ${status.nomic.download_url}`;
+  if (nomicDownload) nomicDownload.style.display = !status.llamacpp.present ? "none" : (status.nomic.present ? "none" : "");
+  if (nomicRemove) nomicRemove.style.display = status.nomic.present ? "" : "none";
+
+  if (ollamaStatus) ollamaStatus.textContent = `Ollama status: ${status.ollama_installed ? "installed" : "not installed"} (${status.ollama_path || "not on PATH"})`;
+  if (ollamaInstall) ollamaInstall.style.display = status.ollama_installed ? "none" : "";
+  if (ollamaPullNomic) ollamaPullNomic.style.display = status.ollama_installed ? "" : "none";
+
+  llamaDownload?.addEventListener("click", async () => {
+    llamaDownload.disabled = true;
+    llamaDownload.textContent = "Downloading...";
+    try {
+      await invoke("resources_download_llamacpp");
+      await setupEmbeddingsTab();
+    } catch (e) {
+      llamaDownload.disabled = false;
+      llamaDownload.textContent = "Download llama.cpp";
+      const msg = e instanceof Error ? e.message : String(e);
+      const choice = window.confirm(`Failed to download llama.cpp:\n\n${msg}\n\nClick OK to try downloading Ollama as a fallback, or Cancel to retry llama.cpp.`);
+      if (choice) {
+        window.open("https://ollama.com/download", "_blank");
+      }
+    }
+  });
+  llamaRemove?.addEventListener("click", async () => {
+    if (!window.confirm("Remove llama.cpp? You can re-download it at any time.")) return;
+    await invoke("resources_remove_all");
+    await setupEmbeddingsTab();
+  });
+  nomicDownload?.addEventListener("click", async () => {
+    nomicDownload.disabled = true;
+    nomicDownload.textContent = "Downloading...";
+    try {
+      await invoke("resources_download_nomic");
+      await setupEmbeddingsTab();
+    } catch (e) {
+      nomicDownload.disabled = false;
+      nomicDownload.textContent = "Download nomic";
+      alert("Failed to download nomic: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+  nomicRemove?.addEventListener("click", async () => {
+    if (!window.confirm("Remove nomic? You can re-download it at any time.")) return;
+    await invoke("resources_remove_all");
+    await setupEmbeddingsTab();
+  });
+  ollamaPullNomic?.addEventListener("click", async () => {
+    ollamaPullNomic.disabled = true;
+    ollamaPullNomic.textContent = "Pulling nomic via Ollama...";
+    try {
+      await invoke("ollama_pull_nomic");
+      ollamaPullNomic.textContent = "nomic pulled via Ollama ✓";
+    } catch (e) {
+      ollamaPullNomic.disabled = false;
+      ollamaPullNomic.textContent = "Download nomic via Ollama";
+      alert("Failed to pull nomic via Ollama: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+  removeAll?.addEventListener("click", async () => {
+    if (!window.confirm("Remove both llama.cpp and nomic? You can re-download at any time.")) return;
+    await invoke("resources_remove_all");
+    await setupEmbeddingsTab();
+  });
+}
+
+function maybeShowEmbeddingsOnboarding(): void {
+  if (localStorage.getItem(EMBED_ONBOARDING_KEY)) return;
+  const modal = document.getElementById("embeddings-onboarding-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+
+  const close = (download: boolean) => {
+    localStorage.setItem(EMBED_ONBOARDING_KEY, "1");
+    modal.classList.add("hidden");
+    if (download) {
+      (async () => {
+        try {
+          await invoke("resources_download_llamacpp");
+          await invoke("resources_download_nomic");
+          await setupEmbeddingsTab();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const choice = window.confirm(`Failed to download:\n\n${msg}\n\nClick OK to try downloading Ollama as a fallback, or Cancel to retry later.`);
+          if (choice) {
+            window.open("https://ollama.com/download", "_blank");
+          }
+        }
+      })();
+    }
+  };
+
+  document.getElementById("embeddings-onboarding-close")?.addEventListener("click", () => close(false));
+  document.getElementById("embeddings-onboarding-skip")?.addEventListener("click", () => close(false));
+  document.getElementById("embeddings-onboarding-download")?.addEventListener("click", () => close(true));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initErrorBoundaries();
   initTheme();
@@ -910,6 +1064,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Resizable side panels (AI chat, projects)
   setupResizablePanels();
 
+  // Embeddings tab + first-launch onboarding dialog
+  setupEmbeddingsTab();
+  maybeShowEmbeddingsOnboarding();
+
   // Initialize project panel
   initProjectPanel({
     onDocumentSelect: (doc) => {
@@ -930,7 +1088,7 @@ document.addEventListener("DOMContentLoaded", () => {
           syncDocumentPaginationState(editorView);
           console.log("Loaded document content");
         } else {
-          // Document is empty — clear the editor
+          // Document is empty â€” clear the editor
           const tr = editorView.state.tr;
           tr.delete(0, tr.doc.content.size);
           editorView.dispatch(tr);

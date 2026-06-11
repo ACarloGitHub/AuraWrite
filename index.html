@@ -299,6 +299,7 @@
             <button class="pref-tab active" data-tab="general">General</button>
             <button class="pref-tab" data-tab="ai-provider">AI Provider</button>
             <button class="pref-tab" data-tab="ai-behavior">AI Behavior</button>
+            <button class="pref-tab" data-tab="embeddings">Embeddings</button>
             <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
             <button class="pref-tab" data-tab="fonts">Fonts</button>
@@ -476,6 +477,83 @@
                 </div>
               </div>
             </div>
+            <!-- TAB: Embeddings -->
+            <div class="pref-tab-content" data-tab="embeddings">
+              <div class="preference-group">
+                <h3>Local Embeddings</h3>
+                <p class="preference-hint">
+                  AuraWrite helps you keep track of your projects and documents using several
+                  memory systems. One of them is the "semantic" memory: it stores a numerical
+                  fingerprint (embedding) of your text so the AI can later find passages by
+                  meaning, not only by exact word match. To use it you need to download
+                  <strong>nomic-embed-text-v2-moe</strong>, a small open-source embedding model.
+                </p>
+                <p class="preference-hint">
+                  Keep in mind: nomic only creates the fingerprint and stores it. It cannot
+                  answer questions on its own. To actually query the vector database that
+                  nomic builds and get useful answers, you will also need a chat-capable AI
+                  model (see the <em>AI Provider</em> tab).
+                </p>
+                <p class="preference-hint">
+                  nomic needs a small runtime called <strong>llama.cpp</strong> to load the
+                  model. Both are downloaded the first time you choose to, and stored in your
+                  user data folder. You can remove them at any time from this tab.
+                </p>
+              </div>
+
+              <div class="preference-group">
+                <h3>llama.cpp runtime</h3>
+                <p id="embed-llamacpp-status" class="preference-hint">Status: unknown</p>
+                <p id="embed-llamacpp-meta" class="preference-hint"></p>
+                <div class="preference-row">
+                  <button id="embed-llamacpp-download" class="pref-btn pref-btn-primary">Download llama.cpp</button>
+                  <button id="embed-llamacpp-remove" class="pref-btn pref-btn-danger" style="display:none;">Remove llama.cpp</button>
+                </div>
+                <p class="preference-hint">
+                  License: <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a> (open source, free for commercial use).
+                </p>
+              </div>
+
+              <div class="preference-group">
+                <h3>nomic-embed-text-v2-moe (GGUF Q8_0)</h3>
+                <p id="embed-nomic-status" class="preference-hint">Status: unknown</p>
+                <p id="embed-nomic-meta" class="preference-hint"></p>
+                <div class="preference-row">
+                  <button id="embed-nomic-download" class="pref-btn pref-btn-primary" style="display:none;">Download nomic</button>
+                  <button id="embed-nomic-remove" class="pref-btn pref-btn-danger" style="display:none;">Remove nomic</button>
+                </div>
+                <p class="preference-hint">
+                  License: <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache 2.0</a> (open source, free for commercial use).
+                </p>
+              </div>
+
+              <div class="preference-group">
+                <h3>Fallback: Ollama</h3>
+                <p id="embed-ollama-status" class="preference-hint">Ollama status: unknown</p>
+                <p class="preference-hint">
+                  If llama.cpp cannot be downloaded, you can use Ollama as a fallback to run
+                  nomic. Note: Ollama on its own is not enough — you will also need to
+                  download the <code>nomic-embed-text-v2-moe</code> model through Ollama
+                  (one click below). The button is shown only if Ollama is installed on this
+                  machine.
+                </p>
+                <div class="preference-row">
+                  <button id="embed-ollama-install" class="pref-btn" style="display:none;">Open Ollama download page</button>
+                  <button id="embed-ollama-pull-nomic" class="pref-btn" style="display:none;">Download nomic via Ollama</button>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Remove everything</h3>
+                <p class="preference-hint">
+                  Frees the disk space used by llama.cpp and nomic. The next time you
+                  search by meaning you will be asked to download them again.
+                </p>
+                <div class="preference-row">
+                  <button id="embed-remove-all" class="pref-btn pref-btn-danger">Remove llama.cpp + nomic</button>
+                </div>
+              </div>
+            </div>
             <!-- TAB: Editor & Data -->
             <div class="pref-tab-content" data-tab="editor-data">
               <div class="preference-group">
@@ -587,6 +665,46 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+    <div id="embeddings-onboarding-modal" class="modal hidden">
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Welcome to AuraWrite</h2>
+          <button id="embeddings-onboarding-close" class="modal-close">×</button>
+        </div>
+        <div class="modal-body" style="padding: var(--spacing-md);">
+          <p style="margin: 0 0 12px 0;">
+            AuraWrite keeps track of your projects and documents using several memory
+            systems. One of them is the <strong>semantic</strong> one: it stores a
+            numerical fingerprint of your text so the AI can later retrieve passages
+            by meaning, not only by exact word match.
+          </p>
+          <p style="margin: 0 0 12px 0;">
+            To use it, you need to download <strong>nomic</strong>, a small open-source
+            embedding model. Please note that nomic only builds the vector database:
+            to actually query it and get useful answers, you will also need a chat-capable
+            AI model, configured in the <em>AI Provider</em> tab.
+          </p>
+          <p style="margin: 0 0 12px 0;">
+            nomic needs a small runtime called <strong>llama.cpp</strong> to load and
+            run. Would you like to download both now? They will be stored in your user
+            data folder and you can remove or update them at any time from
+            Preferences &rarr; Embeddings.
+          </p>
+          <p class="preference-hint" style="font-size: 0.85em; margin: 0;">
+            llama.cpp is released under the
+            <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT license</a>.
+            nomic-embed-text-v2-moe is released under the
+            <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache 2.0 license</a>.
+            Both are open source and free for commercial use.
+          </p>
+        </div>
+        <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: flex-end; gap: 8px;">
+          <button id="embeddings-onboarding-skip" class="pref-btn">Skip for now</button>
+          <button id="embeddings-onboarding-download" class="pref-btn pref-btn-primary">Download</button>
         </div>
       </div>
     </div>
