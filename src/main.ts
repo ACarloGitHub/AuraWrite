@@ -948,52 +948,7 @@ async function setupEmbeddingsTab(): Promise<void> {
   if (ollamaInstall) ollamaInstall.style.display = status.ollama_installed ? "none" : "";
   if (ollamaPullNomic) ollamaPullNomic.style.display = status.ollama_installed ? "" : "none";
 
-  llamaDownload?.addEventListener("click", async () => {
-    llamaDownload.disabled = true;
-    setDownloadRetryHandler("llamacpp", () => {
-      llamaDownload?.click();
-    });
-    try {
-      await invoke("resources_download_llamacpp");
-      await setupEmbeddingsTab();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn("[llamacpp] download failed:", msg);
-    } finally {
-      if (llamaDownload) {
-        llamaDownload.disabled = false;
-        llamaDownload.textContent = "Download llama.cpp";
-      }
-    }
-  });
-  llamaRemove?.addEventListener("click", async () => {
-    if (!window.confirm("Remove llama.cpp? You can re-download it at any time.")) return;
-    await invoke("resources_remove_all");
-    await setupEmbeddingsTab();
-  });
-  nomicDownload?.addEventListener("click", async () => {
-    nomicDownload.disabled = true;
-    setDownloadRetryHandler("nomic", () => {
-      nomicDownload?.click();
-    });
-    try {
-      await invoke("resources_download_nomic");
-      await setupEmbeddingsTab();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn("[nomic] download failed:", msg);
-    } finally {
-      if (nomicDownload) {
-        nomicDownload.disabled = false;
-        nomicDownload.textContent = "Download nomic";
-      }
-    }
-  });
-  nomicRemove?.addEventListener("click", async () => {
-    if (!window.confirm("Remove nomic? You can re-download it at any time.")) return;
-    await invoke("resources_remove_all");
-    await setupEmbeddingsTab();
-  });
+  installEmbeddingsButtonHandlers();
   ollamaPullNomic?.addEventListener("click", async () => {
     ollamaPullNomic.disabled = true;
     ollamaPullNomic.textContent = "Pulling nomic via Ollama...";
@@ -1017,6 +972,59 @@ async function setupEmbeddingsTab(): Promise<void> {
   });
 }
 
+let embeddingsButtonHandlersInstalled = false;
+function installEmbeddingsButtonHandlers(): void {
+  if (embeddingsButtonHandlersInstalled) return;
+  embeddingsButtonHandlersInstalled = true;
+  const llamaDownload = document.getElementById("embed-llamacpp-download") as HTMLButtonElement | null;
+  const llamaRemove = document.getElementById("embed-llamacpp-remove") as HTMLButtonElement | null;
+  const nomicDownload = document.getElementById("embed-nomic-download") as HTMLButtonElement | null;
+  const nomicRemove = document.getElementById("embed-nomic-remove") as HTMLButtonElement | null;
+
+  llamaDownload?.addEventListener("click", async () => {
+    llamaDownload.disabled = true;
+    setDownloadRetryHandler("llamacpp", () => {
+      llamaDownload.click();
+    });
+    try {
+      await invoke("resources_download_llamacpp");
+      await setupEmbeddingsTab();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[llamacpp] download failed:", msg);
+    } finally {
+      llamaDownload.disabled = false;
+      llamaDownload.textContent = "Download llama.cpp";
+    }
+  });
+  llamaRemove?.addEventListener("click", async () => {
+    if (!window.confirm("Remove llama.cpp? You can re-download it at any time.")) return;
+    await invoke("resources_remove_all");
+    await setupEmbeddingsTab();
+  });
+  nomicDownload?.addEventListener("click", async () => {
+    nomicDownload.disabled = true;
+    setDownloadRetryHandler("nomic", () => {
+      nomicDownload.click();
+    });
+    try {
+      await invoke("resources_download_nomic");
+      await setupEmbeddingsTab();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[nomic] download failed:", msg);
+    } finally {
+      nomicDownload.disabled = false;
+      nomicDownload.textContent = "Download nomic";
+    }
+  });
+  nomicRemove?.addEventListener("click", async () => {
+    if (!window.confirm("Remove nomic? You can re-download it at any time.")) return;
+    await invoke("resources_remove_all");
+    await setupEmbeddingsTab();
+  });
+}
+
 function maybeShowEmbeddingsOnboarding(): void {
   if (localStorage.getItem(EMBED_ONBOARDING_KEY)) return;
   const modal = document.getElementById("embeddings-onboarding-modal");
@@ -1034,10 +1042,7 @@ function maybeShowEmbeddingsOnboarding(): void {
           await setupEmbeddingsTab();
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          const choice = window.confirm(`Failed to download:\n\n${msg}\n\nClick OK to try downloading Ollama as a fallback, or Cancel to retry later.`);
-          if (choice) {
-            window.open("https://ollama.com/download", "_blank");
-          }
+          console.warn("[embeddings onboarding] download failed:", msg);
         }
       })();
     }
