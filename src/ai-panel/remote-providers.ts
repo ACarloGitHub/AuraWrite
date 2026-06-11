@@ -635,6 +635,18 @@ export class MiniMaxProvider implements AIProvider {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
+  setModel(model: string): void {
+    this.model = model;
+  }
+
+  setApiKey(apiKey: string): void {
+    this.apiKey = apiKey;
+  }
+
+  setBaseUrl(baseUrl: string): void {
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
     if (!isValidHttpUrl(this.baseUrl)) {
       return { content: "", done: false, error: `MiniMax: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };

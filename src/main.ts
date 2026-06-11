@@ -2,6 +2,7 @@ import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
+import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries, showErrorToast, showInfoToast, showToast } from "./error-boundary";
@@ -566,7 +567,13 @@ function updateApiKeyGroupVisibility(): void {
 
   const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
   if (modelInput && defaultModels[effectiveProvider]) {
-    modelInput.placeholder = defaultModels[effectiveProvider];
+    const newDefault = defaultModels[effectiveProvider];
+    modelInput.placeholder = newDefault;
+    const currentValue = modelInput.value.trim();
+    const isKnownDefault = Object.values(defaultModels).includes(currentValue);
+    if (currentValue === "" || isKnownDefault) {
+      modelInput.value = newDefault;
+    }
   }
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
@@ -978,10 +985,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("pref-ai-provider")?.addEventListener("change", () => {
     updateApiKeyGroupVisibility();
     refreshModelList();
+    savePreferencesFromModal();
   });
   document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", () => {
     updateApiKeyGroupVisibility();
     refreshModelList();
+    savePreferencesFromModal();
   });
   document.getElementById("pref-ai-base-url")?.addEventListener("change", () => {
     refreshModelList();
@@ -994,9 +1003,13 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("pref-ai-model-select")?.addEventListener("change", (e) => {
     const value = (e.target as HTMLSelectElement).value;
-    if (value) {
-      const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
-      if (modelInput) modelInput.value = value;
+    if (!value) return;
+    const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
+    if (modelInput) modelInput.value = value;
+    savePreferencesFromModal();
+    const current = getCurrentProvider();
+    if (current && typeof (current as any).setModel === "function") {
+      (current as any).setModel(value);
     }
   });
 
