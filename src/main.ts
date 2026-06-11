@@ -1,4 +1,4 @@
-﻿import { createEditor, syncDocumentPaginationState } from "./editor/editor";
+import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
@@ -296,11 +296,11 @@ function updateThemeIcon(theme: ThemeMode): void {
   const btn = document.getElementById("btn-theme");
   if (btn) {
     if (theme === "light") {
-      btn.textContent = "â˜€ï¸";
+      btn.textContent = "☀️";
     } else if (theme === "dark") {
-      btn.textContent = "ðŸŒ™";
+      btn.textContent = "🌙";
     } else {
-      btn.textContent = "ðŸŽ¨";
+      btn.textContent = "🎨";
     }
   }
 }
