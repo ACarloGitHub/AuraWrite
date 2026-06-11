@@ -1,4 +1,4 @@
-// resources.rs - Local AI resource management (llama.cpp + nomic-embed GGUF)
+﻿// resources.rs - Local AI resource management (llama.cpp + nomic-embed GGUF)
 //
 // Handles download, status, removal, spawn, and Ollama fallback for the
 // self-contained embeddings stack. The downloads are performed at runtime
@@ -18,7 +18,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-const LLAMACPP_PINNED_VERSION: &str = "b9587";
+const LLAMACPP_PINNED_VERSION: &str = "b9596";
 const NOMIC_MODEL_FILENAME: &str = "nomic-embed-text-v2-moe.Q8_0.gguf";
 const NOMIC_DEFAULT_URL: &str = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
 const NOMIC_LICENSE: &str = "Apache-2.0";
@@ -83,16 +83,22 @@ fn default_llamacpp_url() -> String {
     let arch = arch_string();
     let ver = LLAMACPP_PINNED_VERSION;
     let asset = match (platform, arch) {
-        ("windows", "x64") => format!("llama-{}-bin-win-avx2-x64.zip", ver),
-        ("macos", "arm64") => format!("llama-{}-bin-macos-arm64.zip", ver),
-        ("macos", "x64") => format!("llama-{}-bin-macos-x64.zip", ver),
-        ("linux", "x64") => format!("llama-{}-bin-ubuntu-x64.zip", ver),
-        _ => format!("llama-{}-bin-ubuntu-x64.zip", ver),
+        ("windows", "x64") => format!("llama-{}-bin-win-cpu-x64.zip", ver),
+        ("windows", "arm64") => format!("llama-{}-bin-win-cpu-arm64.zip", ver),
+        ("macos", "arm64") => format!("llama-{}-bin-macos-arm64.tar.gz", ver),
+        ("macos", "x64") => format!("llama-{}-bin-macos-x64.tar.gz", ver),
+        ("linux", "x64") => format!("llama-{}-bin-ubuntu-x64.tar.gz", ver),
+        ("linux", "arm64") => format!("llama-{}-bin-ubuntu-arm64.tar.gz", ver),
+        _ => format!("llama-{}-bin-ubuntu-x64.tar.gz", ver),
     };
     format!(
-        "https://github.com/ggerganov/llama.cpp/releases/download/{}/{}",
+        "https://github.com/ggml-org/llama.cpp/releases/download/{}/{}",
         ver, asset
     )
+}
+
+fn is_zip_url(url: &str) -> bool {
+    url.to_lowercase().ends_with(".zip")
 }
 
 fn llamacpp_binary_name() -> &'static str {
@@ -130,20 +136,28 @@ fn sha256_string(path: &Path) -> Option<String> {
 #[tauri::command]
 pub fn resources_get_status(app: AppHandle) -> Result<ResourcesStatus, String> {
     let dir = resources_dir(&app)?;
-    let bin_path = dir.join("llama.cpp").join(llamacpp_binary_name());
+    let llama_dir = dir.join("llama.cpp");
+    let bin_path = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
+        .ok()
+        .filter(|p| p.exists());
     let model_path = dir.join("nomic").join(NOMIC_MODEL_FILENAME);
 
-    let llamacpp_present = bin_path.exists();
+    let llamacpp_present = bin_path.is_some();
     let nomic_present = model_path.exists();
 
     let ollama_path = find_ollama_binary().unwrap_or_default();
     let ollama_installed = !ollama_path.is_empty();
 
+    let (llama_display_path, llama_size) = match &bin_path {
+        Some(p) => (p.to_string_lossy().to_string(), file_size(p)),
+        None => (llama_dir.join(llamacpp_binary_name()).to_string_lossy().to_string(), 0),
+    };
+
     Ok(ResourcesStatus {
         llamacpp: ResourceInfo {
             present: llamacpp_present,
-            path: bin_path.to_string_lossy().to_string(),
-            size_bytes: if llamacpp_present { file_size(&bin_path) } else { 0 },
+            path: llama_display_path,
+            size_bytes: llama_size,
             version: LLAMACPP_PINNED_VERSION.to_string(),
             license: LLAMACPP_LICENSE.to_string(),
             download_url: default_llamacpp_url(),
@@ -234,24 +248,72 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn extract_tar_gz(tar_gz_path: &Path, dest_dir: &Path) -> Result<(), String> {
+    let f = File::open(tar_gz_path).map_err(|e| format!("open tar.gz: {}", e))?;
+    let gz = flate2::read::GzDecoder::new(f);
+    let mut archive = tar::Archive::new(gz);
+    archive.unpack(dest_dir).map_err(|e| format!("unpack tar.gz: {}", e))?;
+    Ok(())
+}
+
+fn find_binary_in_dir(root: &Path, name: &str) -> Result<std::path::PathBuf, String> {
+    if !root.exists() {
+        return Err(format!("Root directory does not exist: {}", root.display()));
+    }
+    let mut stack: Vec<std::path::PathBuf> = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.is_file() {
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if file_name == name {
+                        return Ok(path);
+                    }
+                }
+            }
+        }
+    }
+    Err(format!(
+        "Extracted archive but {} not found under {}",
+        name,
+        root.display()
+    ))
+}
+
 #[tauri::command]
 pub async fn resources_download_llamacpp(app: AppHandle) -> Result<ResourceInfo, String> {
     let dir = resources_dir(&app)?;
     let target_dir = dir.join("llama.cpp");
     let url = default_llamacpp_url();
-    let zip_path = dir.join("llama.cpp.zip");
+    let is_zip = is_zip_url(&url);
+    let archive_path = if is_zip {
+        dir.join("llama.cpp.zip")
+    } else {
+        dir.join("llama.cpp.tar.gz")
+    };
     let _ = fs::create_dir_all(&target_dir);
-    download_to_file_async(&url, &zip_path)
+    download_to_file_async(&url, &archive_path)
         .await
         .map_err(|e| format!("download llama.cpp: {}", e))?;
-    extract_zip(&zip_path, &target_dir).map_err(|e| format!("extract llama.cpp: {}", e))?;
-    let _ = fs::remove_file(&zip_path);
-    let bin = target_dir.join(llamacpp_binary_name());
-    if !bin.exists() {
-        return Err(format!(
-            "Extracted archive but {} not found inside. Check release assets for this platform.",
-            llamacpp_binary_name()
-        ));
+    if is_zip {
+        extract_zip(&archive_path, &target_dir).map_err(|e| format!("extract llama.cpp zip: {}", e))?;
+    } else {
+        extract_tar_gz(&archive_path, &target_dir).map_err(|e| format!("extract llama.cpp tar.gz: {}", e))?;
+    }
+    let _ = fs::remove_file(&archive_path);
+    let bin = find_binary_in_dir(&target_dir, llamacpp_binary_name())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&bin).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&bin, perms).ok();
     }
     #[cfg(unix)]
     {
@@ -374,8 +436,8 @@ pub fn ollama_pull_nomic() -> Result<String, String> {
 pub fn embeddings_check_provider(app: AppHandle) -> Result<String, String> {
     // Returns one of: "llamacpp" | "ollama" | "none"
     if let Ok(dir) = resources_dir(&app) {
-        let bin = dir.join("llama.cpp").join(llamacpp_binary_name());
-        if bin.exists() {
+        let llama_dir = dir.join("llama.cpp");
+        if find_binary_in_dir(&llama_dir, llamacpp_binary_name()).is_ok() {
             return Ok("llamacpp".to_string());
         }
     }
