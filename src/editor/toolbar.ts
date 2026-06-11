@@ -372,7 +372,7 @@ async function getContentByFormat(format: string): Promise<string> {
 }
 
 async function docxToBase64(doc: unknown): Promise<string> {
-  const docxDoc = toDocx(doc);
+  const docxDoc = await toDocx(doc);
   return await Packer.toBase64String(docxDoc);
 }
 

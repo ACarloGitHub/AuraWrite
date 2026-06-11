@@ -1,7 +1,30 @@
 import mammoth from "mammoth";
 import JSZip from "jszip";
-import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  AlignmentType,
+  HeadingLevel,
+  ExternalHyperlink,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  ImageRun,
+  TextWrappingType,
+  TextWrappingSide,
+} from "docx";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
+
+const EMU_PER_PIXEL = 9525;
+
+function pxToEmu(px: number): number {
+  return Math.round(px * EMU_PER_PIXEL);
+}
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -722,12 +745,17 @@ function serializeContainer(container: any): string {
   return out.join("");
 }
 
-export function toDocx(doc: any): Document {
+export async function toDocx(doc: any): Promise<Document> {
   const children: any[] = [];
 
-  contentToArray(doc.content).forEach((node: any) => {
-    children.push(...nodeToChildren(node));
-  });
+  for (const node of contentToArray(doc.content)) {
+    const result = nodeToChildren(node);
+    if (result instanceof Promise) {
+      children.push(...(await result));
+    } else {
+      children.push(...result);
+    }
+  }
 
   return new Document({
     sections: [
@@ -876,7 +904,7 @@ function nodeToParagraphs(node: any): Paragraph[] {
   }
 }
 
-function nodeToChildren(node: any): any[] {
+function nodeToChildren(node: any): any[] | Promise<any[]> {
   switch (node.type.name) {
     case "table":
       return [tableNodeToDocx(node)];
@@ -919,6 +947,8 @@ function nodeToChildren(node: any): any[] {
           },
         }),
       ];
+    case "image":
+      return imageNodeToDocx(node);
     case "page":
       return contentToArray(node.content).flatMap((child: any) => nodeToChildren(child));
     default:
@@ -930,6 +960,80 @@ function nodeToChildren(node: any): any[] {
       }
       return [];
   }
+}
+
+async function imageNodeToDocx(node: any): Promise<Paragraph[]> {
+  const src: string = node.attrs?.src || "";
+  if (!src) return [];
+  const alt: string = node.attrs?.alt || "";
+  const width: number | null = node.attrs?.width ?? null;
+  const height: number | null = node.attrs?.height ?? null;
+  const offsetX: number = node.attrs?.offsetX || 0;
+  const offsetY: number = node.attrs?.offsetY || 0;
+  const align: string = node.attrs?.align || "center";
+
+  let bytes: Uint8Array | null = null;
+  try {
+    if (
+      src.startsWith("http://") ||
+      src.startsWith("https://") ||
+      src.startsWith("data:") ||
+      src.startsWith("blob:")
+    ) {
+      const res = await fetch(src);
+      const buf = await res.arrayBuffer();
+      bytes = new Uint8Array(buf);
+    } else {
+      const raw = await invoke<number[]>("read_image_asset", { relativePath: src });
+      bytes = new Uint8Array(raw);
+    }
+  } catch (e) {
+    console.warn("[docx export] failed to read image asset, skipping:", src, e);
+    return [];
+  }
+  if (!bytes || bytes.length === 0) return [];
+
+  const imgWidth = width || 200;
+  const imgHeight = height || 200;
+
+  const useFloating = offsetX !== 0 || offsetY !== 0;
+  const imageRunOptions: any = {
+    data: bytes,
+    transformation: { width: imgWidth, height: imgHeight },
+    altText: alt ? { title: alt, description: alt, name: alt } : undefined,
+  };
+  if (useFloating) {
+    imageRunOptions.floating = {
+      horizontalPosition: {
+        offset: pxToEmu(offsetX),
+      },
+      verticalPosition: {
+        offset: pxToEmu(offsetY),
+      },
+      wrap: {
+        type: TextWrappingType.SQUARE,
+        side: TextWrappingSide.BOTH_SIDES,
+      },
+      margins: {
+        top: 0,
+        bottom: 0,
+      },
+    };
+  }
+
+  let paragraphAlignment: (typeof AlignmentType)[keyof typeof AlignmentType] | undefined;
+  if (!useFloating) {
+    if (align === "left") paragraphAlignment = AlignmentType.LEFT;
+    else if (align === "right") paragraphAlignment = AlignmentType.RIGHT;
+    else if (align === "center") paragraphAlignment = AlignmentType.CENTER;
+  }
+
+  return [
+    new Paragraph({
+      children: [new ImageRun(imageRunOptions)],
+      alignment: paragraphAlignment,
+    }),
+  ];
 }
 
 function tableNodeToDocx(tableNode: any): Table {
