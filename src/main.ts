@@ -1035,16 +1035,12 @@ function maybeShowEmbeddingsOnboarding(): void {
     localStorage.setItem(EMBED_ONBOARDING_KEY, "1");
     modal.classList.add("hidden");
     if (download) {
-      (async () => {
-        try {
-          await invoke("resources_download_llamacpp");
-          await invoke("resources_download_nomic");
-          await setupEmbeddingsTab();
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.warn("[embeddings onboarding] download failed:", msg);
-        }
-      })();
+      Promise.allSettled([
+        invoke("resources_download_llamacpp"),
+        invoke("resources_download_nomic"),
+      ])
+        .then(() => setupEmbeddingsTab())
+        .catch((e) => console.warn("[embeddings onboarding] download failed:", e));
     }
   };
 

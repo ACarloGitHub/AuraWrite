@@ -226,6 +226,7 @@ async fn download_to_file_async(
     );
     let resp = client
         .get(url)
+        .header("Accept-Encoding", "identity")
         .send()
         .await
         .map_err(|e| format!("download failed: {}", e))?;
