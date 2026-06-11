@@ -6,12 +6,12 @@ import {
   PROVIDER_DEFAULT_MODELS,
 } from "./providers";
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
-import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider } from "./remote-providers";
+import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider } from "./remote-providers";
 import { buildToolSystemPrompt } from "./tools";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 
-type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax";
 
 interface PreferencesAI {
   aiProvider: ProviderName;
@@ -75,6 +75,8 @@ function createProvider(settings: PreferencesAI): AIProvider {
       return new DeepSeekProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     case "lmstudio":
       return new LMStudioProvider(settings.aiModel, baseUrl);
+    case "minimax":
+      return new MiniMaxProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     default:
       return new OllamaProvider();
   }
@@ -102,7 +104,7 @@ export async function sendToAI(
 
   // Check if the current provider requires an API key
   const settings = loadAIFromPreferences();
-  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud"];
+  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud", "minimax"];
   if (providersRequiringKey.includes(settings.aiProvider) && !settings.aiApiKey.trim()) {
     const msg =
       `Missing API key for ${settings.aiProvider}. Please add your API key in Preferences > AI Provider.`;

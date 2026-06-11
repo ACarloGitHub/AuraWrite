@@ -4,7 +4,7 @@ import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
-import { initErrorBoundaries, showErrorToast } from "./error-boundary";
+import { initErrorBoundaries, showErrorToast, showInfoToast, showToast } from "./error-boundary";
 import { checkForUpdatesOnStartup } from "./updates";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
@@ -530,6 +530,7 @@ function updateApiKeyGroupVisibility(): void {
     deepseek: "deepseek-chat",
     openrouter: "openai/gpt-4o",
     lmstudio: "loaded-model",
+    minimax: "MiniMax-M3",
   };
 
   if (ollamaModeGroup) {
@@ -553,6 +554,8 @@ function updateApiKeyGroupVisibility(): void {
       apiKeyHint.textContent = "Optional. Only needed if you ran `ollama signin` to use cloud models through your local Ollama.";
     } else if (provider === "lmstudio") {
       apiKeyHint.textContent = "Not required for LM Studio.";
+    } else if (provider === "minimax") {
+      apiKeyHint.textContent = "Required. Get your MiniMax API key from platform.minimax.io/user-center/payment/token-plan.";
     } else {
       apiKeyHint.textContent = "Required.";
     }
@@ -568,8 +571,12 @@ function updateApiKeyGroupVisibility(): void {
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
   if (baseUrlInput) {
-    baseUrlInput.placeholder = PROVIDER_BASE_URLS[effectiveProvider] || "";
-    baseUrlInput.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
+    const defaultUrl = PROVIDER_BASE_URLS[effectiveProvider] || "";
+    baseUrlInput.placeholder = defaultUrl;
+    if (!baseUrlInput.value.trim() || baseUrlInput.dataset.autoFilled === "true") {
+      baseUrlInput.value = defaultUrl;
+      baseUrlInput.dataset.autoFilled = defaultUrl ? "true" : "false";
+    }
   }
 }
 
@@ -1088,3 +1095,5 @@ function updateWordCount(view: any): void {
 }
 
 (window as any).updateWordCount = updateWordCount;
+
+// ============================================================================

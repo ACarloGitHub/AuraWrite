@@ -173,6 +173,21 @@ function buildListingConfig(provider: string, baseUrl: string, apiKey: string): 
         },
       };
     }
+    case "minimax": {
+      const headers: Record<string, string> = {};
+      if (trimmedKey) headers["Authorization"] = `Bearer ${trimmedKey}`;
+      return {
+        url: `${cleanBase}/models`,
+        headers,
+        parse: (body: any) => {
+          if (!body || !Array.isArray(body.data)) return [];
+          return body.data.map((m: any) => ({
+            id: m.id,
+            displayName: m.id,
+          }));
+        },
+      };
+    }
     default:
       return null;
   }

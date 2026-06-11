@@ -615,3 +615,83 @@ export class LMStudioProvider implements AIProvider {
     if (this.abortController) { this.abortController.abort(); this.abortController = null; }
   }
 }
+
+export class MiniMaxProvider implements AIProvider {
+  name = "minimax";
+  displayName = "MiniMax";
+  isLocal = false;
+  private apiKey: string;
+  private model: string;
+  private baseUrl: string;
+  private abortController: AbortController | null = null;
+
+  constructor(
+    apiKey: string = "",
+    model: string = "MiniMax-M3",
+    baseUrl: string = "https://api.minimax.io/v1",
+  ) {
+    this.apiKey = apiKey;
+    this.model = model;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+
+  async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `MiniMax: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.apiKey.trim()) {
+      return { content: "", done: false, error: "MiniMax: missing API key. Add your MiniMax API key in Preferences > AI Provider." };
+    }
+    if (!this.model.trim()) {
+      return { content: "", done: false, error: `MiniMax: missing model name. Default: MiniMax-M3. See https://platform.minimax.io/docs/guides/models-intro for the full list.` };
+    }
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
+
+    try {
+      const body: Record<string, unknown> = {
+        messages: buildOpenAICompatibleMessages(prompt, context),
+        stream: false,
+        model: this.model,
+      };
+
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+        { signal },
+      );
+
+      const data = await response.json().catch(() => null);
+      if (!data) {
+        return { content: "", done: false, error: `MiniMax error: empty response (status ${response.status})` };
+      }
+      if (data.error) {
+        const errMsg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
+        return { content: "", done: false, error: `MiniMax error: ${errMsg}` };
+      }
+      if (!response.ok) {
+        return { content: "", done: false, error: `MiniMax error: HTTP ${response.status} ${response.statusText}` };
+      }
+      const content = data.choices?.[0]?.message?.content || "";
+      const thinking = extractOpenAIStyleReasoning(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}) };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return { content: "", done: true, error: "Request cancelled" };
+      }
+      console.error(`[MiniMax] Request failed:`, error);
+      return { content: "", done: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  stop(): void {
+    if (this.abortController) { this.abortController.abort(); this.abortController = null; }
+  }
+}
