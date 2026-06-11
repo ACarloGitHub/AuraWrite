@@ -10,9 +10,11 @@ mod database;
 mod embeddings;
 mod updates;
 mod fonts;
+mod resources;
 use database::*;
 use updates::*;
 use fonts::*;
+use resources::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -932,6 +934,17 @@ pub fn run() {
             // Fonts (v0.4.0+)
             get_user_fonts_dir,
             list_user_fonts,
+            // Resources (v0.7.0+ — local embeddings: llama.cpp + nomic GGUF)
+            resources_get_status,
+            resources_verify_nomic,
+            resources_nomic_sha256,
+            resources_download_llamacpp,
+            resources_download_nomic,
+            resources_remove_all,
+            ollama_check,
+            ollama_pull_model,
+            ollama_pull_nomic,
+            embeddings_check_provider,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
