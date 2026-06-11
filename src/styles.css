@@ -303,11 +303,18 @@ body {
   font-size: 16px;
   color: var(--color-text-buttons);
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", sans-serif;
+  line-height: 1;
   transition:
     background 0.15s,
     border-color 0.15s,
     color 0.3s;
   flex-shrink: 0;
+}
+
+#btn-theme {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", sans-serif;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .toolbar__btn-icon-only:hover {
