@@ -10,7 +10,7 @@
 // Rust change.
 
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::{self};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -264,28 +264,53 @@ async fn download_to_file_async(
         }),
     );
 
-    let bytes = match resp.bytes().await {
-        Ok(b) => b,
-        Err(e) => {
-            return Err(format!("download failed: {}", e));
+    let mut downloaded: u64 = 0;
+    let mut chunks: Vec<u8> = Vec::with_capacity(total as usize);
+    use futures_util::StreamExt;
+    let mut stream = resp.bytes_stream();
+    let mut download_error: Option<String> = None;
+    while let Some(chunk) = stream.next().await {
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(e) => {
+                download_error = Some(format!("stream error: {}", e));
+                break;
+            }
+        };
+        downloaded += chunk.len() as u64;
+        chunks.extend_from_slice(&chunk);
+        if last_emit.elapsed() >= Duration::from_millis(200) {
+            let elapsed = start.elapsed().as_secs_f64();
+            let speed_bps = if elapsed > 0.0 {
+                (downloaded as f64 / elapsed) as u64
+            } else {
+                0
+            };
+            let eta = if total > 0 && speed_bps > 0 {
+                ((total - downloaded) as f64 / speed_bps as f64).max(0.0)
+            } else {
+                -1.0
+            };
+            let eta_value = if eta < 0.0 { serde_json::Value::Null } else { serde_json::json!(eta) };
+            let _ = app.emit(
+                "download-progress",
+                serde_json::json!({
+                    "id": id,
+                    "name": name,
+                    "phase": "downloading",
+                    "bytes": downloaded,
+                    "total": total,
+                    "speed_bps": speed_bps,
+                    "eta_seconds": eta_value,
+                }),
+            );
+            last_emit = std::time::Instant::now();
         }
-    };
-    let downloaded = bytes.len() as u64;
-    let _ = app.emit(
-        "download-progress",
-        serde_json::json!({
-            "id": id,
-            "name": name,
-            "phase": "downloading",
-            "bytes": downloaded,
-            "total": total,
-            "speed_bps": 0,
-            "eta_seconds": 0.0,
-        }),
-    );
-    let _ = last_emit;
-    let _ = start;
-
+    }
+    if let Some(err) = download_error {
+        return Err(format!("download failed: {}", err));
+    }
+    let downloaded = chunks.len() as u64;
     if downloaded == 0 {
         return Err("Download produced an empty file (server returned 0 bytes).".to_string());
     }
@@ -295,10 +320,21 @@ async fn download_to_file_async(
             downloaded, total
         ));
     }
-
-    if let Err(e) = fs::write(dest, &bytes) {
+    if let Err(e) = fs::write(dest, &chunks) {
         return Err(format!("write: {}", e));
     }
+    let _ = app.emit(
+        "download-progress",
+        serde_json::json!({
+            "id": id,
+            "name": name,
+            "phase": "done",
+            "bytes": downloaded,
+            "total": total,
+            "speed_bps": 0,
+            "eta_seconds": null,
+        }),
+    );
     Ok(downloaded)
 }
 
