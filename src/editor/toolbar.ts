@@ -429,10 +429,11 @@ async function handleOpen(): Promise<void> {
 async function openJSON(path: string): Promise<void> {
   const content = await loadFile(path);
   const json = JSON.parse(content);
+  const migrated = migrateImageNodesInJson(json);
 
   const { Node } = await import("prosemirror-model");
 
-  const newDoc = Node.fromJSON(schema, json);
+  const newDoc = Node.fromJSON(schema, migrated);
   const newState = EditorState.create({
     schema: editorView.state.schema,
     doc: newDoc,
@@ -507,6 +508,21 @@ async function openTXT(path: string): Promise<void> {
   syncDocumentPaginationState(editorView);
 
   markSaved(JSON.stringify(json), path, "txt");
+}
+
+function migrateImageNodesInJson(node: any): any {
+  if (!node || typeof node !== "object") return node;
+  if (Array.isArray(node)) {
+    return node.map((child) => migrateImageNodesInJson(child));
+  }
+  if (node.type === "image") {
+    return { type: "paragraph", content: [node] };
+  }
+  if (Array.isArray(node.content)) {
+    const newContent = node.content.map((child: any) => migrateImageNodesInJson(child));
+    return { ...node, content: newContent };
+  }
+  return node;
 }
 
 async function handleExport(): Promise<void> {

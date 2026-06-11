@@ -15,16 +15,8 @@ import {
   WidthType,
   BorderStyle,
   ImageRun,
-  TextWrappingType,
-  TextWrappingSide,
 } from "docx";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
-
-const EMU_PER_PIXEL = 9525;
-
-function pxToEmu(px: number): number {
-  return Math.round(px * EMU_PER_PIXEL);
-}
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -745,16 +737,54 @@ function serializeContainer(container: any): string {
   return out.join("");
 }
 
-export async function toDocx(doc: any): Promise<Document> {
-  const children: any[] = [];
-
-  for (const node of contentToArray(doc.content)) {
-    const result = nodeToChildren(node);
-    if (result instanceof Promise) {
-      children.push(...(await result));
-    } else {
-      children.push(...result);
+async function collectImageSources(node: any, sources: Set<string>): Promise<void> {
+  if (!node) return;
+  if (node.type?.name === "image") {
+    const src = node.attrs?.src;
+    if (src && !sources.has(src)) sources.add(src);
+    return;
+  }
+  if (node.content) {
+    for (const child of contentToArray(node.content)) {
+      await collectImageSources(child, sources);
     }
+  }
+}
+
+async function loadImageBytes(src: string): Promise<Uint8Array | null> {
+  try {
+    if (
+      src.startsWith("http://") ||
+      src.startsWith("https://") ||
+      src.startsWith("data:") ||
+      src.startsWith("blob:")
+    ) {
+      const res = await fetch(src);
+      const buf = await res.arrayBuffer();
+      return new Uint8Array(buf);
+    }
+    const raw = await invoke<number[]>("read_image_asset", { relativePath: src });
+    return new Uint8Array(raw);
+  } catch (e) {
+    console.warn("[docx export] failed to read image asset, skipping:", src, e);
+    return null;
+  }
+}
+
+export async function toDocx(doc: any): Promise<Document> {
+  const sources = new Set<string>();
+  await collectImageSources(doc, sources);
+  const imageCache = new Map<string, Uint8Array>();
+  await Promise.all(
+    Array.from(sources).map(async (src) => {
+      const bytes = await loadImageBytes(src);
+      if (bytes) imageCache.set(src, bytes);
+    })
+  );
+
+  const children: any[] = [];
+  for (const node of contentToArray(doc.content)) {
+    children.push(...nodeToChildren(node, imageCache));
   }
 
   return new Document({
@@ -904,12 +934,12 @@ function nodeToParagraphs(node: any): Paragraph[] {
   }
 }
 
-function nodeToChildren(node: any): any[] | Promise<any[]> {
+function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>): any[] {
   switch (node.type.name) {
     case "table":
       return [tableNodeToDocx(node)];
     case "paragraph":
-      return [paragraphFromNode(node, { align: node.attrs?.align })];
+      return [paragraphFromNode(node, { align: node.attrs?.align }, imageCache)];
     case "heading": {
       const isTitle = node.attrs?.level === 1 && node.attrs?.align === "center";
       return [
@@ -917,12 +947,12 @@ function nodeToChildren(node: any): any[] | Promise<any[]> {
           heading: isTitle ? HeadingLevel.TITLE : getHeadingLevel(node.attrs.level),
           style: isTitle ? "Title" : undefined,
           align: node.attrs?.align,
-        }),
+        }, imageCache),
       ];
     }
     case "blockquote":
       return contentToArray(node.content).map((child: any) =>
-        paragraphFromNode(child, { style: "IntenseQuote" })
+        paragraphFromNode(child, { style: "IntenseQuote" }, imageCache)
       );
     case "code_block":
       return contentToArray(node.content).map((child: any) => {
@@ -947,10 +977,18 @@ function nodeToChildren(node: any): any[] | Promise<any[]> {
           },
         }),
       ];
-    case "image":
-      return imageNodeToDocx(node);
+    case "image": {
+      const bytes = imageCache.get(node.attrs?.src || "");
+      if (!bytes) return [];
+      return [
+        new Paragraph({
+          children: [buildImageRun(node, bytes)],
+          alignment: paragraphAlignFromAttr(node.attrs?.align),
+        }),
+      ];
+    }
     case "page":
-      return contentToArray(node.content).flatMap((child: any) => nodeToChildren(child));
+      return contentToArray(node.content).flatMap((child: any) => nodeToChildren(child, imageCache));
     default:
       if (node.type?.spec?.tableRole === "table") {
         return [tableNodeToDocx(node)];
@@ -962,78 +1000,34 @@ function nodeToChildren(node: any): any[] | Promise<any[]> {
   }
 }
 
-async function imageNodeToDocx(node: any): Promise<Paragraph[]> {
-  const src: string = node.attrs?.src || "";
-  if (!src) return [];
+function paragraphAlignFromAttr(align: string | undefined): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined {
+  if (align === "left") return AlignmentType.LEFT;
+  if (align === "right") return AlignmentType.RIGHT;
+  if (align === "center") return AlignmentType.CENTER;
+  return undefined;
+}
+
+function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   const alt: string = node.attrs?.alt || "";
   const width: number | null = node.attrs?.width ?? null;
   const height: number | null = node.attrs?.height ?? null;
-  const offsetX: number = node.attrs?.offsetX || 0;
-  const offsetY: number = node.attrs?.offsetY || 0;
-  const align: string = node.attrs?.align || "center";
-
-  let bytes: Uint8Array | null = null;
-  try {
-    if (
-      src.startsWith("http://") ||
-      src.startsWith("https://") ||
-      src.startsWith("data:") ||
-      src.startsWith("blob:")
-    ) {
-      const res = await fetch(src);
-      const buf = await res.arrayBuffer();
-      bytes = new Uint8Array(buf);
-    } else {
-      const raw = await invoke<number[]>("read_image_asset", { relativePath: src });
-      bytes = new Uint8Array(raw);
-    }
-  } catch (e) {
-    console.warn("[docx export] failed to read image asset, skipping:", src, e);
-    return [];
-  }
-  if (!bytes || bytes.length === 0) return [];
-
   const imgWidth = width || 200;
   const imgHeight = height || 200;
-
-  const useFloating = offsetX !== 0 || offsetY !== 0;
-  const imageRunOptions: any = {
+  const src: string = (node.attrs?.src || "").toLowerCase();
+  let type: "png" | "jpg" | "gif" | "bmp" | "webp" = "png";
+  if (src.endsWith(".jpg") || src.endsWith(".jpeg")) type = "jpg";
+  else if (src.endsWith(".gif")) type = "gif";
+  else if (src.endsWith(".bmp")) type = "bmp";
+  else if (src.endsWith(".webp")) type = "webp";
+  const opts: any = {
+    type,
     data: bytes,
     transformation: { width: imgWidth, height: imgHeight },
-    altText: alt ? { title: alt, description: alt, name: alt } : undefined,
   };
-  if (useFloating) {
-    imageRunOptions.floating = {
-      horizontalPosition: {
-        offset: pxToEmu(offsetX),
-      },
-      verticalPosition: {
-        offset: pxToEmu(offsetY),
-      },
-      wrap: {
-        type: TextWrappingType.SQUARE,
-        side: TextWrappingSide.BOTH_SIDES,
-      },
-      margins: {
-        top: 0,
-        bottom: 0,
-      },
-    };
+  if (alt) {
+    opts.altText = { title: alt, description: alt, name: alt };
   }
-
-  let paragraphAlignment: (typeof AlignmentType)[keyof typeof AlignmentType] | undefined;
-  if (!useFloating) {
-    if (align === "left") paragraphAlignment = AlignmentType.LEFT;
-    else if (align === "right") paragraphAlignment = AlignmentType.RIGHT;
-    else if (align === "center") paragraphAlignment = AlignmentType.CENTER;
-  }
-
-  return [
-    new Paragraph({
-      children: [new ImageRun(imageRunOptions)],
-      alignment: paragraphAlignment,
-    }),
-  ];
+  return new ImageRun(opts);
 }
 
 function tableNodeToDocx(tableNode: any): Table {
@@ -1096,17 +1090,17 @@ interface ParagraphExtras {
   style?: string;
 }
 
-function paragraphFromNode(node: any, extras: ParagraphExtras = {}): Paragraph {
-  const runs = nodeContentToRuns(node);
+function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?: Map<string, Uint8Array>): Paragraph {
+  const runs = nodeContentToRuns(node, imageCache);
   const opts: any = { children: runs };
 
   if (extras.heading) opts.heading = extras.heading;
   if (extras.style) opts.style = extras.style;
   if (extras.indent) opts.indent = extras.indent;
   if (extras.italic) {
-    runs.forEach((r: RunOrLink) => {
+    runs.forEach((r: RunOrLinkOrImage) => {
       const o: any = (r as any).options;
-      if (o) o.italics = true;
+      if (o && o.text != null) o.italics = true;
     });
   }
 
@@ -1185,14 +1179,21 @@ function makeRun(text: string, marks: any[]): TextRun {
 }
 
 type RunOrLink = TextRun | ExternalHyperlink;
+type RunOrLinkOrImage = RunOrLink | ImageRun;
 
-function nodeContentToRuns(node: any): RunOrLink[] {
+function nodeContentToRuns(node: any, imageCache?: Map<string, Uint8Array>): RunOrLinkOrImage[] {
   if (!node.content) {
     const text = node.text || "";
     return text ? [new TextRun({ text })] : [];
   }
 
   return contentToArray(node.content).map((child: any) => {
+    if (child.type.name === "image") {
+      if (!imageCache) return new TextRun({ text: "" });
+      const bytes = imageCache.get(child.attrs?.src || "");
+      if (!bytes) return new TextRun({ text: "" });
+      return buildImageRun(child, bytes);
+    }
     if (child.type.name !== "text") {
       return new TextRun({ text: getTextContent(child) });
     }

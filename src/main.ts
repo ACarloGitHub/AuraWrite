@@ -771,6 +771,21 @@ document.addEventListener("DOMContentLoaded", () => {
     (window as any).__aurawrite_loading = val;
   }
 
+  function migrateImageNodesInJson(node: any): any {
+    if (!node || typeof node !== "object") return node;
+    if (Array.isArray(node)) {
+      return node.map((child) => migrateImageNodesInJson(child));
+    }
+    if (node.type === "image") {
+      return { type: "paragraph", content: [node] };
+    }
+    if (Array.isArray(node.content)) {
+      const newContent = node.content.map((child: any) => migrateImageNodesInJson(child));
+      return { ...node, content: newContent };
+    }
+    return node;
+  }
+
   // Listen for clear editor events
   window.addEventListener("aurawrite:clear-editor", () => {
     setLoading(true);
@@ -790,8 +805,9 @@ document.addEventListener("DOMContentLoaded", () => {
       setLoading(true);
       try {
         if (doc.content_json && doc.content_json.trim() !== "") {
-          const content = JSON.parse(doc.content_json);
-          const newDoc = editorView.state.schema.nodeFromJSON(content);
+          const rawContent = JSON.parse(doc.content_json);
+          const migrated = migrateImageNodesInJson(rawContent);
+          const newDoc = editorView.state.schema.nodeFromJSON(migrated);
           const newState = EditorState.create({
             schema: editorView.state.schema,
             doc: newDoc,

@@ -33,14 +33,8 @@ function findInsertPos(view: EditorView): { pos: number; depth: number } | null 
       break;
     }
   }
-  if (leafDepth < 0) {
-    if ($from.node(0).type === view.state.schema.nodes.doc || $from.node(0).type.spec.content === "block+") {
-      return { pos: 0, depth: 0 };
-    }
-    return null;
-  }
-  const insertAt = leafDepth === 0 ? $from.end(0) : $from.after(leafDepth);
-  return { pos: insertAt, depth: leafDepth };
+  if (leafDepth < 0) return null;
+  return { pos: $from.pos, depth: leafDepth };
 }
 
 export async function insertImageFromFile(

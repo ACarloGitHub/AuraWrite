@@ -245,8 +245,8 @@ const codeBlockSpec: NodeSpec = {
 };
 
 const imageSpec: NodeSpec = {
-  inline: false,
-  group: "block",
+  inline: true,
+  group: "inline",
   draggable: true,
   selectable: true,
   attrs: {
