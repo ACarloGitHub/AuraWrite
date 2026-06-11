@@ -909,6 +909,7 @@ async function setupEmbeddingsTab(): Promise<void> {
   const ollamaInstall = document.getElementById("embed-ollama-install") as HTMLButtonElement | null;
   const ollamaPullNomic = document.getElementById("embed-ollama-pull-nomic") as HTMLButtonElement | null;
   const removeAll = document.getElementById("embed-remove-all") as HTMLButtonElement | null;
+  const reshowOnboarding = document.getElementById("embed-reshow-onboarding") as HTMLButtonElement | null;
 
   if (llamaStatus) llamaStatus.textContent = `Status: ${status.llamacpp.present ? "installed" : "not installed"} (${status.platform}/${status.arch})`;
   if (llamaMeta) llamaMeta.textContent = status.llamacpp.present ? `Version: ${status.llamacpp.version} · Size: ${formatBytes(status.llamacpp.size_bytes)}` : `Will download: ${status.llamacpp.download_url}`;
@@ -917,7 +918,7 @@ async function setupEmbeddingsTab(): Promise<void> {
 
   if (nomicStatus) nomicStatus.textContent = `Status: ${status.nomic.present ? "installed" : "not installed"}`;
   if (nomicMeta) nomicMeta.textContent = status.nomic.present ? `Version: ${status.nomic.version} · Size: ${formatBytes(status.nomic.size_bytes)}` : `Will download: ${status.nomic.download_url}`;
-  if (nomicDownload) nomicDownload.style.display = !status.llamacpp.present ? "none" : (status.nomic.present ? "none" : "");
+  if (nomicDownload) nomicDownload.style.display = status.nomic.present ? "none" : "";
   if (nomicRemove) nomicRemove.style.display = status.nomic.present ? "" : "none";
 
   if (ollamaStatus) ollamaStatus.textContent = `Ollama status: ${status.ollama_installed ? "installed" : "not installed"} (${status.ollama_path || "not on PATH"})`;
@@ -978,6 +979,10 @@ async function setupEmbeddingsTab(): Promise<void> {
     if (!window.confirm("Remove both llama.cpp and nomic? You can re-download at any time.")) return;
     await invoke("resources_remove_all");
     await setupEmbeddingsTab();
+  });
+  reshowOnboarding?.addEventListener("click", () => {
+    localStorage.removeItem(EMBED_ONBOARDING_KEY);
+    maybeShowEmbeddingsOnboarding();
   });
 }
 

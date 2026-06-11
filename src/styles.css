@@ -1271,9 +1271,12 @@ body {
   position: relative;
   background: var(--color-surface);
   border-radius: 8px;
-  min-width: 720px;
-  max-width: 92%;
+  min-width: 760px;
+  max-width: 92vw;
   max-height: 85vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
@@ -1318,6 +1321,8 @@ body {
   border-bottom: 1px solid var(--color-border);
   margin-bottom: var(--spacing-md);
   gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .pref-tab {
