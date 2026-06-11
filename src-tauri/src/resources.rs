@@ -244,16 +244,28 @@ async fn download_to_file_async(
         return Err(format!("HTTP {} for {}", resp.status(), url));
     }
     let total = resp.content_length().unwrap_or(0);
-    let tmp = dest.with_extension("part");
-    let mut f = File::create(&tmp).map_err(|e| format!("create temp: {}", e))?;
+    if dest.exists() {
+        let _ = fs::remove_file(dest);
+    }
+    let mut f = File::create(dest).map_err(|e| format!("create dest: {}", e))?;
     let mut downloaded: u64 = 0;
     let start = std::time::Instant::now();
     let mut last_emit = std::time::Instant::now();
     use futures_util::StreamExt;
     let mut stream = resp.bytes_stream();
+    let mut write_error: Option<String> = None;
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("read chunk: {}", e))?;
-        f.write_all(&chunk).map_err(|e| format!("write: {}", e))?;
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(e) => {
+                write_error = Some(format!("read chunk: {}", e));
+                break;
+            }
+        };
+        if let Err(e) = f.write_all(&chunk) {
+            write_error = Some(format!("write: {}", e));
+            break;
+        }
         downloaded += chunk.len() as u64;
         if last_emit.elapsed() >= Duration::from_millis(200) {
             let elapsed = start.elapsed().as_secs_f64();
@@ -284,25 +296,20 @@ async fn download_to_file_async(
         }
     }
     drop(f);
-    if !tmp.exists() {
-        return Err(format!("Download finished but temp file {} is missing.", tmp.display()));
+    if let Some(err) = write_error {
+        let _ = fs::remove_file(dest);
+        return Err(err);
     }
-    let tmp_size = file_size(&tmp);
-    if tmp_size == 0 {
-        let _ = fs::remove_file(&tmp);
+    if downloaded == 0 {
+        let _ = fs::remove_file(dest);
         return Err("Download produced an empty file (server returned 0 bytes).".to_string());
     }
-    if total > 0 && tmp_size < total {
+    if total > 0 && downloaded < total {
+        let _ = fs::remove_file(dest);
         return Err(format!(
             "Incomplete download: got {} bytes, expected {} bytes. The server may have closed the connection early.",
-            tmp_size, total
+            downloaded, total
         ));
-    }
-    if dest.exists() {
-        let _ = fs::remove_file(dest);
-    }
-    if let Err(e) = fs::rename(&tmp, dest) {
-        return Err(format!("rename: {}", e));
     }
     Ok(downloaded)
 }
