@@ -302,6 +302,7 @@ body {
   cursor: pointer;
   font-size: 16px;
   color: var(--color-text-buttons);
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji", sans-serif;
   transition:
     background 0.15s,
     border-color 0.15s,
