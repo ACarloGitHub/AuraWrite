@@ -757,30 +757,46 @@ function savePreferencesFromModal(): void {
 
 function setupResizablePanels(): void {
   const STORAGE_KEY = "aurawrite-preferences";
-  const DEFAULTS = { ai: 360, projects: 280 } as const;
-  const MIN = { ai: 200, projects: 180 } as const;
-  const MAX_RATIO = { ai: 0.8, projects: 0.6 } as const;
+  const DEFAULTS = { ai: 360, projects: 280, suggestions: 320 } as const;
+  const MIN = { ai: 200, projects: 180, suggestions: 200 } as const;
+  const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6 } as const;
+  const STORAGE_KEYS = {
+    ai: "aiChatPanelWidth",
+    projects: "projectPanelWidth",
+    suggestions: "suggestionsPanelWidth",
+  } as const;
+  const CSS_VARS = {
+    ai: "--ai-panel-width",
+    projects: "--project-panel-width",
+    suggestions: "--suggestions-panel-width",
+  } as const;
+  const LEFT_EDGED: ReadonlyArray<"ai" | "projects" | "suggestions"> = ["ai"];
 
-  function loadWidths(): { ai: number; projects: number } {
+  type PanelKey = "ai" | "projects" | "suggestions";
+  type Widths = Record<PanelKey, number>;
+
+  function loadWidths(): Widths {
+    const out: Widths = { ...DEFAULTS };
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        return {
-          ai: typeof parsed.aiChatPanelWidth === "number" ? parsed.aiChatPanelWidth : DEFAULTS.ai,
-          projects: typeof parsed.projectPanelWidth === "number" ? parsed.projectPanelWidth : DEFAULTS.projects,
-        };
+        for (const k of Object.keys(STORAGE_KEYS) as PanelKey[]) {
+          const v = parsed[STORAGE_KEYS[k]];
+          if (typeof v === "number") out[k] = v;
+        }
       }
     } catch { /* fall through */ }
-    return { ai: DEFAULTS.ai, projects: DEFAULTS.projects };
+    return out;
   }
 
-  function saveWidths(ai: number, projects: number): void {
+  function saveWidths(w: Widths): void {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
-      parsed.aiChatPanelWidth = ai;
-      parsed.projectPanelWidth = projects;
+      for (const k of Object.keys(STORAGE_KEYS) as PanelKey[]) {
+        parsed[STORAGE_KEYS[k]] = w[k];
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     } catch (e) {
       console.warn("[resize] failed to save panel widths:", e);
@@ -788,12 +804,12 @@ function setupResizablePanels(): void {
   }
 
   function applyWidths(): void {
-    const { ai, projects } = loadWidths();
+    const w = loadWidths();
     const root = document.documentElement;
-    const maxAi = window.innerWidth * MAX_RATIO.ai;
-    const maxProjects = window.innerWidth * MAX_RATIO.projects;
-    root.style.setProperty("--ai-panel-width", Math.max(MIN.ai, Math.min(ai, maxAi)) + "px");
-    root.style.setProperty("--project-panel-width", Math.max(MIN.projects, Math.min(projects, maxProjects)) + "px");
+    for (const k of Object.keys(STORAGE_KEYS) as PanelKey[]) {
+      const maxW = window.innerWidth * MAX_RATIO[k];
+      root.style.setProperty(CSS_VARS[k], Math.max(MIN[k], Math.min(w[k], maxW)) + "px");
+    }
   }
 
   applyWidths();
@@ -802,14 +818,14 @@ function setupResizablePanels(): void {
   let widths = loadWidths();
 
   document.querySelectorAll<HTMLElement>(".panel-resize-handle").forEach((handle) => {
-    const target = handle.dataset.resize as "ai" | "projects" | undefined;
-    if (!target) return;
+    const target = handle.dataset.resize as PanelKey | undefined;
+    if (!target || !(target in STORAGE_KEYS)) return;
 
     handle.addEventListener("dblclick", (e) => {
       e.preventDefault();
       widths = { ...widths, [target]: DEFAULTS[target] };
       applyWidths();
-      saveWidths(widths.ai, widths.projects);
+      saveWidths(widths);
     });
 
     handle.addEventListener("mousedown", (e) => {
@@ -822,18 +838,18 @@ function setupResizablePanels(): void {
       handle.classList.add("panel-resize-handle--active");
 
       const onMove = (ev: MouseEvent) => {
-        const dx = target === "ai" ? startX - ev.clientX : ev.clientX - startX;
+        const growRight = !LEFT_EDGED.includes(target);
+        const dx = growRight ? ev.clientX - startX : startX - ev.clientX;
         const next = Math.max(minWidth, Math.min(startWidth + dx, maxWidth));
         widths = { ...widths, [target]: next };
-        const root = document.documentElement;
-        root.style.setProperty(`--${target === "ai" ? "ai-panel" : "project-panel"}-width`, next + "px");
+        document.documentElement.style.setProperty(CSS_VARS[target], next + "px");
       };
 
       const onUp = () => {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
         handle.classList.remove("panel-resize-handle--active");
-        saveWidths(widths.ai, widths.projects);
+        saveWidths(widths);
       };
 
       document.addEventListener("mousemove", onMove);

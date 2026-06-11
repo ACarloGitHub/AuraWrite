@@ -27,6 +27,7 @@
   --statusbar-height: 28px;
   --ai-panel-width: 360px;
   --project-panel-width: 280px;
+  --suggestions-panel-width: 320px;
 
   --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.15);
   --selection-highlight: rgba(255, 255, 0, 0.4);
@@ -526,12 +527,13 @@ body {
 }
 
 .suggestions-panel {
-  width: var(--ai-panel-width);
+  width: var(--suggestions-panel-width, 320px);
   min-height: 400px;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
+  position: relative;
   transition:
     transform 0.2s ease,
     background 0.3s,
@@ -2067,6 +2069,10 @@ kbd {
 }
 
 .panel-resize-handle--projects {
+  right: -3px;
+}
+
+.panel-resize-handle--suggestions {
   right: -3px;
 }
 
