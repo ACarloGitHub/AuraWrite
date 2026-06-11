@@ -16,7 +16,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const LLAMACPP_PINNED_VERSION: &str = "b9596";
 const NOMIC_MODEL_FILENAME: &str = "nomic-embed-text-v2-moe.Q8_0.gguf";
@@ -198,7 +198,13 @@ pub fn resources_nomic_sha256(app: AppHandle) -> Result<String, String> {
     sha256_string(&model_path).ok_or_else(|| "failed to hash model".to_string())
 }
 
-async fn download_to_file_async(url: &str, dest: &Path) -> Result<u64, String> {
+async fn download_to_file_async(
+    app: &tauri::AppHandle,
+    id: &str,
+    name: &str,
+    url: &str,
+    dest: &Path,
+) -> Result<u64, String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create dir: {}", e))?;
     }
@@ -206,22 +212,80 @@ async fn download_to_file_async(url: &str, dest: &Path) -> Result<u64, String> {
         .timeout(Duration::from_secs(600))
         .build()
         .map_err(|e| format!("http client: {}", e))?;
+    let _ = app.emit(
+        "download-progress",
+        serde_json::json!({
+            "id": id,
+            "name": name,
+            "phase": "downloading",
+            "bytes": 0,
+            "total": 0,
+            "speed_bps": 0,
+            "eta_seconds": null,
+        }),
+    );
     let resp = client
         .get(url)
         .send()
         .await
         .map_err(|e| format!("download failed: {}", e))?;
     if !resp.status().is_success() {
+        let err_payload = serde_json::json!({
+            "id": id,
+            "name": name,
+            "phase": "error",
+            "error": format!("HTTP {} for {}", resp.status(), url),
+            "bytes": 0,
+            "total": 0,
+            "speed_bps": 0,
+            "eta_seconds": null,
+        });
+        let _ = app.emit("download-progress", err_payload);
         return Err(format!("HTTP {} for {}", resp.status(), url));
     }
+    let total = resp.content_length().unwrap_or(0);
     let tmp = dest.with_extension("part");
     let mut f = File::create(&tmp).map_err(|e| format!("create temp: {}", e))?;
-    let bytes = resp.bytes().await.map_err(|e| format!("read body: {}", e))?;
-    f.write_all(&bytes).map_err(|e| format!("write: {}", e))?;
-    let total = bytes.len() as u64;
+    let mut downloaded: u64 = 0;
+    let start = std::time::Instant::now();
+    let mut last_emit = std::time::Instant::now();
+    use futures_util::StreamExt;
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("read chunk: {}", e))?;
+        f.write_all(&chunk).map_err(|e| format!("write: {}", e))?;
+        downloaded += chunk.len() as u64;
+        if last_emit.elapsed() >= Duration::from_millis(200) {
+            let elapsed = start.elapsed().as_secs_f64();
+            let speed_bps = if elapsed > 0.0 {
+                (downloaded as f64 / elapsed) as u64
+            } else {
+                0
+            };
+            let eta = if speed_bps > 0 && total > 0 {
+                ((total - downloaded) as f64 / speed_bps as f64).max(0.0)
+            } else {
+                -1.0
+            };
+            let eta_value = if eta < 0.0 { serde_json::Value::Null } else { serde_json::json!(eta) };
+            let _ = app.emit(
+                "download-progress",
+                serde_json::json!({
+                    "id": id,
+                    "name": name,
+                    "phase": "downloading",
+                    "bytes": downloaded,
+                    "total": total,
+                    "speed_bps": speed_bps,
+                    "eta_seconds": eta_value,
+                }),
+            );
+            last_emit = std::time::Instant::now();
+        }
+    }
     drop(f);
     fs::rename(&tmp, dest).map_err(|e| format!("rename: {}", e))?;
-    Ok(total)
+    Ok(downloaded)
 }
 
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
@@ -298,7 +362,7 @@ pub async fn resources_download_llamacpp(app: AppHandle) -> Result<ResourceInfo,
         dir.join("llama.cpp.tar.gz")
     };
     let _ = fs::create_dir_all(&target_dir);
-    download_to_file_async(&url, &archive_path)
+    download_to_file_async(&app, "llamacpp", "llama.cpp", &url, &archive_path)
         .await
         .map_err(|e| format!("download llama.cpp: {}", e))?;
     if is_zip {
@@ -338,9 +402,33 @@ pub async fn resources_download_nomic(app: AppHandle) -> Result<ResourceInfo, St
     let target_dir = dir.join("nomic");
     let target = target_dir.join(NOMIC_MODEL_FILENAME);
     let url = NOMIC_DEFAULT_URL;
-    download_to_file_async(&url, &target)
+    download_to_file_async(&app, "nomic", "nomic-embed-text-v2-moe", &url, &target)
         .await
         .map_err(|e| format!("download nomic: {}", e))?;
+    let _ = app.emit(
+        "download-progress",
+        serde_json::json!({
+            "id": "nomic",
+            "name": "nomic-embed-text-v2-moe",
+            "phase": "verifying",
+            "bytes": 0,
+            "total": 0,
+            "speed_bps": 0,
+            "eta_seconds": null,
+        }),
+    );
+    let _ = app.emit(
+        "download-progress",
+        serde_json::json!({
+            "id": "nomic",
+            "name": "nomic-embed-text-v2-moe",
+            "phase": "done",
+            "bytes": 0,
+            "total": 0,
+            "speed_bps": 0,
+            "eta_seconds": null,
+        }),
+    );
     Ok(ResourceInfo {
         present: true,
         path: target.to_string_lossy().to_string(),

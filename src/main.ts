@@ -11,6 +11,8 @@ import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
+import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
+import { updateDownloadProgress, setDownloadRetryHandler, clearDownload } from "./download-toast";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import {
   populateUserFontsInToolbar,
@@ -877,6 +879,27 @@ function setupResizablePanels(): void {
   });
 }
 
+let downloadListenerInstalled = false;
+function setupDownloadProgressListener(): void {
+  if (downloadListenerInstalled) return;
+  downloadListenerInstalled = true;
+  tauriListen<any>("download-progress", (event) => {
+    const p = event.payload as any;
+    if (p && typeof p.id === "string") {
+      updateDownloadProgress({
+        id: p.id,
+        name: p.name ?? p.id,
+        phase: p.phase ?? "downloading",
+        bytes: typeof p.bytes === "number" ? p.bytes : 0,
+        total: typeof p.total === "number" ? p.total : 0,
+        speed_bps: typeof p.speed_bps === "number" ? p.speed_bps : 0,
+        eta_seconds: typeof p.eta_seconds === "number" ? p.eta_seconds : Infinity,
+        error: p.error,
+      });
+    }
+  }).catch((e) => console.warn("[download-toast] listen failed:", e));
+}
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -910,7 +933,6 @@ async function setupEmbeddingsTab(): Promise<void> {
   const ollamaPullNomic = document.getElementById("embed-ollama-pull-nomic") as HTMLButtonElement | null;
   const removeAll = document.getElementById("embed-remove-all") as HTMLButtonElement | null;
   const reshowOnboarding = document.getElementById("embed-reshow-onboarding") as HTMLButtonElement | null;
-  const reshowOnboardingTop = document.getElementById("embed-reshow-onboarding-top") as HTMLButtonElement | null;
 
   if (llamaStatus) llamaStatus.textContent = `Status: ${status.llamacpp.present ? "installed" : "not installed"} (${status.platform}/${status.arch})`;
   if (llamaMeta) llamaMeta.textContent = status.llamacpp.present ? `Version: ${status.llamacpp.version} · Size: ${formatBytes(status.llamacpp.size_bytes)}` : `Will download: ${status.llamacpp.download_url}`;
@@ -928,17 +950,19 @@ async function setupEmbeddingsTab(): Promise<void> {
 
   llamaDownload?.addEventListener("click", async () => {
     llamaDownload.disabled = true;
-    llamaDownload.textContent = "Downloading...";
+    setDownloadRetryHandler("llamacpp", () => {
+      llamaDownload?.click();
+    });
     try {
       await invoke("resources_download_llamacpp");
       await setupEmbeddingsTab();
     } catch (e) {
-      llamaDownload.disabled = false;
-      llamaDownload.textContent = "Download llama.cpp";
       const msg = e instanceof Error ? e.message : String(e);
-      const choice = window.confirm(`Failed to download llama.cpp:\n\n${msg}\n\nClick OK to try downloading Ollama as a fallback, or Cancel to retry llama.cpp.`);
-      if (choice) {
-        window.open("https://ollama.com/download", "_blank");
+      console.warn("[llamacpp] download failed:", msg);
+    } finally {
+      if (llamaDownload) {
+        llamaDownload.disabled = false;
+        llamaDownload.textContent = "Download llama.cpp";
       }
     }
   });
@@ -949,14 +973,20 @@ async function setupEmbeddingsTab(): Promise<void> {
   });
   nomicDownload?.addEventListener("click", async () => {
     nomicDownload.disabled = true;
-    nomicDownload.textContent = "Downloading...";
+    setDownloadRetryHandler("nomic", () => {
+      nomicDownload?.click();
+    });
     try {
       await invoke("resources_download_nomic");
       await setupEmbeddingsTab();
     } catch (e) {
-      nomicDownload.disabled = false;
-      nomicDownload.textContent = "Download nomic";
-      alert("Failed to download nomic: " + (e instanceof Error ? e.message : String(e)));
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[nomic] download failed:", msg);
+    } finally {
+      if (nomicDownload) {
+        nomicDownload.disabled = false;
+        nomicDownload.textContent = "Download nomic";
+      }
     }
   });
   nomicRemove?.addEventListener("click", async () => {
@@ -982,10 +1012,6 @@ async function setupEmbeddingsTab(): Promise<void> {
     await setupEmbeddingsTab();
   });
   reshowOnboarding?.addEventListener("click", () => {
-    localStorage.removeItem(EMBED_ONBOARDING_KEY);
-    maybeShowEmbeddingsOnboarding();
-  });
-  reshowOnboardingTop?.addEventListener("click", () => {
     localStorage.removeItem(EMBED_ONBOARDING_KEY);
     maybeShowEmbeddingsOnboarding();
   });
@@ -1073,6 +1099,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Resizable side panels (AI chat, projects)
   setupResizablePanels();
+
+  // Listen for download progress events from the Rust backend
+  setupDownloadProgressListener();
 
   // Embeddings tab + first-launch onboarding dialog
   setupEmbeddingsTab();
