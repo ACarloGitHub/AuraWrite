@@ -7,11 +7,42 @@ function contentToArray(content: any): any[] {
   return result;
 }
 
+/**
+ * Normalize a ProseMirror node-like input into a list of child nodes to
+ * convert. Handles the three top-level shapes we see in AuraWrite:
+ *  - A raw Fragment (has .forEach directly)
+ *  - A ProseMirror "doc" node (has .content which is a Fragment)
+ *  - A ProseMirror "page" node (has .content which is a Fragment)
+ *  - A plain array of nodes
+ */
+function rootToNodes(input: any): any[] {
+  if (!input) return [];
+  if (Array.isArray(input)) return input;
+  if (typeof input.forEach === "function") {
+    // Raw Fragment
+    const arr: any[] = [];
+    input.forEach((n: any) => arr.push(n));
+    return arr;
+  }
+  if (input.content && typeof input.content.forEach === "function") {
+    // ProseMirror node with .content (doc, page, list_item, etc.)
+    const arr: any[] = [];
+    input.content.forEach((n: any) => arr.push(n));
+    return arr;
+  }
+  // Single node passed directly
+  if (input.type && typeof input.type.name === "string") {
+    return [input];
+  }
+  return [];
+}
+
 export function toMarkdown(doc: any): string {
+  const nodes = rootToNodes(doc);
   let result = "";
-  doc.forEach((node: any) => {
+  for (const node of nodes) {
     result += nodeToMarkdown(node);
-  });
+  }
   return result;
 }
 
@@ -35,10 +66,11 @@ export function toMarkdownWithRewrites(
     linkPathFor?: (href: string) => string | null;
   } = {}
 ): string {
+  const nodes = rootToNodes(doc);
   let result = "";
-  doc.forEach((node: any) => {
+  for (const node of nodes) {
     result += nodeToMarkdown(node, opts);
-  });
+  }
   return result;
 }
 
@@ -103,6 +135,28 @@ function nodeToMarkdown(
       );
     case "horizontal_rule":
       return "---\n\n";
+    case "page": {
+      // Paged-mode wrapper node. Just render its children; the page break
+      // is implicit between pages in the source document, no need to add
+      // a `---` separator here (that would create spurious horizontal rules
+      // in the exported .md).
+      return (
+        contentToArray(node.content)
+          .map((n: any) => nodeToMarkdown(n, opts))
+          .join("") + "\n"
+      );
+    }
+    case "list_item": {
+      // Top-level list item (e.g. used by bullet_list/ordered_list). Render
+      // its children inline so they sit on the same line as the marker.
+      return (
+        contentToArray(node.content)
+          .map((n: any) => nodeToMarkdown(n, opts))
+          .join("")
+          .replace(/^\n+|\n+$/g, "")
+          .replace(/\n\n+/g, "\n") + "\n"
+      );
+    }
     case "image": {
       const src: string = node.attrs?.src || "";
       const alt: string = node.attrs?.alt || "";
