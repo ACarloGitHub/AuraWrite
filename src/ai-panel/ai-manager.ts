@@ -22,7 +22,7 @@ interface PreferencesAI {
   aiOllamaMode: OllamaMode;
 }
 
-function loadAIFromPreferences(): PreferencesAI {
+export function loadAIFromPreferences(): PreferencesAI {
   const stored = localStorage.getItem(PREFERENCES_KEY);
   if (stored) {
     try {

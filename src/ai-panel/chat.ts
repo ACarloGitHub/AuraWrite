@@ -19,6 +19,7 @@ import { applyAuraEdit } from "./edit-executor";
 import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
+import { updateContextFooter } from "./context-footer";
 
 const MAX_TOOL_ITERATIONS = 3;
 
@@ -683,6 +684,7 @@ Based on these results, provide your final response to the user's question. ${ha
     }
   } finally {
     setProcessing(false);
+    updateContextFooter();
   }
 
   if (historyEl) {

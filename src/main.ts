@@ -1,6 +1,8 @@
 import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
+import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
+import { loadAIFromPreferences } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
@@ -1155,6 +1157,16 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAIPanel(editorView);
   setupSuggestionsPanel(editorView);
   setupToolbar(editorView);
+
+  const initialPrefs = loadAIFromPreferences();
+  setContextFooterModel(initialPrefs.aiProvider, initialPrefs.aiModel);
+  updateContextFooter();
+  window.addEventListener("aurawrite:preferences-changed", () => {
+    const prefs = loadAIFromPreferences();
+    setContextFooterModel(prefs.aiProvider, prefs.aiModel);
+    updateContextFooter();
+  });
+
   initKeyboardHelp();
 
   const findBar = document.getElementById("find-bar");
