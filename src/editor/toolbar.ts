@@ -622,11 +622,14 @@ async function walkAndCopyImages(
   node: any,
   attachmentsDir: string,
   baseDir: string,
-  out: Map<string, string>
+  out: Map<string, string>,
+  path: string[] = []
 ): Promise<void> {
   if (!node) return;
   if (node.type === "image" || (node.type && node.attrs?.src)) {
     const src: string = node.attrs?.src;
+    const typeName = typeof node.type === "string" ? node.type : node.type?.name;
+    console.log("[walk] found image candidate at path:", path.join("."), "type:", typeName, "src:", src);
     if (src && !out.has(src)) {
       try {
         const fileName = await copyImageToDir(src, attachmentsDir, baseDir);
@@ -654,12 +657,24 @@ async function walkAndCopyImages(
     // Fragment: collect via forEach
     const children: any[] = [];
     content.forEach((c: any) => children.push(c));
-    for (const child of children) {
-      await walkAndCopyImages(child, attachmentsDir, baseDir, out);
+    for (let i = 0; i < children.length; i++) {
+      await walkAndCopyImages(
+        children[i],
+        attachmentsDir,
+        baseDir,
+        out,
+        [...path, `${typeof node.type === "string" ? node.type : node.type?.name}[${i}]`]
+      );
     }
   } else if (Array.isArray(content)) {
-    for (const child of content) {
-      await walkAndCopyImages(child, attachmentsDir, baseDir, out);
+    for (let i = 0; i < content.length; i++) {
+      await walkAndCopyImages(
+        content[i],
+        attachmentsDir,
+        baseDir,
+        out,
+        [...path, `${typeof node.type === "string" ? node.type : node.type?.name}[${i}]`]
+      );
     }
   }
 }

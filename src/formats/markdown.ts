@@ -104,7 +104,9 @@ function nodeToMarkdown(
   } = {}
 ): string {
   const t = getNodeType(node);
-  if (t === "image") console.log("[toMarkdown] image node type matched, t:", t, "node.type:", typeof node.type, JSON.stringify(node.type));
+  if (t === "image" || (node.attrs && typeof node.attrs.src === "string")) {
+    console.log("[toMarkdown] potential image node, t:", t, "node.type:", typeof node.type, "src:", node.attrs?.src);
+  }
   switch (t) {
     case "paragraph": {
       const text = contentToArray(node.content)
