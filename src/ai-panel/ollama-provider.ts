@@ -2,6 +2,14 @@ import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse } from "./providers";
 import { withRetry, isValidHttpUrl } from "./fetch-retry";
 
+function extractOllamaUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
+  const d = data as { prompt_eval_count?: number; eval_count?: number };
+  const input = typeof d.prompt_eval_count === "number" ? d.prompt_eval_count : 0;
+  const output = typeof d.eval_count === "number" ? d.eval_count : 0;
+  if (input === 0 && output === 0) return undefined;
+  return { inputTokens: input, outputTokens: output };
+}
+
 export type OllamaMode = "local" | "cloud";
 
 const OLLAMA_LOCAL_BASE_URL = "http://localhost:11434";
@@ -118,10 +126,12 @@ export class OllamaProvider implements AIProvider {
       const thinking = typeof data.thinking === "string" && data.thinking.trim()
         ? data.thinking
         : undefined;
+      const usage = extractOllamaUsage(data);
       return {
         content,
         done: true,
         ...(thinking ? { thinking } : {}),
+        ...(usage ? { usage } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
