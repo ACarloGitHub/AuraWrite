@@ -93,9 +93,12 @@ export function setupAIPanel(view: EditorView): void {
 }
 
 const CHAT_INPUT_HEIGHT_KEY = "aurawrite-chat-input-height";
+const CHAT_INPUT_MIN_HEIGHT = 60;
+const CHAT_INPUT_MAX_HEIGHT_RATIO = 0.5;
 
 function setupChatInputResizePersistence(): void {
   const ta = document.getElementById("ai-input") as HTMLTextAreaElement | null;
+  const handle = document.getElementById("ai-input-resize-handle") as HTMLElement | null;
   if (!ta) return;
 
   const saved = localStorage.getItem(CHAT_INPUT_HEIGHT_KEY);
@@ -107,14 +110,49 @@ function setupChatInputResizePersistence(): void {
   }
 
   let resizeTimer: number | null = null;
-  ta.addEventListener("mouseup", () => {
+  const saveHeight = () => {
     if (resizeTimer !== null) {
       window.clearTimeout(resizeTimer);
     }
     resizeTimer = window.setTimeout(() => {
       localStorage.setItem(CHAT_INPUT_HEIGHT_KEY, String(ta.offsetHeight));
     }, 250);
-  });
+  };
+
+  ta.addEventListener("mouseup", saveHeight);
+
+  if (handle) {
+    let startY = 0;
+    let startHeight = 0;
+    let dragging = false;
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      const delta = startY - e.clientY;
+      const maxHeight = Math.floor(window.innerHeight * CHAT_INPUT_MAX_HEIGHT_RATIO);
+      const newHeight = Math.max(CHAT_INPUT_MIN_HEIGHT, Math.min(maxHeight, startHeight + delta));
+      ta.style.height = `${newHeight}px`;
+    };
+
+    const onMouseUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove("dragging");
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      saveHeight();
+    };
+
+    handle.addEventListener("mousedown", (e: MouseEvent) => {
+      e.preventDefault();
+      dragging = true;
+      startY = e.clientY;
+      startHeight = ta.offsetHeight;
+      handle.classList.add("dragging");
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  }
 }
 
 // Track selection only while the editor is focused, so the stored value
