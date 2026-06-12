@@ -4135,15 +4135,7 @@ kbd {
   display: inline-block;
   margin: 8px 0;
   max-width: 100%;
-  transition: transform 120ms ease-out;
-  cursor: move;
-  will-change: transform;
-}
-
-.image-node-wrapper--dragging {
-  transition: none;
-  cursor: grabbing;
-  outline-style: dashed;
+  vertical-align: top;
 }
 
 .image-node-wrapper[data-align="left"] {
