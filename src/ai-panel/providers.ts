@@ -33,6 +33,11 @@ export interface AIResponse {
   done: boolean;
   error?: string;
   thinking?: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
 }
 
 export interface AIProviderConfig {
