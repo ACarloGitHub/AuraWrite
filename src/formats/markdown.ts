@@ -446,6 +446,7 @@ function parseInlineMarkdown(text: string): any[] {
     const strongMatch = remaining.match(/^\*\*(.+?)\*\*/);
     const emMatch = remaining.match(/^\*(.+?)\*/);
     const codeMatch = remaining.match(/^`(.+?)`/);
+    const imageMatch = remaining.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/);
 
     if (strongMatch) {
       result.push({
@@ -464,8 +465,23 @@ function parseInlineMarkdown(text: string): any[] {
         marks: [{ type: "code" }],
       });
       remaining = remaining.substring(codeMatch[0].length);
+    } else if (imageMatch) {
+      result.push({
+        type: "image",
+        attrs: {
+          src: imageMatch[2],
+          alt: imageMatch[1] || "",
+          title: imageMatch[3] || "",
+          width: null,
+          height: null,
+          align: "center",
+          offsetX: 0,
+          offsetY: 0,
+        },
+      });
+      remaining = remaining.substring(imageMatch[0].length);
     } else {
-      const nextSpecial = remaining.search(/\*\*|\*|`/);
+      const nextSpecial = remaining.search(/\*\*|\*|`|!\[/);
       if (nextSpecial === -1) {
         if (remaining.trim()) {
           result.push({ type: "text", text: remaining });
