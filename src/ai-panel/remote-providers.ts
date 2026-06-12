@@ -24,6 +24,15 @@ function extractAnthropicThinking(data: unknown): string | undefined {
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
+function extractOpenAICompatibleUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
+  const usage = (data as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
+  if (!usage) return undefined;
+  const input = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0;
+  const output = typeof usage.completion_tokens === "number" ? usage.completion_tokens : 0;
+  if (input === 0 && output === 0) return undefined;
+  return { inputTokens: input, outputTokens: output };
+}
+
 function buildOpenAICompatibleMessages(
   prompt: string,
   context?: AIContext,
@@ -171,11 +180,13 @@ export class OpenAIProvider implements AIProvider {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
       const thinking = extractOpenAIStyleReasoning(data);
+      const usage = extractOpenAICompatibleUsage(data);
 
       return {
         content,
         done: true,
         ...(thinking ? { thinking } : {}),
+        ...(usage ? { usage } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
@@ -442,7 +453,8 @@ export class DeepSeekProvider implements AIProvider {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
       const thinking = extractOpenAIStyleReasoning(data);
-      return { content, done: true, ...(thinking ? { thinking } : {}) };
+      const usage = extractOpenAICompatibleUsage(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}), ...(usage ? { usage } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
@@ -514,7 +526,8 @@ export class OpenRouterProvider implements AIProvider {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || "";
       const thinking = extractOpenAIStyleReasoning(data);
-      return { content, done: true, ...(thinking ? { thinking } : {}) };
+      const usage = extractOpenAICompatibleUsage(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}), ...(usage ? { usage } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
@@ -601,7 +614,8 @@ export class LMStudioProvider implements AIProvider {
       }
       const content = data.choices?.[0]?.message?.content || "";
       const thinking = extractOpenAIStyleReasoning(data);
-      return { content, done: true, ...(thinking ? { thinking } : {}) };
+      const usage = extractOpenAICompatibleUsage(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}), ...(usage ? { usage } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
@@ -693,7 +707,8 @@ export class MiniMaxProvider implements AIProvider {
       }
       const content = data.choices?.[0]?.message?.content || "";
       const thinking = extractOpenAIStyleReasoning(data);
-      return { content, done: true, ...(thinking ? { thinking } : {}) };
+      const usage = extractOpenAICompatibleUsage(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}), ...(usage ? { usage } : {}) };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return { content: "", done: true, error: "Request cancelled" };
