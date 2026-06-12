@@ -8,6 +8,20 @@ function contentToArray(content: any): any[] {
 }
 
 /**
+ * Get the type name of a ProseMirror node, handling BOTH shapes that appear
+ * in AuraWrite:
+ *  - Serialized form: `node.type === "page"` (a plain string)
+ *  - Live ProseMirror form: `node.type.name === "page"` (a Spec object)
+ * Returns the type name as a string, or null if neither shape matches.
+ */
+function getNodeType(node: any): string | null {
+  if (!node) return null;
+  if (typeof node.type === "string") return node.type;
+  if (node.type && typeof node.type.name === "string") return node.type.name;
+  return null;
+}
+
+/**
  * Normalize a ProseMirror node-like input into a list of child nodes to
  * convert. Handles the three top-level shapes we see in AuraWrite:
  *  - A raw Fragment (has .forEach directly)
@@ -81,7 +95,8 @@ function nodeToMarkdown(
     linkPathFor?: (href: string) => string | null;
   } = {}
 ): string {
-  switch (node.type.name) {
+  const t = getNodeType(node);
+  switch (t) {
     case "paragraph": {
       const text = contentToArray(node.content)
         .map((n: any) => inlineToMarkdown(n, opts))
@@ -187,11 +202,11 @@ function inlineToMarkdown(
     linkPathFor?: (href: string) => string | null;
   } = {}
 ): string {
-  if (node.type.name === "text") {
+  if (getNodeType(node) === "text") {
     let text = node.text || "";
     if (node.marks) {
       for (const mark of node.marks) {
-        switch (mark.type.name) {
+        switch (getNodeType(mark)) {
           case "strong":
             text = "**" + text + "**";
             break;
