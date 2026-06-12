@@ -107,7 +107,6 @@ export class ImageNodeView implements NodeView {
   }
 
   private async onWrapperMouseDown(e: MouseEvent): Promise<void> {
-    e.preventDefault();
     const startX = e.clientX;
     const startY = e.clientY;
     const pos = this.getPos();
