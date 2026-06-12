@@ -212,10 +212,8 @@ export class OllamaProvider implements AIProvider {
     }
 
     if (context?.messageHistory && context.messageHistory.length > 0) {
-      const maxHistory = 10;
-      const history = context.messageHistory.slice(-maxHistory);
       fullPrompt += "[Conversation History]\n";
-      for (const msg of history) {
+      for (const msg of context.messageHistory) {
         if (msg.role === "user") {
           fullPrompt += `User: ${msg.content}\n`;
         } else if (msg.role === "assistant") {
