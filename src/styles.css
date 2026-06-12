@@ -4113,12 +4113,6 @@ kbd {
   margin-right: 0;
 }
 
-.ProseMirror img[data-align="inline"] {
-  display: inline-block;
-  vertical-align: middle;
-  margin: 0 4px;
-}
-
 .ProseMirror .ProseMirror-selectednode img,
 .ProseMirror img.ProseMirror-selectednode {
   border-color: var(--color-primary, #4a90d9);
