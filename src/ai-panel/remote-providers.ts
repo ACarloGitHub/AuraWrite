@@ -33,6 +33,15 @@ function extractOpenAICompatibleUsage(data: unknown): { inputTokens: number; out
   return { inputTokens: input, outputTokens: output };
 }
 
+function extractAnthropicUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
+  const usage = (data as { usage?: { input_tokens?: number; output_tokens?: number } })?.usage;
+  if (!usage) return undefined;
+  const input = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+  const output = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+  if (input === 0 && output === 0) return undefined;
+  return { inputTokens: input, outputTokens: output };
+}
+
 function buildOpenAICompatibleMessages(
   prompt: string,
   context?: AIContext,
@@ -286,11 +295,13 @@ export class AnthropicProvider implements AIProvider {
       const data = await response.json();
       const content = data.content?.[0]?.text || "";
       const thinking = extractAnthropicThinking(data);
+      const usage = extractAnthropicUsage(data);
 
       return {
         content,
         done: true,
         ...(thinking ? { thinking } : {}),
+        ...(usage ? { usage } : {}),
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
