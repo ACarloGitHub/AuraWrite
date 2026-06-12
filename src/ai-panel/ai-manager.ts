@@ -8,6 +8,7 @@ import {
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider } from "./remote-providers";
 import { buildToolSystemPrompt } from "./tools";
+import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 
@@ -116,7 +117,11 @@ export async function sendToAI(
   } else {
     const providerAny = current as any;
     if (typeof providerAny.setModel === "function" && settings.aiModel) {
+      const previousModel = providerAny.model;
       providerAny.setModel(settings.aiModel);
+      if (previousModel && previousModel !== settings.aiModel) {
+        resetSessionUsage();
+      }
     }
     if (typeof providerAny.setApiKey === "function") {
       providerAny.setApiKey(settings.aiApiKey);
@@ -153,6 +158,7 @@ export async function sendToAI(
 
   try {
     const response = await active.stream(prompt, context);
+    recordChatTurn(prompt, context, response);
     return response;
   } catch (error) {
     return {
