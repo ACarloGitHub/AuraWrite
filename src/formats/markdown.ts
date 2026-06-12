@@ -250,6 +250,17 @@ function inlineToMarkdown(
     }
     return text;
   }
+  // Inline image: not technically inline in ProseMirror (image is a leaf
+  // node), but it can appear inside a paragraph. Emit markdown syntax.
+  if (getNodeType(node) === "image") {
+    const src: string = node.attrs?.src || "";
+    const alt: string = node.attrs?.alt || "";
+    const title: string = node.attrs?.title || "";
+    const resolved = opts.imagePathFor && src ? opts.imagePathFor(src, alt, title) : null;
+    const finalPath = resolved || src;
+    const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+    return `![${alt}](${finalPath}${titlePart})`;
+  }
   return "";
 }
 
