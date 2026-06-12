@@ -134,8 +134,13 @@ export class ImageNodeView implements NodeView {
         this.wrapper.classList.add("image-node-wrapper--dragging");
         e.stopPropagation();
       }
-      const newX = startOffsetX + dx;
-      const newY = startOffsetY + dy;
+      // VULN-5: clamp offset to a reasonable range so the image can't
+      // be dragged off-screen permanently.
+      const MAX_OFFSET = Math.max(window.innerWidth, window.innerHeight);
+      const rawX = startOffsetX + dx;
+      const rawY = startOffsetY + dy;
+      const newX = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, rawX));
+      const newY = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, rawY));
       lastX = newX;
       lastY = newY;
       applyPreview(newX, newY);
