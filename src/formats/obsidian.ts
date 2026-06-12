@@ -144,13 +144,19 @@ function documentToMarkdown(
   try {
     const json = JSON.parse(bodyJson);
     body = toMarkdownWithRewrites(json, {
-      // Image: rewrite asset://... into relative _attachments/<doc-title>/<filename>
+      // Image: rewrite asset://, http://asset.localhost/, or images/
+      // relative paths into _attachments/<doc-title>/<filename>.
+      // For images/... paths we use the basename of the path.
       imagePathFor: (src: string) => {
         if (
           src.startsWith("asset://") ||
           src.startsWith("http://asset.localhost")
         ) {
           const fileName = srcFilenameFromAssetUrl(src);
+          return `_attachments/${safeDocTitle}/${fileName}`;
+        }
+        if (src.startsWith("images/")) {
+          const fileName = src.substring("images/".length);
           return `_attachments/${safeDocTitle}/${fileName}`;
         }
         return null; // keep as-is for data: or http(s) URLs
@@ -183,9 +189,12 @@ function documentToMarkdown(
  * Walk the document's ProseMirror JSON and collect all image src URLs.
  * Returns the list of image sources to copy to the _attachments folder.
  *
- * For now we only support `asset://` URLs (Tauri asset protocol, used by
- * images uploaded via the editor). Data URIs and http(s) URLs are skipped
- * (they will be left as-is in the .md, which is fine for the first release).
+ * Supports:
+ *  - `asset://localhost/...` and `http://asset.localhost/...` (Tauri asset protocol)
+ *  - Relative paths like `images/1234-foo.png` (the format saved by
+ *    `save_image_to_assets` Rust command)
+ *  - `http://` and `https://` URLs (skipped — too risky to fetch during export)
+ *  - `data:` URIs (skipped — too large to round-trip through base64)
  */
 function collectImageSources(docJson: string): string[] {
   if (!docJson) return [];
@@ -200,7 +209,11 @@ function collectImageSources(docJson: string): string[] {
     if (!node) return;
     if (node.type === "image" && typeof node.attrs?.src === "string") {
       const src: string = node.attrs.src;
-      if (src.startsWith("asset://") || src.startsWith("http://asset.localhost")) {
+      if (
+        src.startsWith("asset://") ||
+        src.startsWith("http://asset.localhost") ||
+        src.startsWith("images/")
+      ) {
         sources.push(src);
       }
     }
@@ -210,6 +223,28 @@ function collectImageSources(docJson: string): string[] {
   };
   walk(json);
   return sources;
+}
+
+/**
+ * Resolve a relative image src (e.g. `images/1234-foo.png`) to its absolute
+ * filesystem path via the `read_image_asset_path` Tauri command. Returns
+ * null if the path cannot be resolved (e.g. file not found).
+ */
+async function resolveImageAssetPath(
+  src: string
+): Promise<string | null> {
+  try {
+    const path = await invoke<string>("read_image_asset_path", {
+      relativePath: src,
+    });
+    return path;
+  } catch (e) {
+    console.warn(
+      `[vault-export] Could not resolve image path ${src}:`,
+      (e as Error).message
+    );
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -502,15 +537,31 @@ function srcFilenameFromAssetUrl(src: string): string {
   return parts[parts.length - 1] || "image";
 }
 
+/**
+ * Copy an image from one of the supported src shapes to a local path.
+ * Throws on failure (caller catches and logs a warning).
+ *
+ * Supports:
+ *  - `images/...` relative paths: resolved via read_image_asset_path, then
+ *    copied with vault_copy_file
+ *  - `asset://localhost/...` / `http://asset.localhost/...`: fetched via the
+ *    browser, then written via vault_write_file_bytes
+ */
 async function copyAssetToLocal(
   assetUrl: string,
   destPath: string
 ): Promise<void> {
-  // Strategy: fetch the asset URL via the browser, get bytes, write to a
-  // base64 string, then call a Tauri command that writes the file. We
-  // piggyback on `vault_write_file` which already takes a string payload.
-  // For images this means a 33% size overhead but it's acceptable for the
-  // first release.
+  if (assetUrl.startsWith("images/")) {
+    // Resolve the relative path to an absolute filesystem path, then copy.
+    const absPath = await resolveImageAssetPath(assetUrl);
+    if (!absPath) {
+      throw new Error(`Could not resolve relative image path: ${assetUrl}`);
+    }
+    await vaultCopyFile(absPath, destPath);
+    return;
+  }
+
+  // asset:// or http://asset.localhost/: fetch via browser, write via base64
   const response = await fetch(assetUrl);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} fetching ${assetUrl}`);
@@ -518,7 +569,7 @@ async function copyAssetToLocal(
   const blob = await response.blob();
   const buffer = await blob.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  // Convert to base64 in chunks to avoid call stack issues
+  // Convert to base64 in chunks to avoid call stack issues with large images
   let binary = "";
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
@@ -528,18 +579,7 @@ async function copyAssetToLocal(
     );
   }
   const base64 = btoa(binary);
-  // We don't have a binary-write command, so we use vault_write_file with
-  // a data: URL? No — that would re-encode. Instead, we add a one-off
-  // command would be cleaner. For now, fall back to vault_copy_file with
-  // a URL that the OS can resolve: not reliable. Use a separate command.
-  // TODO: add vault_write_file_bytes command.
-  await writeBase64File(destPath, base64);
-}
-
-async function writeBase64File(path: string, base64: string): Promise<void> {
-  // Use a dedicated Tauri command that takes base64 + writes raw bytes.
-  // For now, we'll add this command in a follow-up commit.
-  await invoke("vault_write_file_bytes", { path, base64 });
+  await invoke("vault_write_file_bytes", { path: destPath, base64 });
 }
 
 // ---------------------------------------------------------------------------

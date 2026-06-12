@@ -624,6 +624,22 @@ fn read_image_asset(
 }
 
 #[tauri::command]
+fn read_image_asset_path(
+    app: tauri::AppHandle,
+    relative_path: String,
+) -> Result<String, String> {
+    if relative_path.contains("..") {
+        return Err("Invalid path".into());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?;
+    let full = app_data.join(&relative_path);
+    Ok(full.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn get_image_asset_url(
     app: tauri::AppHandle,
     relative_path: String,
@@ -872,6 +888,7 @@ pub fn run() {
             save_binary_file,
             save_image_to_assets,
             read_image_asset,
+            read_image_asset_path,
             get_image_asset_url,
             get_app_version,
             // Project commands
