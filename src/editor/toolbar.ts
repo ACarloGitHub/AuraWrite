@@ -594,22 +594,17 @@ async function handleExportMarkdownSingle(mdPath: string): Promise<void> {
   // Walk the doc, collect image sources, copy each, rewrite paths
   const imageMap = new Map<string, string>(); // original src -> relative copied path
   await walkAndCopyImages(doc, attachmentsDir, baseDir, imageMap);
-  console.log("[export-md] imageMap size:", imageMap.size);
-  for (const [k, v] of imageMap) console.log("[export-md] map:", k, "->", v);
 
   // Generate markdown with rewritten image paths
   const json: any = doc;
   const body = toMarkdownWithRewrites(json, {
     imagePathFor: (src: string) => {
       const rewritten = imageMap.get(src);
-      console.log("[export-md] imagePathFor(", src, ") ->", rewritten);
       if (rewritten) return rewritten;
       // If image wasn't copied (e.g. external http URL), keep original
       return null;
     },
   });
-  console.log("[export-md] body length:", body.length);
-  console.log("[export-md] body has image refs:", body.includes("!["));
 
   // Write the .md
   await invoke("save_document", { path: mdPath, content: body });
@@ -622,14 +617,11 @@ async function walkAndCopyImages(
   node: any,
   attachmentsDir: string,
   baseDir: string,
-  out: Map<string, string>,
-  path: string[] = []
+  out: Map<string, string>
 ): Promise<void> {
   if (!node) return;
   if (node.type === "image" || (node.type && node.attrs?.src)) {
     const src: string = node.attrs?.src;
-    const typeName = typeof node.type === "string" ? node.type : node.type?.name;
-    console.log("[walk] found image candidate at path:", path.join("."), "type:", typeName, "src:", src);
     if (src && !out.has(src)) {
       try {
         const fileName = await copyImageToDir(src, attachmentsDir, baseDir);
@@ -657,24 +649,12 @@ async function walkAndCopyImages(
     // Fragment: collect via forEach
     const children: any[] = [];
     content.forEach((c: any) => children.push(c));
-    for (let i = 0; i < children.length; i++) {
-      await walkAndCopyImages(
-        children[i],
-        attachmentsDir,
-        baseDir,
-        out,
-        [...path, `${typeof node.type === "string" ? node.type : node.type?.name}[${i}]`]
-      );
+    for (const child of children) {
+      await walkAndCopyImages(child, attachmentsDir, baseDir, out);
     }
   } else if (Array.isArray(content)) {
-    for (let i = 0; i < content.length; i++) {
-      await walkAndCopyImages(
-        content[i],
-        attachmentsDir,
-        baseDir,
-        out,
-        [...path, `${typeof node.type === "string" ? node.type : node.type?.name}[${i}]`]
-      );
+    for (const child of content) {
+      await walkAndCopyImages(child, attachmentsDir, baseDir, out);
     }
   }
 }

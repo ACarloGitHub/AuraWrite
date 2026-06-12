@@ -104,9 +104,6 @@ function nodeToMarkdown(
   } = {}
 ): string {
   const t = getNodeType(node);
-  if (t === "image" || (node.attrs && typeof node.attrs.src === "string")) {
-    console.log("[toMarkdown] potential image node, t:", t, "node.type:", typeof node.type, "src:", node.attrs?.src);
-  }
   switch (t) {
     case "paragraph": {
       const text = contentToArray(node.content)
@@ -187,7 +184,6 @@ function nodeToMarkdown(
       const src: string = node.attrs?.src || "";
       const alt: string = node.attrs?.alt || "";
       const title: string = node.attrs?.title || "";
-      console.log("[toMarkdown] IMAGE case hit, src:", src, "alt:", alt);
       // Resolve path: if imagePathFor returns a non-null path, use it;
       // otherwise use src as-is. The Obsidian export uses this to rewrite
       // asset://localhost/... into relative _attachments/<doc-title>/...
@@ -223,9 +219,21 @@ function inlineToMarkdown(
   } = {}
 ): string {
   if (getNodeType(node) === "image") {
-    console.log("[inlineToMarkdown] image case hit, node.attrs:", JSON.stringify(node.attrs));
-  } else {
-    console.log("[inlineToMarkdown] NON-image child, type:", getNodeType(node), "has src:", !!node?.attrs?.src);
+    // No diagnostic logging here.
+  } else if (node && (node.isBlock || getNodeType(node) === "paragraph")) {
+    // Block-level node inside a paragraph (unusual but possible if
+    // the document has nested paragraphs from a previous bug or import).
+    // Recurse into its children to find inline content.
+    const sub = node.content;
+    if (sub && typeof sub.forEach === "function") {
+      const kids: any[] = [];
+      sub.forEach((c: any) => kids.push(c));
+      return kids.map((k) => inlineToMarkdown(k, opts)).join("");
+    }
+    if (Array.isArray(sub)) {
+      return sub.map((k: any) => inlineToMarkdown(k, opts)).join("");
+    }
+    return "";
   }
   if (getNodeType(node) === "text") {
     let text = node.text || "";

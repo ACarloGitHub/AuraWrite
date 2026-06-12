@@ -189,6 +189,89 @@ describe("walkAndCopyImages content iteration", () => {
     expect(result).toContain("![Foo](Chapter One_attachments/foo.png)");
   });
 
+  it("REPRODUCES THE BUG: image nested in paragraph-in-paragraph (doc[2].page[0].paragraph[0].paragraph[0].image)", async () => {
+    // The user's actual case: the image is at path
+    //   doc[2].page[0].paragraph[0].paragraph[0]
+    // i.e. a paragraph containing a nested paragraph containing the image.
+    // This is an unusual structure (probably from an old import/drag-drop
+    // bug) but walkAndCopyImages finds it and toMarkdownWithRewrites
+    // must emit the image link too.
+    const liveDoc: any = {
+      type: "doc",
+      content: {
+        nodes: [
+          {
+            type: "page",
+            attrs: { pageNumber: 1 },
+            content: {
+              nodes: [
+                {
+                  type: "paragraph",
+                  content: {
+                    nodes: [
+                      {
+                        // NESTED paragraph inside the first paragraph
+                        type: "paragraph",
+                        content: {
+                          nodes: [
+                            {
+                              type: "image",
+                              attrs: {
+                                src: "images/nested-img.png",
+                                alt: "Nested",
+                                title: "Nested",
+                                width: 100,
+                                height: 100,
+                              },
+                            },
+                          ],
+                          forEach(cb: any) { this.nodes.forEach((n) => cb(n)); },
+                        },
+                      },
+                    ],
+                    forEach(cb: any) { this.nodes.forEach((n) => cb(n)); },
+                  },
+                },
+              ],
+              forEach(cb: any) { this.nodes.forEach((n) => cb(n)); },
+            },
+          },
+        ],
+        forEach(cb: any) { this.nodes.forEach((n) => cb(n)); },
+      },
+    };
+
+    const map = new Map<string, string>();
+    async function walk(node: any, path: string[] = []) {
+      if (!node) return;
+      if (node.type === "image" || (node.type && node.attrs?.src)) {
+        const src = node.attrs?.src;
+        if (src) map.set(src, "10_attachments/" + src.substring("images/".length));
+        return;
+      }
+      const c = node.content;
+      if (Array.isArray(c)) { for (let i = 0; i < c.length; i++) await walk(c[i], [...path, `arr[${i}]`]); return; }
+      if (c && typeof c.forEach === "function") {
+        const ch: any[] = [];
+        c.forEach((x: any) => ch.push(x));
+        for (let i = 0; i < ch.length; i++) await walk(ch[i], [...path, `fr[${i}]`]);
+        return;
+      }
+    }
+    await walk(liveDoc);
+    expect(map.size).toBe(1);
+    expect(map.get("images/nested-img.png")).toBe("10_attachments/nested-img.png");
+
+    let pathForCalls = 0;
+    const imagePathFor = (src: string) => {
+      pathForCalls++;
+      return map.get(src) ?? null;
+    };
+    const result = toMarkdownWithRewrites(liveDoc, { imagePathFor });
+    expect(pathForCalls).toBe(1);
+    expect(result).toContain("![Nested](10_attachments/nested-img.png \"Nested\")");
+  });
+
   it("REPRODUCES THE BUG: image in 2nd page paragraph with no surrounding text", async () => {
     // The user's actual case: image is the ONLY content of a paragraph
     // in the 2nd page. No surrounding text.
