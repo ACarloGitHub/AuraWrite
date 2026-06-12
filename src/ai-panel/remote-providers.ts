@@ -391,9 +391,7 @@ Do NOT use AURA_EDIT for normal conversation - only for document edits.`);
     const messages: Array<{ role: string; content: string }> = [];
 
     if (context?.messageHistory && context.messageHistory.length > 0) {
-      const maxHistory = 10;
-      const history = context.messageHistory.slice(-maxHistory);
-      for (const msg of history) {
+      for (const msg of context.messageHistory) {
         if (msg.role === "user" || msg.role === "assistant") {
           messages.push({ role: msg.role, content: msg.content });
         }
