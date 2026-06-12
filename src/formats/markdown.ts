@@ -222,6 +222,8 @@ function inlineToMarkdown(
 ): string {
   if (getNodeType(node) === "image") {
     console.log("[inlineToMarkdown] image case hit, node.attrs:", JSON.stringify(node.attrs));
+  } else {
+    console.log("[inlineToMarkdown] NON-image child, type:", getNodeType(node), "has src:", !!node?.attrs?.src);
   }
   if (getNodeType(node) === "text") {
     let text = node.text || "";
