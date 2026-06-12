@@ -5,7 +5,7 @@ import { EditorState } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 import type { NodeType } from "prosemirror-model";
 
-import { toMarkdown, fromMarkdown } from "../formats/markdown";
+import { toMarkdown, toMarkdownWithRewrites, fromMarkdown } from "../formats/markdown";
 import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
@@ -16,7 +16,7 @@ import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { showErrorToast } from "../error-boundary";
+import { showErrorToast, showInfoToast } from "../error-boundary";
 import {
   initPagination,
   updateOnTextChange,
@@ -547,8 +547,186 @@ async function handleExport(): Promise<void> {
   if (!path) return;
 
   const ext = path.split(".").pop()?.toLowerCase();
+
+  // Special path for Markdown: also copy images to a sibling _attachments
+  // folder so the exported .md is self-contained.
+  if (ext === "md" || ext === "markdown") {
+    await handleExportMarkdownSingle(path);
+    return;
+  }
+
   const content = await getContentByFormat(ext || "md");
   await saveFile(path, ext || "md", content);
+}
+
+/**
+ * Export a single document as a standalone .md file with images copied to a
+ * sibling <doc-name>_attachments/ folder. Emits:
+ *   <user-path>/my-doc.md
+ *   <user-path>/my-doc_attachments/1781-foo.png
+ *   <user-path>/my-doc_attachments/1782-bar.jpg
+ * The .md uses relative paths to those copied images:
+ *   ![alt](my-doc_attachments/1781-foo.png)
+ *
+ * This way the .md file is self-contained and can be opened standalone in
+ * Obsidian, VS Code, or any markdown viewer.
+ */
+async function handleExportMarkdownSingle(mdPath: string): Promise<void> {
+  const doc = editorView.state.doc;
+  const docTitle =
+    (typeof doc.firstChild?.attrs?.title === "string" && doc.firstChild.attrs.title) ||
+    basenameWithoutExt(mdPath) ||
+    "document";
+  const safeDocTitle = sanitizeFilenameLocal(docTitle);
+  const baseDir = dirnameLocal(mdPath);
+  const attachmentsDir = joinPathLocal(baseDir, `${safeDocTitle}_attachments`);
+
+  // Create the attachments dir up front
+  try {
+    await invoke("vault_create_dir", { path: attachmentsDir });
+  } catch (e) {
+    showErrorToast(
+      `Could not create attachments folder: ${(e as Error).message}`
+    );
+    return;
+  }
+
+  // Walk the doc, collect image sources, copy each, rewrite paths
+  const imageMap = new Map<string, string>(); // original src -> relative copied path
+  await walkAndCopyImages(doc, attachmentsDir, baseDir, imageMap);
+
+  // Generate markdown with rewritten image paths
+  const json: any = doc;
+  const body = toMarkdownWithRewrites(json, {
+    imagePathFor: (src: string) => {
+      const rewritten = imageMap.get(src);
+      if (rewritten) return rewritten;
+      // If image wasn't copied (e.g. external http URL), keep original
+      return null;
+    },
+  });
+
+  // Write the .md
+  await invoke("save_document", { path: mdPath, content: body });
+  showInfoToast(
+    `Exported to ${mdPath}${imageMap.size > 0 ? ` (${imageMap.size} image${imageMap.size === 1 ? "" : "s"} copied to ${safeDocTitle}_attachments/)` : ""}`
+  );
+}
+
+async function walkAndCopyImages(
+  node: any,
+  attachmentsDir: string,
+  baseDir: string,
+  out: Map<string, string>
+): Promise<void> {
+  if (!node) return;
+  if (node.type === "image" || (node.type && node.attrs?.src)) {
+    const src: string = node.attrs?.src;
+    if (src && !out.has(src)) {
+      try {
+        const fileName = await copyImageToDir(src, attachmentsDir, baseDir);
+        if (fileName) {
+          // Compute relative path from baseDir to attachmentsDir/fileName
+          const rel = `${basenameLocal(attachmentsDir)}/${fileName}`;
+          out.set(src, rel);
+        }
+      } catch (e) {
+        console.warn(
+          `[export-md-single] Could not copy image ${src}:`,
+          (e as Error).message
+        );
+      }
+    }
+    return;
+  }
+  if (node.content) {
+    for (const child of node.content) {
+      await walkAndCopyImages(child, attachmentsDir, baseDir, out);
+    }
+  }
+}
+
+async function copyImageToDir(
+  src: string,
+  destDir: string,
+  baseDir: string
+): Promise<string | null> {
+  // Strip any query/hash
+  const cleanSrc = src.split("?")[0].split("#")[0];
+
+  if (cleanSrc.startsWith("images/")) {
+    // Local app-data image
+    const absPath = await invoke<string>("read_image_asset_path", {
+      relativePath: cleanSrc,
+    });
+    const fileName = basenameLocal(absPath);
+    const destPath = joinPathLocal(destDir, fileName);
+    await invoke("vault_copy_file", { src: absPath, dest: destPath });
+    return fileName;
+  }
+
+  if (cleanSrc.startsWith("asset://") || cleanSrc.startsWith("http://asset.localhost")) {
+    // Tauri asset protocol URL: fetch + write via base64
+    const response = await fetch(src);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(
+        null,
+        Array.from(bytes.subarray(i, i + chunk))
+      );
+    }
+    const base64 = btoa(binary);
+    // Derive a filename from the URL or fall back to "image-<n>"
+    const urlFileName = cleanSrc.split("/").pop()?.split("?")[0] || "image";
+    const fileName = sanitizeFilenameLocal(urlFileName) || "image";
+    const destPath = joinPathLocal(destDir, fileName);
+    await invoke("vault_write_file_bytes", { path: destPath, base64 });
+    return fileName;
+  }
+
+  // data: URIs, http(s) URLs: skip (not safe to copy)
+  return null;
+}
+
+// Local helpers (duplicated to keep this module self-contained)
+function basenameWithoutExt(p: string): string {
+  const lastSlash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  const file = lastSlash >= 0 ? p.substring(lastSlash + 1) : p;
+  const lastDot = file.lastIndexOf(".");
+  return lastDot > 0 ? file.substring(0, lastDot) : file;
+}
+
+function dirnameLocal(p: string): string {
+  const lastSlash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return lastSlash >= 0 ? p.substring(0, lastSlash) : "";
+}
+
+function basenameLocal(p: string): string {
+  const lastSlash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return lastSlash >= 0 ? p.substring(lastSlash + 1) : p;
+}
+
+function joinPathLocal(...parts: string[]): string {
+  const cleaned = parts
+    .map((p) => p.replace(/^[\\/]+|[\\/]+$/g, ""))
+    .filter((p) => p.length > 0);
+  return cleaned.join("/");
+}
+
+function sanitizeFilenameLocal(name: string): string {
+  if (!name) return "untitled";
+  let s = name
+    .replace(/[\\/:*?"<>|\x00-\x1f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  s = s.replace(/[.\s]+$/, "");
+  if (!s) s = "untitled";
+  return s;
 }
 
 // ============================================================================
