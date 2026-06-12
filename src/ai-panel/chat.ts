@@ -515,7 +515,6 @@ async function sendMessage(text: string): Promise<void> {
     messageHistory: messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(0, -1)
-      .slice(-10)
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
   };
 
