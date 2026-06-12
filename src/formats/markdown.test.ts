@@ -84,6 +84,46 @@ describe("toMarkdown — multi-page with inline image", () => {
     expect(result).toContain("![Foo](_attachments/Doc1/foo.png)");
   });
 
+  it("emits Obsidian wikilink ![[]] for attachments/ paths when useObsidianWikilinks is true", () => {
+    const testJson = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "image", attrs: { src: "images/foo.png", alt: "Foo" } }
+          ]
+        }
+      ]
+    };
+    const result = toMarkdownWithRewrites(testJson, {
+      useObsidianWikilinks: true,
+      imagePathFor: (src) => `attachments/Doc1-${src.substring("images/".length)}`,
+    });
+    expect(result).toContain("![[attachments/Doc1-foo.png]]");
+    // alt should NOT appear in wikilink form
+    expect(result).not.toContain("![Foo]");
+  });
+
+  it("keeps standard markdown ![]() when useObsidianWikilinks is false", () => {
+    const testJson = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "image", attrs: { src: "images/foo.png", alt: "Foo" } }
+          ]
+        }
+      ]
+    };
+    const result = toMarkdownWithRewrites(testJson, {
+      useObsidianWikilinks: false,
+      imagePathFor: (src) => `attachments/Doc1-${src.substring("images/".length)}`,
+    });
+    expect(result).toContain("![Foo](attachments/Doc1-foo.png)");
+  });
+
   it("rewrites aurawrite-doc:// links to wikilinks", () => {
     const testJson = {
       type: "doc",

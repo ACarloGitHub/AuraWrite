@@ -145,19 +145,22 @@ function documentToMarkdown(
     const json = JSON.parse(bodyJson);
     body = toMarkdownWithRewrites(json, {
       // Image: rewrite asset://, http://asset.localhost/, or images/
-      // relative paths into _attachments/<doc-title>/<filename>.
-      // For images/... paths we use the basename of the path.
+      // relative paths into the vault's flat attachments/ folder.
+      // The link uses Obsidian wikilink syntax ![[attachments/<file>]] so
+      // Obsidian resolves it regardless of the .md file's depth in the
+      // vault tree.
+      useObsidianWikilinks: true,
       imagePathFor: (src: string) => {
         if (
           src.startsWith("asset://") ||
           src.startsWith("http://asset.localhost")
         ) {
           const fileName = srcFilenameFromAssetUrl(src);
-          return `_attachments/${safeDocTitle}/${fileName}`;
+          return `attachments/${safeDocTitle}-${fileName}`;
         }
         if (src.startsWith("images/")) {
           const fileName = src.substring("images/".length);
-          return `_attachments/${safeDocTitle}/${fileName}`;
+          return `attachments/${safeDocTitle}-${fileName}`;
         }
         return null; // keep as-is for data: or http(s) URLs
       },
@@ -403,34 +406,24 @@ export async function exportProjectToVault(
       await vaultWriteFile(docPath, md);
       filesWritten++;
 
-      // Images
+      // Images: write to vault-root /attachments/ with a name that
+      // includes the doc title to avoid collisions across docs.
+      // The .md file uses Obsidian wikilink syntax ![[attachments/<file>]]
+      // which Obsidian resolves reliably regardless of where the .md sits.
       const imgSources = collectImageSources(doc.content_json);
       if (imgSources.length > 0) {
-        const attachmentsDir = joinPath(
-          sectionDir,
-          "_attachments",
-          sanitizeFilename(doc.title)
-        );
-        await vaultCreateDir(attachmentsDir);
+        const vaultAttachmentsDir = joinPath(vaultPath, "attachments");
+        await vaultCreateDir(vaultAttachmentsDir);
         for (const src of imgSources) {
           try {
-            const fileName = srcFilenameFromAssetUrl(src);
-            const destPath = joinPath(attachmentsDir, fileName);
-            // We need the local file path of the asset. For asset://localhost
-            // URLs, Tauri exposes the local path. We read it via the
-            // read_image_asset Rust command, but here we use copy_file with the
-            // resolved local path. The frontend can't resolve asset:// directly
-            // to a local path easily, so we rely on the convertFileSrc URL and
-            // the Rust command `read_image_asset` to fetch bytes.
-            // For now, the simplest reliable approach: fetch the asset URL via
-            // the browser, get a Blob, then write the bytes via a base64
-            // round-trip. Tauri 2 supports this via fetch(asset.localhost).
+            const baseName = srcFilenameFromAssetUrl(src);
+            // Prefix with the doc title to avoid name collisions between docs
+            // (e.g. two docs both have an image named "cover.png")
+            const fileName = `${sanitizeFilename(doc.title)}-${baseName}`;
+            const destPath = joinPath(vaultAttachmentsDir, fileName);
             await copyAssetToLocal(src, destPath);
             imagesCopied++;
           } catch (e) {
-            // Don't abort the whole export on a single image failure.
-            // The .md still references the image (link will be broken in
-            // Obsidian but the rest of the vault is fine).
             console.warn(
               `[vault-export] Failed to copy image ${src}:`,
               (e as Error).message

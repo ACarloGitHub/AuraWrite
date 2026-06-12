@@ -78,6 +78,13 @@ export function toMarkdownWithRewrites(
   opts: {
     imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
     linkPathFor?: (href: string) => string | null;
+    /**
+     * If true, image paths that start with "attachments/" are emitted
+     * as Obsidian wikilink embeds (![[attachments/<file>]]) instead of
+     * the standard markdown ![]() syntax. This is more reliable for
+     * images that live in subfolders of the vault.
+     */
+    useObsidianWikilinks?: boolean;
   } = {}
 ): string {
   const nodes = rootToNodes(doc);
@@ -93,6 +100,7 @@ function nodeToMarkdown(
   opts: {
     imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
     linkPathFor?: (href: string) => string | null;
+    useObsidianWikilinks?: boolean;
   } = {}
 ): string {
   const t = getNodeType(node);
@@ -185,6 +193,13 @@ function nodeToMarkdown(
           : null;
       const finalPath = resolved || src;
       const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+      // Obsidian wikilink embed syntax (no description) is more reliable
+      // than the standard ![alt](path) markdown form, especially for
+      // images in subfolders. Detect paths that start with the literal
+      // "attachments/" and emit the wikilink form.
+      if (opts.useObsidianWikilinks && finalPath.startsWith("attachments/")) {
+        return `![[${finalPath}]]\n\n`;
+      }
       return `![${alt}](${finalPath}${titlePart})\n\n`;
     }
     default:
@@ -200,6 +215,7 @@ function inlineToMarkdown(
   opts: {
     imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
     linkPathFor?: (href: string) => string | null;
+    useObsidianWikilinks?: boolean;
   } = {}
 ): string {
   if (getNodeType(node) === "text") {
@@ -258,6 +274,10 @@ function inlineToMarkdown(
     const title: string = node.attrs?.title || "";
     const resolved = opts.imagePathFor && src ? opts.imagePathFor(src, alt, title) : null;
     const finalPath = resolved || src;
+    // Obsidian wikilink embed syntax for attachments/ paths
+    if (opts.useObsidianWikilinks && finalPath.startsWith("attachments/")) {
+      return `![[${finalPath}]]`;
+    }
     const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
     return `![${alt}](${finalPath}${titlePart})`;
   }
