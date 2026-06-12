@@ -127,3 +127,56 @@ pub fn vault_copy_file(src: String, dest: String) -> Result<String, String> {
 
     Ok(dest_p.to_string_lossy().to_string())
 }
+
+/// Write a file from a base64-encoded payload. Used for binary data like images
+/// (the frontend fetches the asset via Tauri asset protocol, encodes to base64,
+/// and sends the bytes here). Atomic via .tmp + rename.
+#[tauri::command]
+pub fn vault_write_file_bytes(path: String, base64: String) -> Result<(), String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let bytes = STANDARD
+        .decode(base64.as_bytes())
+        .map_err(|e| format!("Invalid base64: {}", e))?;
+
+    let p = Path::new(&path);
+
+    if let Some(parent) = p.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(format!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            ));
+        }
+    }
+    if p.exists() && p.is_dir() {
+        return Err(format!("Path is a directory, cannot write file: {}", path));
+    }
+
+    let tmp_path: PathBuf = {
+        let mut tmp = p.to_path_buf();
+        let mut name = tmp
+            .file_name()
+            .map(|n| n.to_os_string())
+            .unwrap_or_default();
+        name.push(".tmp");
+        tmp.set_file_name(name);
+        tmp
+    };
+
+    {
+        let mut f = fs::File::create(&tmp_path)
+            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+        f.write_all(&bytes)
+            .map_err(|e| format!("Failed to write bytes: {}", e))?;
+        f.sync_all()
+            .map_err(|e| format!("Failed to sync temp file: {}", e))?;
+    }
+
+    if let Err(e) = fs::rename(&tmp_path, p) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(format!("Failed to rename temp to final: {}", e));
+    }
+
+    Ok(())
+}

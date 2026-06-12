@@ -951,6 +951,7 @@ pub fn run() {
             vault_create_dir,
             vault_check_path,
             vault_write_file,
+            vault_write_file_bytes,
             vault_copy_file,
         ])
         .run(tauri::generate_context!())
