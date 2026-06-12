@@ -88,7 +88,33 @@ export function setupAIPanel(view: EditorView): void {
   setupPanelEvents(view);
   setupEditorClickListener(view);
   setupEditorSelectionListener(view);
+  setupChatInputResizePersistence();
   window.addEventListener("aurawrite:preferences-changed", handlePreferencesChanged);
+}
+
+const CHAT_INPUT_HEIGHT_KEY = "aurawrite-chat-input-height";
+
+function setupChatInputResizePersistence(): void {
+  const ta = document.getElementById("ai-input") as HTMLTextAreaElement | null;
+  if (!ta) return;
+
+  const saved = localStorage.getItem(CHAT_INPUT_HEIGHT_KEY);
+  if (saved) {
+    const height = parseInt(saved, 10);
+    if (!isNaN(height) && height > 0) {
+      ta.style.height = `${height}px`;
+    }
+  }
+
+  let resizeTimer: number | null = null;
+  ta.addEventListener("mouseup", () => {
+    if (resizeTimer !== null) {
+      window.clearTimeout(resizeTimer);
+    }
+    resizeTimer = window.setTimeout(() => {
+      localStorage.setItem(CHAT_INPUT_HEIGHT_KEY, String(ta.offsetHeight));
+    }, 250);
+  });
 }
 
 // Track selection only while the editor is focused, so the stored value
