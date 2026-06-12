@@ -51,9 +51,7 @@ function buildOpenAICompatibleMessages(
   ];
 
   if (context?.messageHistory && context.messageHistory.length > 0) {
-    const maxHistory = 10;
-    const history = context.messageHistory.slice(-maxHistory);
-    for (const msg of history) {
+    for (const msg of context.messageHistory) {
       messages.push({ role: msg.role, content: msg.content });
     }
   }
