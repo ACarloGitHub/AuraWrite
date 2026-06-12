@@ -594,17 +594,22 @@ async function handleExportMarkdownSingle(mdPath: string): Promise<void> {
   // Walk the doc, collect image sources, copy each, rewrite paths
   const imageMap = new Map<string, string>(); // original src -> relative copied path
   await walkAndCopyImages(doc, attachmentsDir, baseDir, imageMap);
+  console.log("[export-md] imageMap size:", imageMap.size);
+  for (const [k, v] of imageMap) console.log("[export-md] map:", k, "->", v);
 
   // Generate markdown with rewritten image paths
   const json: any = doc;
   const body = toMarkdownWithRewrites(json, {
     imagePathFor: (src: string) => {
       const rewritten = imageMap.get(src);
+      console.log("[export-md] imagePathFor(", src, ") ->", rewritten);
       if (rewritten) return rewritten;
       // If image wasn't copied (e.g. external http URL), keep original
       return null;
     },
   });
+  console.log("[export-md] body length:", body.length);
+  console.log("[export-md] body has image refs:", body.includes("!["));
 
   // Write the .md
   await invoke("save_document", { path: mdPath, content: body });
