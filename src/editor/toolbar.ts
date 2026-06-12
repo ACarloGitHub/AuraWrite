@@ -639,8 +639,21 @@ async function walkAndCopyImages(
     }
     return;
   }
-  if (node.content) {
-    for (const child of node.content) {
+  // node.content can be:
+  //  - undefined (leaf node like "image" — already handled above)
+  //  - a plain array (serialized ProseMirror JSON from the database)
+  //  - a Fragment (live ProseMirror Node, has .forEach but no Symbol.iterator)
+  //  - anything else (defensive: skip)
+  const content = node.content;
+  if (content && typeof content.forEach === "function") {
+    // Fragment: collect via forEach
+    const children: any[] = [];
+    content.forEach((c: any) => children.push(c));
+    for (const child of children) {
+      await walkAndCopyImages(child, attachmentsDir, baseDir, out);
+    }
+  } else if (Array.isArray(content)) {
+    for (const child of content) {
       await walkAndCopyImages(child, attachmentsDir, baseDir, out);
     }
   }
