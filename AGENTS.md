@@ -8,7 +8,8 @@
 2. `AuraWrite-Wiki/concepts/todo-list.md` — Detailed task status, priorities, technical notes
 3. `documentation/STATO.md` — Current project state overview
 4. `documentation/RESUME_MEMO_v0.X.Y.md` — Latest release memo (read the most recent)
-5. `AuraWrite-Wiki/log.md` — Activity log of all sessions
+5. **`documentation/RELEASE_PROCESS.md`** — **Step-by-step release procedure (read BEFORE any release)**
+6. `AuraWrite-Wiki/log.md` — Activity log of all sessions
 
 **For wiki schema and rules:** `AuraWrite-Wiki/CLAUDE.md`
 
@@ -23,6 +24,7 @@
 | Session activity log | `AuraWrite-Wiki/log.md` | Append-only entry per session |
 | Release memo | `documentation/RESUME_MEMO_v0.X.Y.md` | One file per release |
 | Release plan (optional) | `documentation/RESUME_MEMO_v0.X.Y_PLAN.md` | Planning notes for a release |
+| **Release procedure** | **`documentation/RELEASE_PROCESS.md`** | **Step-by-step release procedure (TL;DR + lessons learned). Read this BEFORE any release.** |
 | TODO audit snapshot | `documentation/TODO_AUDIT_YYYY-MM-DD.md` | Periodic audit results |
 | Project status overview | `documentation/STATO.md` | Update when state changes |
 | Improvement plans | `documentation/piano-miglioramento-*.md` | Strategic planning |
