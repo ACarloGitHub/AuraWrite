@@ -78,3 +78,19 @@ Before ending any session, the agent MUST:
 | Rust config | `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` |
 | CI/CD | `.github/workflows/` |
 | Wiki schema | `AuraWrite-Wiki/CLAUDE.md` |
+
+## GitHub Token Location
+
+Il token GitHub (PAT) per l'utente ACarloGitHub è salvato in:
+\C:\Users\carlo\.config\aurawrite\github_token.txt\
+
+Usarlo per:
+- Upload manuale di assets via API: \-H \"Authorization: token <TOKEN>\"\
+- Qualsiasi operazione che richiede autenticazione (workflow CI lo usa via GITHUB_TOKEN, ma per upload manuale serve il PAT)
+
+## Common Errors to Avoid
+
+- Dimenticare dove sta il token ? chiederlo ogni volta
+- Non committare lavori incompiuti ? sempre fare commit per ogni passo significativo
+- Bump version PRIMA del tag, mai dopo
+- Verificare SEMPRE git status prima di pushare
