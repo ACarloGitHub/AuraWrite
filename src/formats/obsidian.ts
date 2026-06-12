@@ -38,7 +38,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getProject, getSections, getDocument } from "../database/db";
 import type { Project, Section, Document } from "../types/database";
-import { toMarkdown } from "./markdown";
+import { toMarkdown, toMarkdownWithRewrites } from "./markdown";
 
 // ---------------------------------------------------------------------------
 // Tauri command wrappers (mirror src-tauri/src/vault_export.rs)
@@ -139,26 +139,39 @@ function documentToMarkdown(
   if (!bodyJson.trim()) {
     return frontmatter + "(empty document)\n";
   }
+  const safeDocTitle = sanitizeFilename(doc.title);
   let body = "";
   try {
     const json = JSON.parse(bodyJson);
-    body = toMarkdown(json);
+    body = toMarkdownWithRewrites(json, {
+      // Image: rewrite asset://... into relative _attachments/<doc-title>/<filename>
+      imagePathFor: (src: string) => {
+        if (
+          src.startsWith("asset://") ||
+          src.startsWith("http://asset.localhost")
+        ) {
+          const fileName = srcFilenameFromAssetUrl(src);
+          return `_attachments/${safeDocTitle}/${fileName}`;
+        }
+        return null; // keep as-is for data: or http(s) URLs
+      },
+      // Link: rewrite aurawrite-doc://<id> to [[Title]]
+      linkPathFor: (href: string) => {
+        const m = href.match(/^aurawrite-doc:\/\/([a-zA-Z0-9-]+)$/);
+        if (m) {
+          const id = m[1];
+          const target = Array.from(allDocsByTitle.values()).find(
+            (d) => d.id === id
+          );
+          return `[[${target ? target.title : id}]]`;
+        }
+        return null; // keep as-is for http(s), mailto, etc.
+      },
+    });
   } catch (e) {
     // Fallback: emit a warning block with the raw JSON
     body = `> ⚠ Could not parse ProseMirror content: ${(e as Error).message}\n\n\`\`\`json\n${bodyJson}\n\`\`\`\n`;
   }
-  // Wikilink pass: convert any markdown link of the form [label](aurawrite-doc://<id>)
-  // to [[Title]]. We currently emit internal links with the special scheme
-  // `aurawrite-doc://<id>`; replace those with [[<title>]].
-  body = body.replace(
-    /\[([^\]]*)\]\(aurawrite-doc:\/\/([a-zA-Z0-9-]+)\)/g,
-    (_match, _label, id: string) => {
-      const target = Array.from(allDocsByTitle.values()).find(
-        (d) => d.id === id
-      );
-      return `[[${target ? target.title : id}]]`;
-    }
-  );
   return frontmatter + body;
 }
 

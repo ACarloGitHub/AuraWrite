@@ -15,21 +15,60 @@ export function toMarkdown(doc: any): string {
   return result;
 }
 
-function nodeToMarkdown(node: any): string {
+/**
+ * Like toMarkdown, but with image and link transformations applied.
+ * Used by the Obsidian vault export to rewrite image srcs and internal links.
+ *
+ * @param doc ProseMirror document node
+ * @param opts.imagePathFor Function that maps an image src to a relative
+ *   path to use in the .md (e.g. "_attachments/<doc-title>/image.png").
+ *   If not provided, image srcs are used as-is.
+ * @param opts.linkPathFor Function that maps an internal link href to a
+ *   relative path or wikilink. If it returns a string starting with "[[",
+ *   it is inserted as-is (wikilink). Otherwise it is wrapped in a
+ *   markdown link [text](result).
+ */
+export function toMarkdownWithRewrites(
+  doc: any,
+  opts: {
+    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
+    linkPathFor?: (href: string) => string | null;
+  } = {}
+): string {
+  let result = "";
+  doc.forEach((node: any) => {
+    result += nodeToMarkdown(node, opts);
+  });
+  return result;
+}
+
+function nodeToMarkdown(
+  node: any,
+  opts: {
+    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
+    linkPathFor?: (href: string) => string | null;
+  } = {}
+): string {
   switch (node.type.name) {
     case "paragraph": {
-      const text = contentToArray(node.content).map(inlineToMarkdown).join("") || "";
+      const text = contentToArray(node.content)
+        .map((n: any) => inlineToMarkdown(n, opts))
+        .join("") || "";
       const pageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return pageBreak + text + "\n\n";
     }
     case "heading": {
       const level = node.attrs.level || 1;
-      const hText = contentToArray(node.content).map(inlineToMarkdown).join("") || "";
+      const hText = contentToArray(node.content)
+        .map((n: any) => inlineToMarkdown(n, opts))
+        .join("") || "";
       const hPageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return hPageBreak + "#".repeat(level) + " " + hText + "\n\n";
     }
     case "blockquote": {
-      const quote = contentToArray(node.content).map(nodeToMarkdown).join("") || "";
+      const quote = contentToArray(node.content)
+        .map((n: any) => nodeToMarkdown(n, opts))
+        .join("") || "";
       return "> " + quote.replace(/\n/g, "\n> ");
     }
     case "code_block": {
@@ -44,8 +83,9 @@ function nodeToMarkdown(node: any): string {
       return (
         contentToArray(node.content)
           .map((item: any) => {
-            const itemContent =
-              contentToArray(item.content).map(nodeToMarkdown).join("") || "";
+            const itemContent = contentToArray(item.content)
+              .map((n: any) => nodeToMarkdown(n, opts))
+              .join("") || "";
             return "- " + itemContent.replace(/\n\n/g, "\n");
           })
           .join("\n") + "\n\n"
@@ -54,23 +94,45 @@ function nodeToMarkdown(node: any): string {
       return (
         contentToArray(node.content)
           .map((item: any, index: number) => {
-            const itemContent =
-              contentToArray(item.content).map(nodeToMarkdown).join("") || "";
+            const itemContent = contentToArray(item.content)
+              .map((n: any) => nodeToMarkdown(n, opts))
+              .join("") || "";
             return index + 1 + ". " + itemContent.replace(/\n\n/g, "\n");
           })
           .join("\n") + "\n\n"
       );
     case "horizontal_rule":
       return "---\n\n";
+    case "image": {
+      const src: string = node.attrs?.src || "";
+      const alt: string = node.attrs?.alt || "";
+      const title: string = node.attrs?.title || "";
+      // Resolve path: if imagePathFor returns a non-null path, use it;
+      // otherwise use src as-is. The Obsidian export uses this to rewrite
+      // asset://localhost/... into relative _attachments/<doc-title>/...
+      const resolved =
+        opts.imagePathFor && src
+          ? opts.imagePathFor(src, alt, title)
+          : null;
+      const finalPath = resolved || src;
+      const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+      return `![${alt}](${finalPath}${titlePart})\n\n`;
+    }
     default:
       if (node.isBlock) {
-        return nodeToMarkdown({ ...node, type: { name: "paragraph" } });
+        return nodeToMarkdown({ ...node, type: { name: "paragraph" } }, opts);
       }
       return "";
   }
 }
 
-function inlineToMarkdown(node: any): string {
+function inlineToMarkdown(
+  node: any,
+  opts: {
+    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
+    linkPathFor?: (href: string) => string | null;
+  } = {}
+): string {
   if (node.type.name === "text") {
     let text = node.text || "";
     if (node.marks) {
@@ -97,9 +159,23 @@ function inlineToMarkdown(node: any): string {
           case "superscript":
             text = "<sup>" + text + "</sup>";
             break;
-          case "link":
-            text = "[" + text + "](" + (mark.attrs?.href || "") + ")";
+          case "link": {
+            const href: string = mark.attrs?.href || "";
+            if (opts.linkPathFor && href) {
+              const resolved = opts.linkPathFor(href);
+              if (resolved !== null && resolved !== undefined) {
+                // If resolved starts with "[[", emit as wikilink (no [text])
+                if (resolved.startsWith("[[")) {
+                  text = resolved;
+                  break;
+                }
+                text = "[" + text + "](" + resolved + ")";
+                break;
+              }
+            }
+            text = "[" + text + "](" + href + ")";
             break;
+          }
         }
       }
     }
