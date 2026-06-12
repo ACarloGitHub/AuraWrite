@@ -16,6 +16,7 @@ import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { showErrorToast } from "../error-boundary";
 import {
   initPagination,
   updateOnTextChange,
@@ -259,6 +260,9 @@ function setupTopLevelButtons(): void {
           break;
         case "export":
           handleExport();
+          break;
+        case "export-project":
+          handleExportProject();
           break;
         case "save-project":
           handleSaveProject();
@@ -545,6 +549,169 @@ async function handleExport(): Promise<void> {
   const ext = path.split(".").pop()?.toLowerCase();
   const content = await getContentByFormat(ext || "md");
   await saveFile(path, ext || "md", content);
+}
+
+// ============================================================================
+// EXPORT PROJECT (D1 — Obsidian vault export)
+// ============================================================================
+
+async function handleExportProject(): Promise<void> {
+  // Need a project loaded. We import currentProject lazily to avoid a
+  // circular import between toolbar.ts and project-panel.ts.
+  const { currentProject } = await import("./project-panel");
+  if (!currentProject) {
+    showErrorToast(
+      "No project selected. Open a project from the Projects panel first."
+    );
+    return;
+  }
+  const projectId: string = currentProject.id;
+
+  const modal = document.getElementById("export-project-modal");
+  const closeBtn = document.getElementById("export-project-close");
+  const cancelBtn = document.getElementById("export-project-cancel");
+  const browseBtn = document.getElementById("export-project-browse");
+  const startBtn = document.getElementById("export-project-start");
+  const vaultNameInput = document.getElementById(
+    "export-project-vault-name"
+  ) as HTMLInputElement | null;
+  const targetDirLabel = document.getElementById("export-project-target-dir");
+  const aiCheckbox = document.getElementById(
+    "export-project-include-ai-index"
+  ) as HTMLInputElement | null;
+  const statusLabel = document.getElementById("export-project-status");
+  const progressWrap = document.getElementById("export-project-progress-wrap");
+  const progressBar = document.getElementById("export-project-progress-bar");
+
+  if (
+    !modal ||
+    !closeBtn ||
+    !cancelBtn ||
+    !browseBtn ||
+    !startBtn ||
+    !vaultNameInput ||
+    !targetDirLabel ||
+    !aiCheckbox ||
+    !statusLabel ||
+    !progressWrap ||
+    !progressBar
+  ) {
+    console.error("[export-project] modal elements not found");
+    return;
+  }
+
+  // Pre-fill the vault name with the project name (best effort)
+  try {
+    const { getProject } = await import("../database/db");
+    const project = await getProject(projectId);
+    if (project && !vaultNameInput.value) {
+      vaultNameInput.value = project.name || "AuraWrite Project";
+    }
+  } catch {
+    // ignore
+  }
+
+  // Determine if AI is configured (best effort: check localStorage prefs key)
+  let aiConfigured = false;
+  try {
+    const prefsRaw = localStorage.getItem("aurawrite-preferences");
+    if (prefsRaw) {
+      const prefs = JSON.parse(prefsRaw);
+      if (prefs.aiProvider && prefs.aiProvider !== "none") {
+        aiConfigured = true;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  aiCheckbox.disabled = !aiConfigured;
+  if (!aiConfigured) {
+    aiCheckbox.checked = false;
+  }
+
+  // Reset state
+  targetDirLabel.textContent = "(not selected)";
+  statusLabel.textContent = "";
+  statusLabel.style.color = "";
+  progressWrap.style.display = "none";
+  progressBar.style.width = "0%";
+  let selectedTargetDir: string | null = null;
+
+  const closeModal = () => {
+    modal.classList.add("hidden");
+  };
+
+  const setStatus = (text: string, color?: string) => {
+    statusLabel.textContent = text;
+    if (color) statusLabel.style.color = color;
+  };
+
+  closeBtn.onclick = closeModal;
+  cancelBtn.onclick = closeModal;
+
+  browseBtn.onclick = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const picked = await open({ directory: true, multiple: false });
+      if (typeof picked === "string" && picked.length > 0) {
+        selectedTargetDir = picked;
+        targetDirLabel.textContent = picked;
+      }
+    } catch (e) {
+      setStatus(`Could not open folder picker: ${(e as Error).message}`, "red");
+    }
+  };
+
+  startBtn.onclick = async () => {
+    const vaultName = vaultNameInput.value.trim();
+    if (!vaultName) {
+      setStatus("Please enter a vault name.", "red");
+      return;
+    }
+    if (!selectedTargetDir) {
+      setStatus("Please choose a target folder.", "red");
+      return;
+    }
+    if (aiCheckbox.checked && !aiConfigured) {
+      setStatus("AI is not configured. Uncheck the AI index option.", "red");
+      return;
+    }
+
+    (startBtn as HTMLButtonElement).disabled = true;
+    (cancelBtn as HTMLButtonElement).disabled = true;
+    progressWrap.style.display = "block";
+    progressBar.style.width = "0%";
+    setStatus("Starting export...");
+    try {
+      const { exportProjectToVault } = await import("../formats/obsidian");
+      const result = await exportProjectToVault({
+        projectId,
+        parentDir: selectedTargetDir,
+        vaultName,
+        failIfExists: true,
+        onProgress: (fraction, message) => {
+          progressBar.style.width = `${Math.round(fraction * 100)}%`;
+          setStatus(message);
+        },
+      });
+      setStatus(
+        `Vault exported to ${result.vaultPath} (${result.filesWritten} files, ${result.imagesCopied} images).`,
+        "green"
+      );
+      // Keep modal open so user can see the path; close after 3s
+      setTimeout(() => {
+        closeModal();
+        (startBtn as HTMLButtonElement).disabled = false;
+        (cancelBtn as HTMLButtonElement).disabled = false;
+      }, 3000);
+    } catch (e) {
+      setStatus(`Export failed: ${(e as Error).message}`, "red");
+      (startBtn as HTMLButtonElement).disabled = false;
+      (cancelBtn as HTMLButtonElement).disabled = false;
+    }
+  };
+
+  modal.classList.remove("hidden");
 }
 
 async function getFilePath(options: {

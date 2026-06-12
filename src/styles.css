@@ -2103,6 +2103,20 @@ kbd {
   left: -3px;
 }
 
+/* Export Project modal */
+.modal-content.export-project {
+  max-width: 560px;
+  width: 90%;
+}
+
+.export-project .modal-body code {
+  background: var(--color-background);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
 .project-panel.hidden {
   display: none;
 }

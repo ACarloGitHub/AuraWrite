@@ -31,6 +31,7 @@
             <div class="dropdown-divider"></div>
             <div class="dropdown-section">Project</div>
             <button class="dropdown-item" data-action="save-project">💿 Save Project</button>
+            <button class="dropdown-item" data-action="export-project">📁 Export Project...</button>
             <button class="dropdown-item" data-action="index">🔍 Index Document</button>
             <button class="dropdown-item" data-action="index-create">🔍✨ Index &amp; Create Entities</button>
           </div>
@@ -757,6 +758,61 @@
             <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>S</kbd><span>Save project</span></div>
             <div class="shortcut-row"><kbd>?</kbd><span>Show this help</span></div>
           </div>
+        </div>
+      </div>
+    </div>
+    <div id="export-project-modal" class="modal hidden">
+      <div class="modal-overlay"></div>
+      <div class="modal-content export-project">
+        <div class="modal-header">
+          <h2>Export Project</h2>
+          <button id="export-project-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: var(--spacing-md);">
+          <p class="preference-hint" style="margin: 0 0 16px 0;">
+            Export the current project as an Obsidian vault. Each section becomes a
+            folder, each document becomes a Markdown file, and images are copied
+            into <code>_attachments/</code> subfolders.
+          </p>
+
+          <div class="preference-group">
+            <label>Vault name</label>
+            <span class="preference-hint">Name of the folder that will contain the vault</span>
+            <input type="text" id="export-project-vault-name" placeholder="My Project Vault" />
+          </div>
+
+          <div class="preference-group">
+            <label>Save in folder</label>
+            <span class="preference-hint">Parent directory where the vault folder will be created</span>
+            <div class="folder-row">
+              <code id="export-project-target-dir" style="flex:1; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 3px; min-height: 24px;">(not selected)</code>
+              <button id="export-project-browse" type="button" class="btn-small">Browse...</button>
+            </div>
+          </div>
+
+          <div class="preference-group">
+            <label class="preference-checkbox-label">
+              <input type="checkbox" id="export-project-include-ai-index" />
+              Include AI topic index (requires AI provider configured)
+            </label>
+            <span class="preference-hint">
+              If enabled and an AI provider is configured, the AI will read the
+              project's documents and generate a topic index based on the
+              template's entity types.
+            </span>
+          </div>
+
+          <div id="export-project-status" class="preference-hint" style="margin-top: 12px; min-height: 20px;"></div>
+
+          <div id="export-project-progress-wrap" style="display:none; margin-top: 12px;">
+            <div style="height: 8px; background: var(--color-border); border-radius: 4px; overflow: hidden;">
+              <div id="export-project-progress-bar" style="height: 100%; width: 0%; background: var(--color-primary); transition: width 0.2s;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: flex-end; gap: 8px;">
+          <button id="export-project-cancel" class="pref-btn">Cancel</button>
+          <button id="export-project-start" class="pref-btn pref-btn-primary">Export</button>
         </div>
       </div>
     </div>
