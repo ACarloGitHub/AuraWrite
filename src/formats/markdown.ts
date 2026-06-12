@@ -104,6 +104,7 @@ function nodeToMarkdown(
   } = {}
 ): string {
   const t = getNodeType(node);
+  if (t === "image") console.log("[toMarkdown] image node type matched, t:", t, "node.type:", typeof node.type, JSON.stringify(node.type));
   switch (t) {
     case "paragraph": {
       const text = contentToArray(node.content)
@@ -184,6 +185,7 @@ function nodeToMarkdown(
       const src: string = node.attrs?.src || "";
       const alt: string = node.attrs?.alt || "";
       const title: string = node.attrs?.title || "";
+      console.log("[toMarkdown] IMAGE case hit, src:", src, "alt:", alt);
       // Resolve path: if imagePathFor returns a non-null path, use it;
       // otherwise use src as-is. The Obsidian export uses this to rewrite
       // asset://localhost/... into relative _attachments/<doc-title>/...
@@ -195,8 +197,8 @@ function nodeToMarkdown(
       const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
       // Obsidian wikilink embed syntax (no description) is more reliable
       // than the standard ![alt](path) markdown form, especially for
-      // images in subfolders. Detect paths that start with the literal
-      // "attachments/" and emit the wikilink form.
+      // images that live in subfolders of the vault. Detect paths that
+      // start with the literal "attachments/" and emit the wikilink form.
       if (opts.useObsidianWikilinks && finalPath.startsWith("attachments/")) {
         return `![[${finalPath}]]\n\n`;
       }
@@ -218,6 +220,9 @@ function inlineToMarkdown(
     useObsidianWikilinks?: boolean;
   } = {}
 ): string {
+  if (getNodeType(node) === "image") {
+    console.log("[inlineToMarkdown] image case hit, node.attrs:", JSON.stringify(node.attrs));
+  }
   if (getNodeType(node) === "text") {
     let text = node.text || "";
     if (node.marks) {
