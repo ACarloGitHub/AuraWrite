@@ -11,10 +11,12 @@ mod embeddings;
 mod updates;
 mod fonts;
 mod resources;
+mod vault_export;
 use database::*;
 use updates::*;
 use fonts::*;
 use resources::*;
+use vault_export::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -945,6 +947,11 @@ pub fn run() {
             ollama_pull_model,
             ollama_pull_nomic,
             embeddings_check_provider,
+            // Vault export (D1 — Obsidian export)
+            vault_create_dir,
+            vault_check_path,
+            vault_write_file,
+            vault_copy_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
