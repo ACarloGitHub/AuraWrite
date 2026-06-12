@@ -520,13 +520,6 @@ function migrateImageNodesInJson(node: any): any {
     return node.map((child) => migrateImageNodesInJson(child));
   }
   if (node.type === "image") {
-    const ox = (node.attrs && node.attrs.offsetX) || 0;
-    const oy = (node.attrs && node.attrs.offsetY) || 0;
-    if (ox !== 0 || oy !== 0) {
-      console.warn(`[migration] dropping image offset (${ox}, ${oy}) -- drag-to-move removed in v0.6.2`);
-      const cleaned = { ...node, attrs: { ...node.attrs, offsetX: 0, offsetY: 0 } };
-      return { type: "paragraph", content: [cleaned] };
-    }
     return { type: "paragraph", content: [node] };
   }
   if (Array.isArray(node.content)) {

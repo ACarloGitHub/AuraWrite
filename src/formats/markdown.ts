@@ -475,6 +475,8 @@ function parseInlineMarkdown(text: string): any[] {
           width: null,
           height: null,
           align: "center",
+          offsetX: 0,
+          offsetY: 0,
         },
       });
       remaining = remaining.substring(imageMatch[0].length);

@@ -160,7 +160,7 @@ export async function getSelectedImage(view: EditorView): Promise<SelectedImageI
 
 export async function setImageAlignment(
   view: EditorView,
-  align: "left" | "center" | "right"
+  align: "left" | "center" | "right" | "inline"
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
