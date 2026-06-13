@@ -1138,15 +1138,37 @@ function wrapInList(listType?: NodeType): void {
 }
 
 function setupAlignmentControls(): void {
-  const btnLeft = document.getElementById("btn-align-left");
-  const btnCenter = document.getElementById("btn-align-center");
-  const btnRight = document.getElementById("btn-align-right");
-  const btnJustify = document.getElementById("btn-align-justify");
+  const btn = document.getElementById("btn-align-menu") as HTMLButtonElement | null;
+  const menu = document.getElementById("align-menu") as HTMLElement | null;
+  if (!btn || !menu) return;
 
-  btnLeft?.addEventListener("click", () => setAlignment("left"));
-  btnCenter?.addEventListener("click", () => setAlignment("center"));
-  btnRight?.addEventListener("click", () => setAlignment("right"));
-  btnJustify?.addEventListener("click", () => setAlignment("justify"));
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains("hidden")) {
+      menu.classList.remove("hidden");
+      positionDropdown(btn, menu);
+    } else {
+      menu.classList.add("hidden");
+    }
+  });
+
+  document.addEventListener("click", (e: MouseEvent) => {
+    if (!btn.contains(e.target as Node) && !menu.contains(e.target as Node)) {
+      menu.classList.add("hidden");
+    }
+  });
+
+  menu.querySelectorAll<HTMLButtonElement>("[data-align]").forEach((item) => {
+    item.addEventListener("click", () => {
+      const align = item.getAttribute("data-align") as
+        | "left"
+        | "center"
+        | "right"
+        | "justify";
+      setAlignment(align);
+      menu.classList.add("hidden");
+    });
+  });
 }
 
 function setAlignment(align: "left" | "center" | "right" | "justify"): void {

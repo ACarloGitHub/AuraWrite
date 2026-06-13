@@ -138,19 +138,31 @@
         </div>
 
         <!-- ALIGNMENT GROUP -->
-        <div class="toolbar-group">
-          <button id="btn-align-left" class="toolbar__btn" title="Align Left">
+        <div class="toolbar-group toolbar-dropdown" id="align-dropdown">
+          <button id="btn-align-menu" class="toolbar__btn" title="Text Alignment">
             <span class="toolbar__btn-icon">≡</span>
+            <span class="toolbar__btn-text">Align</span>
+            <span class="toolbar__btn-caret">▾</span>
           </button>
-          <button id="btn-align-center" class="toolbar__btn" title="Align Center">
-            <span class="toolbar__btn-icon"><span style="display:inline-block;text-align:center">≡</span></span>
-          </button>
-          <button id="btn-align-right" class="toolbar__btn" title="Align Right">
-            <span class="toolbar__btn-icon" style="display:inline-block;text-align:right">≡</span>
-          </button>
-          <button id="btn-align-justify" class="toolbar__btn" title="Justify">
-            <span class="toolbar__btn-icon" style="display:inline-block;text-align:justify">≡</span>
-          </button>
+          <div id="align-menu" class="dropdown-menu hidden">
+            <button class="dropdown-menu__item" data-align="left">
+              <span class="dropdown-menu__icon">≡</span>
+              <span class="dropdown-menu__label">Left</span>
+            </button>
+            <button class="dropdown-menu__item" data-align="center">
+              <span class="dropdown-menu__icon" style="display:inline-block;text-align:center;width:100%">≡</span>
+              <span class="dropdown-menu__label">Center</span>
+            </button>
+            <button class="dropdown-menu__item" data-align="right">
+              <span class="dropdown-menu__icon" style="display:inline-block;text-align:right;width:100%">≡</span>
+              <span class="dropdown-menu__label">Right</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-menu__item" data-align="justify">
+              <span class="dropdown-menu__icon" style="display:inline-block;text-align:justify;width:100%">≡</span>
+              <span class="dropdown-menu__label">Justify</span>
+            </button>
+          </div>
         </div>
 
         <!-- LINE HEIGHT GROUP -->
