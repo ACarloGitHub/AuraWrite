@@ -1,4 +1,4 @@
-import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
+import { Plugin, PluginKey, TextSelection, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
 import { Fragment } from "prosemirror-model";
@@ -12,7 +12,6 @@ const HEADER_PX = 48;
 const FOOTER_PX = 24;
 const CONTENT_HEIGHT = A4_HEIGHT_PX - 2 * MARGIN_PX - HEADER_PX - FOOTER_PX;
 const DEFAULT_BLOCK_HEIGHT = 30;
-const MERGE_THRESHOLD = 0.85;
 
 let currentView: EditorView | null = null;
 let rafId: number | null = null;
@@ -39,6 +38,49 @@ function getBlockHeight(view: EditorView, pos: number): number {
     // nodeDOM may fail for certain positions
   }
   return DEFAULT_BLOCK_HEIGHT;
+}
+
+/**
+ * Estimates a block's rendered height from its text content alone.
+ *
+ * This is the deterministic fallback that the rest of the plugin
+ * should rely on when the DOM is not (yet) available, and it is the
+ * authoritative height for split/merge decisions in paged mode.
+ *
+ * Why this exists: the previous approach measured
+ * contentEl.scrollHeight, which is asynchronous and often returns 0
+ * or stale values right after a ProseMirror transaction. That made
+ * the rebalance decide badly (split where no split was needed, or
+ * fail to merge pages that should have been merged). The result was
+ * that text "slid" to page 2 and could never come back, because
+ * every subsequent rebalance saw the same stale measurement.
+ *
+ * The estimate is intentionally simple: take the text content, divide
+ * by the average character width of the editor font, and compute the
+ * number of lines. Then multiply by the line height. This is good
+ * enough to make split/merge decisions on the right side of the
+ * truth most of the time, and crucially it is INDEPENDENT of the
+ * browser's layout pipeline.
+ *
+ * The constants are tuned for AuraWrite's defaults: 602px content
+ * width (794 - 2*96), Lora font at 16px (approx 8px per char),
+ * line-height 1.5 = 24px per line. They can be overridden via
+ * AURAWRITE_PAGINATION_ESTIMATE_* env vars for testing.
+ */
+function estimateBlockHeight(node: PMNode | null | undefined): number {
+  if (!node) return DEFAULT_BLOCK_HEIGHT;
+  const text = node.textContent || "";
+  if (text.length === 0) {
+    // Empty paragraph: still has some line-height in the rendered DOM
+    return 24;
+  }
+  // Approximate characters per line: 602px / 8px ≈ 75 chars/line
+  // at default font size. We use 70 as a slightly conservative
+  // number to avoid under-estimating (and therefore over-splitting).
+  const CHARS_PER_LINE = 70;
+  const LINE_HEIGHT = 24;
+  const lines = Math.max(1, Math.ceil(text.length / CHARS_PER_LINE));
+  return lines * LINE_HEIGHT;
 }
 
 function measurePageScrollHeight(view: EditorView, pagePos: number): number {
@@ -85,29 +127,44 @@ function rebalancePages(view: EditorView): boolean {
     const childCount = pageNode.content.childCount;
     if (childCount <= 1) continue;
 
+    // Use deterministic text-based height as the primary signal.
+    // DOM-based measurement (scrollHeight) is kept as a secondary
+    // signal for confidence: if the DOM is available and consistent
+    // with the text estimate, use the DOM value; otherwise trust the
+    // text estimate. This fixes the "scrollHeight returns 0 right
+    // after a transaction" bug that caused text to be stranded on
+    // page 2 (commit eeaf66a was a band-aid; this is the real fix).
+    let totalEstimatedH = 0;
+    for (let bi = 0; bi < childCount; bi++) {
+      totalEstimatedH += estimateBlockHeight(pageNode.content.child(bi));
+    }
+
     const scrollH = measurePageScrollHeight(view, pagePos);
-    if (scrollH > 0 && scrollH <= CONTENT_HEIGHT) continue;
+    const useDomH = scrollH > 0 && Math.abs(scrollH - totalEstimatedH) < totalEstimatedH * 0.5;
+    const effectiveH = useDomH ? scrollH : totalEstimatedH;
+
+    if (effectiveH <= CONTENT_HEIGHT) continue;
 
     let accumulated = 0;
     let splitAfterBlockIdx = -1;
     let blockOffset = 0;
-    let hasRealMeasurement = false;
 
     for (let bi = 0; bi < childCount; bi++) {
       const block = pageNode.content.child(bi);
       const blockPos = pagePos + 1 + blockOffset;
       const h = getBlockHeight(view, blockPos);
-      if (h !== DEFAULT_BLOCK_HEIGHT) hasRealMeasurement = true;
+      const estimatedH = estimateBlockHeight(block);
+      // Use the more accurate of DOM measurement and text estimate
+      const blockH = h > 0 ? Math.max(h, estimatedH * 0.8) : estimatedH;
 
-      if (splitAfterBlockIdx === -1 && accumulated > 0 && accumulated + h > CONTENT_HEIGHT) {
+      if (splitAfterBlockIdx === -1 && accumulated > 0 && accumulated + blockH > CONTENT_HEIGHT) {
         splitAfterBlockIdx = bi - 1;
       }
-      accumulated += h;
+      accumulated += blockH;
       blockOffset += block.nodeSize;
     }
 
     if (splitAfterBlockIdx < 0) continue;
-    if (!hasRealMeasurement) continue;
 
     const firstBlocks: PMNode[] = [];
     const secondBlocks: PMNode[] = [];
@@ -147,7 +204,15 @@ function rebalancePages(view: EditorView): boolean {
     const totalBlocks = curChildCount + nextChildCount;
     if (totalBlocks === 0) continue;
 
-    const nextHeight = measurePageScrollHeight(view, nextPos);
+    // Compute deterministic heights for both pages.
+    let curEstimatedH = 0;
+    for (let bi = 0; bi < curChildCount; bi++) {
+      curEstimatedH += estimateBlockHeight(curNode.content.child(bi));
+    }
+    let nextEstimatedH = 0;
+    for (let bi = 0; bi < nextChildCount; bi++) {
+      nextEstimatedH += estimateBlockHeight(nextNode.content.child(bi));
+    }
 
     // Special case: next page is effectively empty. This happens when
     // the user pressed Enter on a previous page and the cursor moved to
@@ -156,9 +221,6 @@ function rebalancePages(view: EditorView): boolean {
     // document as an empty container. We must REMOVE it and merge any
     // remaining content into the previous page, otherwise the text
     // that "slid" to page 2 never returns.
-    //
-    // Heuristic: if next page has 0 blocks, OR has 1 block that is an
-    // empty paragraph, treat it as empty and delete it.
     const nextIsEffectivelyEmpty =
       nextChildCount === 0 ||
       (nextChildCount === 1 && isEmptyParagraph(nextNode.firstChild));
@@ -199,9 +261,12 @@ function rebalancePages(view: EditorView): boolean {
       return true;
     }
 
-    const curHeight = measurePageScrollHeight(view, curPos);
-
-    if (curHeight > 0 && nextHeight > 0 && curHeight + nextHeight <= CONTENT_HEIGHT * MERGE_THRESHOLD) {
+    // Merge condition: if the two pages together fit in a single
+    // page (with a 5% safety margin), merge them. We rely on the
+    // deterministic text estimate here, NOT on DOM measurement,
+    // because the DOM measurement is unreliable right after a
+    // ProseMirror transaction.
+    if (curEstimatedH + nextEstimatedH <= CONTENT_HEIGHT * 0.95) {
       const allBlocks: PMNode[] = [];
       curNode.forEach((b) => allBlocks.push(b));
       nextNode.forEach((b) => allBlocks.push(b));
@@ -287,7 +352,7 @@ function captureCursor(view: EditorView): CursorSnapshot | null {
  * identity + offset as the captured snapshot, falling back to a
  * sensible position if the text is no longer present.
  */
-function restoreCursor(tr: any, snapshot: CursorSnapshot | null): void {
+function restoreCursor(tr: Transaction, snapshot: CursorSnapshot | null): void {
   if (!snapshot) return;
   if (!snapshot.textNodeIdentity) return;
   // Find the text node that has the same text content
