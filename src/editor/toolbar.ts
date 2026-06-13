@@ -1380,6 +1380,15 @@ function updatePagedModeButtonText(): void {
   const isPaged = getPagedMode();
   btnText.textContent = isPaged ? "Scroll" : "Pages";
   btn.classList.toggle("toolbar__btn--active", isPaged);
+  // Show/hide the persistent info banner above the editor.
+  const banner = document.getElementById("paged-info-banner");
+  if (banner) {
+    if (isPaged) {
+      banner.removeAttribute("hidden");
+    } else {
+      banner.setAttribute("hidden", "");
+    }
+  }
   // Show/hide the width control depending on mode
   syncWidthGroupVisibility();
 }

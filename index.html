@@ -70,7 +70,7 @@
               <option value="monospace">Monospace</option>
             </optgroup>
           </select>
-          <span id="font-family-preview" class="font-preview" aria-hidden="true">The quick brown fox</span>
+          <span id="font-family-preview" class="font-preview" aria-hidden="true">Text</span>
           <select id="sel-font-size" class="toolbar__select" title="Font Size">
             <option value="">Size</option>
             <option value="10px">10</option>
@@ -248,6 +248,10 @@
           <div id="suggestions-debug-log" class="suggestions-debug-log" style="display: none;"></div>
         </aside>
         <div id="editor"></div>
+        <div id="paged-info-banner" class="paged-info-banner" hidden>
+          <span class="paged-info-banner__icon" aria-hidden="true">ⓘ</span>
+          <span class="paged-info-banner__text">Paged view is visual only. Tables and images are not reflowed across pages.</span>
+        </div>
         <div id="paginated-container" style="display: none"></div>
         <aside id="ai-panel" class="ai-panel hidden">
           <div class="panel-resize-handle panel-resize-handle--ai" data-resize="ai" title="Drag to resize, double-click to reset"></div>
