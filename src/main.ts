@@ -372,6 +372,18 @@ function openPreferencesModal(): void {
     prefs.aiApiKey;
   (document.getElementById("pref-ai-base-url") as HTMLInputElement).value =
     prefs.aiBaseUrl;
+  // Mark the base URL as "auto-filled" if it matches a known default.
+  // This is critical: when the user later changes the provider, the
+  // updateApiKeyGroupVisibility() function only re-populates the base
+  // URL when dataset.autoFilled === "true" (or the field is empty).
+  // Without this marker, a base URL saved from a previous session would
+  // prevent the field from updating when the user switches provider,
+  // making it look like the feature is broken.
+  const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
+  if (baseUrlInput) {
+    const knownDefaults = Object.values(PROVIDER_BASE_URLS) as string[];
+    baseUrlInput.dataset.autoFilled = knownDefaults.includes(prefs.aiBaseUrl) ? "true" : "false";
+  }
   (
     document.getElementById("pref-ai-interface-language") as HTMLSelectElement
   ).value = prefs.aiInterfaceLanguage;
