@@ -226,19 +226,27 @@ export function createPaginationPlugin(): Plugin {
       newState.doc.forEach((node) => {
         if (node.type.name !== "page") hasBareBlocks = true;
       });
-      if (!hasBareBlocks) return null;
+      if (hasBareBlocks) {
+        const pageType = newState.schema.nodes.page;
+        if (!pageType) return null;
+        const blocks: PMNode[] = [];
+        newState.doc.forEach((node) => blocks.push(node));
+        const page = pageType.create(null, Fragment.from(blocks));
+        const tr = newState.tr;
+        tr.replaceWith(0, newState.doc.content.size, page);
+        tr.setMeta(paginationPluginKey, { rebalance: true });
+        tr.setMeta("addToHistory", false);
+        return tr;
+      }
 
-      const pageType = newState.schema.nodes.page;
-      if (!pageType) return null;
-
-      const blocks: PMNode[] = [];
-      newState.doc.forEach((node) => blocks.push(node));
-      const page = pageType.create(null, Fragment.from(blocks));
-      const tr = newState.tr;
-      tr.replaceWith(0, newState.doc.content.size, page);
-      tr.setMeta(paginationPluginKey, { rebalance: true });
-      tr.setMeta("addToHistory", false);
-      return tr;
+      // Always rebalance when the document changes. The user pressing Enter,
+      // Backspace, or any other edit can change page heights and require
+      // splits/merges. The view.update hook also calls scheduleRebalance,
+      // but it can race with user transactions; calling it here too
+      // guarantees a rebalance right after the user's edit is applied.
+      // The rebalance itself is idempotent and skip-safe.
+      scheduleRebalance();
+      return null;
     },
 
     view(view: EditorView) {
