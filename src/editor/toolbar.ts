@@ -1550,9 +1550,6 @@ function positionDropdown(trigger: HTMLElement, menu: HTMLElement | null): void 
 // Groups that can overflow, in priority order (first to hide = lowest priority).
 // width-group is first: it's least critical and already hides in paged mode.
 // Groups that can overflow, in priority order (first to hide = lowest priority).
-// `page-group` is first: the Break/Auto Breaks/Pages/Print buttons are
-// the most recently added and the user can always reach them through
-// the overflow menu `⋯` without losing core functionality.
 // `width-group` is last: it controls the editor margins, and the
 // user expects to be able to adjust the margins at all times.
 const OVERFLOW_ORDER: string[] = [
