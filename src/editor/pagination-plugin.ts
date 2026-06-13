@@ -127,11 +127,60 @@ function rebalancePages(view: EditorView): boolean {
     const nextNode = pages[pi + 1].node;
     const nextPos = curPos + curNode.nodeSize;
 
-    const totalBlocks = curNode.content.childCount + nextNode.content.childCount;
+    const curChildCount = curNode.content.childCount;
+    const nextChildCount = nextNode.content.childCount;
+    const totalBlocks = curChildCount + nextChildCount;
     if (totalBlocks === 0) continue;
 
-    const curHeight = measurePageScrollHeight(view, curPos);
     const nextHeight = measurePageScrollHeight(view, nextPos);
+
+    // Special case: next page is effectively empty. This happens when
+    // the user pressed Enter on a previous page and the cursor moved to
+    // page 2, but the page 2 is just a single empty paragraph (or
+    // nothing). After deleting the Enter, the page 2 stays in the
+    // document as an empty container. We must REMOVE it and merge any
+    // remaining content into the previous page, otherwise the text
+    // that "slid" to page 2 never returns.
+    //
+    // Heuristic: if next page has 0 blocks, OR has 1 block that is an
+    // empty paragraph, treat it as empty and delete it.
+    const nextIsEffectivelyEmpty =
+      nextChildCount === 0 ||
+      (nextChildCount === 1 && isEmptyParagraph(nextNode.firstChild));
+    if (nextIsEffectivelyEmpty) {
+      const remainingBlocks: PMNode[] = [];
+      curNode.forEach((b) => remainingBlocks.push(b));
+      if (remainingBlocks.length === 0 && paragraphType) {
+        remainingBlocks.push(paragraphType.create());
+      }
+      const merged = pageType.create(null, Fragment.from(remainingBlocks));
+      const tr = state.tr;
+      tr.replaceWith(curPos, nextPos + nextNode.nodeSize, merged);
+      tr.setMeta(paginationPluginKey, { rebalance: true });
+      tr.setMeta("addToHistory", false);
+      view.dispatch(tr);
+      return true;
+    }
+
+    // Special case: current page is empty. Move its content (or a
+    // placeholder paragraph) to the next page and remove the current.
+    if (curChildCount === 0 ||
+        (curChildCount === 1 && isEmptyParagraph(curNode.firstChild))) {
+      const remainingBlocks: PMNode[] = [];
+      nextNode.forEach((b) => remainingBlocks.push(b));
+      if (remainingBlocks.length === 0 && paragraphType) {
+        remainingBlocks.push(paragraphType.create());
+      }
+      const merged = pageType.create(null, Fragment.from(remainingBlocks));
+      const tr = state.tr;
+      tr.replaceWith(curPos, nextPos + nextNode.nodeSize, merged);
+      tr.setMeta(paginationPluginKey, { rebalance: true });
+      tr.setMeta("addToHistory", false);
+      view.dispatch(tr);
+      return true;
+    }
+
+    const curHeight = measurePageScrollHeight(view, curPos);
 
     if (curHeight > 0 && nextHeight > 0 && curHeight + nextHeight <= CONTENT_HEIGHT * MERGE_THRESHOLD) {
       const allBlocks: PMNode[] = [];
@@ -161,6 +210,19 @@ function rebalancePages(view: EditorView): boolean {
   }
 
   return false;
+}
+
+/**
+ * Returns true if the given node is a paragraph that contains no text
+ * (i.e. an empty placeholder paragraph, often created automatically
+ * by ProseMirror or by the pagination plugin itself).
+ */
+function isEmptyParagraph(node: PMNode | null | undefined): boolean {
+  if (!node) return true;
+  if (node.type.name !== "paragraph") return false;
+  if (node.content.childCount === 0) return true;
+  if (node.textContent.length > 0) return false;
+  return true;
 }
 
 function scheduleRebalance(): void {
