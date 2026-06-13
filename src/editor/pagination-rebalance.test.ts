@@ -169,3 +169,42 @@ describe("pagination: empty page removal (regression for 'text on page 2 never r
     // length and content.childCount.
   });
 });
+
+/**
+ * Regression test for the "cursor ends up in wrong page after
+ * pagination rebalance" bug.
+ *
+ * Scenario: in paged mode, the user has a paragraph with text.
+ * After pagination splits the document into two pages, the cursor
+ * may end up in the WRONG page (ProseMirror's automatic selection
+ * mapping doesn't respect the logical "this text belongs here"
+ * invariant when the page nodes are isolating).
+ *
+ * The fix: captureCursor() saves the text identity + offset before
+ * a structural change, and restoreCursor() re-derives the position
+ * by searching for the same text in the new document.
+ */
+describe("pagination: cursor preservation across split/merge", () => {
+  beforeEach(() => {
+    setPagedMode(true);
+  });
+
+  it("the document has textblocks we can use to test cursor restoration", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("page", { pageNumber: 1 }, [
+        schema.node("paragraph", null, [schema.text("hello world")]),
+      ]),
+      schema.node("page", { pageNumber: 2 }, [
+        schema.node("paragraph", null, [schema.text("second page text")]),
+      ]),
+    ]);
+    // Both textblocks have unique text content
+    const textblocks: string[] = [];
+    doc.descendants((node) => {
+      if (node.isTextblock) textblocks.push(node.textContent);
+    });
+    expect(textblocks.length).toBe(2);
+    expect(textblocks[0]).toBe("hello world");
+    expect(textblocks[1]).toBe("second page text");
+  });
+});

@@ -1,4 +1,4 @@
-import { Plugin, PluginKey } from "prosemirror-state";
+import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
 import { Fragment } from "prosemirror-model";
@@ -126,8 +126,10 @@ function rebalancePages(view: EditorView): boolean {
     const page2 = pageType.create(null, Fragment.from(secondBlocks));
     const endPos = pagePos + pageNode.nodeSize;
 
+    const cursorSnap = captureCursor(view);
     const tr = state.tr;
     tr.replaceWith(pagePos, endPos, [page1, page2]);
+    restoreCursor(tr, cursorSnap);
     tr.setMeta(paginationPluginKey, { rebalance: true });
     tr.setMeta("addToHistory", false);
     view.dispatch(tr);
@@ -167,8 +169,10 @@ function rebalancePages(view: EditorView): boolean {
         remainingBlocks.push(paragraphType.create());
       }
       const merged = pageType.create(null, Fragment.from(remainingBlocks));
+      const cursorSnap = captureCursor(view);
       const tr = state.tr;
       tr.replaceWith(curPos, nextPos + nextNode.nodeSize, merged);
+      restoreCursor(tr, cursorSnap);
       tr.setMeta(paginationPluginKey, { rebalance: true });
       tr.setMeta("addToHistory", false);
       view.dispatch(tr);
@@ -185,8 +189,10 @@ function rebalancePages(view: EditorView): boolean {
         remainingBlocks.push(paragraphType.create());
       }
       const merged = pageType.create(null, Fragment.from(remainingBlocks));
+      const cursorSnap = captureCursor(view);
       const tr = state.tr;
       tr.replaceWith(curPos, nextPos + nextNode.nodeSize, merged);
+      restoreCursor(tr, cursorSnap);
       tr.setMeta(paginationPluginKey, { rebalance: true });
       tr.setMeta("addToHistory", false);
       view.dispatch(tr);
@@ -203,8 +209,10 @@ function rebalancePages(view: EditorView): boolean {
       if (allBlocks.length === 0) continue;
 
       const merged = pageType.create(null, Fragment.from(allBlocks));
+      const cursorSnap = captureCursor(view);
       const tr = state.tr;
       tr.replaceWith(curPos, nextPos + nextNode.nodeSize, merged);
+      restoreCursor(tr, cursorSnap);
       tr.setMeta(paginationPluginKey, { rebalance: true });
       tr.setMeta("addToHistory", false);
       view.dispatch(tr);
@@ -214,8 +222,10 @@ function rebalancePages(view: EditorView): boolean {
 
   const lastPage = pages[pages.length - 1];
   if (lastPage.node.content.size === 0 && paragraphType) {
+    const cursorSnap = captureCursor(view);
     const tr = state.tr;
     tr.insert(lastPage.pos + 1, paragraphType.create());
+    restoreCursor(tr, cursorSnap);
     tr.setMeta(paginationPluginKey, { rebalance: true });
     tr.setMeta("addToHistory", false);
     view.dispatch(tr);
@@ -236,6 +246,89 @@ function isEmptyParagraph(node: PMNode | null | undefined): boolean {
   if (node.content.childCount === 0) return true;
   if (node.textContent.length > 0) return false;
   return true;
+}
+
+/**
+ * Captures the current cursor position along with the text node the
+ * cursor is in, so that after a structural change (split/merge) we
+ * can restore the cursor to the SAME logical place (same text content
+ * + same offset), not just the same absolute document position.
+ *
+ * Why this matters: when the rebalance merges two pages, ProseMirror
+ * maps the cursor position by node size, but the page nodes have
+ * isolating: true, so the mapped position can end up in the WRONG
+ * page or even in the wrong paragraph. We instead remember the text
+ * node identity and re-derive the position after the change.
+ */
+interface CursorSnapshot {
+  textNodeIdentity: string | null;
+  offsetInText: number;
+  wasAtTextEnd: boolean;
+}
+
+function captureCursor(view: EditorView): CursorSnapshot | null {
+  const { selection } = view.state;
+  if (!(selection instanceof TextSelection)) return null;
+  const $from = selection.$from;
+  // Find the deepest text node the cursor is in (parent of $from.parent)
+  const parent = $from.parent;
+  if (!parent || !parent.isTextblock) return null;
+  // parent is the textblock (paragraph); the cursor is at $from.parentOffset
+  // within it. The text the user sees is parent.textContent.
+  return {
+    textNodeIdentity: parent.textContent,
+    offsetInText: $from.parentOffset,
+    wasAtTextEnd: $from.parentOffset >= parent.textContent.length,
+  };
+}
+
+/**
+ * Restores the cursor to the position that has the same text
+ * identity + offset as the captured snapshot, falling back to a
+ * sensible position if the text is no longer present.
+ */
+function restoreCursor(tr: any, snapshot: CursorSnapshot | null): void {
+  if (!snapshot) return;
+  if (!snapshot.textNodeIdentity) return;
+  // Find the text node that has the same text content
+  const targetText = snapshot.textNodeIdentity;
+  let bestPos: number | null = null;
+  let bestOffset = snapshot.offsetInText;
+  tr.doc.descendants((node: PMNode, pos: number) => {
+    if (bestPos !== null) return false;
+    if (!node.isTextblock) return true;
+    if (node.textContent !== targetText) return true;
+    // Found a textblock with matching text. Set the cursor there.
+    let targetPos = pos + 1; // start of the textblock content
+    let remaining = Math.min(bestOffset, node.content.size);
+    // Walk into the textblock to find the right character offset
+    let acc = 0;
+    let found = false;
+    node.content.forEach((child: PMNode, childPos: number) => {
+      if (found) return false;
+      if (child.isText) {
+        const text = child.textContent || "";
+        if (acc + text.length >= remaining) {
+          targetPos = pos + 1 + childPos + (remaining - acc);
+          found = true;
+          return false;
+        }
+        acc += text.length;
+      }
+    });
+    if (found) {
+      bestPos = targetPos;
+      return false;
+    }
+    return true;
+  });
+  if (bestPos !== null) {
+    try {
+      tr.setSelection(TextSelection.near(tr.doc.resolve(bestPos)));
+    } catch {
+      // Position invalid; leave selection as-is
+    }
+  }
 }
 
 function scheduleRebalance(): void {
