@@ -1189,9 +1189,9 @@ body {
 }
 
 .ai-panel__input-resize-handle {
-  width: calc(100% - 2 * var(--spacing-md));
-  margin: 0 var(--spacing-md) -4px var(--spacing-md);
+  width: 100%;
   height: 8px;
+  margin: 4px 0 4px 0;
   cursor: ns-resize;
   background: transparent;
   border-radius: 3px;
