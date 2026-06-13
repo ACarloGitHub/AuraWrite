@@ -24,6 +24,11 @@ function getBlockHeight(view: EditorView, pos: number): number {
   try {
     const dom = view.nodeDOM(pos);
     if (dom instanceof HTMLElement) {
+      // Force a layout flush so offsetHeight is accurate. Without this,
+      // right after a ProseMirror transaction, the browser may not have
+      // computed the layout yet and offsetHeight returns 0 (or stale).
+      // Reading offsetWidth/offsetHeight triggers a synchronous reflow.
+      void dom.offsetHeight;
       const style = window.getComputedStyle(dom);
       const mt = parseFloat(style.marginTop) || 0;
       const mb = parseFloat(style.marginBottom) || 0;
@@ -40,8 +45,16 @@ function measurePageScrollHeight(view: EditorView, pagePos: number): number {
   try {
     const dom = view.nodeDOM(pagePos);
     if (dom instanceof HTMLElement) {
+      // Force a synchronous reflow so scrollHeight is accurate.
+      // Without this, the page-content area may report scrollHeight = 0
+      // (or the previous frame's value) right after a ProseMirror
+      // transaction, because the browser hasn't yet calculated the
+      // layout of the new content. Reading offsetHeight here forces the
+      // browser to compute the layout synchronously.
+      void dom.offsetHeight;
       const contentEl = dom.querySelector(".pm-page-content");
       if (contentEl instanceof HTMLElement) {
+        void contentEl.offsetHeight;
         return contentEl.scrollHeight;
       }
       return dom.scrollHeight;
@@ -243,17 +256,26 @@ function scheduleRebalance(): void {
             });
           });
         } else if (retryCount < MAX_RETRIES) {
+          // The rebalance did nothing. The most common reason is that
+          // the DOM scrollHeight was 0 or stale (browser had not yet
+          // laid out the page after the user transaction). Retry with
+          // a longer wait (4 rAFs instead of 2) to give the browser
+          // more time, and force a reflow before measuring.
           retryCount++;
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              if (currentView && getPagedMode()) {
-                rebalancing = true;
-                try {
-                  rebalancePages(currentView);
-                } finally {
-                  rebalancing = false;
-                }
-              }
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  if (currentView && getPagedMode()) {
+                    rebalancing = true;
+                    try {
+                      rebalancePages(currentView);
+                    } finally {
+                      rebalancing = false;
+                    }
+                  }
+                });
+              });
             });
           });
         } else {
@@ -307,6 +329,18 @@ export function createPaginationPlugin(): Plugin {
       // but it can race with user transactions; calling it here too
       // guarantees a rebalance right after the user's edit is applied.
       // The rebalance itself is idempotent and skip-safe.
+      //
+      // We do NOT return a transaction from appendTransaction for the
+      // rebalance itself. Returning a tr here would mean: the
+      // pagination plugin owns the structural changes (split/merge) and
+      // the user transaction is paired with them. That works in
+      // theory, but the DOM measurements (scrollHeight) are stale at
+      // this point because the browser has not yet rendered the new
+      // content. Returning a tr now would lead to a "first measurement
+      // returns 0" problem, which means the split/merge decisions are
+      // made on bad data. Instead, we schedule a deferred rebalance
+      // via scheduleRebalance, which waits for the DOM to settle and
+      // retries up to MAX_RETRIES if the first measurement is 0.
       scheduleRebalance();
       return null;
     },
