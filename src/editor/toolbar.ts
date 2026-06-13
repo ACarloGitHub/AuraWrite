@@ -121,6 +121,7 @@ export function setupToolbar(view: EditorView): void {
   setupFormattingButtons();
   setupHeadingControl();
   setupListControls();
+  setupDecorControls();
   setupAlignmentControls();
   void setupStyleControls();
   setupTopLevelButtons();
@@ -994,9 +995,6 @@ function setupFormattingButtons(): void {
   const btnBold = document.getElementById("btn-bold");
   const btnItalic = document.getElementById("btn-italic");
   const btnUnderline = document.getElementById("btn-underline");
-  const btnStrikethrough = document.getElementById("btn-strikethrough");
-  const btnBlockquote = document.getElementById("btn-blockquote");
-  const btnCodeBlock = document.getElementById("btn-code-block");
   const btnPageBreak = document.getElementById("btn-page-break");
   const btnLink = document.getElementById("btn-link");
   const btnTable = document.getElementById("btn-table");
@@ -1005,7 +1003,6 @@ function setupFormattingButtons(): void {
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
   btnUnderline?.addEventListener("click", () => toggleMarkWithStored("underline"));
-  btnStrikethrough?.addEventListener("click", () => toggleMarkWithStored("strikethrough"));
   btnLink?.addEventListener("click", () => openLinkPopover(editorView));
   btnTable?.addEventListener("click", () => toggleTableDropdown());
   btnImage?.addEventListener("click", () => openImagePicker(editorView));
@@ -1017,44 +1014,6 @@ function setupFormattingButtons(): void {
     if (!target.closest("#btn-table") && !target.closest(".table-dropdown")) {
       hideTableDropdown();
     }
-  });
-
-  btnBlockquote?.addEventListener("click", () => {
-    const { state } = editorView;
-    const blockquoteType = state.schema.nodes.blockquote;
-    if (!blockquoteType) return;
-
-    const { $from } = state.selection;
-    for (let d = $from.depth; d > 0; d--) {
-      if ($from.node(d).type === blockquoteType) {
-        lift(state, (tr: Transaction) => {
-          editorView.dispatch(tr);
-          editorView.focus();
-        });
-        return;
-      }
-    }
-
-    wrapIn(blockquoteType)(state, (tr: Transaction) => {
-      editorView.dispatch(tr);
-      editorView.focus();
-    });
-  });
-
-  btnCodeBlock?.addEventListener("click", () => {
-    const { state } = editorView;
-    const codeBlockType = state.schema.nodes.code_block;
-    const paragraphType = state.schema.nodes.paragraph;
-    if (!codeBlockType || !paragraphType) return;
-
-    const { $from } = state.selection;
-    const node = $from.parent;
-    if (node.type === codeBlockType) {
-      setBlockType(paragraphType)(state, editorView.dispatch);
-    } else {
-      setBlockType(codeBlockType)(state, editorView.dispatch);
-    }
-    editorView.focus();
   });
 
   btnPageBreak?.addEventListener("click", () => {
@@ -1114,16 +1073,114 @@ function setupHeadingControl(): void {
 // ============================================================================
 
 function setupListControls(): void {
-  const btnBullet = document.getElementById("btn-bullet-list");
-  const btnOrdered = document.getElementById("btn-ordered-list");
+  const btn = document.getElementById("btn-list-menu") as HTMLButtonElement | null;
+  const menu = document.getElementById("list-menu") as HTMLElement | null;
+  if (!btn || !menu) return;
 
-  btnBullet?.addEventListener("click", () => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains("hidden")) {
+      menu.classList.remove("hidden");
+      positionDropdown(btn, menu);
+    } else {
+      menu.classList.add("hidden");
+    }
+  });
+
+  document.addEventListener("click", (e: MouseEvent) => {
+    if (!btn.contains(e.target as Node) && !menu.contains(e.target as Node)) {
+      menu.classList.add("hidden");
+    }
+  });
+
+  const bullet = document.getElementById("btn-bullet-list");
+  const ordered = document.getElementById("btn-ordered-list");
+
+  bullet?.addEventListener("click", () => {
     wrapInList(editorView.state.schema.nodes.bullet_list);
+    menu.classList.add("hidden");
+  });
+  ordered?.addEventListener("click", () => {
+    wrapInList(editorView.state.schema.nodes.ordered_list);
+    menu.classList.add("hidden");
+  });
+}
+
+function setupDecorControls(): void {
+  const btn = document.getElementById("btn-decor-menu") as HTMLButtonElement | null;
+  const menu = document.getElementById("decor-menu") as HTMLElement | null;
+  if (!btn || !menu) return;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains("hidden")) {
+      menu.classList.remove("hidden");
+      positionDropdown(btn, menu);
+    } else {
+      menu.classList.add("hidden");
+    }
   });
 
-  btnOrdered?.addEventListener("click", () => {
-    wrapInList(editorView.state.schema.nodes.ordered_list);
+  document.addEventListener("click", (e: MouseEvent) => {
+    if (!btn.contains(e.target as Node) && !menu.contains(e.target as Node)) {
+      menu.classList.add("hidden");
+    }
   });
+
+  const strike = document.getElementById("btn-strikethrough-decor");
+  const quote = document.getElementById("btn-blockquote-decor");
+  const code = document.getElementById("btn-code-block-decor");
+
+  strike?.addEventListener("click", () => {
+    toggleMarkWithStored("strikethrough");
+    menu.classList.add("hidden");
+  });
+  quote?.addEventListener("click", () => {
+    handleToggleBlockquote();
+    menu.classList.add("hidden");
+  });
+  code?.addEventListener("click", () => {
+    handleToggleCodeBlock();
+    menu.classList.add("hidden");
+  });
+}
+
+function handleToggleBlockquote(): void {
+  const { state } = editorView;
+  const blockquoteType = state.schema.nodes.blockquote;
+  if (!blockquoteType) return;
+
+  const { $from } = state.selection;
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type === blockquoteType) {
+      lift(state, (tr: Transaction) => {
+        editorView.dispatch(tr);
+        editorView.focus();
+      });
+      return;
+    }
+  }
+
+  wrapIn(blockquoteType)(state, (tr: Transaction) => {
+    editorView.dispatch(tr);
+    editorView.focus();
+  });
+}
+
+function handleToggleCodeBlock(): void {
+  const { state } = editorView;
+  const codeBlockType = state.schema.nodes.code_block;
+  const paragraphType = state.schema.nodes.paragraph;
+  if (!codeBlockType || !paragraphType) return;
+
+  const { $from } = state.selection;
+  const node = $from.parent;
+  if (node.type === codeBlockType) {
+    setBlockType(paragraphType)(state, editorView.dispatch);
+  } else {
+    setBlockType(codeBlockType)(state, editorView.dispatch);
+  }
+  editorView.focus();
 }
 
 function wrapInList(listType?: NodeType): void {
@@ -1737,6 +1794,30 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
       overflowMenu.appendChild(sectionHeader);
     }
 
+    // If the group is a toolbar-dropdown (e.g. "List", "Align", "Decor"),
+    // we replicate the dropdown items inline so the user can still
+    // reach them. Without this, the user would see only the toggle
+    // button with no way to access the items inside.
+    if (group.classList.contains("toolbar-dropdown")) {
+      const innerMenu = group.querySelector(".dropdown-menu") as HTMLElement | null;
+      if (innerMenu) {
+        const items = innerMenu.querySelectorAll<HTMLElement>(".dropdown-menu__item");
+        for (const item of Array.from(items)) {
+          const proxy = item.cloneNode(true) as HTMLElement;
+          proxy.addEventListener("click", (e) => {
+            e.stopPropagation();
+            item.click();
+            overflowMenu.classList.add("hidden");
+          });
+          overflowMenu.appendChild(proxy);
+        }
+      }
+      const divider = document.createElement("div");
+      divider.className = "dropdown-divider";
+      overflowMenu.appendChild(divider);
+      continue;
+    }
+
     const row = document.createElement("div");
     row.className = "overflow-group-row";
 
@@ -1820,6 +1901,39 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
     input.addEventListener("input", () => {
       original.value = input.value;
       original.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    return input;
+  }
+
+  if (original instanceof HTMLInputElement && original.type === "color") {
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = original.value;
+    input.className = original.className;
+    input.title = original.title || "";
+
+    input.addEventListener("input", () => {
+      original.value = input.value;
+      original.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    return input;
+  }
+
+  if (original instanceof HTMLInputElement && original.type === "number") {
+    const input = document.createElement("input");
+    input.type = "number";
+    if (original.min) input.min = original.min;
+    if (original.max) input.max = original.max;
+    if (original.step) input.step = original.step;
+    input.value = original.value;
+    input.className = original.className;
+    input.title = original.title || "";
+
+    input.addEventListener("change", () => {
+      original.value = input.value;
+      original.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     return input;
