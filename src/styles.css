@@ -4270,14 +4270,12 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
-  margin: 0 16px 8px 16px;
+  padding: 4px 16px;
   font-size: 12px;
   line-height: 1.4;
   color: var(--color-text-muted, #666);
   background: var(--color-surface-2, #f5f5f5);
-  border: 1px solid var(--color-border, #ddd);
-  border-radius: 4px;
+  border-bottom: 1px solid var(--color-border, #ddd);
 }
 
 .paged-info-banner[hidden] {
