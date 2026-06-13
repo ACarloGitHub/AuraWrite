@@ -2017,6 +2017,43 @@ body {
 }
 
 /* ============================================================================
+   AURAWRITE AUTO PAGE-BREAK DECORATIONS (Cassie-style pagination)
+   These decorations are inserted by pagination-cassie-plugin.ts.
+   They are visual only: no node is added to the document, so the
+   cursor is never trapped and the schema stays flat.
+   ============================================================================ */
+.aw-page-break {
+  position: relative;
+  margin: 1.5em 0 1em 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.aw-page-break-line {
+  border-top: 1px dashed #b0b0b0;
+  width: 100%;
+}
+
+.aw-page-break-label {
+  position: absolute;
+  top: -0.7em;
+  right: 0;
+  font-size: 0.75em;
+  color: #888;
+  background: transparent;
+  padding: 0 0.4em;
+  font-family: system-ui, sans-serif;
+}
+
+[data-theme="dark"] .aw-page-break-line {
+  border-top-color: #555;
+}
+
+[data-theme="dark"] .aw-page-break-label {
+  color: #aaa;
+}
+
+/* ============================================================================
    KEYBOARD HELP MODAL
    ============================================================================ */
 

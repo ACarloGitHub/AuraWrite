@@ -25,11 +25,12 @@ import { createPageBreakPlugin } from "./page-break-plugin";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
 import { createPaginationPlugin, requestPaginationRecalc } from "./pagination-plugin";
+import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { PageNodeView } from "./page-node-view";
 import { ImageNodeView } from "./image-node-view";
-import { initPagedMode, getPagedMode, setPagedMode } from "./pagination-state";
+import { initPagedMode, getPagedMode, setPagedMode, getCassieMode } from "./pagination-state";
 
 // ============================================================================
 // Custom Schema — Extended for full rich text editing
@@ -547,6 +548,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       suggestionsMarkerPlugin,
       findReplacePlugin,
       paginationPluginInstance,
+      createCassiePaginationPlugin({ enabled: getCassieMode }),
       linkPopoverPlugin,
       createImageDropPlugin(),
       createImagePastePlugin(),

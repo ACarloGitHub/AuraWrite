@@ -22,6 +22,7 @@ import {
   updateOnTextChange,
 } from "./fake-pagination";
 import { getPagedMode } from "./pagination-state";
+import { getCassieMode, setCassieMode } from "./pagination-state";
 import { togglePagedMode as toggleDocPagedMode } from "./editor";
 import {
   currentProject,
@@ -1069,6 +1070,15 @@ function setupFormattingButtons(): void {
   window.addEventListener("aurawrite:pagination-mode-changed", () => {
     updatePagedModeButtonText();
   });
+
+  const btnCassie = document.getElementById("btn-cassie-pagination");
+  btnCassie?.addEventListener("click", () => {
+    handleToggleCassieMode();
+  });
+  updateCassieModeButton();
+  window.addEventListener("aurawrite:cassie-pagination-changed", () => {
+    updateCassieModeButton();
+  });
 }
 
 // ============================================================================
@@ -1343,6 +1353,23 @@ function handleTogglePagedMode(): void {
   toggleDocPagedMode(editorView);
   updatePagedModeButtonText();
   editorView.focus();
+}
+
+function handleToggleCassieMode(): void {
+  setCassieMode(!getCassieMode());
+  // Force a re-measure by dispatching an empty transaction; the
+  // plugin recomputes on the next doc-changing transaction, but
+  // the user expects immediate visual feedback after toggling.
+  const tr = editorView.state.tr;
+  tr.setMeta("force-cassie-recompute", true);
+  editorView.dispatch(tr);
+  editorView.focus();
+}
+
+function updateCassieModeButton(): void {
+  const btn = document.getElementById("btn-cassie-pagination");
+  if (!btn) return;
+  btn.classList.toggle("toolbar__btn--active", getCassieMode());
 }
 
 function updatePagedModeButtonText(): void {
