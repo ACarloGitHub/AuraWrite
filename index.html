@@ -123,18 +123,45 @@
             <option value="5">Heading 5</option>
             <option value="6">Heading 6</option>
           </select>
-          <button id="btn-bullet-list" class="toolbar__btn" title="Bullet List">
-            <span class="toolbar__btn-icon">•</span>
-          </button>
-          <button id="btn-ordered-list" class="toolbar__btn" title="Ordered List">
-            <span class="toolbar__btn-icon">1.</span>
-          </button>
-          <button id="btn-blockquote" class="toolbar__btn" title="Blockquote">
-            <span class="toolbar__btn-icon">"</span>
-          </button>
-          <button id="btn-code-block" class="toolbar__btn" title="Code Block">
-            <span class="toolbar__btn-icon">&lt;/&gt;</span>
-          </button>
+          <div class="toolbar-group toolbar-dropdown" id="list-dropdown">
+            <button id="btn-list-menu" class="toolbar__btn" title="Lists">
+              <span class="toolbar__btn-icon">≡</span>
+              <span class="toolbar__btn-text">List</span>
+              <span class="toolbar__btn-caret">▾</span>
+            </button>
+            <div id="list-menu" class="dropdown-menu hidden">
+              <button id="btn-bullet-list" class="dropdown-menu__item" data-list="bullet">
+                <span class="dropdown-menu__icon">•</span>
+                <span class="dropdown-menu__label">Bullet</span>
+              </button>
+              <button id="btn-ordered-list" class="dropdown-menu__item" data-list="ordered">
+                <span class="dropdown-menu__icon">1.</span>
+                <span class="dropdown-menu__label">Numbered</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="toolbar-group toolbar-dropdown" id="decor-dropdown">
+            <button id="btn-decor-menu" class="toolbar__btn" title="Decorative elements">
+              <span class="toolbar__btn-icon">✦</span>
+              <span class="toolbar__btn-text">Decor</span>
+              <span class="toolbar__btn-caret">▾</span>
+            </button>
+            <div id="decor-menu" class="dropdown-menu hidden">
+              <button id="btn-strikethrough-decor" class="dropdown-menu__item" data-decor="strikethrough">
+                <span class="dropdown-menu__icon"><s>S</s></span>
+                <span class="dropdown-menu__label">Strikethrough</span>
+              </button>
+              <button id="btn-blockquote-decor" class="dropdown-menu__item" data-decor="blockquote">
+                <span class="dropdown-menu__icon">"</span>
+                <span class="dropdown-menu__label">Quote</span>
+              </button>
+              <button id="btn-code-block-decor" class="dropdown-menu__item" data-decor="code">
+                <span class="dropdown-menu__icon">&lt;/&gt;</span>
+                <span class="dropdown-menu__label">Code</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- ALIGNMENT GROUP -->
@@ -146,20 +173,16 @@
           </button>
           <div id="align-menu" class="dropdown-menu hidden">
             <button class="dropdown-menu__item" data-align="left">
-              <span class="dropdown-menu__icon">≡</span>
               <span class="dropdown-menu__label">Left</span>
             </button>
             <button class="dropdown-menu__item" data-align="center">
-              <span class="dropdown-menu__icon" style="display:inline-block;text-align:center;width:100%">≡</span>
               <span class="dropdown-menu__label">Center</span>
             </button>
             <button class="dropdown-menu__item" data-align="right">
-              <span class="dropdown-menu__icon" style="display:inline-block;text-align:right;width:100%">≡</span>
               <span class="dropdown-menu__label">Right</span>
             </button>
             <div class="dropdown-divider"></div>
             <button class="dropdown-menu__item" data-align="justify">
-              <span class="dropdown-menu__icon" style="display:inline-block;text-align:justify;width:100%">≡</span>
               <span class="dropdown-menu__label">Justify</span>
             </button>
           </div>
