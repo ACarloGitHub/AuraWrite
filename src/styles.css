@@ -254,6 +254,37 @@ body {
   background: var(--color-background);
 }
 
+.dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.dropdown-menu__item:hover {
+  background: var(--color-background);
+}
+
+.dropdown-menu__icon {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.dropdown-menu__label {
+  flex: 1;
+}
+
 .toolbar__btn-caret {
   font-size: 10px;
   margin-left: 2px;
