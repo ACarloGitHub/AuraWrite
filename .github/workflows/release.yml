@@ -252,6 +252,7 @@ jobs:
                 target_commitish: context.sha,
               });
               console.log(`[sync] created release id=${created.id} tag_name=${created.tag_name} url=${created.html_url} bodyLength=${created.body.length}`);
+              core.setOutput('release_id', String(created.id));
             } catch (err) {
               console.error(`[sync] FAILED: ${err.message}`);
               console.error(err.stack);
@@ -259,21 +260,73 @@ jobs:
             }
 
       - name: Create or update release and attach all artifacts
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: "AuraWrite ${{ github.ref_name }}"
-          draft: true
-          prerelease: false
-          generate_release_notes: false
-          body_path: release_body.md
-          files: |
-            artifacts/**/*.msi
-            artifacts/**/*-setup.exe
-            artifacts/**/*.dmg
-            artifacts/**/*.app.tar.gz
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/**/*.AppImage
+        uses: actions/github-script@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SYNC_RELEASE_ID: ${{ steps.sync.outputs.release_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const releaseId = process.env.SYNC_RELEASE_ID;
+            if (!releaseId) {
+              core.setFailed('SYNC_RELEASE_ID not set (previous sync step did not run)');
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+            const artifactsDir = path.join(workspace, 'artifacts');
+            const exts = ['.msi', '.exe', '.dmg', '.deb', '.rpm', '.AppImage'];
+            const tarGzNames = ['.app.tar.gz'];
+            function walk(dir) {
+              const out = [];
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const p = path.join(dir, entry.name);
+                if (entry.isDirectory()) out.push(...walk(p));
+                else out.push(p);
+              }
+              return out;
+            }
+            const allFiles = walk(artifactsDir);
+            const files = allFiles.filter(f => {
+              const base = path.basename(f);
+              if (tarGzNames.some(s => base.endsWith(s))) return true;
+              return exts.includes(path.extname(f));
+            });
+            console.log(`[upload] found ${files.length} files to upload`);
+            const mimeMap = {
+              '.msi': 'application/x-msi',
+              '.exe': 'application/x-msdownload',
+              '.dmg': 'application/x-apple-diskimage',
+              '.tar.gz': 'application/gzip',
+              '.deb': 'application/x-deb',
+              '.rpm': 'application/x-rpm',
+              '.AppImage': 'application/x-executable',
+            };
+            for (const file of files) {
+              const base = path.basename(file);
+              let contentType = 'application/octet-stream';
+              for (const k of Object.keys(mimeMap)) {
+                if (base.endsWith(k)) { contentType = mimeMap[k]; break; }
+              }
+              const data = fs.readFileSync(file);
+              const url = `https://uploads.github.com/repos/${owner}/${repo}/releases/${releaseId}/assets?name=${encodeURIComponent(base)}`;
+              console.log(`[upload] uploading ${base} (${data.length} bytes)`);
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+                  'Content-Type': contentType,
+                  'Accept': 'application/vnd.github+json',
+                  'User-Agent': 'AW-Release',
+                },
+                body: data,
+              });
+              if (!res.ok) {
+                const txt = await res.text();
+                core.setFailed(`upload ${base} failed: ${res.status} ${txt}`);
+                return;
+              }
+              console.log(`[upload] uploaded ${base} status=${res.status}`);
+            }
