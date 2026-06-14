@@ -1026,9 +1026,12 @@ function setupFormattingButtons(): void {
     handleTogglePagedMode();
   });
   updatePagedModeButtonText();
-  window.addEventListener("aurawrite:pagination-mode-changed", () => {
+  window.addEventListener("aurawrite:pagination-mode-changed", ((e: CustomEvent) => {
     updatePagedModeButtonText();
-  });
+    if (e.detail.enabled && getCassieMode()) {
+      setCassieMode(false);
+    }
+  }) as EventListener);
 
   const btnCassie = document.getElementById("btn-cassie-pagination");
   btnCassie?.addEventListener("click", () => {
@@ -1449,6 +1452,7 @@ function updateCassieModeButton(): void {
   const btn = document.getElementById("btn-cassie-pagination");
   if (!btn) return;
   btn.classList.toggle("toolbar__btn--active", getCassieMode());
+  btn.disabled = getPagedMode();
 }
 
 function updatePagedModeButtonText(): void {
@@ -1470,6 +1474,7 @@ function updatePagedModeButtonText(): void {
   }
   // Show/hide the width control depending on mode
   syncWidthGroupVisibility();
+  updateCassieModeButton();
 }
 
 async function handleSaveProject(): Promise<void> {

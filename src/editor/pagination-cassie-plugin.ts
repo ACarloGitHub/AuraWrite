@@ -34,11 +34,13 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
+import { getPagedMode } from "./pagination-state";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
 function buildDecorations(doc: PMNode, enabled: boolean): DecorationSet {
   if (!enabled) return DecorationSet.empty;
+  if (getPagedMode()) return DecorationSet.empty;
   const { breaks } = calculatePageBreaks(doc);
   if (breaks.length === 0) return DecorationSet.empty;
 
@@ -86,6 +88,9 @@ export function createCassiePaginationPlugin(
     state: {
       init: (_, state) => buildDecorations(state.doc, options.enabled()),
       apply: (tr, old, _oldState, newState) => {
+        if (tr.getMeta("force-cassie-recompute")) {
+          return buildDecorations(newState.doc, options.enabled());
+        }
         if (!tr.docChanged) return old;
         return buildDecorations(newState.doc, options.enabled());
       },

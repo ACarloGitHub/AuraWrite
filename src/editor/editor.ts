@@ -675,8 +675,8 @@ export function unwrapPages(view: EditorView): void {
 export function togglePagedMode(view: EditorView): void {
   const currentlyPaged = getPagedMode();
   if (currentlyPaged) {
-    unwrapPages(view);
     setPagedMode(false);
+    unwrapPages(view);
     view.dom.classList.remove("paged-mode");
     view.dom.classList.remove("is-paged-mode");
   } else {
