@@ -1449,7 +1449,7 @@ function handleToggleCassieMode(): void {
 }
 
 function updateCassieModeButton(): void {
-  const btn = document.getElementById("btn-cassie-pagination");
+  const btn = document.getElementById("btn-cassie-pagination") as HTMLButtonElement | null;
   if (!btn) return;
   btn.classList.toggle("toolbar__btn--active", getCassieMode());
   btn.disabled = getPagedMode();
