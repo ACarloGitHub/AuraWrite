@@ -465,6 +465,13 @@ body {
   overflow: hidden;
 }
 
+#editor-zoom-wrapper {
+  flex: 1;
+  overflow: auto;
+  transform-origin: top center;
+  transition: transform 0.15s ease;
+}
+
 #editor {
   flex: 1;
   overflow: auto;
@@ -480,7 +487,7 @@ body {
   background: transparent;
   padding: var(--spacing-xl) 0;
   font-family: var(--font-editor);
-  font-size: 18px;
+  font-size: 11pt;
   line-height: 1.7;
   color: var(--color-text);
   white-space: pre-wrap;

@@ -48,8 +48,8 @@ export const CONTENT_HEIGHT_PX =
 // Font and metrics for the editor body text. Tuned for Lora at
 // 16px with a 1.5 line-height. These constants are exported so
 // tests and other modules can refer to the same values.
-export const EDITOR_FONT = "16px Lora, Georgia, serif";
-export const EDITOR_LINE_HEIGHT_PX = 24;
+export const EDITOR_FONT = "11pt Lora, Georgia, serif";
+export const EDITOR_LINE_HEIGHT_PX = 25;
 const EMPTY_BLOCK_HEIGHT_PX = EDITOR_LINE_HEIGHT_PX;
 
 export interface BlockMetrics {
