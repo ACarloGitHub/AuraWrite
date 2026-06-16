@@ -1438,14 +1438,6 @@ function updateCassiePagedModeButton(): void {
   const isPaged = getCassiePagedMode();
   btnText.textContent = isPaged ? "Scroll" : "Pages";
   btn.classList.toggle("toolbar__btn--active", isPaged);
-  const banner = document.getElementById("paged-info-banner");
-  if (banner) {
-    if (isPaged) {
-      banner.removeAttribute("hidden");
-    } else {
-      banner.setAttribute("hidden", "");
-    }
-  }
   syncWidthGroupVisibility();
   updateCassieModeButton();
 }

@@ -316,12 +316,9 @@ function initZoom(): void {
 }
 
 function applyZoom(): void {
-  const wrapper = document.getElementById("editor-zoom-wrapper") as HTMLElement;
-  if (wrapper) {
-    const scale = currentZoom / 100;
-    wrapper.style.transform = `scale(${scale})`;
-    wrapper.style.transformOrigin = "top center";
-    wrapper.style.width = `${100 / scale}%`;
+  const editor = document.querySelector(".ProseMirror") as HTMLElement;
+  if (editor) {
+    editor.style.zoom = String(currentZoom / 100);
   }
   const zoomLevelEl = document.getElementById("zoom-level");
   if (zoomLevelEl) {
