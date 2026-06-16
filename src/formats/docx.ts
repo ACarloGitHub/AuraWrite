@@ -25,6 +25,9 @@ import {
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+const A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
 function getDOMParser(): any {
   const g: any = globalThis as any;
@@ -170,6 +173,7 @@ async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<strin
     const el = htmlBlocks[i];
     applyParagraphMeta(wP, el);
     applyRunMeta(wP, el);
+    applyDrawingMeta(wP, el);
   }
 
   // Greedy fallback: for any wParagraphs not yet matched (i.e. when htmlBlocks
@@ -183,6 +187,7 @@ async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<strin
     if (el) {
       applyParagraphMeta(wP, el);
       applyRunMeta(wP, el);
+      applyDrawingMeta(wP, el);
     }
   }
 
@@ -505,6 +510,114 @@ function applyRunMeta(wP: any, el: any): void {
   }
 }
 
+function applyDrawingMeta(wP: any, el: any): void {
+  const wDrawings: any[] = Array.from(wP.getElementsByTagNameNS(W_NS, "drawing") || []);
+  if (wDrawings.length === 0) return;
+
+  const htmlImgs: any[] = [];
+  const collectImgs = (node: any) => {
+    if (!node) return;
+    if (node.nodeType === 1 && (node.tagName || "").toUpperCase() === "IMG") {
+      htmlImgs.push(node);
+    }
+    for (let c = node.firstChild; c; c = c.nextSibling) {
+      collectImgs(c);
+    }
+  };
+  collectImgs(el);
+
+  if (htmlImgs.length === 0) return;
+
+  for (let dIdx = 0; dIdx < wDrawings.length && dIdx < htmlImgs.length; dIdx++) {
+    const drawing = wDrawings[dIdx];
+    const img = htmlImgs[dIdx];
+    const attrs = extractDrawingAttrs(drawing);
+    if (!attrs) continue;
+
+    if (attrs.wrap) img.setAttribute("data-wrap", "");
+    if (attrs.rotation) img.setAttribute("data-rotation", String(attrs.rotation));
+    if (attrs.flipH) img.setAttribute("data-flip-h", "");
+    if (attrs.flipV) img.setAttribute("data-flip-v", "");
+    if (attrs.align) img.setAttribute("data-align", attrs.align);
+    if (attrs.widthPx) img.setAttribute("width", String(attrs.widthPx));
+    if (attrs.heightPx) img.setAttribute("height", String(attrs.heightPx));
+  }
+}
+
+interface DrawingAttrs {
+  wrap: boolean;
+  rotation: number;
+  flipH: boolean;
+  flipV: boolean;
+  align: string;
+  widthPx: number | null;
+  heightPx: number | null;
+}
+
+function extractDrawingAttrs(drawing: any): DrawingAttrs | null {
+  const anchor = drawing.getElementsByTagNameNS(WP_NS, "anchor")?.[0];
+  const inline = drawing.getElementsByTagNameNS(WP_NS, "inline")?.[0];
+  const container = anchor || inline;
+  if (!container) return null;
+
+  const result: DrawingAttrs = {
+    wrap: false,
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+    align: "center",
+    widthPx: null,
+    heightPx: null,
+  };
+
+  result.wrap = !!anchor;
+  if (anchor) {
+    const wrapSquare = anchor.getElementsByTagNameNS(WP_NS, "wrapSquare")?.[0];
+    const wrapTight = anchor.getElementsByTagNameNS(WP_NS, "wrapTight")?.[0];
+    const wrapTopAndBottom = anchor.getElementsByTagNameNS(WP_NS, "wrapTopAndBottom")?.[0];
+    if (!wrapSquare && !wrapTight && !wrapTopAndBottom) {
+      result.wrap = false;
+    }
+
+    const posH = anchor.getElementsByTagNameNS(WP_NS, "positionH")?.[0];
+    if (posH) {
+      const alignEl = posH.getElementsByTagNameNS(WP_NS, "align")?.[0];
+      if (alignEl) {
+        const alignText = (alignEl.textContent || "").trim().toLowerCase();
+        if (alignText === "left" || alignText === "right" || alignText === "center") {
+          result.align = alignText;
+        }
+      }
+    }
+  }
+
+  const extent = container.getElementsByTagNameNS(WP_NS, "extent")?.[0];
+  if (extent) {
+    const cx = attrValue(extent, WP_NS, "cx");
+    const cy = attrValue(extent, WP_NS, "cy");
+    if (cx) result.widthPx = Math.round(parseInt(cx, 10) / 9525);
+    if (cy) result.heightPx = Math.round(parseInt(cy, 10) / 9525);
+  }
+
+  const xfrmElements = drawing.getElementsByTagNameNS(A_NS, "xfrm");
+  if (xfrmElements && xfrmElements.length > 0) {
+    const xfrm = xfrmElements[0];
+    const rot = attrValue(xfrm, A_NS, "rot");
+    if (rot) {
+      const rotVal = parseInt(rot, 10);
+      if (!isNaN(rotVal) && rotVal !== 0) {
+        result.rotation = rotVal / 60000;
+      }
+    }
+    const flipHAttr = attrValue(xfrm, A_NS, "flipH");
+    if (flipHAttr === "1" || flipHAttr === "true") result.flipH = true;
+    const flipVAttr = attrValue(xfrm, A_NS, "flipV");
+    if (flipVAttr === "1" || flipVAttr === "true") result.flipV = true;
+  }
+
+  return result;
+}
+
 function runText(wR: any): string {
   const texts = Array.from(wR.getElementsByTagNameNS(W_NS, "t") || []);
   return texts.map((t: any) => t.textContent || "").join("");
@@ -690,7 +803,11 @@ function attrValue(node: any, ns: string, name: string): string | null {
   if (!node) return null;
   const v = node.getAttributeNS?.(ns, name);
   if (v) return v;
-  return node.getAttribute?.("w:" + name) || null;
+  if (ns === W_NS) {
+    const wv = node.getAttribute?.("w:" + name);
+    if (wv) return wv;
+  }
+  return node.getAttribute?.(name) || null;
 }
 
 function setStyle(el: any, prop: string, value: string): void {
