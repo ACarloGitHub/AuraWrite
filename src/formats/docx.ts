@@ -15,6 +15,12 @@ import {
   WidthType,
   BorderStyle,
   ImageRun,
+  TextWrappingType,
+  TextWrappingSide,
+  HorizontalPositionRelativeFrom,
+  HorizontalPositionAlign,
+  VerticalPositionRelativeFrom,
+  VerticalPositionAlign,
 } from "docx";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
@@ -1019,14 +1025,75 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   else if (src.endsWith(".gif")) type = "gif";
   else if (src.endsWith(".bmp")) type = "bmp";
   else if (src.endsWith(".webp")) type = "webp";
+
+  const wrap: boolean = !!node.attrs?.wrap;
+  const rotation: number = node.attrs?.rotation || 0;
+  const flipH: boolean = !!node.attrs?.flipH;
+  const flipV: boolean = !!node.attrs?.flipV;
+  const align: string = node.attrs?.align || "center";
+
+  const needsFloating = wrap;
+  const needsTransform = rotation !== 0 || flipH || flipV;
+
+  const transformation: any = { width: imgWidth, height: imgHeight };
+  if (needsTransform) {
+    if (rotation !== 0) transformation.rotation = rotation;
+    if (flipH || flipV) {
+      transformation.flip = {
+        horizontal: flipH || undefined,
+        vertical: flipV || undefined,
+      };
+    }
+  }
+
   const opts: any = {
     type,
     data: bytes,
-    transformation: { width: imgWidth, height: imgHeight },
+    transformation,
   };
+
   if (alt) {
     opts.altText = { title: alt, description: alt, name: alt };
   }
+
+  if (needsFloating) {
+    let hAlign: (typeof HorizontalPositionAlign)[keyof typeof HorizontalPositionAlign];
+    switch (align) {
+      case "left":
+        hAlign = HorizontalPositionAlign.LEFT;
+        break;
+      case "right":
+        hAlign = HorizontalPositionAlign.RIGHT;
+        break;
+      default:
+        hAlign = HorizontalPositionAlign.CENTER;
+        break;
+    }
+
+    opts.floating = {
+      horizontalPosition: {
+        relative: HorizontalPositionRelativeFrom.COLUMN,
+        align: hAlign,
+      },
+      verticalPosition: {
+        relative: VerticalPositionRelativeFrom.PARAGRAPH,
+        align: VerticalPositionAlign.TOP,
+      },
+      wrap: {
+        type: TextWrappingType.SQUARE,
+        side: TextWrappingSide.BOTH_SIDES,
+      },
+      margins: {
+        top: 0,
+        bottom: 0,
+        left: 720,
+        right: 720,
+      },
+      allowOverlap: true,
+      behindDocument: false,
+    };
+  }
+
   return new ImageRun(opts);
 }
 
