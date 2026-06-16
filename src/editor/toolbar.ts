@@ -1540,6 +1540,10 @@ function applyEditorMargin(userVal: number): void {
     .ProseMirror:not(.is-cassie-paged) .pm-page-footer {
       display: none !important;
     }
+    .ProseMirror.is-cassie-paged {
+      padding-left: ${Math.round(userVal * 2.88)}px !important;
+      padding-right: ${Math.round(userVal * 2.88)}px !important;
+    }
   `;
 
   document.documentElement.style.setProperty("--editor-margin-h", `calc(16px + ${internalPct.toFixed(2)}%)`);
@@ -1551,7 +1555,7 @@ function applyEditorMargin(userVal: number): void {
 function syncWidthGroupVisibility(): void {
   const group = document.getElementById("width-group");
   if (!group) return;
-  group.classList.toggle("hidden", getCassiePagedMode());
+  group.classList.remove("hidden");
 }
 
 function setupWidthControl(): void {
