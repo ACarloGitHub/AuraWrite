@@ -30,6 +30,7 @@ import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { PageNodeView } from "./page-node-view";
 import { ImageNodeView } from "./image-node-view";
+import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getPagedMode, setPagedMode, getCassieMode } from "./pagination-state";
 
 // ============================================================================
@@ -246,8 +247,8 @@ const codeBlockSpec: NodeSpec = {
 };
 
 const imageSpec: NodeSpec = {
-  inline: true,
-  group: "inline",
+  inline: false,
+  group: "block",
   draggable: true,
   selectable: true,
   attrs: {
@@ -257,8 +258,11 @@ const imageSpec: NodeSpec = {
     width: { default: null },
     height: { default: null },
     align: { default: "center" },
-    offsetX: { default: 0 },
-    offsetY: { default: 0 },
+    wrap: { default: false },
+    rotation: { default: 0 },
+    flipH: { default: false },
+    flipV: { default: false },
+    aspectLocked: { default: true },
   },
   parseDOM: [
     {
@@ -274,8 +278,11 @@ const imageSpec: NodeSpec = {
           width: w ? parseInt(w, 10) || null : null,
           height: h ? parseInt(h, 10) || null : null,
           align: dom.getAttribute("data-align") || "center",
-          offsetX: parseInt(dom.getAttribute("data-offset-x") || "0", 10) || 0,
-          offsetY: parseInt(dom.getAttribute("data-offset-y") || "0", 10) || 0,
+          wrap: dom.hasAttribute("data-wrap"),
+          rotation: parseFloat(dom.getAttribute("data-rotation") || "0") || 0,
+          flipH: dom.hasAttribute("data-flip-h"),
+          flipV: dom.hasAttribute("data-flip-v"),
+          aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
         };
       },
     },
@@ -289,10 +296,11 @@ const imageSpec: NodeSpec = {
     if (node.attrs.width) attrs.width = String(node.attrs.width);
     if (node.attrs.height) attrs.height = String(node.attrs.height);
     attrs["data-align"] = node.attrs.align as string;
-    const offsetX = (node.attrs.offsetX as number) || 0;
-    const offsetY = (node.attrs.offsetY as number) || 0;
-    if (offsetX) attrs["data-offset-x"] = String(offsetX);
-    if (offsetY) attrs["data-offset-y"] = String(offsetY);
+    if (node.attrs.wrap) attrs["data-wrap"] = "";
+    if (node.attrs.rotation) attrs["data-rotation"] = String(node.attrs.rotation);
+    if (node.attrs.flipH) attrs["data-flip-h"] = "";
+    if (node.attrs.flipV) attrs["data-flip-v"] = "";
+    if (!node.attrs.aspectLocked) attrs["data-aspect-unlocked"] = "";
     return ["img", attrs];
   },
 };
@@ -555,6 +563,16 @@ export function createEditor(element: HTMLElement): EditorViewType {
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
       tableEditing(),
       createTableMonitorPlugin(),
+      new Plugin({
+        key: new PluginKey("imageToolbarSync"),
+        view() {
+          return {
+            update(view) {
+              updateImageToolbar(view as EditorView);
+            },
+          };
+        },
+      }),
     ],
   });
 

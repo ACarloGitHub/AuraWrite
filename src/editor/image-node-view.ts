@@ -1,20 +1,12 @@
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView } from "prosemirror-view";
+import { NodeSelection } from "prosemirror-state";
 import { resolveImageSrc } from "./image-uploader";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
 interface HandleEl extends HTMLElement {
   _corner: Corner;
-}
-
-const ALIGN_VALUES = ["left", "center", "right"] as const;
-type Align = (typeof ALIGN_VALUES)[number];
-
-function nextAlign(current: string): Align {
-  const i = ALIGN_VALUES.indexOf(current as Align);
-  if (i < 0) return "center";
-  return ALIGN_VALUES[(i + 1) % ALIGN_VALUES.length] as Align;
 }
 
 export class ImageNodeView implements NodeView {
@@ -34,7 +26,8 @@ export class ImageNodeView implements NodeView {
     this.wrapper.className = "image-node-wrapper";
     const attrs = node.attrs;
     this.wrapper.setAttribute("data-align", (attrs.align as string) || "center");
-    this.applyOffset(attrs.offsetX as number, attrs.offsetY as number);
+    if (attrs.wrap) this.wrapper.setAttribute("data-wrap", "");
+    this.applyTransform(attrs);
 
     this.img = document.createElement("img");
     this.img.alt = (attrs.alt as string) || "";
@@ -46,7 +39,7 @@ export class ImageNodeView implements NodeView {
 
     this.wrapper.appendChild(this.img);
     this.createHandles();
-    this.bindWrapperDrag();
+    this.bindEvents();
 
     this.dom = this.wrapper;
     void this.resolveSrc(attrs.src as string);
@@ -81,6 +74,22 @@ export class ImageNodeView implements NodeView {
     });
   }
 
+  private applyTransform(attrs: Record<string, unknown>): void {
+    const rotation = (attrs.rotation as number) || 0;
+    const flipH = attrs.flipH as boolean;
+    const flipV = attrs.flipV as boolean;
+    const parts: string[] = [];
+    if (rotation) parts.push(`rotate(${rotation}deg)`);
+    if (flipH && flipV) parts.push("scale(-1, -1)");
+    else if (flipH) parts.push("scaleX(-1)");
+    else if (flipV) parts.push("scaleY(-1)");
+    if (parts.length) {
+      this.wrapper.style.transform = parts.join(" ");
+    } else {
+      this.wrapper.style.removeProperty("transform");
+    }
+  }
+
   private createHandles(): void {
     const corners: Corner[] = ["tl", "tr", "bl", "br"];
     for (const corner of corners) {
@@ -93,115 +102,37 @@ export class ImageNodeView implements NodeView {
     }
   }
 
-  private bindWrapperDrag(): void {
-    this.wrapper.addEventListener("dblclick", (e) => {
-      e.preventDefault();
+  private bindEvents(): void {
+    this.wrapper.addEventListener("click", (e) => {
       e.stopPropagation();
-      void this.cycleAlignment();
+      this.selectNodeInEditor();
     });
     this.wrapper.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       if ((e.target as HTMLElement).classList.contains("image-resize-handle")) return;
-      void this.onWrapperMouseDown(e);
+      e.preventDefault();
+      this.selectNodeInEditor();
     });
   }
 
-  private async onWrapperMouseDown(e: MouseEvent): Promise<void> {
-    const startX = e.clientX;
-    const startY = e.clientY;
+  private selectNodeInEditor(): void {
     const pos = this.getPos();
     if (pos == null) return;
     const node = this.view.state.doc.nodeAt(pos);
     if (!node) return;
-    const startOffsetX = (node.attrs.offsetX as number) || 0;
-    const startOffsetY = (node.attrs.offsetY as number) || 0;
-    const DRAG_THRESHOLD = 3;
-    let dragging = false;
-    let lastX = startOffsetX;
-    let lastY = startOffsetY;
-
-    const applyPreview = (x: number, y: number): void => {
-      this.applyOffset(x, y);
-    };
-
-    const onMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      if (!dragging) {
-        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
-        dragging = true;
-        this.wrapper.classList.add("image-node-wrapper--dragging");
-        e.stopPropagation();
-      }
-      // VULN-5: clamp offset to a reasonable range so the image can't
-      // be dragged off-screen permanently.
-      const MAX_OFFSET = Math.max(window.innerWidth, window.innerHeight);
-      const rawX = startOffsetX + dx;
-      const rawY = startOffsetY + dy;
-      const newX = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, rawX));
-      const newY = Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, rawY));
-      lastX = newX;
-      lastY = newY;
-      applyPreview(newX, newY);
-    };
-
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      this.wrapper.classList.remove("image-node-wrapper--dragging");
-      if (dragging) {
-        void this.persistOffset(Math.round(lastX), Math.round(lastY));
-      }
-    };
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
-
-  private applyOffset(x: number, y: number): void {
-    const ox = Math.round(x || 0);
-    const oy = Math.round(y || 0);
-    if (ox === 0 && oy === 0) {
-      this.wrapper.style.removeProperty("transform");
-      this.wrapper.removeAttribute("data-offset-x");
-      this.wrapper.removeAttribute("data-offset-y");
-    } else {
-      this.wrapper.style.transform = `translate(${ox}px, ${oy}px)`;
-      this.wrapper.setAttribute("data-offset-x", String(ox));
-      this.wrapper.setAttribute("data-offset-y", String(oy));
-    }
-  }
-
-  private async persistOffset(x: number, y: number): Promise<void> {
-    const pos = this.getPos();
-    if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      offsetX: x,
-      offsetY: y,
-    });
-    this.view.dispatch(tr);
-  }
-
-  private async cycleAlignment(): Promise<void> {
-    const pos = this.getPos();
-    if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    const current = (node.attrs.align as string) || "center";
-    const newAlign = nextAlign(current);
-    const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      align: newAlign,
-    });
-    this.view.dispatch(tr);
+    const sel = NodeSelection.create(this.view.state.doc, pos);
+    this.view.dispatch(this.view.state.tr.setSelection(sel));
+    this.view.focus();
   }
 
   private onHandleMouseDown(e: MouseEvent, corner: Corner): void {
     e.preventDefault();
     e.stopPropagation();
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return;
+    const aspectLocked = node.attrs.aspectLocked !== false;
     const startX = e.clientX;
     const startY = e.clientY;
     const startWidth = this.img.clientWidth;
@@ -217,12 +148,18 @@ export class ImageNodeView implements NodeView {
       if (corner === "tl" || corner === "tr") deltaY = -dy;
       let newWidth = Math.max(50, startWidth + deltaX);
       let newHeight = Math.max(20, startHeight + deltaY);
-      if (e.shiftKey) {
+      if (aspectLocked) {
         const ratio = aspect > 0 ? aspect : startHeight / startWidth;
-        if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+        if (corner === "tl" || corner === "br") {
+          const avg = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
+          const sign = (deltaX + deltaY) >= 0 ? 1 : -1;
+          newWidth = Math.max(50, startWidth + sign * avg);
           newHeight = Math.round(newWidth * ratio);
         } else {
-          newWidth = Math.round(newHeight / ratio);
+          const avg = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
+          const sign = (deltaX - deltaY) >= 0 ? 1 : -1;
+          newWidth = Math.max(50, startWidth + sign * avg);
+          newHeight = Math.round(newWidth * ratio);
         }
       }
       return { width: newWidth, height: newHeight };
@@ -277,13 +214,12 @@ export class ImageNodeView implements NodeView {
     if (this.wrapper.getAttribute("data-align") !== newAlign) {
       this.wrapper.setAttribute("data-align", newAlign);
     }
-    const newOffsetX = (attrs.offsetX as number) || 0;
-    const newOffsetY = (attrs.offsetY as number) || 0;
-    const currentX = parseInt(this.wrapper.getAttribute("data-offset-x") || "0", 10) || 0;
-    const currentY = parseInt(this.wrapper.getAttribute("data-offset-y") || "0", 10) || 0;
-    if (newOffsetX !== currentX || newOffsetY !== currentY) {
-      this.applyOffset(newOffsetX, newOffsetY);
+    if (attrs.wrap) {
+      this.wrapper.setAttribute("data-wrap", "");
+    } else {
+      this.wrapper.removeAttribute("data-wrap");
     }
+    this.applyTransform(attrs);
     return true;
   }
 

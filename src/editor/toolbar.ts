@@ -13,7 +13,7 @@ import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile } from "./image-commands";
+import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, removeImage } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -66,29 +66,7 @@ async function openImagePicker(view: EditorView): Promise<void> {
     const base64 = await invoke<string>("load_binary_file", { path: selected });
     const mime = mimeFromFilename(fileName);
     const fakeFile = makeFileLike(fileName, mime, base64);
-    const { uploadImageFile } = await import("./image-uploader");
-    const uploaded = await uploadImageFile(fakeFile);
-    const { createImageNode } = await import("./image-commands");
-    const node = createImageNode(view, uploaded);
-    if (!node) {
-      console.error("[image] no image node in schema");
-      return;
-    }
-    const $from = view.state.selection.$from;
-    let insertPos = $from.pos;
-    for (let d = $from.depth; d >= 0; d--) {
-      const parent = $from.node(d);
-      const match = parent
-        .contentMatchAt($from.index(d))
-        .matchType(view.state.schema.nodes.image);
-      if (match) {
-        insertPos = $from.end(d);
-        break;
-      }
-    }
-    const tr = view.state.tr.insert(insertPos, node);
-    view.dispatch(tr);
-    view.focus();
+    await insertImageFromFile(view, fakeFile);
   } catch (e) {
     console.error("[image] openImagePicker failed:", e);
   }
@@ -1008,6 +986,7 @@ function setupFormattingButtons(): void {
   btnImage?.addEventListener("click", () => openImagePicker(editorView));
 
   setupTableToolbar(editorView);
+  setupImageToolbar(editorView);
 
   document.addEventListener("click", (e: MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -1945,4 +1924,105 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
   }
 
   return null;
+}
+
+function setupImageToolbar(view: EditorView): void {
+  const toolbar = document.getElementById("image-toolbar");
+  if (!toolbar) return;
+
+  toolbar.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+  });
+
+  const btnAlignLeft = document.getElementById("img-align-left");
+  const btnAlignCenter = document.getElementById("img-align-center");
+  const btnAlignRight = document.getElementById("img-align-right");
+  const btnToggleWrap = document.getElementById("img-toggle-wrap");
+  const btnRotateLeft = document.getElementById("img-rotate-left");
+  const btnRotateRight = document.getElementById("img-rotate-right");
+  const btnFlipH = document.getElementById("img-flip-h");
+  const btnFlipV = document.getElementById("img-flip-v");
+  const btnAspectLock = document.getElementById("img-aspect-lock");
+  const btnDelete = document.getElementById("img-delete");
+
+  btnAlignLeft?.addEventListener("click", () => {
+    void setImageAlignment(view, "left");
+  });
+  btnAlignCenter?.addEventListener("click", () => {
+    void setImageAlignment(view, "center");
+  });
+  btnAlignRight?.addEventListener("click", () => {
+    void setImageAlignment(view, "right");
+  });
+  btnToggleWrap?.addEventListener("click", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    const { setImageWrap } = await import("./image-commands");
+    void setImageWrap(view, !info.node.attrs.wrap);
+  });
+  btnRotateLeft?.addEventListener("click", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    const current = (info.node.attrs.rotation as number) || 0;
+    void setImageRotation(view, (current - 90 + 360) % 360);
+  });
+  btnRotateRight?.addEventListener("click", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    const current = (info.node.attrs.rotation as number) || 0;
+    void setImageRotation(view, (current + 90) % 360);
+  });
+  btnFlipH?.addEventListener("click", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    void setImageFlipH(view, !info.node.attrs.flipH);
+  });
+  btnFlipV?.addEventListener("click", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    void setImageFlipV(view, !info.node.attrs.flipV);
+  });
+  btnAspectLock?.addEventListener("click", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    void setImageAspectLocked(view, !info.node.attrs.aspectLocked);
+  });
+  btnDelete?.addEventListener("click", () => {
+    void removeImage(view);
+  });
+}
+
+export function updateImageToolbar(view: EditorView): void {
+  const toolbar = document.getElementById("image-toolbar");
+  if (!toolbar) return;
+
+  void (async () => {
+    const info = await getSelectedImage(view);
+    if (!info) {
+      toolbar.classList.remove("image-toolbar--visible");
+      return;
+    }
+    toolbar.classList.add("image-toolbar--visible");
+    const attrs = info.node.attrs;
+    const align = (attrs.align as string) || "center";
+
+    const btnAlignLeft = document.getElementById("img-align-left");
+    const btnAlignCenter = document.getElementById("img-align-center");
+    const btnAlignRight = document.getElementById("img-align-right");
+    const btnToggleWrap = document.getElementById("img-toggle-wrap");
+    const btnFlipH = document.getElementById("img-flip-h");
+    const btnFlipV = document.getElementById("img-flip-v");
+    const btnAspectLock = document.getElementById("img-aspect-lock");
+
+    btnAlignLeft?.classList.toggle("image-toolbar__btn--active", align === "left");
+    btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
+    btnAlignRight?.classList.toggle("image-toolbar__btn--active", align === "right");
+    btnToggleWrap?.classList.toggle("image-toolbar__btn--active", !!attrs.wrap);
+    if (btnToggleWrap instanceof HTMLButtonElement) {
+      btnToggleWrap.disabled = align === "center";
+    }
+    btnFlipH?.classList.toggle("image-toolbar__btn--active", !!attrs.flipH);
+    btnFlipV?.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);
+    btnAspectLock?.classList.toggle("image-toolbar__btn--active", attrs.aspectLocked !== false);
+  })();
 }

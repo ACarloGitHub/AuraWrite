@@ -475,8 +475,11 @@ function parseInlineMarkdown(text: string): any[] {
           width: null,
           height: null,
           align: "center",
-          offsetX: 0,
-          offsetY: 0,
+          wrap: false,
+          rotation: 0,
+          flipH: false,
+          flipV: false,
+          aspectLocked: true,
         },
       });
       remaining = remaining.substring(imageMatch[0].length);

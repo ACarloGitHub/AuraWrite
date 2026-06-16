@@ -309,16 +309,14 @@ describe("walkAndCopyImages content iteration", () => {
                     nodes: [
                       {
                         type: "image",
-                        attrs: {
-                          src: "images/1781253306593-an_android_with_human_proportion.png",
-                          alt: "An android",
-                          title: "An android",
-                          width: 146,
-                          height: 152,
-                          align: "center",
-                          offsetX: -227,
-                          offsetY: -429,
-                        },
+                          attrs: {
+                            src: "images/1781253306593-an_android_with_human_proportion.png",
+                            alt: "An android",
+                            title: "An android",
+                            width: 146,
+                            height: 152,
+                            align: "center",
+                          },
                       },
                     ],
                     forEach(cb: any) { this.nodes.forEach((n) => cb(n)); },
