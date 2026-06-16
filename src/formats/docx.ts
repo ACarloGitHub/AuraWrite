@@ -22,6 +22,7 @@ import {
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
 } from "docx";
+import { calculatePageBreaks } from "../editor/pagination-cassie";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -925,9 +926,21 @@ export async function toDocx(doc: any): Promise<Document> {
     })
   );
 
+  const cassieBreaks = new Set<number>();
+  try {
+    const { breaks } = calculatePageBreaks(doc);
+    for (const bp of breaks) {
+      cassieBreaks.add(bp.pos);
+    }
+  } catch {}
+
   const children: any[] = [];
+  let pos = 0;
   for (const node of contentToArray(doc.content)) {
-    children.push(...nodeToChildren(node, imageCache));
+    const isFirstOnNewPage = cassieBreaks.has(pos);
+    const nodeChildren = nodeToChildren(node, imageCache, isFirstOnNewPage);
+    children.push(...nodeChildren);
+    pos += node.nodeSize;
   }
 
   return new Document({
@@ -1077,12 +1090,12 @@ function nodeToParagraphs(node: any): Paragraph[] {
   }
 }
 
-function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>): any[] {
+function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBreakBefore: boolean = false): any[] {
   switch (node.type.name) {
     case "table":
       return [tableNodeToDocx(node)];
     case "paragraph":
-      return [paragraphFromNode(node, { align: node.attrs?.align }, imageCache)];
+      return [paragraphFromNode(node, { align: node.attrs?.align, pageBreakBefore }, imageCache)];
     case "heading": {
       const isTitle = node.attrs?.level === 1 && node.attrs?.align === "center";
       return [
@@ -1090,21 +1103,23 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>): any[] {
           heading: isTitle ? HeadingLevel.TITLE : getHeadingLevel(node.attrs.level),
           style: isTitle ? "Title" : undefined,
           align: node.attrs?.align,
+          pageBreakBefore,
         }, imageCache),
       ];
     }
     case "blockquote":
-      return contentToArray(node.content).map((child: any) =>
-        paragraphFromNode(child, { style: "IntenseQuote" }, imageCache)
+      return contentToArray(node.content).map((child: any, i: number) =>
+        paragraphFromNode(child, { style: "IntenseQuote", pageBreakBefore: pageBreakBefore && i === 0 }, imageCache)
       );
     case "code_block":
-      return contentToArray(node.content).map((child: any) => {
+      return contentToArray(node.content).map((child: any, i: number) => {
         const txt = getTextContent(child);
         return new Paragraph({
           children: [new TextRun({ text: txt, font: "Courier New", size: 20 })],
           shading: { fill: "F5F5F5" },
           indent: { left: 360 },
           spacing: { before: 80, after: 80, line: 240 },
+          pageBreakBefore: pageBreakBefore && i === 0,
         });
       });
     case "bullet_list":
@@ -1118,6 +1133,7 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>): any[] {
           border: {
             bottom: { color: "CCCCCC", size: 1, space: 1, style: "single" },
           },
+          pageBreakBefore,
         }),
       ];
     case "image": {
@@ -1127,6 +1143,7 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>): any[] {
         new Paragraph({
           children: [buildImageRun(node, bytes)],
           alignment: paragraphAlignFromAttr(node.attrs?.align),
+          pageBreakBefore,
         }),
       ];
     }
@@ -1304,6 +1321,7 @@ interface ParagraphExtras {
   indent?: { left?: number; right?: number };
   italic?: boolean;
   style?: string;
+  pageBreakBefore?: boolean;
 }
 
 function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?: Map<string, Uint8Array>): Paragraph {
@@ -1326,7 +1344,7 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   const lh = lineHeightToTwips(node.attrs?.lineHeight);
   if (lh) opts.spacing = { ...(opts.spacing || {}), line: lh, lineRule: "auto" };
 
-  if (node.attrs?.pageBreakBefore) {
+  if (node.attrs?.pageBreakBefore || extras.pageBreakBefore) {
     opts.pageBreakBefore = true;
   }
 

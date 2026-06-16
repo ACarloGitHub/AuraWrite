@@ -374,6 +374,18 @@ export class ImageNodeView implements NodeView {
     if (this.img.title !== (attrs.title as string)) {
       this.img.title = (attrs.title as string) || "";
     }
+    const newSrc = (attrs.src as string) || "";
+    const currentSrc = this.img.getAttribute("src") || "";
+    if (newSrc && newSrc !== currentSrc && newSrc !== this.img.dataset?.pendingSrc) {
+      this.img.dataset.pendingSrc = newSrc;
+      const pendingSrc = newSrc;
+      void resolveImageSrc(newSrc).then((resolved: string) => {
+        if (resolved && this.img.dataset.pendingSrc === pendingSrc) {
+          this.img.setAttribute("src", resolved);
+          delete this.img.dataset.pendingSrc;
+        }
+      });
+    }
     this.applySize(attrs);
     const newAlign = (attrs.align as string) || "center";
     if (this.wrapper.getAttribute("data-align") !== newAlign) {
