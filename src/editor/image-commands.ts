@@ -24,6 +24,8 @@ export function createImageNode(
     flipH: false,
     flipV: false,
     aspectLocked: true,
+    offsetLeft: 0,
+    offsetTop: 0,
   };
   return imageType.create(attrs);
 }
@@ -110,6 +112,8 @@ export function insertImageFromSrc(
     flipH: false,
     flipV: false,
     aspectLocked: true,
+    offsetLeft: 0,
+    offsetTop: 0,
   });
   return insertImageBlock(view, node);
 }
@@ -239,6 +243,39 @@ export async function setImageSize(
     width,
     height,
   });
+  view.dispatch(tr);
+  return true;
+}
+
+export async function setImageOffset(
+  view: EditorView,
+  offsetLeft: number,
+  offsetTop: number
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
+    ...info.node.attrs,
+    offsetLeft,
+    offsetTop,
+  });
+  view.dispatch(tr);
+  return true;
+}
+
+export async function setImageWidth(
+  view: EditorView,
+  width: number
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  const attrs: Record<string, unknown> = { ...info.node.attrs, width };
+  if (info.node.attrs.aspectLocked !== false) {
+    const currentW = (info.node.attrs.width as number) || 1;
+    const currentH = (info.node.attrs.height as number) || 1;
+    attrs.height = Math.round((width / currentW) * currentH);
+  }
+  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, attrs);
   view.dispatch(tr);
   return true;
 }

@@ -539,6 +539,8 @@ function applyDrawingMeta(wP: any, el: any): void {
     if (attrs.flipH) img.setAttribute("data-flip-h", "");
     if (attrs.flipV) img.setAttribute("data-flip-v", "");
     if (attrs.align) img.setAttribute("data-align", attrs.align);
+    if (attrs.offsetLeft) img.setAttribute("data-offset-left", String(attrs.offsetLeft));
+    if (attrs.offsetTop) img.setAttribute("data-offset-top", String(attrs.offsetTop));
     if (attrs.widthPx) img.setAttribute("width", String(attrs.widthPx));
     if (attrs.heightPx) img.setAttribute("height", String(attrs.heightPx));
   }
@@ -552,6 +554,8 @@ interface DrawingAttrs {
   align: string;
   widthPx: number | null;
   heightPx: number | null;
+  offsetLeft: number;
+  offsetTop: number;
 }
 
 function extractDrawingAttrs(drawing: any): DrawingAttrs | null {
@@ -568,6 +572,8 @@ function extractDrawingAttrs(drawing: any): DrawingAttrs | null {
     align: "center",
     widthPx: null,
     heightPx: null,
+    offsetLeft: 0,
+    offsetTop: 0,
   };
 
   result.wrap = !!anchor;
@@ -587,6 +593,20 @@ function extractDrawingAttrs(drawing: any): DrawingAttrs | null {
         if (alignText === "left" || alignText === "right" || alignText === "center") {
           result.align = alignText;
         }
+      }
+      const posOffsetH = posH.getElementsByTagNameNS(WP_NS, "posOffset")?.[0];
+      if (posOffsetH) {
+        const emuH = parseInt(posOffsetH.textContent || "0", 10);
+        if (emuH > 0) result.offsetLeft = Math.round(emuH / 9525);
+      }
+    }
+
+    const posV = anchor.getElementsByTagNameNS(WP_NS, "positionV")?.[0];
+    if (posV) {
+      const posOffsetV = posV.getElementsByTagNameNS(WP_NS, "posOffset")?.[0];
+      if (posOffsetV) {
+        const emuV = parseInt(posOffsetV.textContent || "0", 10);
+        if (emuV > 0) result.offsetTop = Math.round(emuV / 9525);
       }
     }
   }
@@ -1148,6 +1168,8 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   const flipH: boolean = !!node.attrs?.flipH;
   const flipV: boolean = !!node.attrs?.flipV;
   const align: string = node.attrs?.align || "center";
+  const offsetLeft: number = node.attrs?.offsetLeft || 0;
+  const offsetTop: number = node.attrs?.offsetTop || 0;
 
   const needsFloating = wrap;
   const needsTransform = rotation !== 0 || flipH || flipV;
@@ -1174,28 +1196,38 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   }
 
   if (needsFloating) {
-    let hAlign: (typeof HorizontalPositionAlign)[keyof typeof HorizontalPositionAlign];
-    switch (align) {
-      case "left":
-        hAlign = HorizontalPositionAlign.LEFT;
-        break;
-      case "right":
-        hAlign = HorizontalPositionAlign.RIGHT;
-        break;
-      default:
-        hAlign = HorizontalPositionAlign.CENTER;
-        break;
+    const hPos: any = {
+      relative: HorizontalPositionRelativeFrom.COLUMN,
+    };
+    if (offsetLeft > 0) {
+      hPos.offset = offsetLeft * 9525;
+    } else {
+      let hAlign: (typeof HorizontalPositionAlign)[keyof typeof HorizontalPositionAlign];
+      switch (align) {
+        case "left":
+          hAlign = HorizontalPositionAlign.LEFT;
+          break;
+        case "right":
+          hAlign = HorizontalPositionAlign.RIGHT;
+          break;
+        default:
+          hAlign = HorizontalPositionAlign.CENTER;
+          break;
+      }
+      hPos.align = hAlign;
+    }
+
+    const vPos: any = {
+      relative: VerticalPositionRelativeFrom.PARAGRAPH,
+      align: VerticalPositionAlign.TOP,
+    };
+    if (offsetTop > 0) {
+      vPos.offset = offsetTop * 9525;
     }
 
     opts.floating = {
-      horizontalPosition: {
-        relative: HorizontalPositionRelativeFrom.COLUMN,
-        align: hAlign,
-      },
-      verticalPosition: {
-        relative: VerticalPositionRelativeFrom.PARAGRAPH,
-        align: VerticalPositionAlign.TOP,
-      },
+      horizontalPosition: hPos,
+      verticalPosition: vPos,
       wrap: {
         type: TextWrappingType.SQUARE,
         side: TextWrappingSide.BOTH_SIDES,

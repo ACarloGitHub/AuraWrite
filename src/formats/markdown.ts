@@ -480,6 +480,8 @@ function parseInlineMarkdown(text: string): any[] {
           flipH: false,
           flipV: false,
           aspectLocked: true,
+          offsetLeft: 0,
+          offsetTop: 0,
         },
       });
       remaining = remaining.substring(imageMatch[0].length);

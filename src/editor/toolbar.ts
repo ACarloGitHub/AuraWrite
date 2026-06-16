@@ -13,7 +13,7 @@ import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, removeImage } from "./image-commands";
+import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageOffset, setImageWidth, removeImage } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -1931,7 +1931,13 @@ function setupImageToolbar(view: EditorView): void {
   if (!toolbar) return;
 
   toolbar.addEventListener("mousedown", (e) => {
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
     e.preventDefault();
+  });
+  toolbar.addEventListener("keydown", (e) => {
+    if ((e.target as HTMLElement).tagName === "INPUT") {
+      e.stopPropagation();
+    }
   });
 
   const btnAlignLeft = document.getElementById("img-align-left");
@@ -1944,6 +1950,9 @@ function setupImageToolbar(view: EditorView): void {
   const btnFlipV = document.getElementById("img-flip-v");
   const btnAspectLock = document.getElementById("img-aspect-lock");
   const btnDelete = document.getElementById("img-delete");
+  const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
+  const inputOffsetLeft = document.getElementById("img-offset-left") as HTMLInputElement | null;
+  const inputOffsetTop = document.getElementById("img-offset-top") as HTMLInputElement | null;
 
   btnAlignLeft?.addEventListener("click", () => {
     void setImageAlignment(view, "left");
@@ -1990,6 +1999,26 @@ function setupImageToolbar(view: EditorView): void {
   btnDelete?.addEventListener("click", () => {
     void removeImage(view);
   });
+
+  inputWidth?.addEventListener("change", () => {
+    const val = parseInt(inputWidth.value, 10);
+    if (isNaN(val) || val < 20) return;
+    void setImageWidth(view, val);
+  });
+  inputOffsetLeft?.addEventListener("change", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    const val = parseInt(inputOffsetLeft.value, 10) || 0;
+    const currentTop = (info.node.attrs.offsetTop as number) || 0;
+    void setImageOffset(view, val, currentTop);
+  });
+  inputOffsetTop?.addEventListener("change", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    const val = parseInt(inputOffsetTop.value, 10) || 0;
+    const currentLeft = (info.node.attrs.offsetLeft as number) || 0;
+    void setImageOffset(view, currentLeft, val);
+  });
 }
 
 export function updateImageToolbar(view: EditorView): void {
@@ -2024,5 +2053,22 @@ export function updateImageToolbar(view: EditorView): void {
     btnFlipH?.classList.toggle("image-toolbar__btn--active", !!attrs.flipH);
     btnFlipV?.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);
     btnAspectLock?.classList.toggle("image-toolbar__btn--active", attrs.aspectLocked !== false);
+
+    toolbar.classList.toggle("image-toolbar--wrap-active", !!attrs.wrap);
+
+    const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
+    const inputOffsetLeft = document.getElementById("img-offset-left") as HTMLInputElement | null;
+    const inputOffsetTop = document.getElementById("img-offset-top") as HTMLInputElement | null;
+
+    if (inputWidth) {
+      const w = attrs.width as number | null;
+      inputWidth.value = w ? String(w) : "";
+    }
+    if (inputOffsetLeft) {
+      inputOffsetLeft.value = (attrs.offsetLeft as number) ? String(attrs.offsetLeft) : "";
+    }
+    if (inputOffsetTop) {
+      inputOffsetTop.value = (attrs.offsetTop as number) ? String(attrs.offsetTop) : "";
+    }
   })();
 }

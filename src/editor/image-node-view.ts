@@ -28,6 +28,7 @@ export class ImageNodeView implements NodeView {
     this.wrapper.setAttribute("data-align", (attrs.align as string) || "center");
     if (attrs.wrap) this.wrapper.setAttribute("data-wrap", "");
     this.applyTransform(attrs);
+    this.applyOffset(attrs);
 
     this.img = document.createElement("img");
     this.img.alt = (attrs.alt as string) || "";
@@ -87,6 +88,15 @@ export class ImageNodeView implements NodeView {
     } else {
       this.wrapper.style.removeProperty("transform");
     }
+  }
+
+  private applyOffset(attrs: Record<string, unknown>): void {
+    const offsetLeft = (attrs.offsetLeft as number) || 0;
+    const offsetTop = (attrs.offsetTop as number) || 0;
+    if (offsetLeft) this.wrapper.style.marginLeft = `${offsetLeft}px`;
+    else this.wrapper.style.removeProperty("margin-left");
+    if (offsetTop) this.wrapper.style.marginTop = `${offsetTop}px`;
+    else this.wrapper.style.removeProperty("margin-top");
   }
 
   private applySize(attrs: Record<string, unknown>): void {
@@ -221,6 +231,7 @@ export class ImageNodeView implements NodeView {
       this.wrapper.removeAttribute("data-wrap");
     }
     this.applyTransform(attrs);
+    this.applyOffset(attrs);
     return true;
   }
 
