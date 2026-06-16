@@ -23,6 +23,7 @@ import {
   VerticalPositionAlign,
 } from "docx";
 import { calculatePageBreaks } from "../editor/pagination-cassie";
+import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -962,8 +963,9 @@ export async function toDocx(doc: any): Promise<Document> {
   );
 
   const cassieBreaks = new Set<number>();
+  const margins = getMargins();
   try {
-    const { breaks } = calculatePageBreaks(doc);
+    const { breaks } = calculatePageBreaks(doc, margins);
     for (const bp of breaks) {
       cassieBreaks.add(bp.pos);
     }
@@ -978,9 +980,21 @@ export async function toDocx(doc: any): Promise<Document> {
     pos += node.nodeSize;
   }
 
+  const pxToTwip = (px: number) => px * 15;
+
   return new Document({
     sections: [
       {
+        properties: {
+          page: {
+            margin: {
+              top: pxToTwip(margins.top),
+              bottom: pxToTwip(margins.bottom),
+              left: pxToTwip(margins.left),
+              right: pxToTwip(margins.right),
+            },
+          },
+        },
         children,
       },
     ],

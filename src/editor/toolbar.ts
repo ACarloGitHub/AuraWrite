@@ -1475,41 +1475,23 @@ export function getEditorView(): EditorView {
 }
 
 // ============================================================================
-// EDITOR MARGIN CONTROL (continuous mode only)
+// EDITOR MARGIN CONTROL (4 independent margins)
 // ============================================================================
 
-// The user-facing scale is 0–100.
-// 0  = no margins (text fills the full editor area)
-// 100 = maximum margins (very narrow text column, ~10% of editor width)
-// Internally we map 0-100 → 0-45% actual CSS padding on each side.
-const MARGIN_KEY = "aurawrite-editor-margin-pct";
-const MARGIN_MIN = 0;
-const MARGIN_MAX = 100;
-const MARGIN_DEFAULT = 20; // ≈ 9% actual padding each side
+import { getMargins, setMargins as setStateMargins } from "./pagination-state";
+import type { PageMargins } from "./pagination-cassie";
 
-function getEditorMargin(): number {
-  const saved = localStorage.getItem(MARGIN_KEY);
-  if (saved) {
-    const n = parseInt(saved, 10);
-    if (!isNaN(n) && n >= MARGIN_MIN && n <= MARGIN_MAX) return n;
-  }
-  return MARGIN_DEFAULT;
-}
-
-// Keep a persistent injected <style> element to override any cached CSS.
-// This guarantees the rules apply even if Vite HMR hasn't refreshed styles.css.
 let _editorStyleEl: HTMLStyleElement | null = null;
+let _marginsPanel: HTMLElement | null = null;
+let _marginsBtn: HTMLElement | null = null;
 
-function applyEditorMargin(userVal: number): void {
-  // Calcolo lineare dei margini interni: da 16px (0%) a calc(16px + 23%) (100%)
-  const internalPct = (userVal / 100) * 23;
-
-  // Inject (or update) a high-specificity style that overrides the CSS file
+function applyEditorMargins(m: PageMargins): void {
   if (!_editorStyleEl) {
     _editorStyleEl = document.createElement("style");
     _editorStyleEl.id = "__aura-editor-margin";
     document.head.appendChild(_editorStyleEl);
   }
+
   _editorStyleEl.textContent = `
     .ProseMirror:not(.is-cassie-paged) {
       width: 95% !important;
@@ -1519,10 +1501,10 @@ function applyEditorMargin(userVal: number): void {
       background: var(--color-paper, #fff) !important;
       box-shadow: var(--shadow-editor) !important;
       border-radius: 6px !important;
-      padding-top: var(--spacing-xl) !important;
-      padding-bottom: var(--spacing-xl) !important;
-      padding-left: calc(16px + ${internalPct.toFixed(2)}%) !important;
-      padding-right: calc(16px + ${internalPct.toFixed(2)}%) !important;
+      padding-top: ${m.top}px !important;
+      padding-bottom: ${m.bottom}px !important;
+      padding-left: ${m.left}px !important;
+      padding-right: ${m.right}px !important;
       box-sizing: border-box !important;
     }
     .ProseMirror:not(.is-cassie-paged) .pm-page {
@@ -1541,15 +1523,23 @@ function applyEditorMargin(userVal: number): void {
       display: none !important;
     }
     .ProseMirror.is-cassie-paged {
-      padding-left: ${Math.round(userVal * 2.88)}px !important;
-      padding-right: ${Math.round(userVal * 2.88)}px !important;
+      padding-top: ${m.top}px !important;
+      padding-bottom: ${m.bottom}px !important;
+      padding-left: ${m.left}px !important;
+      padding-right: ${m.right}px !important;
     }
   `;
 
-  document.documentElement.style.setProperty("--editor-margin-h", `calc(16px + ${internalPct.toFixed(2)}%)`);
-  localStorage.setItem(MARGIN_KEY, String(userVal));
-  const inp = document.getElementById("inp-editor-width") as HTMLInputElement | null;
-  if (inp && inp.value !== String(userVal)) inp.value = String(userVal);
+  document.documentElement.style.setProperty("--editor-margin-h", `${m.left}px`);
+
+  const inpTop = document.getElementById("inp-margin-top") as HTMLInputElement | null;
+  const inpBottom = document.getElementById("inp-margin-bottom") as HTMLInputElement | null;
+  const inpLeft = document.getElementById("inp-margin-left") as HTMLInputElement | null;
+  const inpRight = document.getElementById("inp-margin-right") as HTMLInputElement | null;
+  if (inpTop && inpTop.value !== String(m.top)) inpTop.value = String(m.top);
+  if (inpBottom && inpBottom.value !== String(m.bottom)) inpBottom.value = String(m.bottom);
+  if (inpLeft && inpLeft.value !== String(m.left)) inpLeft.value = String(m.left);
+  if (inpRight && inpRight.value !== String(m.right)) inpRight.value = String(m.right);
 }
 
 function syncWidthGroupVisibility(): void {
@@ -1558,22 +1548,100 @@ function syncWidthGroupVisibility(): void {
   group.classList.remove("hidden");
 }
 
+function syncInputFields(): void {
+  const m = getMargins();
+  const inpTop = document.getElementById("inp-margin-top") as HTMLInputElement | null;
+  const inpBottom = document.getElementById("inp-margin-bottom") as HTMLInputElement | null;
+  const inpLeft = document.getElementById("inp-margin-left") as HTMLInputElement | null;
+  const inpRight = document.getElementById("inp-margin-right") as HTMLInputElement | null;
+  if (inpTop) inpTop.value = String(m.top);
+  if (inpBottom) inpBottom.value = String(m.bottom);
+  if (inpLeft) inpLeft.value = String(m.left);
+  if (inpRight) inpRight.value = String(m.right);
+}
+
+function toggleMarginsPanel(): void {
+  if (!_marginsPanel || !_marginsBtn) return;
+  if (_marginsPanel.classList.contains("visible")) {
+    _marginsPanel.classList.remove("visible");
+    return;
+  }
+  syncInputFields();
+  const rect = _marginsBtn.getBoundingClientRect();
+  _marginsPanel.style.top = `${rect.bottom + 4}px`;
+  _marginsPanel.style.left = `${rect.left}px`;
+  _marginsPanel.classList.add("visible");
+}
+
+function closeMarginsPanel(): void {
+  if (_marginsPanel) {
+    _marginsPanel.classList.remove("visible");
+  }
+}
+
+function clampAndApply(field: "top" | "bottom" | "left" | "right", value: string): void {
+  const n = parseInt(value, 10);
+  if (isNaN(n)) return;
+  const clamped = Math.max(0, Math.min(200, n));
+  setStateMargins({ [field]: clamped });
+}
+
+function forceCassieRecompute(): void {
+  const view = editorView;
+  if (view) {
+    const tr = view.state.tr.setMeta("force-cassie-recompute", true);
+    view.dispatch(tr);
+  }
+}
+
 function setupWidthControl(): void {
-  applyEditorMargin(getEditorMargin());
+  applyEditorMargins(getMargins());
   syncWidthGroupVisibility();
 
-  const inp = document.getElementById("inp-editor-width") as HTMLInputElement | null;
-  if (!inp) return;
+  _marginsBtn = document.getElementById("btn-margins");
+  _marginsPanel = document.getElementById("margins-panel");
 
-  inp.addEventListener("change", () => {
-    const raw = parseInt(inp.value, 10);
-    const val = isNaN(raw) ? MARGIN_DEFAULT : Math.max(MARGIN_MIN, Math.min(MARGIN_MAX, raw));
-    applyEditorMargin(val);
-  });
+  if (_marginsBtn) {
+    _marginsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleMarginsPanel();
+    });
+  }
 
-  inp.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-  });
+  if (_marginsPanel) {
+    _marginsPanel.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (_marginsPanel && !_marginsPanel.contains(e.target as Node) && _marginsBtn && !_marginsBtn.contains(e.target as Node)) {
+        closeMarginsPanel();
+      }
+    });
+  }
+
+  const fields: Array<{ id: string; field: "top" | "bottom" | "left" | "right" }> = [
+    { id: "inp-margin-top", field: "top" },
+    { id: "inp-margin-bottom", field: "bottom" },
+    { id: "inp-margin-left", field: "left" },
+    { id: "inp-margin-right", field: "right" },
+  ];
+
+  for (const { id, field } of fields) {
+    const inp = document.getElementById(id) as HTMLInputElement | null;
+    if (!inp) continue;
+    inp.addEventListener("change", () => {
+      clampAndApply(field, inp.value);
+    });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+    });
+  }
+
+  window.addEventListener("aurawrite:margins-changed", (() => {
+    applyEditorMargins(getMargins());
+    forceCassieRecompute();
+  }) as EventListener);
 }
 
 // ============================================================================
@@ -1768,6 +1836,65 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
       overflowMenu.appendChild(sectionHeader);
     }
 
+    // If the group is a margins-dropdown, replicate its input fields
+    // with labels so the user can still adjust margins from the overflow menu.
+    if (group.classList.contains("margins-dropdown")) {
+      const panel = group.querySelector(".margins-dropdown__panel") as HTMLElement | null;
+      if (panel) {
+        const rows = panel.querySelectorAll<HTMLElement>(".margins-dropdown__row");
+        for (const row of Array.from(rows)) {
+          const proxyRow = document.createElement("div");
+          proxyRow.className = "overflow-group-row";
+          proxyRow.style.gap = "6px";
+          proxyRow.style.alignItems = "center";
+          proxyRow.style.paddingBottom = "4px";
+
+          const label = row.querySelector("label");
+          const input = row.querySelector("input");
+          const unit = row.querySelector("span");
+
+          if (label) {
+            const proxyLabel = document.createElement("span");
+            proxyLabel.textContent = label.textContent;
+            proxyLabel.style.fontSize = "11px";
+            proxyLabel.style.color = "var(--color-text-muted)";
+            proxyLabel.style.minWidth = "48px";
+            proxyRow.appendChild(proxyLabel);
+          }
+          if (input) {
+            const proxyInput = document.createElement("input");
+            proxyInput.type = "number";
+            proxyInput.min = input.min;
+            proxyInput.max = input.max;
+            proxyInput.step = input.step;
+            proxyInput.value = input.value;
+            proxyInput.className = "toolbar__number-input";
+            proxyInput.style.width = "56px";
+
+            proxyInput.addEventListener("change", () => {
+              input.value = proxyInput.value;
+              input.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+
+            proxyRow.appendChild(proxyInput);
+          }
+          if (unit) {
+            const proxyUnit = document.createElement("span");
+            proxyUnit.textContent = unit.textContent;
+            proxyUnit.style.fontSize = "10px";
+            proxyUnit.style.color = "var(--color-text-muted)";
+            proxyRow.appendChild(proxyUnit);
+          }
+
+          overflowMenu.appendChild(proxyRow);
+        }
+      }
+      const divider = document.createElement("div");
+      divider.className = "dropdown-divider";
+      overflowMenu.appendChild(divider);
+      continue;
+    }
+
     // If the group is a toolbar-dropdown (e.g. "List", "Align", "Decor"),
     // we replicate the dropdown items inline so the user can still
     // reach them. Without this, the user would see only the toggle
@@ -1797,7 +1924,7 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
 
     const children = Array.from(group.children);
     for (const child of children) {
-      if (child.classList.contains("dropdown-menu")) continue;
+      if (child.classList.contains("dropdown-menu") || child.classList.contains("margins-dropdown__panel")) continue;
 
       const proxy = createProxyButton(child as HTMLElement);
       if (proxy) row.appendChild(proxy);
@@ -1863,21 +1990,6 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
     });
 
     return select;
-  }
-
-  if (original instanceof HTMLInputElement && original.type === "color") {
-    const input = document.createElement("input");
-    input.type = "color";
-    input.value = original.value;
-    input.className = original.className;
-    input.title = original.title || "";
-
-    input.addEventListener("input", () => {
-      original.value = input.value;
-      original.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    return input;
   }
 
   if (original instanceof HTMLInputElement && original.type === "color") {

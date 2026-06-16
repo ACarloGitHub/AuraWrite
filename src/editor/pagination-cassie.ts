@@ -33,17 +33,39 @@
 import { prepare, layout, prepareWithSegments, layoutWithLines } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
 
-// Page geometry in CSS pixels. Kept in sync with the constants
-// in pagination-plugin.ts and with src/styles.css (.pm-page).
 export const PAGE_WIDTH_PX = 794;
-export const PAGE_MARGIN_PX = 96;
+export const PAGE_HEIGHT_PX = 1123;
 export const PAGE_HEADER_PX = 48;
 export const PAGE_FOOTER_PX = 24;
-export const PAGE_HEIGHT_PX = 1123;
 
-export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - 2 * PAGE_MARGIN_PX;
+export const DEFAULT_MARGIN_TOP = 96;
+export const DEFAULT_MARGIN_BOTTOM = 96;
+export const DEFAULT_MARGIN_LEFT = 96;
+export const DEFAULT_MARGIN_RIGHT = 96;
+
+export const MARGIN_MIN = 0;
+export const MARGIN_MAX = 200;
+
+export const PAGE_MARGIN_PX = 96;
+
+export interface PageMargins {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+export function getContentWidth(margins: PageMargins): number {
+  return PAGE_WIDTH_PX - margins.left - margins.right;
+}
+
+export function getContentHeight(margins: PageMargins): number {
+  return PAGE_HEIGHT_PX - margins.top - margins.bottom - PAGE_HEADER_PX - PAGE_FOOTER_PX;
+}
+
+export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - DEFAULT_MARGIN_LEFT - DEFAULT_MARGIN_RIGHT;
 export const CONTENT_HEIGHT_PX =
-  PAGE_HEIGHT_PX - 2 * PAGE_MARGIN_PX - PAGE_HEADER_PX - PAGE_FOOTER_PX;
+  PAGE_HEIGHT_PX - DEFAULT_MARGIN_TOP - DEFAULT_MARGIN_BOTTOM - PAGE_HEADER_PX - PAGE_FOOTER_PX;
 
 // Font and metrics for the editor body text. Tuned for Lora at
 // 16px with a 1.5 line-height. These constants are exported so
@@ -75,7 +97,7 @@ export interface LineInfo {
  * decision is consistent and does not depend on the browser having
  * laid out the page already.
  */
-export function measureBlock(node: PMNode | null | undefined): BlockMetrics {
+export function measureBlock(node: PMNode | null | undefined, margins?: PageMargins): BlockMetrics {
   if (!node) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
   }
@@ -83,9 +105,10 @@ export function measureBlock(node: PMNode | null | undefined): BlockMetrics {
   if (!text.trim()) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
   }
+  const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   try {
     const prepared = prepare(text, EDITOR_FONT);
-    const result = layout(prepared, CONTENT_WIDTH_PX, EDITOR_LINE_HEIGHT_PX);
+    const result = layout(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
     const lineCount = Math.max(1, result.lineCount ?? Math.ceil(result.height / EDITOR_LINE_HEIGHT_PX));
     return { heightPx: result.height, lineCount };
   } catch {
@@ -100,7 +123,7 @@ export function measureBlock(node: PMNode | null | undefined): BlockMetrics {
  * mid-paragraph split (future work). Each line is a substring of
  * the original text plus the line break that follows it.
  */
-export function getBlockLines(node: PMNode | null | undefined): LineInfo {
+export function getBlockLines(node: PMNode | null | undefined, margins?: PageMargins): LineInfo {
   if (!node) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lines: [], fullText: "" };
   }
@@ -108,9 +131,10 @@ export function getBlockLines(node: PMNode | null | undefined): LineInfo {
   if (!text.trim()) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lines: [], fullText: text };
   }
+  const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   try {
     const prepared = prepareWithSegments(text, EDITOR_FONT);
-    const result = layoutWithLines(prepared, CONTENT_WIDTH_PX, EDITOR_LINE_HEIGHT_PX);
+    const result = layoutWithLines(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
     const lines = (result.lines ?? []).map((l: { text: string }) => l.text);
     return { heightPx: result.height, lines, fullText: text };
   } catch {
@@ -139,7 +163,8 @@ export interface PaginationCalculation {
  * have empty space at the bottom. The mid-paragraph split is a
  * separate, optional step.
  */
-export function calculatePageBreaks(doc: PMNode): PaginationCalculation {
+export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): PaginationCalculation {
+  const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
   const breaks: PageBreakAt[] = [];
   let currentPageHeight = 0;
   let pageNumber = 1;
@@ -150,12 +175,12 @@ export function calculatePageBreaks(doc: PMNode): PaginationCalculation {
       pos += node.nodeSize;
       return;
     }
-    const { heightPx } = measureBlock(node);
+    const { heightPx } = measureBlock(node, margins);
     if (heightPx <= 0) {
       pos += node.nodeSize;
       return;
     }
-    if (currentPageHeight > 0 && currentPageHeight + heightPx > CONTENT_HEIGHT_PX) {
+    if (currentPageHeight > 0 && currentPageHeight + heightPx > contentHeight) {
       breaks.push({ pos, pageNumber: pageNumber + 1 });
       pageNumber++;
       currentPageHeight = heightPx;

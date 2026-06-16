@@ -218,12 +218,35 @@
           </button>
         </div>
 
-        <!-- WIDTH GROUP (continuous mode only) -->
-        <div class="toolbar-group" id="width-group">
-          <label for="inp-editor-width" class="toolbar__label">Margins</label>
-          <input type="number" id="inp-editor-width" class="toolbar__number-input"
-            min="0" max="100" step="5" value="20"
-            title="Horizontal margins: 0 = full width text, 100 = maximum margins (narrowest)" />
+        <!-- MARGINS GROUP (dropdown with 4 fields) -->
+        <div class="toolbar-group margins-dropdown" id="width-group">
+          <button id="btn-margins" class="toolbar__btn" title="Page margins">
+            <span class="toolbar__btn-icon">↔</span>
+            <span class="toolbar__btn-text">Margins</span>
+            <span class="toolbar__btn-caret">▾</span>
+          </button>
+          <div id="margins-panel" class="margins-dropdown__panel">
+            <div class="margins-dropdown__row">
+              <label for="inp-margin-top">Top</label>
+              <input type="number" id="inp-margin-top" class="toolbar__number-input" min="0" max="200" step="1" value="96" />
+              <span>px</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-margin-bottom">Bottom</label>
+              <input type="number" id="inp-margin-bottom" class="toolbar__number-input" min="0" max="200" step="1" value="96" />
+              <span>px</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-margin-left">Left</label>
+              <input type="number" id="inp-margin-left" class="toolbar__number-input" min="0" max="200" step="1" value="96" />
+              <span>px</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-margin-right">Right</label>
+              <input type="number" id="inp-margin-right" class="toolbar__number-input" min="0" max="200" step="1" value="96" />
+              <span>px</span>
+            </div>
+          </div>
         </div>
 
         <!-- OVERFLOW GROUP (items that don't fit) -->

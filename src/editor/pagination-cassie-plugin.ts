@@ -2,7 +2,7 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
-import { getPagedMode, getCassiePagedMode } from "./pagination-state";
+import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
@@ -10,7 +10,8 @@ function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: bool
   if (getPagedMode()) return DecorationSet.empty;
   if (!cassieEnabled && !cassiePaged) return DecorationSet.empty;
 
-  const { breaks } = calculatePageBreaks(doc);
+  const margins = getMargins();
+  const { breaks } = calculatePageBreaks(doc, margins);
   if (breaks.length === 0) return DecorationSet.empty;
 
   const decorations: Decoration[] = breaks.map((bp) =>
@@ -25,6 +26,7 @@ function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: bool
         if (cassiePaged) {
           const topMargin = document.createElement("div");
           topMargin.className = "aw-page-break-margin-top";
+          topMargin.style.height = `${margins.bottom}px`;
 
           const separator = document.createElement("div");
           separator.className = "aw-page-break-separator";
@@ -39,6 +41,7 @@ function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: bool
 
           const bottomMargin = document.createElement("div");
           bottomMargin.className = "aw-page-break-margin-bottom";
+          bottomMargin.style.height = `${margins.top}px`;
 
           wrap.appendChild(topMargin);
           wrap.appendChild(footerArea);
@@ -46,6 +49,10 @@ function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: bool
           wrap.appendChild(headerArea);
           wrap.appendChild(bottomMargin);
         } else {
+          const topSpacer = document.createElement("div");
+          topSpacer.className = "aw-page-break-spacer-top";
+          topSpacer.style.height = `${margins.bottom}px`;
+
           const line = document.createElement("div");
           line.className = "aw-page-break-line";
 
@@ -53,8 +60,14 @@ function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: bool
           label.className = "aw-page-break-label";
           label.textContent = `Pagina ${bp.pageNumber}`;
 
+          const bottomSpacer = document.createElement("div");
+          bottomSpacer.className = "aw-page-break-spacer-bottom";
+          bottomSpacer.style.height = `${margins.top}px`;
+
+          wrap.appendChild(topSpacer);
           wrap.appendChild(line);
           wrap.appendChild(label);
+          wrap.appendChild(bottomSpacer);
         }
 
         return wrap;

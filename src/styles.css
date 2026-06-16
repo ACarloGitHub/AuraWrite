@@ -2056,7 +2056,7 @@ body {
 .ProseMirror.is-cassie-paged {
   max-width: 794px;
   margin: 0 auto;
-  padding: 96px;
+  padding: 96px 96px;
   background: var(--color-paper, #fff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border-radius: 2px;
@@ -2077,7 +2077,8 @@ body {
    ============================================================================ */
 .aw-page-break {
   position: relative;
-  margin: 1.5em 0 1em 0;
+  margin: 0;
+  padding: 0;
   pointer-events: none;
   user-select: none;
 }
@@ -2096,6 +2097,16 @@ body {
   background: transparent;
   padding: 0 0.4em;
   font-family: system-ui, sans-serif;
+}
+
+.aw-page-break-spacer-top,
+.aw-page-break-spacer-bottom {
+  background: transparent;
+}
+
+.aw-page-break:not(.aw-page-break--paged) .aw-page-break-spacer-top,
+.aw-page-break:not(.aw-page-break--paged) .aw-page-break-spacer-bottom {
+  background: transparent;
 }
 
 /* Paged mode: enriched page break with margins */
@@ -3162,6 +3173,67 @@ kbd {
 /* Hide the width group while paged mode is active */
 #width-group.hidden {
   display: none;
+}
+
+/* Margins dropdown panel */
+.margins-dropdown {
+  position: relative;
+}
+
+.margins-dropdown__panel {
+  position: fixed;
+  min-width: 200px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  padding: 10px 12px;
+  display: none;
+}
+
+.margins-dropdown__panel.visible {
+  display: block;
+}
+
+.margins-dropdown__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.margins-dropdown__row:last-child {
+  margin-bottom: 0;
+}
+
+.margins-dropdown__row label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  width: 52px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.margins-dropdown__row input {
+  width: 56px;
+  padding: 2px 4px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.margins-dropdown__row input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.margins-dropdown__row span {
+  font-size: 10px;
+  color: var(--color-text-muted);
 }
 
 /* Overflow dropdown menu for toolbar */
