@@ -1,46 +1,15 @@
-/**
- * Cassie-style pagination plugin for ProseMirror.
- *
- * Replaces the old DOM-measurement-based pagination plugin. The old
- * approach was broken because `scrollHeight` is asynchronous and
- * returned stale values right after a ProseMirror transaction, so
- * the rebalance made bad decisions and text "slid" to page 2 with
- * no way to come back.
- *
- * The new approach is borrowed from CassieEditor
- * (https://github.com/Cassielxd/CassieEditor): use deterministic
- * text-based measurement (see pagination-cassie.ts) to compute
- * where page breaks should go, and draw them as widget decorations.
- * No DOM nodes are created, no document mutations happen, the
- * schema stays flat (block+), and the cursor is never trapped.
- *
- * The plugin is opt-in: it only adds decorations when the user has
- * enabled "Auto Page Breaks" mode (the "modalità 2" of the design
- * agreed on 2026-06-13). When the user has not enabled it, the
- * plugin returns an empty decoration set, so there is no visible
- * effect on the document.
- *
- * Limitations (acknowledged, see wiki):
- *
- * - The measurement is an approximation. Inline images, tables,
- *   and complex marks are not accounted for.
- * - The split is between blocks, not mid-paragraph. A single
- *   paragraph taller than one page will be moved entirely to the
- *   next page; the previous page has empty space at the bottom.
- *   Mid-paragraph split is a future, separate step.
- */
-
 import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
-import { getPagedMode } from "./pagination-state";
+import { getPagedMode, getCassiePagedMode } from "./pagination-state";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
-function buildDecorations(doc: PMNode, enabled: boolean): DecorationSet {
-  if (!enabled) return DecorationSet.empty;
+function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: boolean): DecorationSet {
   if (getPagedMode()) return DecorationSet.empty;
+  if (!cassieEnabled && !cassiePaged) return DecorationSet.empty;
+
   const { breaks } = calculatePageBreaks(doc);
   if (breaks.length === 0) return DecorationSet.empty;
 
@@ -49,19 +18,45 @@ function buildDecorations(doc: PMNode, enabled: boolean): DecorationSet {
       bp.pos,
       () => {
         const wrap = document.createElement("div");
-        wrap.className = "aw-page-break";
+        wrap.className = cassiePaged ? "aw-page-break aw-page-break--paged" : "aw-page-break";
         wrap.setAttribute("data-page", String(bp.pageNumber));
         wrap.contentEditable = "false";
 
-        const line = document.createElement("div");
-        line.className = "aw-page-break-line";
+        if (cassiePaged) {
+          const topMargin = document.createElement("div");
+          topMargin.className = "aw-page-break-margin-top";
 
-        const label = document.createElement("span");
-        label.className = "aw-page-break-label";
-        label.textContent = `Pagina ${bp.pageNumber}`;
+          const separator = document.createElement("div");
+          separator.className = "aw-page-break-separator";
 
-        wrap.appendChild(line);
-        wrap.appendChild(label);
+          const footerArea = document.createElement("div");
+          footerArea.className = "aw-page-break-footer";
+          footerArea.textContent = String(bp.pageNumber);
+
+          const headerArea = document.createElement("div");
+          headerArea.className = "aw-page-break-header";
+          headerArea.textContent = String(bp.pageNumber + 1);
+
+          const bottomMargin = document.createElement("div");
+          bottomMargin.className = "aw-page-break-margin-bottom";
+
+          wrap.appendChild(topMargin);
+          wrap.appendChild(footerArea);
+          wrap.appendChild(separator);
+          wrap.appendChild(headerArea);
+          wrap.appendChild(bottomMargin);
+        } else {
+          const line = document.createElement("div");
+          line.className = "aw-page-break-line";
+
+          const label = document.createElement("span");
+          label.className = "aw-page-break-label";
+          label.textContent = `Pagina ${bp.pageNumber}`;
+
+          wrap.appendChild(line);
+          wrap.appendChild(label);
+        }
+
         return wrap;
       },
       {
@@ -86,13 +81,13 @@ export function createCassiePaginationPlugin(
     key: cassiePaginationPluginKey,
 
     state: {
-      init: (_, state) => buildDecorations(state.doc, options.enabled()),
+      init: (_, state) => buildDecorations(state.doc, options.enabled(), getCassiePagedMode()),
       apply: (tr, old, _oldState, newState) => {
         if (tr.getMeta("force-cassie-recompute")) {
-          return buildDecorations(newState.doc, options.enabled());
+          return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode());
         }
         if (!tr.docChanged) return old;
-        return buildDecorations(newState.doc, options.enabled());
+        return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode());
       },
     },
 

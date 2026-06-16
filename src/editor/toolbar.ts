@@ -21,9 +21,8 @@ import {
   initPagination,
   updateOnTextChange,
 } from "./fake-pagination";
-import { getPagedMode } from "./pagination-state";
-import { getCassieMode, setCassieMode } from "./pagination-state";
-import { togglePagedMode as toggleDocPagedMode } from "./editor";
+import { getCassieMode, setCassieMode, getCassiePagedMode } from "./pagination-state";
+import { toggleCassiePagedMode } from "./editor";
 import {
   currentProject,
   currentDocument,
@@ -1002,15 +1001,12 @@ function setupFormattingButtons(): void {
 
   const btnPagedMode = document.getElementById("btn-paged-mode");
   btnPagedMode?.addEventListener("click", () => {
-    handleTogglePagedMode();
+    handleToggleCassiePagedMode();
   });
-  updatePagedModeButtonText();
-  window.addEventListener("aurawrite:pagination-mode-changed", ((e: CustomEvent) => {
-    updatePagedModeButtonText();
-    if (e.detail.enabled && getCassieMode()) {
-      setCassieMode(false);
-    }
-  }) as EventListener);
+  updateCassiePagedModeButton();
+  window.addEventListener("aurawrite:cassie-paged-changed", () => {
+    updateCassiePagedModeButton();
+  });
 
   const btnCassie = document.getElementById("btn-cassie-pagination");
   btnCassie?.addEventListener("click", () => {
@@ -1410,9 +1406,9 @@ function togglePageBreak(): void {
   }
 }
 
-function handleTogglePagedMode(): void {
-  toggleDocPagedMode(editorView);
-  updatePagedModeButtonText();
+function handleToggleCassiePagedMode(): void {
+  toggleCassiePagedMode(editorView);
+  updateCassiePagedModeButton();
   editorView.focus();
 }
 
@@ -1431,18 +1427,17 @@ function updateCassieModeButton(): void {
   const btn = document.getElementById("btn-cassie-pagination") as HTMLButtonElement | null;
   if (!btn) return;
   btn.classList.toggle("toolbar__btn--active", getCassieMode());
-  btn.disabled = getPagedMode();
+  btn.disabled = getCassiePagedMode();
 }
 
-function updatePagedModeButtonText(): void {
+function updateCassiePagedModeButton(): void {
   const btn = document.getElementById("btn-paged-mode");
   if (!btn) return;
   const btnText = btn.querySelector(".toolbar__btn-text");
   if (!btnText) return;
-  const isPaged = getPagedMode();
+  const isPaged = getCassiePagedMode();
   btnText.textContent = isPaged ? "Scroll" : "Pages";
   btn.classList.toggle("toolbar__btn--active", isPaged);
-  // Show/hide the persistent info banner above the editor.
   const banner = document.getElementById("paged-info-banner");
   if (banner) {
     if (isPaged) {
@@ -1451,7 +1446,6 @@ function updatePagedModeButtonText(): void {
       banner.setAttribute("hidden", "");
     }
   }
-  // Show/hide the width control depending on mode
   syncWidthGroupVisibility();
   updateCassieModeButton();
 }
@@ -1525,7 +1519,7 @@ function applyEditorMargin(userVal: number): void {
     document.head.appendChild(_editorStyleEl);
   }
   _editorStyleEl.textContent = `
-    .ProseMirror:not(.is-paged-mode) {
+    .ProseMirror:not(.is-cassie-paged) {
       width: 95% !important;
       max-width: 95% !important;
       min-height: calc(100% - 40px) !important;
@@ -1539,7 +1533,7 @@ function applyEditorMargin(userVal: number): void {
       padding-right: calc(16px + ${internalPct.toFixed(2)}%) !important;
       box-sizing: border-box !important;
     }
-    .ProseMirror:not(.is-paged-mode) .pm-page {
+    .ProseMirror:not(.is-cassie-paged) .pm-page {
       width: 100% !important;
       max-width: none !important;
       min-height: 100% !important;
@@ -1550,8 +1544,8 @@ function applyEditorMargin(userVal: number): void {
       border: none !important;
       border-radius: 0 !important;
     }
-    .ProseMirror:not(.is-paged-mode) .pm-page-header,
-    .ProseMirror:not(.is-paged-mode) .pm-page-footer {
+    .ProseMirror:not(.is-cassie-paged) .pm-page-header,
+    .ProseMirror:not(.is-cassie-paged) .pm-page-footer {
       display: none !important;
     }
   `;
@@ -1565,7 +1559,7 @@ function applyEditorMargin(userVal: number): void {
 function syncWidthGroupVisibility(): void {
   const group = document.getElementById("width-group");
   if (!group) return;
-  group.classList.toggle("hidden", getPagedMode());
+  group.classList.toggle("hidden", getCassiePagedMode());
 }
 
 function setupWidthControl(): void {

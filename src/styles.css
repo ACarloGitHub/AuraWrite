@@ -2048,6 +2048,28 @@ body {
 }
 
 /* ============================================================================
+   CASSIE PAGED MODE — A4 continuous page with page break margins
+   The document stays flat (no page nodes). The editor area has A4 width
+   with visible margins. Page break decorations create visual separation
+   between pages with margin whitespace, page numbers, and footnotes.
+   ============================================================================ */
+.ProseMirror.is-cassie-paged {
+  max-width: 794px;
+  margin: 0 auto;
+  padding: 96px;
+  background: var(--color-paper, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border-radius: 2px;
+  min-height: 1123px;
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
+[data-theme="dark"] .ProseMirror.is-cassie-paged {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================
    AURAWRITE AUTO PAGE-BREAK DECORATIONS (Cassie-style pagination)
    These decorations are inserted by pagination-cassie-plugin.ts.
    They are visual only: no node is added to the document, so the
@@ -2076,12 +2098,60 @@ body {
   font-family: system-ui, sans-serif;
 }
 
+/* Paged mode: enriched page break with margins */
+.aw-page-break--paged {
+  margin: 0;
+  padding: 0;
+  border: none;
+  height: auto;
+}
+
+.aw-page-break-margin-top {
+  height: 96px;
+  background: transparent;
+}
+
+.aw-page-break-footer {
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted, #999);
+  padding: 0 0 12px 0;
+  font-family: system-ui, sans-serif;
+}
+
+.aw-page-break-separator {
+  border-top: 1px dashed #c0c0c0;
+  margin: 0 32px;
+}
+
+.aw-page-break-header {
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted, #999);
+  padding: 12px 0 0 0;
+  font-family: system-ui, sans-serif;
+}
+
+.aw-page-break-margin-bottom {
+  height: 96px;
+  background: transparent;
+}
+
 [data-theme="dark"] .aw-page-break-line {
   border-top-color: #555;
 }
 
 [data-theme="dark"] .aw-page-break-label {
   color: #aaa;
+}
+
+[data-theme="dark"] .aw-page-break-separator {
+  border-top-color: #444;
+}
+
+[data-theme="dark"] .aw-page-break-footer,
+[data-theme="dark"] .aw-page-break-header {
+  color: #777;
 }
 
 /* ============================================================================
@@ -2192,18 +2262,8 @@ kbd {
   line-height: 1.4;
 }
 
-/* When paged mode is active, override the base .ProseMirror layout.
-   In paged mode we reset #editor horizontal padding to 0 (via JS class),
-   and the .pm-page blocks center themselves via margin:auto. */
-.ProseMirror.is-paged-mode {
-  max-width: none;
-  width: 100%;
-  padding: var(--spacing-xl) 0;
-  background: transparent;
-  white-space: normal;
-  font-size: 11pt;
-  line-height: 1.6;
-}
+/* When paged mode was active, override the base .ProseMirror layout.
+   Now handled by .is-cassie-paged class above. */
 
 
 /* ============================================================================

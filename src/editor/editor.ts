@@ -24,14 +24,14 @@ import { pageBreakPlugin } from "./page-break-widget";
 import { createPageBreakPlugin } from "./page-break-plugin";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
-import { createPaginationPlugin, requestPaginationRecalc } from "./pagination-plugin";
+import { createPaginationPlugin } from "./pagination-plugin";
 import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { PageNodeView } from "./page-node-view";
 import { ImageNodeView } from "./image-node-view";
 import { updateImageToolbar } from "./toolbar";
-import { initPagedMode, getPagedMode, setPagedMode, getCassieMode } from "./pagination-state";
+import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
 // ============================================================================
 // Custom Schema — Extended for full rich text editing
@@ -595,24 +595,19 @@ export function createEditor(element: HTMLElement): EditorViewType {
     },
   });
 
-  // Set initial pagination classes based on getPagedMode()
-  if (getPagedMode()) {
-    view.dom.classList.add("is-paged-mode");
-    view.dom.classList.add("paged-mode");
-  } else {
-    view.dom.classList.remove("is-paged-mode");
-    view.dom.classList.remove("paged-mode");
+  // Set initial pagination classes based on getCassiePagedMode()
+  if (getCassiePagedMode()) {
+    view.dom.classList.add("is-cassie-paged");
   }
 
-  window.addEventListener("aurawrite:pagination-mode-changed", ((e: CustomEvent) => {
-    const enabled = e.detail.enabled as boolean;
-    if (enabled) {
-      view.dom.classList.add("is-paged-mode");
-      view.dom.classList.add("paged-mode");
+  window.addEventListener("aurawrite:cassie-paged-changed", ((e: CustomEvent) => {
+    if (e.detail.enabled) {
+      view.dom.classList.add("is-cassie-paged");
     } else {
-      view.dom.classList.remove("is-paged-mode");
-      view.dom.classList.remove("paged-mode");
+      view.dom.classList.remove("is-cassie-paged");
     }
+    const tr = view.state.tr.setMeta("force-cassie-recompute", true);
+    view.dispatch(tr);
   }) as EventListener);
 
   return view as unknown as EditorViewType;
@@ -698,30 +693,24 @@ export function unwrapPages(view: EditorView): void {
   view.dispatch(tr);
 }
 
-export function togglePagedMode(view: EditorView): void {
-  const currentlyPaged = getPagedMode();
+export function toggleCassiePagedMode(view: EditorView): void {
+  const currentlyPaged = getCassiePagedMode();
   if (currentlyPaged) {
-    setPagedMode(false);
-    unwrapPages(view);
-    view.dom.classList.remove("paged-mode");
-    view.dom.classList.remove("is-paged-mode");
+    setCassiePagedMode(false);
+    view.dom.classList.remove("is-cassie-paged");
   } else {
-    wrapInPages(view);
-    setPagedMode(true);
-    view.dom.classList.add("paged-mode");
-    view.dom.classList.add("is-paged-mode");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          requestPaginationRecalc();
-        });
-      });
-    });
+    if (getCassieMode()) {
+      // Cassie continuous and Cassie paged are mutually exclusive
+      // We just switch to paged
+    }
+    setCassiePagedMode(true);
+    view.dom.classList.add("is-cassie-paged");
   }
+  const tr = view.state.tr.setMeta("force-cassie-recompute", true);
+  view.dispatch(tr);
 }
 
 export function syncDocumentPaginationState(view: EditorView): void {
-  const isPagedMode = getPagedMode();
   const doc = view.state.doc;
 
   let hasPages = false;
@@ -729,13 +718,7 @@ export function syncDocumentPaginationState(view: EditorView): void {
     if (node.type.name === "page") hasPages = true;
   });
 
-  if (isPagedMode) {
-    if (!hasPages) {
-      wrapInPages(view);
-    }
-  } else {
-    if (hasPages) {
-      unwrapPages(view);
-    }
+  if (hasPages) {
+    unwrapPages(view);
   }
 }

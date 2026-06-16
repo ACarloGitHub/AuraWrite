@@ -2,7 +2,7 @@ import type { EditorView } from "prosemirror-view";
 import type { Transaction } from "prosemirror-state";
 import { EditorState, Plugin, PluginKey } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
-import { getPagedMode, setPagedMode } from "./pagination-state";
+import { getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 import {
   addColumnBefore,
   addColumnAfter,
@@ -246,7 +246,7 @@ function showTableWarningBanner(): void {
   tableWarningBanner.className = "table-warning-banner";
   tableWarningBanner.innerHTML =
     '<span class="table-warning-banner__icon">⚠️</span>' +
-    '<span class="table-warning-banner__text">Tables are not compatible with paged mode. Paged mode has been disabled.</span>';
+    '<span class="table-warning-banner__text">Tables are not compatible with paged view. Paged view has been disabled.</span>';
   const editorEl = document.getElementById("editor");
   if (editorEl) {
     editorEl.parentNode?.insertBefore(tableWarningBanner, editorEl.nextSibling);
@@ -263,12 +263,11 @@ function hideTableWarningBanner(): void {
 export function checkTablesAndPagedMode(view: EditorView): void {
   const doc = view.state.doc;
   const tablesFound = hasTable(doc);
-  const isPaged = getPagedMode();
+  const isCassiePaged = getCassiePagedMode();
 
-  if (tablesFound && isPaged) {
-    setPagedMode(false);
-    view.dom.classList.remove("paged-mode");
-    view.dom.classList.remove("is-paged-mode");
+  if (tablesFound && isCassiePaged) {
+    setCassiePagedMode(false);
+    view.dom.classList.remove("is-cassie-paged");
     showTableWarningBanner();
   } else if (!tablesFound) {
     hideTableWarningBanner();
