@@ -482,6 +482,7 @@ function parseInlineMarkdown(text: string): any[] {
           aspectLocked: true,
           offsetLeft: 0,
           offsetTop: 0,
+          caption: "",
         },
       });
       remaining = remaining.substring(imageMatch[0].length);

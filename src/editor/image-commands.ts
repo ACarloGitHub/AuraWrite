@@ -26,6 +26,7 @@ export function createImageNode(
     aspectLocked: true,
     offsetLeft: 0,
     offsetTop: 0,
+    caption: "",
   };
   return imageType.create(attrs);
 }
@@ -114,6 +115,7 @@ export function insertImageFromSrc(
     aspectLocked: true,
     offsetLeft: 0,
     offsetTop: 0,
+    caption: "",
   });
   return insertImageBlock(view, node);
 }
@@ -144,6 +146,19 @@ export async function getSelectedImage(view: EditorView): Promise<SelectedImageI
   return null;
 }
 
+function safeSetNodeMarkup(
+  view: EditorView,
+  pos: number,
+  attrs: Record<string, unknown>
+): boolean {
+  try {
+    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, attrs));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function setImageAlignment(
   view: EditorView,
   align: "left" | "center" | "right"
@@ -152,13 +167,7 @@ export async function setImageAlignment(
   if (!info) return false;
   const currentWrap = !!info.node.attrs.wrap;
   const wrap = align === "center" ? false : currentWrap;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    align,
-    wrap,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, align, wrap });
 }
 
 export async function setImageWrap(
@@ -167,12 +176,7 @@ export async function setImageWrap(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    wrap,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, wrap });
 }
 
 export async function setImageRotation(
@@ -181,12 +185,7 @@ export async function setImageRotation(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    rotation,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, rotation });
 }
 
 export async function setImageFlipH(
@@ -195,12 +194,7 @@ export async function setImageFlipH(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    flipH,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, flipH });
 }
 
 export async function setImageFlipV(
@@ -209,12 +203,7 @@ export async function setImageFlipV(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    flipV,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, flipV });
 }
 
 export async function setImageAspectLocked(
@@ -223,12 +212,7 @@ export async function setImageAspectLocked(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    aspectLocked,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, aspectLocked });
 }
 
 export async function setImageSize(
@@ -238,13 +222,7 @@ export async function setImageSize(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    width,
-    height,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, width, height });
 }
 
 export async function setImageOffset(
@@ -254,13 +232,7 @@ export async function setImageOffset(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, {
-    ...info.node.attrs,
-    offsetLeft,
-    offsetTop,
-  });
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, offsetLeft, offsetTop });
 }
 
 export async function setImageWidth(
@@ -275,9 +247,7 @@ export async function setImageWidth(
     const currentH = (info.node.attrs.height as number) || 1;
     attrs.height = Math.round((width / currentW) * currentH);
   }
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, attrs);
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, attrs);
 }
 
 export async function setImageHeight(
@@ -292,9 +262,16 @@ export async function setImageHeight(
     const currentH = (info.node.attrs.height as number) || 1;
     attrs.width = Math.round((height / currentH) * currentW);
   }
-  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, attrs);
-  view.dispatch(tr);
-  return true;
+  return safeSetNodeMarkup(view, info.pos, attrs);
+}
+
+export async function setImageCaption(
+  view: EditorView,
+  caption: string
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, caption });
 }
 
 export async function removeImage(view: EditorView): Promise<boolean> {

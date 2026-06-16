@@ -16,6 +16,7 @@ export class ImageNodeView implements NodeView {
   private img: HTMLImageElement;
   private handles: HandleEl[] = [];
   private rotateHandle: HTMLElement | null = null;
+  private captionEl: HTMLElement | null = null;
   private resolved = false;
   private aspect = 1;
 
@@ -42,6 +43,7 @@ export class ImageNodeView implements NodeView {
     this.wrapper.appendChild(this.img);
     this.createHandles();
     this.createRotateHandle();
+    this.applyCaption(attrs);
     this.bindEvents();
 
     this.dom = this.wrapper;
@@ -100,6 +102,23 @@ export class ImageNodeView implements NodeView {
     else this.wrapper.style.removeProperty("margin-left");
     if (offsetTop) this.wrapper.style.marginTop = `${offsetTop}px`;
     else this.wrapper.style.removeProperty("margin-top");
+  }
+
+  private applyCaption(attrs: Record<string, unknown>): void {
+    const caption = (attrs.caption as string) || "";
+    if (caption) {
+      if (!this.captionEl) {
+        this.captionEl = document.createElement("div");
+        this.captionEl.className = "image-caption";
+        this.wrapper.appendChild(this.captionEl);
+      }
+      if (this.captionEl.textContent !== caption) {
+        this.captionEl.textContent = caption;
+      }
+    } else if (this.captionEl) {
+      this.captionEl.remove();
+      this.captionEl = null;
+    }
   }
 
   private applySize(attrs: Record<string, unknown>): void {
@@ -220,12 +239,14 @@ export class ImageNodeView implements NodeView {
     if (pos == null) return;
     const node = this.view.state.doc.nodeAt(pos);
     if (!node) return;
-    const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      width: Math.round(width),
-      height: Math.round(height),
-    });
-    this.view.dispatch(tr);
+    try {
+      const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        width: Math.round(width),
+        height: Math.round(height),
+      });
+      this.view.dispatch(tr);
+    } catch {}
   }
 
   private onRotateMouseDown(e: MouseEvent): void {
@@ -261,11 +282,13 @@ export class ImageNodeView implements NodeView {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       const deg = computeRotation(ev);
-      const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
-        ...node.attrs,
-        rotation: deg,
-      });
-      this.view.dispatch(tr);
+      try {
+        const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
+          ...node.attrs,
+          rotation: deg,
+        });
+        this.view.dispatch(tr);
+      } catch {}
     };
 
     document.addEventListener("mousemove", onMove);
@@ -303,12 +326,14 @@ export class ImageNodeView implements NodeView {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       const { offsetLeft, offsetTop } = computeOffset(ev);
-      const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
-        ...node.attrs,
-        offsetLeft,
-        offsetTop,
-      });
-      this.view.dispatch(tr);
+      try {
+        const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
+          ...node.attrs,
+          offsetLeft,
+          offsetTop,
+        });
+        this.view.dispatch(tr);
+      } catch {}
     };
 
     document.addEventListener("mousemove", onMove);
@@ -331,15 +356,17 @@ export class ImageNodeView implements NodeView {
       if (pos == null) return;
       const node = this.view.state.doc.nodeAt(pos);
       if (!node) return;
-      const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        src: uploaded.src,
-        alt: uploaded.filename,
-        title: uploaded.filename,
-        width: uploaded.width,
-        height: uploaded.height,
-      });
-      this.view.dispatch(tr);
+      try {
+        const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          src: uploaded.src,
+          alt: uploaded.filename,
+          title: uploaded.filename,
+          width: uploaded.width,
+          height: uploaded.height,
+        });
+        this.view.dispatch(tr);
+      } catch {}
     } catch (e) {
       console.warn("[image] replace failed:", e);
     }
@@ -398,6 +425,7 @@ export class ImageNodeView implements NodeView {
     }
     this.applyTransform(attrs);
     this.applyOffset(attrs);
+    this.applyCaption(attrs);
     return true;
   }
 
@@ -412,5 +440,6 @@ export class ImageNodeView implements NodeView {
   destroy(): void {
     this.handles = [];
     this.rotateHandle = null;
+    this.captionEl = null;
   }
 }

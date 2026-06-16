@@ -4222,6 +4222,15 @@ kbd {
   -webkit-user-drag: none;
 }
 
+.image-caption {
+  text-align: center;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-muted, #666);
+  padding: 4px 8px 0;
+  margin: 0;
+}
+
 .image-node-wrapper--selected {
   outline: 1px solid var(--color-primary, #4a90d9);
   outline-offset: 1px;
@@ -4385,6 +4394,17 @@ kbd {
 .image-toolbar__field input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+.image-toolbar__field--caption input[type="text"] {
+  width: 120px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  height: 26px;
 }
 
 /* ============================================================================

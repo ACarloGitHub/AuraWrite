@@ -13,7 +13,7 @@ import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageOffset, setImageWidth, setImageHeight, removeImage } from "./image-commands";
+import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageOffset, setImageWidth, setImageHeight, setImageCaption, removeImage } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -1955,6 +1955,7 @@ function setupImageToolbar(view: EditorView): void {
   const inputOffsetLeft = document.getElementById("img-offset-left") as HTMLInputElement | null;
   const inputOffsetTop = document.getElementById("img-offset-top") as HTMLInputElement | null;
   const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
+  const inputCaption = document.getElementById("img-caption") as HTMLInputElement | null;
 
   btnAlignLeft?.addEventListener("click", () => {
     void setImageAlignment(view, "left");
@@ -2032,6 +2033,9 @@ function setupImageToolbar(view: EditorView): void {
     val = ((val % 360) + 360) % 360;
     void setImageRotation(view, val);
   });
+  inputCaption?.addEventListener("change", () => {
+    void setImageCaption(view, inputCaption.value);
+  });
 }
 
 export function updateImageToolbar(view: EditorView): void {
@@ -2071,7 +2075,8 @@ export function updateImageToolbar(view: EditorView): void {
     const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;
     const inputOffsetLeft = document.getElementById("img-offset-left") as HTMLInputElement | null;
     const inputOffsetTop = document.getElementById("img-offset-top") as HTMLInputElement | null;
-    const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
+  const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
+  const inputCaption = document.getElementById("img-caption") as HTMLInputElement | null;
 
     if (inputWidth) {
       const w = attrs.width as number | null;
@@ -2090,6 +2095,9 @@ export function updateImageToolbar(view: EditorView): void {
     if (inputRotation) {
       const r = (attrs.rotation as number) || 0;
       inputRotation.value = r ? String(r) : "";
+    }
+    if (inputCaption) {
+      inputCaption.value = (attrs.caption as string) || "";
     }
   })();
 }

@@ -264,6 +264,7 @@ const imageSpec: NodeSpec = {
     aspectLocked: { default: true },
     offsetLeft: { default: 0 },
     offsetTop: { default: 0 },
+    caption: { default: "" },
   },
   parseDOM: [
     {
@@ -286,6 +287,7 @@ const imageSpec: NodeSpec = {
           aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
           offsetLeft: parseInt(dom.getAttribute("data-offset-left") || "0", 10) || 0,
           offsetTop: parseInt(dom.getAttribute("data-offset-top") || "0", 10) || 0,
+          caption: dom.getAttribute("data-caption") || "",
         };
       },
     },
@@ -306,6 +308,7 @@ const imageSpec: NodeSpec = {
     if (!node.attrs.aspectLocked) attrs["data-aspect-unlocked"] = "";
     if (node.attrs.offsetLeft) attrs["data-offset-left"] = String(node.attrs.offsetLeft);
     if (node.attrs.offsetTop) attrs["data-offset-top"] = String(node.attrs.offsetTop);
+    if (node.attrs.caption) attrs["data-caption"] = node.attrs.caption as string;
     return ["img", attrs];
   },
 };
