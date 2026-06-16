@@ -1616,7 +1616,7 @@ const GROUP_LABELS: Record<string, string> = {
   "alignment-group": "Alignment",
   "line-height-group": "Line Height",
   "page-group": "Page",
-  "width-group": "Width",
+  "width-group": "Margins",
   "misc-group": "Settings",
 };
 
