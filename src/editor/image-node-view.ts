@@ -1,7 +1,8 @@
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView } from "prosemirror-view";
 import { NodeSelection } from "prosemirror-state";
-import { resolveImageSrc } from "./image-uploader";
+import { invoke } from "@tauri-apps/api/core";
+import { resolveImageSrc, uploadImageFile } from "./image-uploader";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -133,6 +134,11 @@ export class ImageNodeView implements NodeView {
     this.wrapper.addEventListener("click", (e) => {
       e.stopPropagation();
       this.selectNodeInEditor();
+    });
+    this.wrapper.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      void this.replaceImage();
     });
     this.wrapper.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
@@ -307,6 +313,56 @@ export class ImageNodeView implements NodeView {
 
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+  }
+
+  private async replaceImage(): Promise<void> {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg"] }],
+    });
+    if (!selected || typeof selected !== "string") return;
+    try {
+      const fileName = selected.split(/[\\/]/).pop() || "image";
+      const base64 = await invoke<string>("load_binary_file", { path: selected });
+      const fakeFile = this.makeFileLike(fileName, this.mimeFromFilename(fileName), base64);
+      const uploaded = await uploadImageFile(fakeFile);
+      const pos = this.getPos();
+      if (pos == null) return;
+      const node = this.view.state.doc.nodeAt(pos);
+      if (!node) return;
+      const tr = this.view.state.tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        src: uploaded.src,
+        alt: uploaded.filename,
+        title: uploaded.filename,
+        width: uploaded.width,
+        height: uploaded.height,
+      });
+      this.view.dispatch(tr);
+    } catch (e) {
+      console.warn("[image] replace failed:", e);
+    }
+  }
+
+  private makeFileLike(name: string, type: string, base64: string): File {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type });
+    return new File([blob], name, { type });
+  }
+
+  private mimeFromFilename(name: string): string {
+    const lower = name.toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+    if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".webp")) return "image/webp";
+    if (lower.endsWith(".bmp")) return "image/bmp";
+    if (lower.endsWith(".svg")) return "image/svg+xml";
+    return "application/octet-stream";
   }
 
   update(node: PMNode): boolean {
