@@ -128,6 +128,15 @@ export async function getSelectedImage(view: EditorView): Promise<SelectedImageI
     const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
     return { pos, node, resolvedSrc };
   }
+  const { $from } = selection;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === "image") {
+      const pos = $from.before(d);
+      const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
+      return { pos, node, resolvedSrc };
+    }
+  }
   return null;
 }
 
