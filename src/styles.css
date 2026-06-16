@@ -4166,6 +4166,10 @@ kbd {
   transition: border-color 0.15s;
 }
 
+.ProseMirror .image-node-wrapper img {
+  max-width: none;
+}
+
 .ProseMirror .ProseMirror-selectednode + .image-node-wrapper img,
 .ProseMirror .image-node-wrapper.ProseMirror-selectednode img {
   border-color: var(--color-primary, #4a90d9);
@@ -4213,7 +4217,6 @@ kbd {
 
 .image-node-wrapper img {
   display: block;
-  max-width: 100%;
   vertical-align: top;
 }
 

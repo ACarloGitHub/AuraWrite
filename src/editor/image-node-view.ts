@@ -32,8 +32,7 @@ export class ImageNodeView implements NodeView {
     this.img = document.createElement("img");
     this.img.alt = (attrs.alt as string) || "";
     this.img.title = (attrs.title as string) || "";
-    if (attrs.width) this.img.setAttribute("width", String(attrs.width));
-    if (attrs.height) this.img.setAttribute("height", String(attrs.height));
+    this.applySize(attrs);
     this.img.setAttribute("src", (attrs.src as string) || "");
     this.img.draggable = false;
 
@@ -88,6 +87,15 @@ export class ImageNodeView implements NodeView {
     } else {
       this.wrapper.style.removeProperty("transform");
     }
+  }
+
+  private applySize(attrs: Record<string, unknown>): void {
+    const w = attrs.width as number | null;
+    const h = attrs.height as number | null;
+    if (w) this.img.style.width = `${w}px`;
+    else this.img.style.removeProperty("width");
+    if (h) this.img.style.height = `${h}px`;
+    else this.img.style.removeProperty("height");
   }
 
   private createHandles(): void {
@@ -174,8 +182,6 @@ export class ImageNodeView implements NodeView {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       const { width, height } = computeNewSize(ev);
-      this.img.style.width = "";
-      this.img.style.height = "";
       void this.persistSize(width, height);
     };
     document.addEventListener("mousemove", onMove);
@@ -204,12 +210,7 @@ export class ImageNodeView implements NodeView {
     if (this.img.title !== (attrs.title as string)) {
       this.img.title = (attrs.title as string) || "";
     }
-    const newWidth = attrs.width ? String(attrs.width) : null;
-    if (newWidth) this.img.setAttribute("width", newWidth);
-    else this.img.removeAttribute("width");
-    const newHeight = attrs.height ? String(attrs.height) : null;
-    if (newHeight) this.img.setAttribute("height", newHeight);
-    else this.img.removeAttribute("height");
+    this.applySize(attrs);
     const newAlign = (attrs.align as string) || "center";
     if (this.wrapper.getAttribute("data-align") !== newAlign) {
       this.wrapper.setAttribute("data-align", newAlign);
