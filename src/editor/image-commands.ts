@@ -280,6 +280,23 @@ export async function setImageWidth(
   return true;
 }
 
+export async function setImageHeight(
+  view: EditorView,
+  height: number
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  const attrs: Record<string, unknown> = { ...info.node.attrs, height };
+  if (info.node.attrs.aspectLocked !== false) {
+    const currentW = (info.node.attrs.width as number) || 1;
+    const currentH = (info.node.attrs.height as number) || 1;
+    attrs.width = Math.round((height / currentH) * currentW);
+  }
+  const tr = view.state.tr.setNodeMarkup(info.pos, undefined, attrs);
+  view.dispatch(tr);
+  return true;
+}
+
 export async function removeImage(view: EditorView): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;

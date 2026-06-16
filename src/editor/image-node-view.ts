@@ -14,6 +14,7 @@ export class ImageNodeView implements NodeView {
   private wrapper: HTMLElement;
   private img: HTMLImageElement;
   private handles: HandleEl[] = [];
+  private rotateHandle: HTMLElement | null = null;
   private resolved = false;
   private aspect = 1;
 
@@ -39,6 +40,7 @@ export class ImageNodeView implements NodeView {
 
     this.wrapper.appendChild(this.img);
     this.createHandles();
+    this.createRotateHandle();
     this.bindEvents();
 
     this.dom = this.wrapper;
@@ -120,6 +122,13 @@ export class ImageNodeView implements NodeView {
     }
   }
 
+  private createRotateHandle(): void {
+    this.rotateHandle = document.createElement("div");
+    this.rotateHandle.className = "image-rotate-handle";
+    this.rotateHandle.addEventListener("mousedown", (e) => this.onRotateMouseDown(e));
+    this.wrapper.appendChild(this.rotateHandle);
+  }
+
   private bindEvents(): void {
     this.wrapper.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -127,9 +136,11 @@ export class ImageNodeView implements NodeView {
     });
     this.wrapper.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
-      if ((e.target as HTMLElement).classList.contains("image-resize-handle")) return;
+      const target = e.target as HTMLElement;
+      if (target.classList.contains("image-resize-handle")) return;
+      if (target.classList.contains("image-rotate-handle")) return;
       e.preventDefault();
-      this.selectNodeInEditor();
+      this.onDragStart(e);
     });
   }
 
@@ -211,6 +222,93 @@ export class ImageNodeView implements NodeView {
     this.view.dispatch(tr);
   }
 
+  private onRotateMouseDown(e: MouseEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return;
+    const startRotation = (node.attrs.rotation as number) || 0;
+    const rect = this.wrapper.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    const computeRotation = (ev: MouseEvent): number => {
+      const angle = Math.atan2(ev.clientY - centerY, ev.clientX - centerX) * (180 / Math.PI) + 90;
+      return ((Math.round(angle) % 360) + 360) % 360;
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      const deg = computeRotation(ev);
+      const parts: string[] = [];
+      parts.push(`rotate(${deg}deg)`);
+      const flipH = node.attrs.flipH as boolean;
+      const flipV = node.attrs.flipV as boolean;
+      if (flipH && flipV) parts.push("scale(-1, -1)");
+      else if (flipH) parts.push("scaleX(-1)");
+      else if (flipV) parts.push("scaleY(-1)");
+      this.wrapper.style.transform = parts.join(" ");
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      const deg = computeRotation(ev);
+      const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
+        ...node.attrs,
+        rotation: deg,
+      });
+      this.view.dispatch(tr);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  private onDragStart(e: MouseEvent): void {
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return;
+    const startOffsetLeft = (node.attrs.offsetLeft as number) || 0;
+    const startOffsetTop = (node.attrs.offsetTop as number) || 0;
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    this.selectNodeInEditor();
+
+    const computeOffset = (ev: MouseEvent): { offsetLeft: number; offsetTop: number } => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      return {
+        offsetLeft: Math.max(0, startOffsetLeft + dx),
+        offsetTop: Math.max(0, startOffsetTop + dy),
+      };
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      const { offsetLeft, offsetTop } = computeOffset(ev);
+      this.wrapper.style.marginLeft = `${offsetLeft}px`;
+      this.wrapper.style.marginTop = `${offsetTop}px`;
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      const { offsetLeft, offsetTop } = computeOffset(ev);
+      const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
+        ...node.attrs,
+        offsetLeft,
+        offsetTop,
+      });
+      this.view.dispatch(tr);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   update(node: PMNode): boolean {
     if (node.type.name !== "image") return false;
     const attrs = node.attrs;
@@ -245,5 +343,6 @@ export class ImageNodeView implements NodeView {
 
   destroy(): void {
     this.handles = [];
+    this.rotateHandle = null;
   }
 }
