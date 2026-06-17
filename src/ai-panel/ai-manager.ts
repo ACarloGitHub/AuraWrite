@@ -7,12 +7,13 @@ import {
 } from "./providers";
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider } from "./remote-providers";
+import { LocalLlamacppProvider } from "./local-llamacpp-provider";
 import { buildToolSystemPrompt } from "./tools";
 import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 
-type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax";
+type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "local-llamacpp";
 
 interface PreferencesAI {
   aiProvider: ProviderName;
@@ -78,6 +79,17 @@ function createProvider(settings: PreferencesAI): AIProvider {
       return new LMStudioProvider(settings.aiModel, baseUrl);
     case "minimax":
       return new MiniMaxProvider(settings.aiApiKey, settings.aiModel, baseUrl);
+    case "local-llamacpp":
+      return new LocalLlamacppProvider({
+        modelPath: settings.aiModel,
+        port: parseInt(localStorage.getItem("aurawrite-llamacpp-port") || "11435"),
+        ctxSize: parseInt(localStorage.getItem("aurawrite-llamacpp-ctx-size") || "4096"),
+        ngl: localStorage.getItem("aurawrite-llamacpp-ngl") || "auto",
+        flashAttn: localStorage.getItem("aurawrite-llamacpp-flash-attn") || "auto",
+        cacheTypeK: localStorage.getItem("aurawrite-llamacpp-cache-type-k") || "f16",
+        cacheTypeV: localStorage.getItem("aurawrite-llamacpp-cache-type-v") || "f16",
+        threads: parseInt(localStorage.getItem("aurawrite-llamacpp-threads") || "0") || undefined,
+      });
     default:
       return new OllamaProvider();
   }

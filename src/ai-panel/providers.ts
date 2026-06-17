@@ -41,7 +41,7 @@ export interface AIResponse {
 }
 
 export interface AIProviderConfig {
-  provider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax";
+  provider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "local-llamacpp";
   model: string;
   apiKey?: string;
   baseUrl?: string;
@@ -56,6 +56,7 @@ export const PROVIDER_BASE_URLS: Record<string, string> = {
   openrouter: "https://openrouter.ai/api/v1",
   lmstudio: "http://localhost:1234/v1",
   minimax: "https://api.minimax.io/v1",
+  "local-llamacpp": "http://127.0.0.1:11435",
 };
 
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
@@ -67,6 +68,7 @@ export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
   openrouter: "openai/gpt-4o",
   lmstudio: "",
   minimax: "MiniMax-M3",
+  "local-llamacpp": "",
 };
 
 export function getProviderBaseUrl(provider: string, customBaseUrl?: string): string {

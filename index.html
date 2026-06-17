@@ -395,6 +395,8 @@
             <button class="pref-tab" data-tab="ai-provider">AI Provider</button>
             <button class="pref-tab" data-tab="ai-behavior">AI Behavior</button>
             <button class="pref-tab" data-tab="embeddings">Embeddings</button>
+            <button class="pref-tab" data-tab="local-models">Local Models</button>
+            <button class="pref-tab" data-tab="llamacpp-params">llama.cpp Params</button>
             <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
             <button class="pref-tab" data-tab="fonts">Fonts</button>
@@ -465,6 +467,7 @@
                   <option value="openrouter">OpenRouter</option>
                   <option value="lmstudio">LM Studio (Local)</option>
                   <option value="minimax">MiniMax</option>
+                  <option value="local-llamacpp">Local (llama.cpp)</option>
                 </select>
               </div>
               <div class="preference-group hidden" id="ollama-mode-group">
@@ -658,6 +661,184 @@
                 </p>
                 <div class="preference-row">
                   <button id="embed-reshow-onboarding" class="pref-btn">Show welcome dialog again</button>
+                </div>
+              </div>
+            </div>
+            <!-- TAB: Local Models -->
+            <div class="pref-tab-content" data-tab="local-models">
+              <div class="preference-group">
+                <h3>Hardware Detection</h3>
+                <p id="local-hardware-info" class="preference-hint">Detecting hardware...</p>
+                <button id="local-hardware-refresh" class="pref-btn">Refresh hardware info</button>
+              </div>
+
+              <div class="preference-group">
+                <h3>Recommended Models</h3>
+                <p class="preference-hint">
+                  Models are sorted by size. The recommended models depend on your GPU VRAM.
+                  Each model entry shows its size and minimum VRAM requirement.
+                </p>
+                <div id="local-model-catalog" class="preference-group">
+                  <p class="preference-hint">Loading catalog...</p>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Downloaded Models</h3>
+                <p class="preference-hint">
+                  Models you have already downloaded. Click "Remove" to free disk space.
+                </p>
+                <div id="local-model-list" class="preference-group">
+                  <p class="preference-hint">Loading...</p>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Download from URL</h3>
+                <p class="preference-hint">
+                  Paste a direct URL to a .gguf file (e.g. from HuggingFace) to download
+                  any model not in the catalog. The URL must point directly to a .gguf file.
+                </p>
+                <div class="preference-row">
+                  <input type="text" id="local-model-url" placeholder="https://huggingface.co/.../resolve/main/model-Q4_K_M.gguf" style="flex:1;" />
+                  <input type="text" id="local-model-url-id" placeholder="Model ID (e.g. my-model-q4km)" style="width:180px;" />
+                  <button id="local-model-url-download" class="pref-btn pref-btn-primary">Download</button>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Register Local File</h3>
+                <p class="preference-hint">
+                  If you already have a .gguf file on disk (e.g. from LM Studio), register
+                  it here so AuraWrite can use it. The file will not be copied.
+                </p>
+                <div class="preference-row">
+                  <input type="text" id="local-model-path" placeholder="C:\Users\...\model.gguf" style="flex:1;" />
+                  <input type="text" id="local-model-path-id" placeholder="Model ID" style="width:180px;" />
+                  <button id="local-model-path-register" class="pref-btn pref-btn-primary">Register</button>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>llama.cpp Runtime</h3>
+                <p id="local-llamacpp-variant" class="preference-hint">Detecting...</p>
+                <p class="preference-hint">
+                  The llama.cpp runtime is required for running local AI models. It is
+                  downloaded automatically when you download a model. You can choose a
+                  specific variant below if needed.
+                </p>
+                <div class="preference-row">
+                  <select id="local-llamacpp-variant-select" style="width:180px;">
+                    <option value="auto">Auto (recommended)</option>
+                    <option value="cpu">CPU only</option>
+                    <option value="cuda">CUDA (NVIDIA GPU)</option>
+                    <option value="vulkan">Vulkan (AMD/Intel GPU)</option>
+                  </select>
+                  <button id="local-llamacpp-download-variant" class="pref-btn pref-btn-primary">Download llama.cpp variant</button>
+                </div>
+              </div>
+            </div>
+            <!-- TAB: llama.cpp Params -->
+            <div class="pref-tab-content" data-tab="llamacpp-params">
+              <div class="preference-group">
+                <h3>Context &amp; Memory</h3>
+                <p class="preference-hint">
+                  These parameters control how the local AI model uses memory.
+                  Higher context = more text the model can see, but uses more RAM/VRAM.
+                </p>
+                <div class="preference-row">
+                  <label for="llamacpp-ctx-size">Context Size (tokens)</label>
+                  <input type="number" id="llamacpp-ctx-size" value="4096" min="512" max="262144" step="512" />
+                </div>
+                <div class="preference-row">
+                  <label for="llamacpp-ngl">GPU Layers</label>
+                  <select id="llamacpp-ngl">
+                    <option value="auto">Auto (recommended)</option>
+                    <option value="all">All layers (max GPU)</option>
+                    <option value="0">0 (CPU only)</option>
+                    <option value="custom">Custom...</option>
+                  </select>
+                  <input type="number" id="llamacpp-ngl-custom" value="0" min="0" max="999" style="width:80px;display:none;" />
+                </div>
+                <div class="preference-row">
+                  <label for="llamacpp-cache-type-k">KV Cache K Type</label>
+                  <select id="llamacpp-cache-type-k">
+                    <option value="f16">f16 (default, best quality)</option>
+                    <option value="q8_0">q8_0 (less VRAM, good quality)</option>
+                    <option value="q4_0">q4_0 (least VRAM, lower quality)</option>
+                  </select>
+                </div>
+                <div class="preference-row">
+                  <label for="llamacpp-cache-type-v">KV Cache V Type</label>
+                  <select id="llamacpp-cache-type-v">
+                    <option value="f16">f16 (default, best quality)</option>
+                    <option value="q8_0">q8_0 (less VRAM, good quality)</option>
+                    <option value="q4_0">q4_0 (least VRAM, lower quality)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Performance</h3>
+                <p class="preference-hint">
+                  These settings affect inference speed and quality.
+                  Leave at defaults unless you know what you are doing.
+                </p>
+                <div class="preference-row">
+                  <label for="llamacpp-flash-attn">Flash Attention</label>
+                  <select id="llamacpp-flash-attn">
+                    <option value="auto">Auto (recommended)</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                  </select>
+                </div>
+                <div class="preference-row">
+                  <label for="llamacpp-threads">CPU Threads</label>
+                  <input type="number" id="llamacpp-threads" value="0" min="0" max="128" />
+                  <span class="preference-hint">0 = auto (all cores)</span>
+                </div>
+                <div class="preference-row">
+                  <label for="llamacpp-port">Server Port</label>
+                  <input type="number" id="llamacpp-port" value="11435" min="1024" max="65535" />
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Advanced</h3>
+                <p class="preference-hint">
+                  Expert settings. Changing these may cause crashes or poor performance.
+                </p>
+                <div class="preference-row">
+                  <label for="llamacpp-batch-size">Batch Size</label>
+                  <input type="number" id="llamacpp-batch-size" value="2048" min="128" max="32768" step="128" />
+                </div>
+                <div class="preference-row">
+                  <label for="llamacpp-spec-type">Speculative Decoding</label>
+                  <select id="llamacpp-spec-type">
+                    <option value="none">None (default)</option>
+                    <option value="draft-mtp">Multi-Token Prediction (MTP)</option>
+                  </select>
+                </div>
+                <div class="preference-row">
+                  <div class="checkbox-row">
+                    <input type="checkbox" id="llamacpp-mmap" checked />
+                    <span>Memory-mapped model (mmap)</span>
+                  </div>
+                </div>
+                <div class="preference-row">
+                  <div class="checkbox-row">
+                    <input type="checkbox" id="llamacpp-context-shift" />
+                    <span>Context shift (continue past context limit)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="preference-group">
+                <h3>Server Status</h3>
+                <p id="llamacpp-server-status" class="preference-hint">Not started</p>
+                <div class="preference-row">
+                  <button id="llamacpp-start-server" class="pref-btn pref-btn-primary">Start server</button>
+                  <button id="llamacpp-stop-server" class="pref-btn pref-btn-danger" style="display:none;">Stop server</button>
                 </div>
               </div>
             </div>
@@ -907,6 +1088,24 @@
         <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: flex-end; gap: 8px;">
           <button id="export-project-cancel" class="pref-btn">Cancel</button>
           <button id="export-project-start" class="pref-btn pref-btn-primary">Export</button>
+        </div>
+      </div>
+    </div>
+    <div id="ai-wizard-modal" class="modal hidden">
+      <div class="modal-overlay"></div>
+      <div class="modal-content" style="max-width:640px;">
+        <div class="modal-header">
+          <h2 id="ai-wizard-title">Set Up Local AI</h2>
+          <button id="ai-wizard-close" class="pref-btn" style="float:right;margin:0;padding:2px 10px;font-size:18px;line-height:1;" title="Close">&times;</button>
+        </div>
+        <div class="modal-body" id="ai-wizard-body" style="padding: var(--spacing-md);">
+          <!-- Step content injected by JS -->
+        </div>
+        <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: space-between;">
+          <button id="ai-wizard-back" class="pref-btn" style="display:none;">Back</button>
+          <span></span>
+          <button id="ai-wizard-skip" class="pref-btn" style="display:none;">Skip</button>
+          <button id="ai-wizard-next" class="pref-btn pref-btn-primary">Next</button>
         </div>
       </div>
     </div>

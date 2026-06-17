@@ -1499,6 +1499,49 @@ body {
   margin-bottom: var(--spacing-xs);
 }
 
+.pref-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #333);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pref-btn:hover {
+  background: var(--color-hover, #f0f0f0);
+}
+.pref-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pref-btn-primary {
+  background: #4caf50;
+  color: #fff;
+  border-color: #4caf50;
+}
+.pref-btn-primary:hover {
+  background: #43a047;
+}
+.pref-btn-primary:disabled {
+  background: #a5d6a7;
+  border-color: #a5d6a7;
+}
+.pref-btn-danger {
+  background: #f44336;
+  color: #fff;
+  border-color: #f44336;
+}
+.pref-btn-danger:hover {
+  background: #e53935;
+}
+.pref-btn-recommended {
+  border-color: #81c784;
+  font-weight: 500;
+}
+
 .folder-row {
   display: flex;
   align-items: center;

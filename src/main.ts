@@ -15,6 +15,8 @@ import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 import { updateDownloadProgress, setDownloadRetryHandler, clearDownload } from "./download-toast";
+import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "./ai-panel/model-catalog";
+import { shouldShowWizard, showAIWizard, hideAIWizard } from "./setup/ai-wizard";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import {
   populateUserFontsInToolbar,
@@ -567,6 +569,7 @@ function updateApiKeyGroupVisibility(): void {
     openrouter: "openai/gpt-4o",
     lmstudio: "loaded-model",
     minimax: "MiniMax-M3",
+    "local-llamacpp": "local-model",
   };
 
   if (ollamaModeGroup) {
@@ -578,10 +581,18 @@ function updateApiKeyGroupVisibility(): void {
   }
 
   if (apiKeyGroup) {
-    apiKeyGroup.classList.remove("hidden");
+    if (provider === "local-llamacpp") {
+      apiKeyGroup.classList.add("hidden");
+    } else {
+      apiKeyGroup.classList.remove("hidden");
+    }
   }
   if (baseUrlGroup) {
-    baseUrlGroup.classList.remove("hidden");
+    if (provider === "local-llamacpp") {
+      baseUrlGroup.classList.add("hidden");
+    } else {
+      baseUrlGroup.classList.remove("hidden");
+    }
   }
   if (apiKeyHint) {
     if (isOllamaCloud) {
@@ -591,7 +602,9 @@ function updateApiKeyGroupVisibility(): void {
     } else if (provider === "lmstudio") {
       apiKeyHint.textContent = "Not required for LM Studio.";
     } else if (provider === "minimax") {
-      apiKeyHint.textContent = "Required. Get your MiniMax API key from platform.minimax.io/user-center/payment/token-plan.";
+      apiKeyHint.textContent = "Required. Get your MiniMax API key from platform.minimax.io/user-center/payment-token-plan.";
+    } else if (provider === "local-llamacpp") {
+      apiKeyHint.textContent = "Local model — no API key needed. Configure models in the Local Models tab.";
     } else {
       apiKeyHint.textContent = "Required.";
     }
@@ -601,14 +614,22 @@ function updateApiKeyGroupVisibility(): void {
   }
 
   const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
-  if (modelInput && defaultModels[effectiveProvider]) {
+  if (provider === "local-llamacpp") {
+    modelInput.placeholder = "Select from list or type path...";
+    modelInput.value = "";
+    modelInput.readOnly = false;
+    populateLocalModelSelect(modelInput.value);
+  } else if (modelInput && defaultModels[effectiveProvider]) {
     const newDefault = defaultModels[effectiveProvider];
     modelInput.placeholder = newDefault;
+    modelInput.readOnly = false;
     const currentValue = modelInput.value.trim();
     const isKnownDefault = Object.values(defaultModels).includes(currentValue);
     if (currentValue === "" || isKnownDefault) {
       modelInput.value = newDefault;
     }
+    const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;
+    if (select) select.innerHTML = '<option value="">— Refresh to load models —</option>';
   }
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
@@ -653,8 +674,8 @@ function populateModelSelect(models: ModelInfo[], currentModel: string): void {
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = models.length === 0
-    ? "â€” No models returned â€”"
-    : "â€” Select a model â€”";
+    ? "— No models returned —"
+    : "— Select a model —";
   select.appendChild(placeholder);
   for (const m of models) {
     const opt = document.createElement("option");
@@ -664,6 +685,62 @@ function populateModelSelect(models: ModelInfo[], currentModel: string): void {
   }
   if (currentModel) {
     select.value = currentModel;
+  }
+}
+
+async function populateLocalModelSelect(currentValue: string): Promise<void> {
+  const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;
+  const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
+  if (!select || !modelInput) return;
+
+  select.innerHTML = '<option value="">— Loading local models... —</option>';
+
+  try {
+    const models = await invoke("resources_list_chat_models") as Array<{
+      id: string;
+      filename: string;
+      path: string;
+      size_bytes: number;
+      mmproj_present: boolean;
+    }>;
+
+    select.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = models.length === 0
+      ? "— No models downloaded —"
+      : "— Select a downloaded model —";
+    select.appendChild(placeholder);
+
+    for (const m of models) {
+      const opt = document.createElement("option");
+      opt.value = m.path;
+      const sizeMB = (m.size_bytes / (1024 * 1024)).toFixed(0);
+      opt.textContent = `${m.id} (${m.filename}, ${sizeMB}MB)${m.mmproj_present ? " +vision" : ""}`;
+      select.appendChild(opt);
+    }
+
+    const customOpt = document.createElement("option");
+    customOpt.value = "__custom__";
+    customOpt.textContent = "Custom path...";
+    select.appendChild(customOpt);
+
+    if (currentValue) {
+      const match = Array.from(select.options).find(o => o.value === currentValue);
+      if (match) {
+        select.value = currentValue;
+      } else {
+        select.value = "__custom__";
+        modelInput.value = currentValue;
+      }
+    }
+
+    setModelStatus(models.length === 0
+      ? "No local models found. Download one from the Local Models tab."
+      : `${models.length} local model(s) available.`);
+  } catch (e) {
+    select.innerHTML = '<option value="">— Error loading models —</option>';
+    setModelStatus("Failed to load local models: " + (e instanceof Error ? e.message : String(e)), true);
   }
 }
 
@@ -1122,6 +1199,15 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEmbeddingsTab();
   maybeShowEmbeddingsOnboarding();
 
+  // Local models tab + llama.cpp params tab
+  setupLocalModelsTab();
+  setupLlamacppParamsTab();
+
+  // AI wizard first launch
+  if (shouldShowWizard()) {
+    showAIWizard();
+  }
+
   // Initialize project panel
   initProjectPanel({
     onDocumentSelect: (doc) => {
@@ -1327,12 +1413,25 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshModelList();
   });
   document.getElementById("pref-ai-model-refresh")?.addEventListener("click", () => {
-    refreshModelList(true);
+    const provider = getEffectiveProvider();
+    if (provider === "local-llamacpp") {
+      const currentModel = (document.getElementById("pref-ai-model") as HTMLInputElement | null)?.value || "";
+      void populateLocalModelSelect(currentModel);
+    } else {
+      refreshModelList(true);
+    }
   });
   document.getElementById("pref-ai-model-select")?.addEventListener("change", (e) => {
     const value = (e.target as HTMLSelectElement).value;
     if (!value) return;
     const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
+    if (value === "__custom__") {
+      if (modelInput) {
+        modelInput.value = "";
+        modelInput.focus();
+      }
+      return;
+    }
     if (modelInput) modelInput.value = value;
     savePreferencesFromModal();
     const current = getCurrentProvider();
@@ -1452,5 +1551,335 @@ function updateWordCount(view: any): void {
 }
 
 (window as any).updateWordCount = updateWordCount;
+
+async function setupLocalModelsTab(): Promise<void> {
+  await refreshHardwareInfo();
+  await refreshLocalModelList();
+  await refreshLocalModelCatalog();
+
+  document.getElementById("local-hardware-refresh")?.addEventListener("click", async () => {
+    await refreshHardwareInfo();
+    await refreshLocalModelCatalog();
+  });
+
+  document.getElementById("local-model-url-download")?.addEventListener("click", async () => {
+    const urlInput = document.getElementById("local-model-url") as HTMLInputElement;
+    const idInput = document.getElementById("local-model-url-id") as HTMLInputElement;
+    const url = urlInput.value.trim();
+    const id = idInput.value.trim();
+    if (!url || !id) {
+      alert("Please provide both a URL and a Model ID.");
+      return;
+    }
+    if (!url.toLowerCase().endsWith(".gguf")) {
+      alert("The URL must point to a .gguf file.");
+      return;
+    }
+    const filename = url.split("/").pop() || `${id}.gguf`;
+    setDownloadRetryHandler(id, () => {
+      (document.getElementById("local-model-url-download") as HTMLButtonElement)?.click();
+    });
+    try {
+      await invoke("resources_download_chat_model", { modelId: id, url, filename, mmprojUrl: null, mmprojFilename: null });
+      urlInput.value = "";
+      idInput.value = "";
+      await refreshLocalModelList();
+    } catch (e) {
+      alert("Download failed: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+
+  document.getElementById("local-model-path-register")?.addEventListener("click", async () => {
+    const pathInput = document.getElementById("local-model-path") as HTMLInputElement;
+    const idInput = document.getElementById("local-model-path-id") as HTMLInputElement;
+    const filePath = pathInput.value.trim();
+    const id = idInput.value.trim();
+    if (!filePath || !id) {
+      alert("Please provide both a file path and a Model ID.");
+      return;
+    }
+    try {
+      const valid = await invoke("resources_verify_model", { filePath }) as boolean;
+      if (!valid) {
+        alert("The file does not appear to be a valid GGUF model.");
+        return;
+      }
+      await invoke("resources_register_local_model", { modelId: id, filePath });
+      pathInput.value = "";
+      idInput.value = "";
+      await refreshLocalModelList();
+    } catch (e) {
+      alert("Registration failed: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+
+  document.getElementById("local-llamacpp-download-variant")?.addEventListener("click", async () => {
+    const select = document.getElementById("local-llamacpp-variant-select") as HTMLSelectElement;
+    let variant = select.value;
+    if (variant === "auto") {
+      const hw = await invoke("resources_detect_hardware") as any;
+      variant = hw.recommended_llamacpp_variant || "cpu";
+    }
+    const btn = document.getElementById("local-llamacpp-download-variant") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Downloading...";
+    setDownloadRetryHandler("llamacpp-" + variant, () => {
+      btn?.click();
+    });
+    try {
+      await invoke("resources_download_llamacpp_variant", { variant });
+      await refreshLlamacppVariant();
+    } catch (e) {
+      alert("Download failed: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Download llama.cpp variant";
+    }
+  });
+}
+
+async function refreshHardwareInfo(): Promise<void> {
+  const el = document.getElementById("local-hardware-info");
+  if (!el) return;
+  try {
+    const hw = await invoke("resources_detect_hardware") as any;
+    const gpus = hw.gpus.map((g: any) => `${g.vendor} ${g.model} (${formatBytes(g.vram_bytes)} VRAM, ${g.backend})`).join(", ") || "None detected";
+    el.innerHTML = `<strong>OS:</strong> ${hw.os}/${hw.arch} &nbsp;|&nbsp; <strong>RAM:</strong> ${formatBytes(hw.ram_total_bytes)} total, ${formatBytes(hw.ram_available_bytes)} available &nbsp;|&nbsp; <strong>GPU:</strong> ${gpus} &nbsp;|&nbsp; <strong>Disk:</strong> ${formatBytes(hw.disk_free_bytes)} free of ${formatBytes(hw.disk_total_bytes)} &nbsp;|&nbsp; <strong>Recommended:</strong> ${hw.recommended_llamacpp_variant}`;
+  } catch (e) {
+    el.textContent = "Failed to detect hardware: " + (e instanceof Error ? e.message : String(e));
+  }
+}
+
+async function refreshLocalModelList(): Promise<void> {
+  const container = document.getElementById("local-model-list");
+  if (!container) return;
+  try {
+    const models = await invoke("resources_list_chat_models") as any[];
+    if (models.length === 0) {
+      container.innerHTML = '<p class="preference-hint">No models downloaded yet. Choose one from the catalog above or provide a URL.</p>';
+      return;
+    }
+    container.innerHTML = models.map((m: any) => `
+      <div class="preference-row" style="margin-bottom:8px;padding:8px;border:1px solid var(--border-color);border-radius:4px;">
+        <div style="flex:1;">
+          <strong>${m.id}</strong> &nbsp; ${m.filename} &nbsp; ${formatBytes(m.size_bytes)}
+          ${m.mmproj_present ? ' &nbsp; <span style="color:#4caf50;">+ mmproj</span>' : ''}
+        </div>
+        <button class="pref-btn pref-btn-danger local-model-remove" data-model-id="${m.id}">Remove</button>
+      </div>
+    `).join("");
+    container.querySelectorAll(".local-model-remove").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const modelId = (btn as HTMLElement).dataset.modelId || "";
+        if (!confirm(`Remove model "${modelId}"? You can re-download it at any time.`)) return;
+        try {
+          await invoke("resources_remove_chat_model", { modelId });
+          await refreshLocalModelList();
+          await refreshLocalModelCatalog();
+        } catch (e) {
+          alert("Failed to remove model: " + (e instanceof Error ? e.message : String(e)));
+        }
+      });
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="preference-hint">Error loading models: ' + (e instanceof Error ? e.message : String(e)) + '</p>';
+  }
+}
+
+async function refreshLocalModelCatalog(): Promise<void> {
+  const container = document.getElementById("local-model-catalog");
+  if (!container) return;
+  try {
+    const hw = await invoke("resources_detect_hardware") as any;
+    const vram = hw.gpus.length > 0 ? hw.gpus[0].vram_bytes : 0;
+    const ram = hw.ram_total_bytes as number;
+    const recommended = recommendModelsForHardware(vram, ram);
+    const downloaded = await invoke("resources_list_chat_models") as any[];
+    const downloadedIds = new Set(downloaded.map((m: any) => m.id));
+
+    container.innerHTML = MODEL_CATALOG.map((model) => {
+      const isRecommended = recommended.some((r: any) => r.id === model.id);
+      const isDownloaded = downloadedIds.has(model.id);
+      const bestQuant = getRecommendedQuantization(model, vram, ram);
+      const canFit = model.quantizations.some((q: any) =>
+        q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= ram)
+      );
+      if (!canFit && vram > 0) return "";
+
+      return `
+        <div class="catalog-model-card" data-model-id="${model.id}" style="margin-bottom:12px;padding:10px;border:1px solid var(--border-color);border-radius:6px;${isRecommended ? 'border-color:#4caf50;' : ''}${isDownloaded ? 'background:rgba(76,175,80,0.08);' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <strong>${model.name}</strong>
+              ${isRecommended ? '<span style="color:#4caf50;">★ Recommended</span>' : ''}
+              ${isDownloaded ? '<span style="color:#4caf50;">✓ Downloaded</span>' : ''}
+              <br><span class="preference-hint">${model.description}</span>
+              <br><span class="preference-hint">${model.total_params} params · ${model.architecture} · ${model.context_length.toLocaleString()} ctx · ${model.license}</span>
+            </div>
+          </div>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;" class="catalog-quant-group" data-model-id="${model.id}">
+            ${model.quantizations
+              .filter((q: any) => q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= ram))
+              .map((q: any) => `
+                <button class="pref-btn catalog-quant-btn${bestQuant && bestQuant.id === q.id ? ' pref-btn-primary' : ''}" data-model-id="${model.id}" data-quant-id="${q.id}" data-url="${q.url}" data-filename="${q.filename}" data-quant-name="${q.name}" data-model-name="${model.name}" data-size="${q.size_bytes}">${q.name}</button>
+              `).join("")}
+          </div>
+          ${model.is_multimodal ? '<span class="preference-hint" style="color:#ff9800;">⚡ Multimodal (vision + audio) — mmproj will be downloaded automatically</span>' : ''}
+          <div class="catalog-confirm-area" id="catalog-confirm-${model.id}" style="display:none;margin-top:8px;padding:8px;background:var(--color-surface,rgba(0,0,0,0.05));border-radius:4px;"></div>
+        </div>
+      `;
+    }).join("");
+
+    container.querySelectorAll(".catalog-quant-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const el = btn as HTMLElement;
+        const modelId = el.dataset.modelId || "";
+        const quantId = el.dataset.quantId || "";
+        const url = el.dataset.url || "";
+        const filename = el.dataset.filename || "";
+        const quantName = el.dataset.quantName || "";
+        const modelName = el.dataset.modelName || "";
+        const sizeBytes = parseInt(el.dataset.size || "0");
+
+        // Deselect all quant buttons in this model card
+        const card = el.closest(".catalog-model-card");
+        card?.querySelectorAll(".catalog-quant-btn").forEach((b) => b.classList.remove("pref-btn-primary"));
+        el.classList.add("pref-btn-primary");
+
+        // Show confirmation area
+        const confirmArea = document.getElementById(`catalog-confirm-${modelId}`);
+        if (confirmArea) {
+          confirmArea.style.display = "block";
+          confirmArea.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <strong>Download ${modelName} (${quantName})?</strong><br>
+                <span class="preference-hint">${formatBytes(sizeBytes)} — ${url.split('/').pop()}</span>
+              </div>
+              <button class="pref-btn pref-btn-primary catalog-confirm-download" data-model-id="${modelId}" data-url="${url}" data-filename="${filename}" data-quant-name="${quantName}">Download</button>
+            </div>
+          `;
+          const confirmBtn = confirmArea.querySelector(".catalog-confirm-download");
+          if (confirmBtn) {
+            (confirmBtn as HTMLButtonElement).addEventListener("click", async () => {
+              const model = MODEL_CATALOG.find((m) => m.id === modelId);
+              const mmprojUrl = model?.mmproj_url || null;
+              const mmprojFilename = model?.mmproj_filename || null;
+              (confirmBtn as HTMLButtonElement).disabled = true;
+              (confirmBtn as HTMLButtonElement).textContent = "Downloading...";
+              setDownloadRetryHandler(modelId, () => {
+                (confirmBtn as HTMLButtonElement).click();
+              });
+              try {
+                await invoke("resources_download_chat_model", {
+                  modelId,
+                  url,
+                  filename,
+                  mmprojUrl,
+                  mmprojFilename,
+                });
+                (confirmBtn as HTMLButtonElement).textContent = "✓ Done";
+                await refreshLocalModelList();
+                await refreshLocalModelCatalog();
+              } catch (e) {
+                (confirmBtn as HTMLButtonElement).textContent = "Failed";
+                alert("Download failed: " + (e instanceof Error ? e.message : String(e)));
+                setTimeout(() => {
+                  (confirmBtn as HTMLButtonElement).disabled = false;
+                  (confirmBtn as HTMLButtonElement).textContent = "Download";
+                }, 2000);
+              }
+            });
+          }
+        }
+      });
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="preference-hint">Error loading catalog: ' + (e instanceof Error ? e.message : String(e)) + '</p>';
+  }
+}
+
+async function refreshLlamacppVariant(): Promise<void> {
+  const el = document.getElementById("local-llamacpp-variant");
+  if (!el) return;
+  try {
+    const variant = await invoke("resources_llamacpp_variant") as string;
+    el.textContent = `llama.cpp variant installed: ${variant}`;
+  } catch {
+    el.textContent = "llama.cpp not installed yet";
+  }
+}
+
+function setupLlamacppParamsTab(): void {
+  const nglSelect = document.getElementById("llamacpp-ngl") as HTMLSelectElement;
+  const nglCustom = document.getElementById("llamacpp-ngl-custom") as HTMLInputElement;
+  if (nglSelect && nglCustom) {
+    nglSelect.addEventListener("change", () => {
+      nglCustom.style.display = nglSelect.value === "custom" ? "" : "none";
+    });
+  }
+
+  document.getElementById("llamacpp-start-server")?.addEventListener("click", async () => {
+    const nglValue = nglSelect?.value === "custom" ? nglCustom?.value : nglSelect?.value;
+    try {
+      const models = await invoke("resources_list_chat_models") as any[];
+      if (models.length === 0) {
+        alert("No models downloaded. Please download a model first from the Local Models tab.");
+        return;
+      }
+      const modelPath = models[0].path;
+      const mmprojPath = models[0].mmproj_path || null;
+      const result = await invoke("llamacpp_spawn_server", {
+        modelPath,
+        port: parseInt((document.getElementById("llamacpp-port") as HTMLInputElement)?.value || "11435"),
+        ctxSize: parseInt((document.getElementById("llamacpp-ctx-size") as HTMLInputElement)?.value || "4096"),
+        ngl: nglValue || "auto",
+        flashAttn: (document.getElementById("llamacpp-flash-attn") as HTMLSelectElement)?.value || "auto",
+        cacheTypeK: (document.getElementById("llamacpp-cache-type-k") as HTMLSelectElement)?.value || "f16",
+        cacheTypeV: (document.getElementById("llamacpp-cache-type-v") as HTMLSelectElement)?.value || "f16",
+        threads: parseInt((document.getElementById("llamacpp-threads") as HTMLInputElement)?.value || "0") || null,
+        mmprojPath,
+      });
+      updateLlamacppServerStatus(result);
+    } catch (e) {
+      alert("Failed to start server: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+
+  document.getElementById("llamacpp-stop-server")?.addEventListener("click", async () => {
+    try {
+      await invoke("llamacpp_stop_server");
+      updateLlamacppServerStatus({ running: false, pid: null, port: null, model_path: null });
+    } catch (e) {
+      console.error("[llamacpp] stop failed:", e);
+    }
+  });
+
+  // Initial status check
+  (async () => {
+    try {
+      const status = await invoke("llamacpp_server_status") as any;
+      updateLlamacppServerStatus(status);
+    } catch {
+      // Server not started yet, that's fine
+    }
+  })();
+}
+
+function updateLlamacppServerStatus(status: any): void {
+  const el = document.getElementById("llamacpp-server-status");
+  const startBtn = document.getElementById("llamacpp-start-server") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("llamacpp-stop-server") as HTMLButtonElement | null;
+  if (!el) return;
+  if (status.running) {
+    el.innerHTML = `<span style="color:#4caf50;">● Running</span> (PID ${status.pid}, port ${status.port})<br>Model: ${status.model_path || "unknown"}`;
+    if (startBtn) startBtn.style.display = "none";
+    if (stopBtn) stopBtn.style.display = "";
+  } else {
+    el.innerHTML = '<span style="color:#999;">○ Not running</span>';
+    if (startBtn) startBtn.style.display = "";
+    if (stopBtn) stopBtn.style.display = "none";
+  }
+}
 
 // ============================================================================

@@ -222,10 +222,88 @@ async fn download_to_file_async(
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create dir: {}", e))?;
     }
+    let part_file = dest.with_extension(format!(
+        "{}.part",
+        dest.extension().map_or("".to_string(), |e| e.to_string_lossy().to_string())
+    ));
+    if part_file.to_string_lossy().ends_with(".part") && !dest.extension().map_or(false, |e| !e.is_empty()) {
+        // If dest has no extension, part_file would be just ".part" — fix that
+    }
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(600))
         .build()
         .map_err(|e| format!("http client: {}", e))?;
+
+    // Check for partial download to resume
+    let partial_size: u64 = if part_file.exists() {
+        fs::metadata(&part_file).map(|m| m.len()).unwrap_or(0)
+    } else {
+        0
+    };
+
+    if partial_size > 0 {
+        // Try to resume
+        let _ = app.emit(
+            "download-progress",
+            serde_json::json!({
+                "id": id,
+                "name": name,
+                "phase": "resuming",
+                "bytes": partial_size,
+                "total": 0,
+                "speed_bps": 0,
+                "eta_seconds": null,
+            }),
+        );
+        let resp = client
+            .get(url)
+            .header("Accept-Encoding", "identity")
+            .header("Range", format!("bytes={}-", partial_size))
+            .send()
+            .await
+            .map_err(|e| {
+                let _ = fs::remove_file(&part_file);
+                format!("resume request failed: {}", e)
+            })?;
+
+        if resp.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+            // Server supports resume — append to existing file
+            let f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&part_file)
+                .map_err(|e| format!("open partial file for append: {}", e))?;
+            return download_stream_to_file(
+                app, id, name, resp, &part_file, dest,
+                partial_size, Some(f),
+            ).await;
+        } else if resp.status().is_success() {
+            // Server doesn't support Range — restart from scratch
+            let _ = fs::remove_file(&part_file);
+            let f = std::fs::File::create(&part_file)
+                .map_err(|e| format!("create partial file: {}", e))?;
+            return download_stream_to_file(
+                app, id, name, resp, &part_file, dest,
+                0, Some(f),
+            ).await;
+        } else {
+            let _ = fs::remove_file(&part_file);
+            let err_payload = serde_json::json!({
+                "id": id,
+                "name": name,
+                "phase": "error",
+                "error": format!("HTTP {} for {}", resp.status(), url),
+                "bytes": 0,
+                "total": 0,
+                "speed_bps": 0,
+                "eta_seconds": null,
+            });
+            let _ = app.emit("download-progress", err_payload);
+            return Err(format!("HTTP {} for {}", resp.status(), url));
+        }
+    }
+
+    // No partial file — fresh download
     let _ = app.emit(
         "download-progress",
         serde_json::json!({
@@ -258,10 +336,29 @@ async fn download_to_file_async(
         let _ = app.emit("download-progress", err_payload);
         return Err(format!("HTTP {} for {}", resp.status(), url));
     }
-    let total = resp.content_length().unwrap_or(0);
-    if dest.exists() {
-        let _ = fs::remove_file(dest);
-    }
+
+    let f = std::fs::File::create(&part_file)
+        .map_err(|e| format!("create partial file: {}", e))?;
+    download_stream_to_file(
+        app, id, name, resp, &part_file, dest,
+        0, Some(f),
+    ).await
+}
+
+async fn download_stream_to_file(
+    app: &tauri::AppHandle,
+    id: &str,
+    name: &str,
+    resp: reqwest::Response,
+    part_file: &Path,
+    dest: &Path,
+    resume_from: u64,
+    file_handle: Option<std::fs::File>,
+) -> Result<u64, String> {
+    use std::io::Write;
+    use futures_util::StreamExt;
+
+    let total = resume_from + resp.content_length().unwrap_or(0);
     let start = std::time::Instant::now();
     let mut last_emit = std::time::Instant::now();
 
@@ -270,37 +367,47 @@ async fn download_to_file_async(
         serde_json::json!({
             "id": id,
             "name": name,
-            "phase": "downloading",
-            "bytes": 0,
+            "phase": if resume_from > 0 { "resuming" } else { "downloading" },
+            "bytes": resume_from,
             "total": total,
             "speed_bps": 0,
             "eta_seconds": null,
         }),
     );
 
-    let mut downloaded: u64 = 0;
-    let mut chunks: Vec<u8> = Vec::with_capacity(total as usize);
-    use futures_util::StreamExt;
-    let mut stream = resp.bytes_stream();
+    let mut f = file_handle.ok_or_else(|| "no file handle".to_string())?;
+    let mut downloaded: u64 = resume_from;
     let mut download_error: Option<String> = None;
-    while let Some(chunk) = stream.next().await {
-        let chunk = match chunk {
+    let mut stream = resp.bytes_stream();
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = match chunk_result {
             Ok(c) => c,
             Err(e) => {
                 download_error = Some(format!("stream error: {}", e));
                 break;
             }
         };
+        if let Err(e) = f.write_all(&chunk) {
+            download_error = Some(format!("write error: {}", e));
+            break;
+        }
         downloaded += chunk.len() as u64;
-        chunks.extend_from_slice(&chunk);
+
+        // Flush every 1MB to balance disk I/O vs crash safety
+        if downloaded % (1024 * 1024) < chunk.len() as u64 {
+            let _ = f.flush();
+        }
+
         if last_emit.elapsed() >= Duration::from_millis(200) {
             let elapsed = start.elapsed().as_secs_f64();
+            let effective_downloaded = downloaded - resume_from;
             let speed_bps = if elapsed > 0.0 {
-                (downloaded as f64 / elapsed) as u64
+                (effective_downloaded as f64 / elapsed) as u64
             } else {
                 0
             };
-            let eta = if total > 0 && speed_bps > 0 {
+            let eta = if total > downloaded && speed_bps > 0 {
                 ((total - downloaded) as f64 / speed_bps as f64).max(0.0)
             } else {
                 -1.0
@@ -311,7 +418,7 @@ async fn download_to_file_async(
                 serde_json::json!({
                     "id": id,
                     "name": name,
-                    "phase": "downloading",
+                    "phase": if resume_from > 0 { "resuming" } else { "downloading" },
                     "bytes": downloaded,
                     "total": total,
                     "speed_bps": speed_bps,
@@ -321,36 +428,58 @@ async fn download_to_file_async(
             last_emit = std::time::Instant::now();
         }
     }
+
     if let Some(err) = download_error {
-        return Err(format!("download failed: {}", err));
+        // Flush what we have — .part file stays for resume
+        let _ = f.flush();
+        drop(f);
+        return Err(format!("download interrupted: {}", err));
     }
-    let downloaded = chunks.len() as u64;
-    if downloaded == 0 {
+
+    if let Err(e) = f.flush() {
+        drop(f);
+        let _ = fs::remove_file(part_file);
+        return Err(format!("flush error: {}", e));
+    }
+    drop(f);
+
+    let part_size = fs::metadata(part_file)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    if part_size == 0 {
+        let _ = fs::remove_file(part_file);
         return Err("Download produced an empty file (server returned 0 bytes).".to_string());
     }
-    if total > 0 && downloaded < total {
+    if total > resume_from && part_size < total {
+        // Incomplete — .part file kept for resume
         return Err(format!(
-            "Incomplete download: got {} bytes, expected {} bytes. The server may have closed the connection early.",
-            downloaded, total
+            "Incomplete download: got {} bytes, expected {} bytes. The partial file is kept for resume.",
+            part_size, total
         ));
     }
-    if let Err(e) = fs::write(dest, &chunks) {
-        return Err(format!("write: {}", e));
+
+    // Atomic rename: .part → final destination
+    if dest.exists() {
+        let _ = fs::remove_file(dest);
     }
+    fs::rename(part_file, dest)
+        .map_err(|e| format!("rename .part to final: {}", e))?;
+
     let _ = app.emit(
         "download-progress",
         serde_json::json!({
             "id": id,
             "name": name,
             "phase": "done",
-            "bytes": downloaded,
+            "bytes": part_size,
             "total": total,
             "speed_bps": 0,
             "eta_seconds": null,
         }),
     );
-    Ok(downloaded)
+    Ok(part_size)
 }
+
 
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
     let f = File::open(zip_path).map_err(|e| format!("open zip: {}", e))?;
