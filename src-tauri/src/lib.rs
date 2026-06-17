@@ -994,6 +994,7 @@ pub fn run() {
             resources_remove_chat_model,
             resources_register_local_model,
             resources_verify_model,
+            resources_detect_mmproj,
             // Llama server lifecycle (M8.6)
             llamacpp_spawn_server,
             llamacpp_stop_server,

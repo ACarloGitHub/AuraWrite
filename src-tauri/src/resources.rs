@@ -1089,6 +1089,13 @@ pub fn resources_register_local_model(
         .to_string();
     let size = file_size(path);
 
+    let mmproj_from_dir = path.parent().and_then(|parent| {
+        fs::read_dir(parent).ok()?.flatten().find(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            name.starts_with("mmproj") && name.ends_with(".gguf")
+        }).map(|e| e.path())
+    });
+
     let mmproj_files: Vec<PathBuf> = fs::read_dir(&model_subdir)
         .ok()
         .map(|entries| {
@@ -1103,9 +1110,15 @@ pub fn resources_register_local_model(
         })
         .unwrap_or_default();
 
-    let mmproj_present = !mmproj_files.is_empty();
-    let mmproj_path_val = mmproj_files.first().map(|p| p.to_string_lossy().to_string());
-    let mmproj_size_val = mmproj_files.first().map(|p| file_size(p));
+    let mmproj_path_val = mmproj_from_dir
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .or_else(|| mmproj_files.first().map(|p| p.to_string_lossy().to_string()));
+    let mmproj_present = mmproj_path_val.is_some();
+    let mmproj_size_val = mmproj_from_dir
+        .as_ref()
+        .map(|p| file_size(p))
+        .or_else(|| mmproj_files.first().map(|p| file_size(p)));
 
     Ok(ModelInfo {
         id: model_id,
@@ -1116,6 +1129,23 @@ pub fn resources_register_local_model(
         mmproj_path: mmproj_path_val,
         mmproj_size_bytes: mmproj_size_val,
     })
+}
+
+#[tauri::command]
+pub fn resources_detect_mmproj(file_path: String) -> Result<Option<String>, String> {
+    let path = Path::new(&file_path);
+    let parent = path.parent().ok_or("no parent directory")?;
+    if !parent.exists() {
+        return Ok(None);
+    }
+    for entry in fs::read_dir(parent).map_err(|e| format!("read dir: {}", e))? {
+        let entry = entry.map_err(|e| format!("entry: {}", e))?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with("mmproj") && name.ends_with(".gguf") {
+            return Ok(Some(entry.path().to_string_lossy().to_string()));
+        }
+    }
+    Ok(None)
 }
 
 #[tauri::command]
@@ -1471,6 +1501,21 @@ pub fn llamacpp_spawn_server(
         }
     }
 
+    // Kill any orphaned llama-server before starting a new one
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "llama-server.exe", "/T"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("pkill")
+            .args(["-9", "-f", "llama-server"])
+            .output();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
     let dir = resources_dir(&app)?;
     let llama_dir = llamacpp_ai_dir(&dir);
     let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
@@ -1557,45 +1602,18 @@ pub fn llamacpp_stop_server() -> Result<LlamaServerStatus, String> {
     let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
     let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-    if let Some(ref existing) = *state {
-        if is_process_alive(existing.pid) {
-            #[cfg(target_os = "windows")]
-            {
-                let _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &existing.pid.to_string(), "/T"])
-                    .output();
-                let max_retries = 10;
-                for _ in 0..max_retries {
-                    if !is_process_alive(existing.pid) {
-                        break;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                }
-                if is_process_alive(existing.pid) {
-                    let _ = Command::new("taskkill")
-                        .args(["/F", "/IM", "llama-server.exe", "/T"])
-                        .output();
-                }
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                unsafe {
-                    libc::kill(existing.pid as i32, libc::SIGTERM);
-                }
-                let max_retries = 10;
-                for _ in 0..max_retries {
-                    if !is_process_alive(existing.pid) {
-                        break;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                }
-                if is_process_alive(existing.pid) {
-                    unsafe {
-                        libc::kill(existing.pid as i32, libc::SIGKILL);
-                    }
-                }
-            }
-        }
+    // Kill ALL llama-server instances immediately (catches orphans too)
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "llama-server.exe", "/T"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("pkill")
+            .args(["-9", "-f", "llama-server"])
+            .output();
     }
 
     *state = None;
@@ -1651,6 +1669,21 @@ pub fn llamacpp_spawn_embeddings_server(
             });
         }
     }
+
+    // Kill any orphaned llama-server before starting the embeddings server
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "llama-server.exe", "/T"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("pkill")
+            .args(["-9", "-f", "llama-server"])
+            .output();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
     let dir = resources_dir(&app)?;
     let emb_dir = llamacpp_embeddings_dir(&dir);
@@ -1712,45 +1745,18 @@ pub fn llamacpp_stop_embeddings_server() -> Result<LlamaServerStatus, String> {
     let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
     let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-    if let Some(ref existing) = *state {
-        if is_process_alive(existing.pid) {
-            #[cfg(target_os = "windows")]
-            {
-                let _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &existing.pid.to_string(), "/T"])
-                    .output();
-                let max_retries = 10;
-                for _ in 0..max_retries {
-                    if !is_process_alive(existing.pid) {
-                        break;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                }
-                if is_process_alive(existing.pid) {
-                    let _ = Command::new("taskkill")
-                        .args(["/F", "/IM", "llama-server.exe", "/T"])
-                        .output();
-                }
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                unsafe {
-                    libc::kill(existing.pid as i32, libc::SIGTERM);
-                }
-                let max_retries = 10;
-                for _ in 0..max_retries {
-                    if !is_process_alive(existing.pid) {
-                        break;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                }
-                if is_process_alive(existing.pid) {
-                    unsafe {
-                        libc::kill(existing.pid as i32, libc::SIGKILL);
-                    }
-                }
-            }
-        }
+    // Kill ALL llama-server instances immediately (catches orphans too)
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "llama-server.exe", "/T"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("pkill")
+            .args(["-9", "-f", "llama-server"])
+            .output();
     }
 
     *state = None;

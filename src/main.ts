@@ -616,22 +616,27 @@ function updateApiKeyGroupVisibility(): void {
   }
 
   const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
+  const llamacppServerGroup = document.getElementById("llamacpp-server-group");
   if (provider === "local-llamacpp") {
     modelInput.placeholder = "Select from list or type path...";
     modelInput.readOnly = false;
+    if (llamacppServerGroup) llamacppServerGroup.classList.remove("hidden");
     const savedModel = modelInput.value.trim();
     void populateLocalModelSelect(savedModel);
-  } else if (modelInput && defaultModels[effectiveProvider]) {
-    const newDefault = defaultModels[effectiveProvider];
-    modelInput.placeholder = newDefault;
-    modelInput.readOnly = false;
-    const currentValue = modelInput.value.trim();
-    const isKnownDefault = Object.values(defaultModels).includes(currentValue);
-    if (currentValue === "" || isKnownDefault) {
-      modelInput.value = newDefault;
+  } else {
+    if (llamacppServerGroup) llamacppServerGroup.classList.add("hidden");
+    if (modelInput && defaultModels[effectiveProvider]) {
+      const newDefault = defaultModels[effectiveProvider];
+      modelInput.placeholder = newDefault;
+      modelInput.readOnly = false;
+      const currentValue = modelInput.value.trim();
+      const isKnownDefault = Object.values(defaultModels).includes(currentValue);
+      if (currentValue === "" || isKnownDefault) {
+        modelInput.value = newDefault;
+      }
+      const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;
+      if (select) select.innerHTML = '<option value="">— Refresh to load models —</option>';
     }
-    const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;
-    if (select) select.innerHTML = '<option value="">— Refresh to load models —</option>';
   }
 
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement;
@@ -1436,6 +1441,14 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshModelList(true);
     }
   });
+  document.getElementById("llamacpp-stop-server-ai")?.addEventListener("click", async () => {
+    try {
+      await invoke("llamacpp_stop_server");
+      updateLlamacppServerStatusAI({ running: false, pid: null, port: null, model_path: null });
+    } catch (e) {
+      console.error("[llamacpp] stop failed:", e);
+    }
+  });
   document.getElementById("pref-ai-model-select")?.addEventListener("change", (e) => {
     const value = (e.target as HTMLSelectElement).value;
     if (!value) return;
@@ -1834,42 +1847,6 @@ function setupLlamacppParamsTab(): void {
     });
   }
 
-  document.getElementById("llamacpp-start-server")?.addEventListener("click", async () => {
-    const nglValue = nglSelect?.value === "custom" ? nglCustom?.value : nglSelect?.value;
-    try {
-      const models = await invoke("resources_list_chat_models") as any[];
-      if (models.length === 0) {
-        alert("No models downloaded. Please download a model first from the Local Models tab.");
-        return;
-      }
-      const modelPath = models[0].path;
-      const mmprojPath = models[0].mmproj_path || null;
-      const result = await invoke("llamacpp_spawn_server", {
-        modelPath,
-        port: parseInt((document.getElementById("llamacpp-port") as HTMLInputElement)?.value || "11435"),
-        ctxSize: parseInt((document.getElementById("llamacpp-ctx-size") as HTMLInputElement)?.value || "4096"),
-        ngl: nglValue || "auto",
-        flashAttn: (document.getElementById("llamacpp-flash-attn") as HTMLSelectElement)?.value || "auto",
-        cacheTypeK: (document.getElementById("llamacpp-cache-type-k") as HTMLSelectElement)?.value || "f16",
-        cacheTypeV: (document.getElementById("llamacpp-cache-type-v") as HTMLSelectElement)?.value || "f16",
-        threads: parseInt((document.getElementById("llamacpp-threads") as HTMLInputElement)?.value || "0") || null,
-        mmprojPath,
-      });
-      updateLlamacppServerStatus(result);
-    } catch (e) {
-      alert("Failed to start server: " + (e instanceof Error ? e.message : String(e)));
-    }
-  });
-
-  document.getElementById("llamacpp-stop-server")?.addEventListener("click", async () => {
-    try {
-      await invoke("llamacpp_stop_server");
-      updateLlamacppServerStatus({ running: false, pid: null, port: null, model_path: null });
-    } catch (e) {
-      console.error("[llamacpp] stop failed:", e);
-    }
-  });
-
   // Initial status check
   (async () => {
     try {
@@ -1880,10 +1857,8 @@ function setupLlamacppParamsTab(): void {
     }
   })();
 
-  // Periodic status polling every 5 seconds (only when tab is visible)
+  // Periodic status polling every 5 seconds
   setInterval(async () => {
-    const tabContent = document.querySelector('.pref-tab-content[data-tab="llamacpp-params"]');
-    if (!tabContent || !tabContent.classList.contains("active")) return;
     try {
       const status = await invoke("llamacpp_server_status") as any;
       updateLlamacppServerStatus(status);
@@ -1895,16 +1870,24 @@ function setupLlamacppParamsTab(): void {
 
 function updateLlamacppServerStatus(status: any): void {
   const el = document.getElementById("llamacpp-server-status");
-  const startBtn = document.getElementById("llamacpp-start-server") as HTMLButtonElement | null;
-  const stopBtn = document.getElementById("llamacpp-stop-server") as HTMLButtonElement | null;
   if (!el) return;
   if (status.running) {
     el.innerHTML = `<span style="color:#4caf50;">● Running</span> (PID ${status.pid}, port ${status.port})<br>Model: ${status.model_path || "unknown"}`;
-    if (startBtn) startBtn.style.display = "none";
+  } else {
+    el.innerHTML = '<span style="color:#999;">○ Not running</span>';
+  }
+  updateLlamacppServerStatusAI(status);
+}
+
+function updateLlamacppServerStatusAI(status: any): void {
+  const el = document.getElementById("llamacpp-server-status-ai");
+  const stopBtn = document.getElementById("llamacpp-stop-server-ai") as HTMLButtonElement | null;
+  if (!el) return;
+  if (status.running) {
+    el.innerHTML = `<span style="color:#4caf50;">● Running</span> (PID ${status.pid}, port ${status.port})<br>Model: ${status.model_path || "unknown"}`;
     if (stopBtn) stopBtn.style.display = "";
   } else {
     el.innerHTML = '<span style="color:#999;">○ Not running</span>';
-    if (startBtn) startBtn.style.display = "";
     if (stopBtn) stopBtn.style.display = "none";
   }
 }

@@ -490,6 +490,13 @@
                 <input type="text" id="pref-ai-model" placeholder="e.g. kimi-k2.5:cloud" />
                 <span class="preference-hint" id="pref-ai-model-status">Select a model from the list, or type a custom name above.</span>
               </div>
+              <div class="preference-group hidden" id="llamacpp-server-group">
+                <label>Local Server</label>
+                <p id="llamacpp-server-status-ai" class="preference-hint">Not started</p>
+                <div class="preference-row">
+                  <button id="llamacpp-stop-server-ai" class="pref-btn pref-btn-danger" style="display:none;">Stop server</button>
+                </div>
+              </div>
               <div class="preference-group" id="api-key-group">
                 <label>API Key</label>
                 <span class="preference-hint">Required for non-local providers</span>
@@ -836,10 +843,7 @@
               <div class="preference-group">
                 <h3>Server Status</h3>
                 <p id="llamacpp-server-status" class="preference-hint">Not started</p>
-                <div class="preference-row">
-                  <button id="llamacpp-start-server" class="pref-btn pref-btn-primary">Start server</button>
-                  <button id="llamacpp-stop-server" class="pref-btn pref-btn-danger" style="display:none;">Stop server</button>
-                </div>
+                <p class="preference-hint">The server starts automatically when you send a message. You can stop it from the AI Provider tab.</p>
               </div>
             </div>
             <!-- TAB: Editor & Data -->
