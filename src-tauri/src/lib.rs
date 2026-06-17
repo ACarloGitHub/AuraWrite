@@ -847,6 +847,29 @@ fn embedding_search_documents(
 }
 
 #[tauri::command]
+fn embedding_search_entities(
+    state: State<AppState>,
+    project_id: String,
+    query_vector: Vec<f32>,
+    limit: i32,
+) -> Result<Vec<embeddings::SearchResult>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::search_similar_entities(&*conn, &project_id, &query_vector, limit)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_get_for_entity(
+    state: State<AppState>,
+    entity_type: String,
+    entity_id: String,
+) -> Result<Vec<embeddings::Embedding>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::get_embeddings_for_entity(&*conn, &entity_type, &entity_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn embedding_delete_for_entity(
     state: State<AppState>,
     entity_type: String,
@@ -965,6 +988,8 @@ pub fn run() {
             embedding_save_chunk,
             embedding_search,
             embedding_search_documents,
+            embedding_search_entities,
+            embedding_get_for_entity,
             embedding_delete_for_entity,
             embedding_delete_for_project,
             // Update notification (v0.4.0+)

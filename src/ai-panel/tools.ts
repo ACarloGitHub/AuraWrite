@@ -148,6 +148,47 @@ export const AVAILABLE_TOOLS = [
     }
   },
   {
+    name: "semantic_search_entities",
+    description: "Search for semantically similar entities (characters, locations, objects, events, themes, recipes, etc.) using vector embeddings. Unlike semantic_search which searches documents, this only searches entity embeddings.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          description: "The project ID"
+        },
+        query: {
+          type: "string",
+          description: "Natural language query about entities (e.g. 'a brave warrior', 'a cozy Italian recipe')"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 5)",
+          default: 5
+        }
+      },
+      required: ["project_id", "query"]
+    }
+  },
+  {
+    name: "get_entity_embeddings",
+    description: "Get all embedding chunks for a specific entity. Returns the text chunks that were indexed for a character, location, recipe, etc. Useful for understanding what information is stored about an entity.",
+    parameters: {
+      type: "object",
+      properties: {
+        entity_type: {
+          type: "string",
+          description: "The type of entity (e.g. 'entity', 'document')"
+        },
+        entity_id: {
+          type: "string",
+          description: "The ID of the entity"
+        }
+      },
+      required: ["entity_type", "entity_id"]
+    }
+  },
+  {
     name: "entities_in_document",
     description: "Get all entities extracted from a specific document. Use this to find which characters, locations, etc. appear in a particular chapter or section.",
     parameters: {
@@ -412,6 +453,65 @@ async function semanticSearch(
   }
 }
 
+async function semanticSearchEntities(
+  projectId: string,
+  query: string,
+  limit: number = 5
+): Promise<Array<{ entity_type: string; entity_id: string; content_text: string; distance: number }>> {
+  try {
+    const PREFERENCES_KEY = "aurawrite-preferences";
+    const saved = localStorage.getItem(PREFERENCES_KEY);
+    const prefs = saved ? JSON.parse(saved) : {};
+    const baseUrl = prefs.aiBaseUrl || undefined;
+
+    const queryVector: number[] = await invoke("embedding_generate", {
+      text: query,
+      isQuery: true,
+      baseUrl,
+    });
+
+    const results = await invoke("embedding_search_entities", {
+      projectId,
+      queryVector,
+      limit
+    });
+
+    return results as Array<{
+      entity_type: string;
+      entity_id: string;
+      content_text: string;
+      distance: number;
+    }>;
+  } catch (error) {
+    console.error("Semantic search entities failed:", error);
+    return [];
+  }
+}
+
+async function getEmbeddingsForEntity(
+  entityType: string,
+  entityId: string
+): Promise<Array<{ id: string; project_id: string; entity_type: string; entity_id: string; chunk_index: number | null; content_text: string; created_at: number }>> {
+  try {
+    const results = await invoke("embedding_get_for_entity", {
+      entityType,
+      entityId,
+    });
+    return results as Array<{
+      id: string;
+      project_id: string;
+      entity_type: string;
+      entity_id: string;
+      chunk_index: number | null;
+      content_text: string;
+      created_at: number;
+    }>;
+  } catch (error) {
+    console.error("Get embeddings for entity failed:", error);
+    return [];
+  }
+}
+
 // Tool: entities_in_document
 async function entitiesInDocument(
   documentId: string,
@@ -562,6 +662,21 @@ export async function executeTool(
           args.project_id as string,
           args.query as string,
           (args.limit as number) || 5
+        );
+        break;
+
+      case "semantic_search_entities":
+        result = await semanticSearchEntities(
+          args.project_id as string,
+          args.query as string,
+          (args.limit as number) || 5
+        );
+        break;
+
+      case "get_entity_embeddings":
+        result = await getEmbeddingsForEntity(
+          args.entity_type as string,
+          args.entity_id as string
         );
         break;
 

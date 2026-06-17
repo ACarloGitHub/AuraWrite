@@ -1539,6 +1539,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const queryVector = await invoke('embedding_generate', { text: query, isQuery: true });
         return invoke('embedding_search_documents', { projectId, queryVector, limit });
       },
+      searchSimilarEntities: async (projectId: string, query: string, limit = 5) => {
+        const queryVector = await invoke('embedding_generate', { text: query, isQuery: true });
+        return invoke('embedding_search_entities', { projectId, queryVector, limit });
+      },
+      getEntityEmbeddings: (entityType: string, entityId: string) =>
+        invoke('embedding_get_for_entity', { entityType, entityId }),
       getCurrentState: () => ({
         project: (window as any).auraProject,
         section: (window as any).auraSection, 
