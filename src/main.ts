@@ -717,6 +717,7 @@ async function populateLocalModelSelect(currentValue: string): Promise<void> {
     placeholder.textContent = models.length === 0
       ? "— No models downloaded —"
       : "— Select a downloaded model —";
+    placeholder.selected = true;
     select.appendChild(placeholder);
 
     for (const m of models) {
@@ -727,18 +728,10 @@ async function populateLocalModelSelect(currentValue: string): Promise<void> {
       select.appendChild(opt);
     }
 
-    const customOpt = document.createElement("option");
-    customOpt.value = "__custom__";
-    customOpt.textContent = "Custom path...";
-    select.appendChild(customOpt);
-
     if (currentValue) {
       const match = Array.from(select.options).find(o => o.value === currentValue);
       if (match) {
         select.value = currentValue;
-      } else {
-        select.value = "__custom__";
-        modelInput.value = currentValue;
       }
     }
 
@@ -1453,13 +1446,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const value = (e.target as HTMLSelectElement).value;
     if (!value) return;
     const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
-    if (value === "__custom__") {
-      if (modelInput) {
-        modelInput.value = "";
-        modelInput.focus();
-      }
-      return;
-    }
     if (modelInput) modelInput.value = value;
     savePreferencesFromModal();
     const current = getCurrentProvider();
