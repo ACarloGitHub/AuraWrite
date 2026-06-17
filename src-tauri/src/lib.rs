@@ -28,8 +28,10 @@ pub struct AppState {
 fn kill_llamacpp_processes() {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         let _ = std::process::Command::new("taskkill")
             .args(["/F", "/IM", "llama-server.exe", "/T"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output();
     }
     #[cfg(not(target_os = "windows"))]

@@ -25,6 +25,21 @@ use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
 use tauri::{AppHandle, Emitter, Manager};
 
+/// Create a Command that never shows a console window on Windows.
+/// In release builds (MSI installer), the app has no attached console,
+/// so any Command::new() for console programs (tasklist, taskkill, where, etc.)
+/// would flash a terminal window. This helper adds CREATE_NO_WINDOW on Windows
+/// to suppress that.
+fn silent_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 const LLAMACPP_PINNED_VERSION: &str = "b9680";
 const NOMIC_MODEL_FILENAME: &str = "nomic-embed-text-v2-moe.Q8_0.gguf";
 const NOMIC_DEFAULT_URL: &str = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
@@ -837,7 +852,7 @@ fn find_ollama_binary() -> Option<String> {
             return Some(p.clone());
         }
     }
-    if let Ok(out) = Command::new(if cfg!(target_os = "windows") { "where" } else { "which" })
+    if let Ok(out) = silent_command(if cfg!(target_os = "windows") { "where" } else { "which" })
         .arg(cmd)
         .output()
     {
@@ -861,7 +876,7 @@ pub fn ollama_check() -> bool {
 #[tauri::command]
 pub fn ollama_pull_model(model: String) -> Result<String, String> {
     let bin = find_ollama_binary().ok_or_else(|| "Ollama binary not found on PATH or in standard install locations".to_string())?;
-    let output = Command::new(&bin)
+    let output = silent_command(&bin)
         .arg("pull")
         .arg(&model)
         .output()
@@ -1186,7 +1201,7 @@ pub struct HardwareInfo {
 
 fn detect_nvidia_gpu() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
-    let output = match Command::new("nvidia-smi")
+    let output = match silent_command("nvidia-smi")
         .args([
             "--query-gpu=name,memory.total",
             "--format=csv,noheader,nounits",
@@ -1225,7 +1240,7 @@ fn detect_gpu_windows() -> Vec<GpuInfo> {
     }
 
     // Fallback: check for AMD/Intel GPU via WMIC
-    if let Ok(output) = Command::new("wmic")
+    if let Ok(output) = silent_command("wmic")
         .args(["path", "win32_VideoController", "get", "name,AdapterRAM"])
         .output()
     {
@@ -1275,7 +1290,7 @@ fn detect_gpu_windows() -> Vec<GpuInfo> {
 
 fn detect_gpu_macos() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
-    if let Ok(output) = Command::new("system_profiler")
+    if let Ok(output) = silent_command("system_profiler")
         .args(["SPDisplaysDataType", "-json"])
         .output()
     {
@@ -1331,7 +1346,7 @@ fn detect_gpu_linux() -> Vec<GpuInfo> {
     }
 
     // Check for AMD/Intel via lspci
-    if let Ok(output) = Command::new("lspci").output() {
+    if let Ok(output) = silent_command("lspci").output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
@@ -1406,39 +1421,41 @@ fn recommended_variant(gpus: &[GpuInfo]) -> String {
 }
 
 #[tauri::command]
-pub fn resources_detect_hardware(app: AppHandle) -> Result<HardwareInfo, String> {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+pub async fn resources_detect_hardware(app: AppHandle) -> Result<HardwareInfo, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut sys = System::new_all();
+        sys.refresh_all();
 
-    let os = platform_string().to_string();
-    let arch = arch_string().to_string();
+        let os = platform_string().to_string();
+        let arch = arch_string().to_string();
 
-    let ram_total_bytes = sys.total_memory();
-    let ram_available_bytes = sys.available_memory();
+        let ram_total_bytes = sys.total_memory();
+        let ram_available_bytes = sys.available_memory();
 
-    let gpus = if cfg!(target_os = "windows") {
-        detect_gpu_windows()
-    } else if cfg!(target_os = "macos") {
-        detect_gpu_macos()
-    } else {
-        detect_gpu_linux()
-    };
+        let gpus = if cfg!(target_os = "windows") {
+            detect_gpu_windows()
+        } else if cfg!(target_os = "macos") {
+            detect_gpu_macos()
+        } else {
+            detect_gpu_linux()
+        };
 
-    let recommended_llamacpp_variant = recommended_variant(&gpus);
+        let recommended_llamacpp_variant = recommended_variant(&gpus);
 
-    let resources_dir = resources_dir(&app)?;
-    let (disk_free, disk_total) = get_disk_space(&resources_dir);
+        let resources_dir = resources_dir(&app)?;
+        let (disk_free, disk_total) = get_disk_space(&resources_dir);
 
-    Ok(HardwareInfo {
-        os,
-        arch,
-        ram_total_bytes,
-        ram_available_bytes,
-        gpus,
-        recommended_llamacpp_variant,
-        disk_free_bytes: disk_free,
-        disk_total_bytes: disk_total,
-    })
+        Ok(HardwareInfo {
+            os,
+            arch,
+            ram_total_bytes,
+            ram_available_bytes,
+            gpus,
+            recommended_llamacpp_variant,
+            disk_free_bytes: disk_free,
+            disk_total_bytes: disk_total,
+        })
+    }).await.map_err(|e| format!("join error: {}", e))?
 }
 
 fn get_disk_space(path: &Path) -> (u64, u64) {
@@ -1473,7 +1490,7 @@ pub struct LlamaServerStatus {
 }
 
 #[tauri::command]
-pub fn llamacpp_spawn_server(
+pub async fn llamacpp_spawn_server(
     app: AppHandle,
     model_path: String,
     port: u16,
@@ -1485,317 +1502,332 @@ pub fn llamacpp_spawn_server(
     threads: Option<u32>,
     mmproj_path: Option<String>,
 ) -> Result<LlamaServerStatus, String> {
-    // Check if already running
-    let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
-    let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+    tokio::task::spawn_blocking(move || {
+        // Check if already running
+        let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
+        let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-    if let Some(ref existing) = *state {
-        // Check if the process is still alive
-        if is_process_alive(existing.pid) {
-            return Ok(LlamaServerStatus {
-                running: true,
-                pid: Some(existing.pid),
-                port: Some(existing.port),
-                model_path: Some(existing.model_path.clone()),
-            });
+        if let Some(ref existing) = *state {
+            if is_process_alive(existing.pid) {
+                return Ok(LlamaServerStatus {
+                    running: true,
+                    pid: Some(existing.pid),
+                    port: Some(existing.port),
+                    model_path: Some(existing.model_path.clone()),
+                });
+            }
         }
-    }
 
-    // Kill any orphaned llama-server before starting a new one
-    #[cfg(target_os = "windows")]
-    {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/IM", "llama-server.exe", "/T"])
-            .output();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = Command::new("pkill")
-            .args(["-9", "-f", "llama-server"])
-            .output();
-    }
-    std::thread::sleep(std::time::Duration::from_millis(500));
+        // Kill any orphaned llama-server before starting a new one
+        #[cfg(target_os = "windows")]
+        {
+            let _ = silent_command("taskkill")
+                .args(["/F", "/IM", "llama-server.exe", "/T"])
+                .output();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", "llama-server"])
+                .output();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let dir = resources_dir(&app)?;
-    let llama_dir = llamacpp_ai_dir(&dir);
-    let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
-        .map_err(|e| format!("llama-server binary not found: {}", e))?;
+        let dir = resources_dir(&app)?;
+        let llama_dir = llamacpp_ai_dir(&dir);
+        let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
+            .map_err(|e| format!("llama-server binary not found: {}", e))?;
 
-    if !Path::new(&model_path).exists() {
-        return Err(format!("model file not found: {}", model_path));
-    }
+        if !Path::new(&model_path).exists() {
+            return Err(format!("model file not found: {}", model_path));
+        }
 
-    let mut cmd = Command::new(&binary);
-    cmd.arg("--model").arg(&model_path);
-    cmd.arg("--port").arg(port.to_string());
-    cmd.arg("--host").arg("127.0.0.1");
+        let mut cmd = Command::new(&binary);
+        cmd.arg("--model").arg(&model_path);
+        cmd.arg("--port").arg(port.to_string());
+        cmd.arg("--host").arg("127.0.0.1");
 
-    if let Some(ctx) = ctx_size {
-        cmd.arg("--ctx-size").arg(ctx.to_string());
-    }
+        if let Some(ctx) = ctx_size {
+            cmd.arg("--ctx-size").arg(ctx.to_string());
+        }
 
-    match ngl.as_deref() {
-        Some("all") => { cmd.arg("--n-gpu-layers").arg("99"); }
-        Some("auto") | None => { cmd.arg("--n-gpu-layers").arg("auto"); }
-        Some(n) => { cmd.arg("--n-gpu-layers").arg(n); }
-    }
+        match ngl.as_deref() {
+            Some("all") => { cmd.arg("--n-gpu-layers").arg("99"); }
+            Some("auto") | None => { cmd.arg("--n-gpu-layers").arg("auto"); }
+            Some(n) => { cmd.arg("--n-gpu-layers").arg(n); }
+        }
 
-    if let Some(fa) = flash_attn.as_deref() {
-        cmd.arg("--flash-attn").arg(fa);
-    } else {
-        cmd.arg("--flash-attn").arg("auto");
-    }
+        if let Some(fa) = flash_attn.as_deref() {
+            cmd.arg("--flash-attn").arg(fa);
+        } else {
+            cmd.arg("--flash-attn").arg("auto");
+        }
 
-    if let Some(ctk) = cache_type_k.as_deref() {
-        cmd.arg("--cache-type-k").arg(ctk);
-    }
-    if let Some(ctv) = cache_type_v.as_deref() {
-        cmd.arg("--cache-type-v").arg(ctv);
-    }
+        if let Some(ctk) = cache_type_k.as_deref() {
+            cmd.arg("--cache-type-k").arg(ctk);
+        }
+        if let Some(ctv) = cache_type_v.as_deref() {
+            cmd.arg("--cache-type-v").arg(ctv);
+        }
 
-    if let Some(t) = threads {
-        cmd.arg("--threads").arg(t.to_string());
-    }
+        if let Some(t) = threads {
+            cmd.arg("--threads").arg(t.to_string());
+        }
 
-    if let Some(mmp) = mmproj_path.as_deref() {
-        cmd.arg("--mmproj").arg(mmp);
-    }
+        if let Some(mmp) = mmproj_path.as_deref() {
+            cmd.arg("--mmproj").arg(mmp);
+        }
 
-    // Production settings for a desktop app
-    cmd.arg("--parallel").arg("1");
-    cmd.arg("--cont-batching");
-    cmd.arg("--cache-prompt");
+        // Production settings for a desktop app
+        cmd.arg("--parallel").arg("1");
+        cmd.arg("--cont-batching");
+        cmd.arg("--cache-prompt");
 
-    // Redirect stdout/stderr to log file
-    let log_path = dir.join("llama-server.log");
-    let log_file = std::fs::File::create(&log_path)
-        .map_err(|e| format!("create log file: {}", e))?;
-    cmd.stdout(log_file.try_clone().map_err(|e| format!("clone stdout: {}", e))?);
-    cmd.stderr(log_file);
+        // Redirect stdout/stderr to log file
+        let log_path = dir.join("llama-server.log");
+        let log_file = std::fs::File::create(&log_path)
+            .map_err(|e| format!("create log file: {}", e))?;
+        cmd.stdout(log_file.try_clone().map_err(|e| format!("clone stdout: {}", e))?);
+        cmd.stderr(log_file);
 
-    // On Windows, suppress the console window
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+        // On Windows, suppress the console window
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
 
-    let child = cmd.spawn().map_err(|e| format!("spawn llama-server: {}", e))?;
-    let pid = child.id();
+        let child = cmd.spawn().map_err(|e| format!("spawn llama-server: {}", e))?;
+        let pid = child.id();
 
-    *state = Some(LlamaServerState {
-        pid,
-        port,
-        model_path: model_path.clone(),
-    });
+        *state = Some(LlamaServerState {
+            pid,
+            port,
+            model_path: model_path.clone(),
+        });
 
-    Ok(LlamaServerStatus {
-        running: true,
-        pid: Some(pid),
+        Ok(LlamaServerStatus {
+            running: true,
+            pid: Some(pid),
         port: Some(port),
         model_path: Some(model_path),
     })
-}
-
-#[tauri::command]
-pub fn llamacpp_stop_server() -> Result<LlamaServerStatus, String> {
-    let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
-    let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
-
-    // Kill ALL llama-server instances immediately (catches orphans too)
-    #[cfg(target_os = "windows")]
-    {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/IM", "llama-server.exe", "/T"])
-            .output();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = Command::new("pkill")
-            .args(["-9", "-f", "llama-server"])
-            .output();
-    }
-
-    *state = None;
-    Ok(LlamaServerStatus {
-        running: false,
-        pid: None,
-        port: None,
-        model_path: None,
     })
+    .await.map_err(|e| format!("join error: {}", e))?
 }
 
 #[tauri::command]
-pub fn llamacpp_server_status() -> Result<LlamaServerStatus, String> {
-    let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
-    let state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+pub async fn llamacpp_stop_server() -> Result<LlamaServerStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
+        let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-    match state.as_ref() {
-        Some(existing) => {
-            let alive = is_process_alive(existing.pid);
-            Ok(LlamaServerStatus {
-                running: alive,
-                pid: if alive { Some(existing.pid) } else { None },
-                port: if alive { Some(existing.port) } else { None },
-                model_path: if alive { Some(existing.model_path.clone()) } else { None },
-            })
+        // Kill ALL llama-server instances immediately (catches orphans too)
+        #[cfg(target_os = "windows")]
+        {
+            let _ = silent_command("taskkill")
+                .args(["/F", "/IM", "llama-server.exe", "/T"])
+                .output();
         }
-        None => Ok(LlamaServerStatus {
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", "llama-server"])
+                .output();
+        }
+
+        *state = None;
+        Ok(LlamaServerStatus {
             running: false,
             pid: None,
             port: None,
             model_path: None,
-        }),
-    }
+        })
+    })
+    .await.map_err(|e| format!("join error: {}", e))?
 }
 
 #[tauri::command]
-pub fn llamacpp_spawn_embeddings_server(
+pub async fn llamacpp_server_status() -> Result<LlamaServerStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
+        let state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+
+        match state.as_ref() {
+            Some(existing) => {
+                let alive = is_process_alive(existing.pid);
+                Ok(LlamaServerStatus {
+                    running: alive,
+                    pid: if alive { Some(existing.pid) } else { None },
+                    port: if alive { Some(existing.port) } else { None },
+                    model_path: if alive { Some(existing.model_path.clone()) } else { None },
+                })
+            }
+            None => Ok(LlamaServerStatus {
+                running: false,
+                pid: None,
+                port: None,
+                model_path: None,
+            }),
+        }
+    }).await.map_err(|e| format!("join error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn llamacpp_spawn_embeddings_server(
     app: AppHandle,
     model_path: String,
     port: Option<u16>,
     threads: Option<u32>,
 ) -> Result<LlamaServerStatus, String> {
-    let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
-    let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+    tokio::task::spawn_blocking(move || {
+        let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
+        let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-    if let Some(ref existing) = *state {
-        if is_process_alive(existing.pid) {
-            return Ok(LlamaServerStatus {
-                running: true,
-                pid: Some(existing.pid),
-                port: Some(existing.port),
-                model_path: Some(existing.model_path.clone()),
-            });
+        if let Some(ref existing) = *state {
+            if is_process_alive(existing.pid) {
+                return Ok(LlamaServerStatus {
+                    running: true,
+                    pid: Some(existing.pid),
+                    port: Some(existing.port),
+                    model_path: Some(existing.model_path.clone()),
+                });
+            }
         }
-    }
 
-    // Kill any orphaned llama-server before starting the embeddings server
-    #[cfg(target_os = "windows")]
-    {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/IM", "llama-server.exe", "/T"])
-            .output();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = Command::new("pkill")
-            .args(["-9", "-f", "llama-server"])
-            .output();
-    }
-    std::thread::sleep(std::time::Duration::from_millis(500));
+        // Kill any orphaned llama-server before starting the embeddings server
+        #[cfg(target_os = "windows")]
+        {
+            let _ = silent_command("taskkill")
+                .args(["/F", "/IM", "llama-server.exe", "/T"])
+                .output();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", "llama-server"])
+                .output();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let dir = resources_dir(&app)?;
-    let emb_dir = llamacpp_embeddings_dir(&dir);
-    let binary = find_binary_in_dir(&emb_dir, llamacpp_binary_name())
-        .map_err(|e| format!("llama-server binary not found in embeddings dir: {}", e))?;
+        let dir = resources_dir(&app)?;
+        let emb_dir = llamacpp_embeddings_dir(&dir);
+        let binary = find_binary_in_dir(&emb_dir, llamacpp_binary_name())
+            .map_err(|e| format!("llama-server binary not found in embeddings dir: {}", e))?;
 
-    if !Path::new(&model_path).exists() {
-        return Err(format!("model file not found: {}", model_path));
-    }
+        if !Path::new(&model_path).exists() {
+            return Err(format!("model file not found: {}", model_path));
+        }
 
-    let actual_port = port.unwrap_or(11434);
+        let actual_port = port.unwrap_or(11434);
 
-    let mut cmd = Command::new(&binary);
-    cmd.arg("--model").arg(&model_path);
-    cmd.arg("--port").arg(actual_port.to_string());
-    cmd.arg("--host").arg("127.0.0.1");
-    cmd.arg("--embedding");
-    cmd.arg("--n-gpu-layers").arg("0"); // Always CPU for embeddings
-    cmd.arg("--ctx-size").arg("8192");
-    cmd.arg("--parallel").arg("1");
+        let mut cmd = Command::new(&binary);
+        cmd.arg("--model").arg(&model_path);
+        cmd.arg("--port").arg(actual_port.to_string());
+        cmd.arg("--host").arg("127.0.0.1");
+        cmd.arg("--embedding");
+        cmd.arg("--n-gpu-layers").arg("0"); // Always CPU for embeddings
+        cmd.arg("--ctx-size").arg("8192");
+        cmd.arg("--parallel").arg("1");
 
-    if let Some(t) = threads {
-        cmd.arg("--threads").arg(t.to_string());
-    }
+        if let Some(t) = threads {
+            cmd.arg("--threads").arg(t.to_string());
+        }
 
-    // Redirect stdout/stderr to log file
-    let log_path = dir.join("llama-embeddings-server.log");
-    let log_file = std::fs::File::create(&log_path)
-        .map_err(|e| format!("create embeddings log file: {}", e))?;
-    cmd.stdout(log_file.try_clone().map_err(|e| format!("clone stdout: {}", e))?);
-    cmd.stderr(log_file);
+        // Redirect stdout/stderr to log file
+        let log_path = dir.join("llama-embeddings-server.log");
+        let log_file = std::fs::File::create(&log_path)
+            .map_err(|e| format!("create embeddings log file: {}", e))?;
+        cmd.stdout(log_file.try_clone().map_err(|e| format!("clone stdout: {}", e))?);
+        cmd.stderr(log_file);
 
-    // On Windows, suppress the console window
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+        // On Windows, suppress the console window
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
 
-    let child = cmd.spawn().map_err(|e| format!("spawn embeddings llama-server: {}", e))?;
-    let pid = child.id();
+        let child = cmd.spawn().map_err(|e| format!("spawn embeddings llama-server: {}", e))?;
+        let pid = child.id();
 
-    *state = Some(LlamaServerState {
-        pid,
-        port: actual_port,
-        model_path: model_path.clone(),
-    });
+        *state = Some(LlamaServerState {
+            pid,
+            port: actual_port,
+            model_path: model_path.clone(),
+        });
 
-    Ok(LlamaServerStatus {
-        running: true,
-        pid: Some(pid),
-        port: Some(actual_port),
-        model_path: Some(model_path),
-    })
+        Ok(LlamaServerStatus {
+            running: true,
+            pid: Some(pid),
+            port: Some(actual_port),
+            model_path: Some(model_path),
+        })
+    }).await.map_err(|e| format!("join error: {}", e))?
 }
 
 #[tauri::command]
-pub fn llamacpp_stop_embeddings_server() -> Result<LlamaServerStatus, String> {
-    let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
-    let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+pub async fn llamacpp_stop_embeddings_server() -> Result<LlamaServerStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
+        let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-    // Kill ALL llama-server instances immediately (catches orphans too)
-    #[cfg(target_os = "windows")]
-    {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/IM", "llama-server.exe", "/T"])
-            .output();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = Command::new("pkill")
-            .args(["-9", "-f", "llama-server"])
-            .output();
-    }
-
-    *state = None;
-    Ok(LlamaServerStatus {
-        running: false,
-        pid: None,
-        port: None,
-        model_path: None,
-    })
-}
-
-#[tauri::command]
-pub fn llamacpp_embeddings_server_status() -> Result<LlamaServerStatus, String> {
-    let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
-    let state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
-
-    match state.as_ref() {
-        Some(existing) => {
-            let alive = is_process_alive(existing.pid);
-            Ok(LlamaServerStatus {
-                running: alive,
-                pid: if alive { Some(existing.pid) } else { None },
-                port: if alive { Some(existing.port) } else { None },
-                model_path: if alive { Some(existing.model_path.clone()) } else { None },
-            })
+        // Kill ALL llama-server instances immediately (catches orphans too)
+        #[cfg(target_os = "windows")]
+        {
+            let _ = silent_command("taskkill")
+                .args(["/F", "/IM", "llama-server.exe", "/T"])
+                .output();
         }
-        None => Ok(LlamaServerStatus {
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", "llama-server"])
+                .output();
+        }
+
+        *state = None;
+        Ok(LlamaServerStatus {
             running: false,
             pid: None,
             port: None,
             model_path: None,
-        }),
-    }
+        })
+    })
+    .await.map_err(|e| format!("join error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn llamacpp_embeddings_server_status() -> Result<LlamaServerStatus, String> {
+    tokio::task::spawn_blocking(move || {
+        let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
+        let state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+
+        match state.as_ref() {
+            Some(existing) => {
+                let alive = is_process_alive(existing.pid);
+                Ok(LlamaServerStatus {
+                    running: alive,
+                    pid: if alive { Some(existing.pid) } else { None },
+                    port: if alive { Some(existing.port) } else { None },
+                    model_path: if alive { Some(existing.model_path.clone()) } else { None },
+                })
+            }
+            None => Ok(LlamaServerStatus {
+                running: false,
+                pid: None,
+                port: None,
+                model_path: None,
+            }),
+        }
+    })
+    .await.map_err(|e| format!("join error: {}", e))?
 }
 
 fn is_process_alive(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
-        let result = Command::new("tasklist")
+        let result = silent_command("tasklist")
             .args(["/FI", &format!("PID eq {}", pid), "/NH"])
             .output();
         match result {
@@ -1808,7 +1840,7 @@ fn is_process_alive(pid: u32) -> bool {
     }
     #[cfg(target_os = "macos")]
     {
-        let result = Command::new("kill")
+        let result = silent_command("kill")
             .args(["-0", &pid.to_string()])
             .output();
         match result {
