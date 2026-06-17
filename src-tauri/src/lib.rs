@@ -958,12 +958,26 @@ pub fn run() {
             resources_verify_nomic,
             resources_nomic_sha256,
             resources_download_llamacpp,
+            resources_download_llamacpp_variant,
+            resources_llamacpp_variant,
             resources_download_nomic,
             resources_remove_all,
             ollama_check,
             ollama_pull_model,
             ollama_pull_nomic,
             embeddings_check_provider,
+            // Hardware detection (M8.1)
+            resources_detect_hardware,
+            // Chat model management (M8.3)
+            resources_download_chat_model,
+            resources_list_chat_models,
+            resources_remove_chat_model,
+            resources_register_local_model,
+            resources_verify_model,
+            // Llama server lifecycle (M8.6)
+            llamacpp_spawn_server,
+            llamacpp_stop_server,
+            llamacpp_server_status,
             // Vault export (D1 — Obsidian export)
             vault_create_dir,
             vault_check_path,

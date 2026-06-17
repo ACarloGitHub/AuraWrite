@@ -31,6 +31,7 @@ zip = { version = "0.6", default-features = false, features = ["deflate"] }
 tar = "0.4"
 flate2 = "1"
 base64 = "0.22"
+sysinfo = "0.39.3"
 
 [profile.dev]
 incremental = true
