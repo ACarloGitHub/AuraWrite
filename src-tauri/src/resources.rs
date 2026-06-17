@@ -4,7 +4,12 @@
 // self-contained embeddings stack. The downloads are performed at runtime
 // to a per-OS data directory; nothing is bundled into the installer.
 //
-// All assets are pinned by default to llama.cpp b9587 (2026-06-10) and
+// Two separate llama.cpp installations:
+// - llama.cpp/        → AI chat server (CPU/CUDA/Vulkan variant chosen by hardware)
+// - llama.cpp-embeddings/ → Embeddings server for nomic (always CPU)
+// This prevents the AI variant download from overwriting the embeddings runtime.
+//
+// All assets are pinned by default to llama.cpp b9680 and
 // nomic-embed-text-v2-moe Q8_0. The URLs can be overridden by the
 // frontend in case a future release needs to be re-pinned without a
 // Rust change.
@@ -20,33 +25,12 @@ use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
 use tauri::{AppHandle, Emitter, Manager};
 
-const LLAMACPP_PINNED_VERSION: &str = "b9596";
+const LLAMACPP_PINNED_VERSION: &str = "b9680";
 const NOMIC_MODEL_FILENAME: &str = "nomic-embed-text-v2-moe.Q8_0.gguf";
 const NOMIC_DEFAULT_URL: &str = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
 const NOMIC_LICENSE: &str = "Apache-2.0";
 const LLAMACPP_LICENSE: &str = "MIT";
 const NOMIC_SHA256_EXPECTED: &str = "6E7A7E594A26985523C18383ABA4AAD39FE6E14F08FFC6AB5B554E1CCDC3CFF";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResourceInfo {
-    pub present: bool,
-    pub path: String,
-    pub size_bytes: u64,
-    pub version: String,
-    pub license: String,
-    pub download_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResourcesStatus {
-    pub llamacpp: ResourceInfo,
-    pub nomic: ResourceInfo,
-    pub ollama_installed: bool,
-    pub ollama_path: String,
-    pub data_dir: String,
-    pub platform: String,
-    pub arch: String,
-}
 
 fn resources_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
@@ -84,22 +68,30 @@ fn default_llamacpp_url() -> String {
     llamacpp_url_for_variant("cpu")
 }
 
+fn llamacpp_embeddings_dir(resources: &Path) -> PathBuf {
+    resources.join("llama.cpp-embeddings")
+}
+
+fn llamacpp_ai_dir(resources: &Path) -> PathBuf {
+    resources.join("llama.cpp")
+}
+
 fn llamacpp_url_for_variant(variant: &str) -> String {
     let platform = platform_string();
     let arch = arch_string();
     let ver = LLAMACPP_PINNED_VERSION;
     let asset = match (platform, arch, variant) {
-        // Windows: CPU, CUDA (cu12), Vulkan
+        // Windows: CPU, CUDA 12.4, Vulkan
         ("windows", "x64", "cpu") => format!("llama-{}-bin-win-cpu-x64.zip", ver),
-        ("windows", "x64", "cuda") => format!("llama-{}-bin-win-cuda-cu12.4.1-x64.zip", ver),
+        ("windows", "x64", "cuda") => format!("llama-{}-bin-win-cuda-12.4-x64.zip", ver),
         ("windows", "x64", "vulkan") => format!("llama-{}-bin-win-vulkan-x64.zip", ver),
         ("windows", "arm64", "cpu") => format!("llama-{}-bin-win-cpu-arm64.zip", ver),
         // macOS: Metal is included in the standard build
         ("macos", "arm64", _) => format!("llama-{}-bin-macos-arm64.tar.gz", ver),
         ("macos", "x64", _) => format!("llama-{}-bin-macos-x64.tar.gz", ver),
-        // Linux: CPU, CUDA, Vulkan
+        // Linux: CPU, CUDA 12.4, Vulkan
         ("linux", "x64", "cpu") => format!("llama-{}-bin-ubuntu-x64.tar.gz", ver),
-        ("linux", "x64", "cuda") => format!("llama-{}-bin-ubuntu-cuda-cu12.4.1-x64.tar.gz", ver),
+        ("linux", "x64", "cuda") => format!("llama-{}-bin-ubuntu-cuda-12.4-x64.tar.gz", ver),
         ("linux", "x64", "vulkan") => format!("llama-{}-bin-ubuntu-vulkan-x64.tar.gz", ver),
         ("linux", "arm64", _) => format!("llama-{}-bin-ubuntu-arm64.tar.gz", ver),
         // Fallback
@@ -147,31 +139,73 @@ fn sha256_string(path: &Path) -> Option<String> {
     Some(format!("{:X}", hasher.finalize()))
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceInfo {
+    pub present: bool,
+    pub path: String,
+    pub size_bytes: u64,
+    pub version: String,
+    pub license: String,
+    pub download_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourcesStatus {
+    pub llamacpp: ResourceInfo,
+    pub llamacpp_embeddings: ResourceInfo,
+    pub nomic: ResourceInfo,
+    pub ollama_installed: bool,
+    pub ollama_path: String,
+    pub data_dir: String,
+    pub platform: String,
+    pub arch: String,
+}
+
 #[tauri::command]
 pub fn resources_get_status(app: AppHandle) -> Result<ResourcesStatus, String> {
     let dir = resources_dir(&app)?;
-    let llama_dir = dir.join("llama.cpp");
-    let bin_path = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
+
+    // AI llama.cpp (in llama.cpp/)
+    let ai_dir = llamacpp_ai_dir(&dir);
+    let ai_bin = find_binary_in_dir(&ai_dir, llamacpp_binary_name())
         .ok()
         .filter(|p| p.exists());
-    let model_path = dir.join("nomic").join(NOMIC_MODEL_FILENAME);
+    let ai_present = ai_bin.is_some();
+    let (ai_path, ai_size) = match &ai_bin {
+        Some(p) => (p.to_string_lossy().to_string(), file_size(p)),
+        None => (ai_dir.join(llamacpp_binary_name()).to_string_lossy().to_string(), 0),
+    };
 
-    let llamacpp_present = bin_path.is_some();
+    // Embeddings llama.cpp (in llama.cpp-embeddings/)
+    let emb_dir = llamacpp_embeddings_dir(&dir);
+    let emb_bin = find_binary_in_dir(&emb_dir, llamacpp_binary_name())
+        .ok()
+        .filter(|p| p.exists());
+    let emb_present = emb_bin.is_some();
+    let (emb_path, emb_size) = match &emb_bin {
+        Some(p) => (p.to_string_lossy().to_string(), file_size(p)),
+        None => (emb_dir.join(llamacpp_binary_name()).to_string_lossy().to_string(), 0),
+    };
+
+    let model_path = dir.join("nomic").join(NOMIC_MODEL_FILENAME);
     let nomic_present = model_path.exists();
 
     let ollama_path = find_ollama_binary().unwrap_or_default();
     let ollama_installed = !ollama_path.is_empty();
 
-    let (llama_display_path, llama_size) = match &bin_path {
-        Some(p) => (p.to_string_lossy().to_string(), file_size(p)),
-        None => (llama_dir.join(llamacpp_binary_name()).to_string_lossy().to_string(), 0),
-    };
-
     Ok(ResourcesStatus {
         llamacpp: ResourceInfo {
-            present: llamacpp_present,
-            path: llama_display_path,
-            size_bytes: llama_size,
+            present: ai_present,
+            path: ai_path,
+            size_bytes: ai_size,
+            version: LLAMACPP_PINNED_VERSION.to_string(),
+            license: LLAMACPP_LICENSE.to_string(),
+            download_url: llamacpp_url_for_variant("cpu"),
+        },
+        llamacpp_embeddings: ResourceInfo {
+            present: emb_present,
+            path: emb_path,
+            size_bytes: emb_size,
             version: LLAMACPP_PINNED_VERSION.to_string(),
             license: LLAMACPP_LICENSE.to_string(),
             download_url: default_llamacpp_url(),
@@ -546,22 +580,25 @@ fn find_binary_in_dir(root: &Path, name: &str) -> Result<std::path::PathBuf, Str
 #[tauri::command]
 pub async fn resources_download_llamacpp(app: AppHandle) -> Result<ResourceInfo, String> {
     let dir = resources_dir(&app)?;
-    let target_dir = dir.join("llama.cpp");
+    let target_dir = llamacpp_embeddings_dir(&dir);
     let url = default_llamacpp_url();
     let is_zip = is_zip_url(&url);
     let archive_path = if is_zip {
-        dir.join("llama.cpp.zip")
+        dir.join("llama.cpp-embeddings.zip")
     } else {
-        dir.join("llama.cpp.tar.gz")
+        dir.join("llama.cpp-embeddings.tar.gz")
     };
+    if target_dir.exists() {
+        let _ = fs::remove_dir_all(&target_dir);
+    }
     let _ = fs::create_dir_all(&target_dir);
-    download_to_file_async(&app, "llamacpp", "llama.cpp", &url, &archive_path)
+    download_to_file_async(&app, "llamacpp-embeddings", "llama.cpp (embeddings)", &url, &archive_path)
         .await
-        .map_err(|e| format!("download llama.cpp: {}", e))?;
+        .map_err(|e| format!("download llama.cpp-embeddings: {}", e))?;
     if is_zip {
-        extract_zip(&archive_path, &target_dir).map_err(|e| format!("extract llama.cpp zip: {}", e))?;
+        extract_zip(&archive_path, &target_dir).map_err(|e| format!("extract llama.cpp-embeddings zip: {}", e))?;
     } else {
-        extract_tar_gz(&archive_path, &target_dir).map_err(|e| format!("extract llama.cpp tar.gz: {}", e))?;
+        extract_tar_gz(&archive_path, &target_dir).map_err(|e| format!("extract llama.cpp-embeddings tar.gz: {}", e))?;
     }
     let _ = fs::remove_file(&archive_path);
     let bin = find_binary_in_dir(&target_dir, llamacpp_binary_name())?;
@@ -572,13 +609,9 @@ pub async fn resources_download_llamacpp(app: AppHandle) -> Result<ResourceInfo,
         perms.set_mode(0o755);
         fs::set_permissions(&bin, perms).ok();
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&bin).map_err(|e| e.to_string())?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&bin, perms).ok();
-    }
+    // Write variant metadata
+    let meta_path = target_dir.join("variant.txt");
+    fs::write(&meta_path, "cpu").map_err(|e| format!("write variant: {}", e))?;
     Ok(ResourceInfo {
         present: true,
         path: bin.to_string_lossy().to_string(),
@@ -609,7 +642,7 @@ pub async fn resources_download_llamacpp_variant(
     };
 
     let dir = resources_dir(&app)?;
-    let target_dir = dir.join("llama.cpp");
+    let target_dir = llamacpp_ai_dir(&dir);
     let url = llamacpp_url_for_variant(&variant);
     let is_zip = is_zip_url(&url);
     let archive_path = if is_zip {
@@ -618,14 +651,23 @@ pub async fn resources_download_llamacpp_variant(
         dir.join(format!("llama.cpp-{}.tar.gz", variant))
     };
 
-    // Remove old variant directory contents first (keep llama.cpp dir but clean it)
+    // Remove old variant directory contents first
     if target_dir.exists() {
         let _ = fs::remove_dir_all(&target_dir);
     }
     let _ = fs::create_dir_all(&target_dir);
 
-    let download_name = format!("llamacpp-{}", variant);
-    download_to_file_async(&app, &download_name, &download_name, &url, &archive_path)
+    let display_name = if variant == "cuda" {
+        "llama.cpp (CUDA)".to_string()
+    } else if variant == "vulkan" {
+        "llama.cpp (Vulkan)".to_string()
+    } else if variant == "cpu" {
+        "llama.cpp (CPU)".to_string()
+    } else {
+        format!("llama.cpp ({})", variant)
+    };
+    let download_id = format!("llamacpp-{}", variant);
+    download_to_file_async(&app, &download_id, &display_name, &url, &archive_path)
         .await
         .map_err(|e| format!("download llama.cpp {}: {}", variant, e))?;
 
@@ -664,13 +706,26 @@ pub async fn resources_download_llamacpp_variant(
 #[tauri::command]
 pub fn resources_llamacpp_variant(app: AppHandle) -> Result<String, String> {
     let dir = resources_dir(&app)?;
-    let llama_dir = dir.join("llama.cpp");
+    let llama_dir = llamacpp_ai_dir(&dir);
     let meta_path = llama_dir.join("variant.txt");
     if meta_path.exists() {
         let variant = fs::read_to_string(&meta_path).unwrap_or_else(|_| "cpu".to_string());
         Ok(variant.trim().to_string())
     } else {
         // Legacy install: assume CPU
+        Ok("cpu".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn resources_llamacpp_embeddings_variant(app: AppHandle) -> Result<String, String> {
+    let dir = resources_dir(&app)?;
+    let emb_dir = llamacpp_embeddings_dir(&dir);
+    let meta_path = emb_dir.join("variant.txt");
+    if meta_path.exists() {
+        let variant = fs::read_to_string(&meta_path).unwrap_or_else(|_| "cpu".to_string());
+        Ok(variant.trim().to_string())
+    } else {
         Ok("cpu".to_string())
     }
 }
@@ -721,13 +776,37 @@ pub async fn resources_download_nomic(app: AppHandle) -> Result<ResourceInfo, St
 #[tauri::command]
 pub fn resources_remove_all(app: AppHandle) -> Result<(), String> {
     let dir = resources_dir(&app)?;
-    let llama = dir.join("llama.cpp");
+    let ai_dir = llamacpp_ai_dir(&dir);
+    let emb_dir = llamacpp_embeddings_dir(&dir);
     let nomic = dir.join("nomic");
-    if llama.exists() {
-        fs::remove_dir_all(&llama).map_err(|e| format!("remove llama.cpp: {}", e))?;
+    if ai_dir.exists() {
+        fs::remove_dir_all(&ai_dir).map_err(|e| format!("remove llama.cpp: {}", e))?;
+    }
+    if emb_dir.exists() {
+        fs::remove_dir_all(&emb_dir).map_err(|e| format!("remove llama.cpp-embeddings: {}", e))?;
     }
     if nomic.exists() {
         fs::remove_dir_all(&nomic).map_err(|e| format!("remove nomic: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn resources_remove_llamacpp_ai(app: AppHandle) -> Result<(), String> {
+    let dir = resources_dir(&app)?;
+    let ai_dir = llamacpp_ai_dir(&dir);
+    if ai_dir.exists() {
+        fs::remove_dir_all(&ai_dir).map_err(|e| format!("remove llama.cpp: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn resources_remove_llamacpp_embeddings(app: AppHandle) -> Result<(), String> {
+    let dir = resources_dir(&app)?;
+    let emb_dir = llamacpp_embeddings_dir(&dir);
+    if emb_dir.exists() {
+        fs::remove_dir_all(&emb_dir).map_err(|e| format!("remove llama.cpp-embeddings: {}", e))?;
     }
     Ok(())
 }
@@ -803,8 +882,13 @@ pub fn ollama_pull_nomic() -> Result<String, String> {
 pub fn embeddings_check_provider(app: AppHandle) -> Result<String, String> {
     // Returns one of: "llamacpp" | "ollama" | "none"
     if let Ok(dir) = resources_dir(&app) {
-        let llama_dir = dir.join("llama.cpp");
-        if find_binary_in_dir(&llama_dir, llamacpp_binary_name()).is_ok() {
+        let emb_dir = llamacpp_embeddings_dir(&dir);
+        if find_binary_in_dir(&emb_dir, llamacpp_binary_name()).is_ok() {
+            return Ok("llamacpp".to_string());
+        }
+        // Also check AI dir as fallback (legacy installs)
+        let ai_dir = llamacpp_ai_dir(&dir);
+        if find_binary_in_dir(&ai_dir, llamacpp_binary_name()).is_ok() {
             return Ok("llamacpp".to_string());
         }
     }
@@ -1342,6 +1426,7 @@ fn get_disk_space(path: &Path) -> (u64, u64) {
 // ============================================================================
 
 static LLAMA_SERVER: OnceLock<Mutex<Option<LlamaServerState>>> = OnceLock::new();
+static LLAMA_EMBEDDINGS_SERVER: OnceLock<Mutex<Option<LlamaServerState>>> = OnceLock::new();
 
 struct LlamaServerState {
     pid: u32,
@@ -1387,7 +1472,7 @@ pub fn llamacpp_spawn_server(
     }
 
     let dir = resources_dir(&app)?;
-    let llama_dir = dir.join("llama.cpp");
+    let llama_dir = llamacpp_ai_dir(&dir);
     let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
         .map_err(|e| format!("llama-server binary not found: {}", e))?;
 
@@ -1443,11 +1528,11 @@ pub fn llamacpp_spawn_server(
     cmd.stdout(log_file.try_clone().map_err(|e| format!("clone stdout: {}", e))?);
     cmd.stderr(log_file);
 
-    // On Windows, create process in new console to detach
+    // On Windows, suppress the console window
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x00000010); // CREATE_NEW_CONSOLE
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
     let child = cmd.spawn().map_err(|e| format!("spawn llama-server: {}", e))?;
@@ -1474,17 +1559,40 @@ pub fn llamacpp_stop_server() -> Result<LlamaServerStatus, String> {
 
     if let Some(ref existing) = *state {
         if is_process_alive(existing.pid) {
-            // Try graceful termination first
             #[cfg(target_os = "windows")]
             {
                 let _ = Command::new("taskkill")
-                    .args(["/PID", &existing.pid.to_string()])
+                    .args(["/F", "/PID", &existing.pid.to_string(), "/T"])
                     .output();
+                let max_retries = 10;
+                for _ in 0..max_retries {
+                    if !is_process_alive(existing.pid) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+                if is_process_alive(existing.pid) {
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/IM", "llama-server.exe", "/T"])
+                        .output();
+                }
             }
             #[cfg(not(target_os = "windows"))]
             {
                 unsafe {
                     libc::kill(existing.pid as i32, libc::SIGTERM);
+                }
+                let max_retries = 10;
+                for _ in 0..max_retries {
+                    if !is_process_alive(existing.pid) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+                if is_process_alive(existing.pid) {
+                    unsafe {
+                        libc::kill(existing.pid as i32, libc::SIGKILL);
+                    }
                 }
             }
         }
@@ -1502,6 +1610,161 @@ pub fn llamacpp_stop_server() -> Result<LlamaServerStatus, String> {
 #[tauri::command]
 pub fn llamacpp_server_status() -> Result<LlamaServerStatus, String> {
     let server_state = LLAMA_SERVER.get_or_init(|| Mutex::new(None));
+    let state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+
+    match state.as_ref() {
+        Some(existing) => {
+            let alive = is_process_alive(existing.pid);
+            Ok(LlamaServerStatus {
+                running: alive,
+                pid: if alive { Some(existing.pid) } else { None },
+                port: if alive { Some(existing.port) } else { None },
+                model_path: if alive { Some(existing.model_path.clone()) } else { None },
+            })
+        }
+        None => Ok(LlamaServerStatus {
+            running: false,
+            pid: None,
+            port: None,
+            model_path: None,
+        }),
+    }
+}
+
+#[tauri::command]
+pub fn llamacpp_spawn_embeddings_server(
+    app: AppHandle,
+    model_path: String,
+    port: Option<u16>,
+    threads: Option<u32>,
+) -> Result<LlamaServerStatus, String> {
+    let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
+    let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+
+    if let Some(ref existing) = *state {
+        if is_process_alive(existing.pid) {
+            return Ok(LlamaServerStatus {
+                running: true,
+                pid: Some(existing.pid),
+                port: Some(existing.port),
+                model_path: Some(existing.model_path.clone()),
+            });
+        }
+    }
+
+    let dir = resources_dir(&app)?;
+    let emb_dir = llamacpp_embeddings_dir(&dir);
+    let binary = find_binary_in_dir(&emb_dir, llamacpp_binary_name())
+        .map_err(|e| format!("llama-server binary not found in embeddings dir: {}", e))?;
+
+    if !Path::new(&model_path).exists() {
+        return Err(format!("model file not found: {}", model_path));
+    }
+
+    let actual_port = port.unwrap_or(11434);
+
+    let mut cmd = Command::new(&binary);
+    cmd.arg("--model").arg(&model_path);
+    cmd.arg("--port").arg(actual_port.to_string());
+    cmd.arg("--host").arg("127.0.0.1");
+    cmd.arg("--embedding");
+    cmd.arg("--n-gpu-layers").arg("0"); // Always CPU for embeddings
+    cmd.arg("--ctx-size").arg("8192");
+    cmd.arg("--parallel").arg("1");
+
+    if let Some(t) = threads {
+        cmd.arg("--threads").arg(t.to_string());
+    }
+
+    // Redirect stdout/stderr to log file
+    let log_path = dir.join("llama-embeddings-server.log");
+    let log_file = std::fs::File::create(&log_path)
+        .map_err(|e| format!("create embeddings log file: {}", e))?;
+    cmd.stdout(log_file.try_clone().map_err(|e| format!("clone stdout: {}", e))?);
+    cmd.stderr(log_file);
+
+    // On Windows, suppress the console window
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let child = cmd.spawn().map_err(|e| format!("spawn embeddings llama-server: {}", e))?;
+    let pid = child.id();
+
+    *state = Some(LlamaServerState {
+        pid,
+        port: actual_port,
+        model_path: model_path.clone(),
+    });
+
+    Ok(LlamaServerStatus {
+        running: true,
+        pid: Some(pid),
+        port: Some(actual_port),
+        model_path: Some(model_path),
+    })
+}
+
+#[tauri::command]
+pub fn llamacpp_stop_embeddings_server() -> Result<LlamaServerStatus, String> {
+    let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
+    let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
+
+    if let Some(ref existing) = *state {
+        if is_process_alive(existing.pid) {
+            #[cfg(target_os = "windows")]
+            {
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/PID", &existing.pid.to_string(), "/T"])
+                    .output();
+                let max_retries = 10;
+                for _ in 0..max_retries {
+                    if !is_process_alive(existing.pid) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+                if is_process_alive(existing.pid) {
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/IM", "llama-server.exe", "/T"])
+                        .output();
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                unsafe {
+                    libc::kill(existing.pid as i32, libc::SIGTERM);
+                }
+                let max_retries = 10;
+                for _ in 0..max_retries {
+                    if !is_process_alive(existing.pid) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+                if is_process_alive(existing.pid) {
+                    unsafe {
+                        libc::kill(existing.pid as i32, libc::SIGKILL);
+                    }
+                }
+            }
+        }
+    }
+
+    *state = None;
+    Ok(LlamaServerStatus {
+        running: false,
+        pid: None,
+        port: None,
+        model_path: None,
+    })
+}
+
+#[tauri::command]
+pub fn llamacpp_embeddings_server_status() -> Result<LlamaServerStatus, String> {
+    let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
     let state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
     match state.as_ref() {

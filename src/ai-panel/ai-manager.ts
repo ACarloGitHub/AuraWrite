@@ -99,8 +99,12 @@ export function getAISettings(): PreferencesAI {
   return loadAIFromPreferences();
 }
 
-export function updateAISettings(): void {
-  currentProvider = createProvider(loadAIFromPreferences());
+export async function updateAISettings(): Promise<void> {
+  const settings = loadAIFromPreferences();
+  if (currentProvider && currentProvider.name === "local-llamacpp" && settings.aiProvider !== "local-llamacpp") {
+    await (currentProvider as LocalLlamacppProvider).shutdownServer();
+  }
+  currentProvider = createProvider(settings);
 }
 
 export function handlePreferencesChanged(): void {
@@ -125,10 +129,20 @@ export async function sendToAI(
   // attached, event fired before chat panel setup, race condition).
   const current = currentProvider!;
   if (current.name !== settings.aiProvider) {
+    if (current.name === "local-llamacpp") {
+      await (current as LocalLlamacppProvider).shutdownServer();
+    }
     currentProvider = createProvider(settings);
   } else {
     const providerAny = current as any;
-    if (typeof providerAny.setModel === "function" && settings.aiModel) {
+    if (current.name === "local-llamacpp" && settings.aiModel) {
+      const llamacppProv = current as LocalLlamacppProvider;
+      const newMmproj = localStorage.getItem("aurawrite-llamacpp-mmproj") || undefined;
+      if (llamacppProv.getConfig().modelPath !== settings.aiModel) {
+        llamacppProv.setModel(settings.aiModel, newMmproj);
+      }
+    }
+    if (typeof providerAny.setModel === "function" && settings.aiModel && current.name !== "local-llamacpp") {
       const previousModel = providerAny.model;
       providerAny.setModel(settings.aiModel);
       if (previousModel && previousModel !== settings.aiModel) {

@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, State};
+use tauri::{Manager, State, WindowEvent};
 
 // Import modules
 mod database;
@@ -21,6 +21,23 @@ use vault_export::*;
 // State containing the database connection
 pub struct AppState {
     db: Mutex<Connection>,
+}
+
+/// Kill all llama-server processes spawned by AuraWrite.
+/// Called on app shutdown to free VRAM/RAM.
+fn kill_llamacpp_processes() {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "llama-server.exe", "/T"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-9", "-f", "llama-server"])
+            .output();
+    }
 }
 
 // ============================================================================
@@ -960,8 +977,11 @@ pub fn run() {
             resources_download_llamacpp,
             resources_download_llamacpp_variant,
             resources_llamacpp_variant,
+            resources_llamacpp_embeddings_variant,
             resources_download_nomic,
             resources_remove_all,
+            resources_remove_llamacpp_ai,
+            resources_remove_llamacpp_embeddings,
             ollama_check,
             ollama_pull_model,
             ollama_pull_nomic,
@@ -978,6 +998,10 @@ pub fn run() {
             llamacpp_spawn_server,
             llamacpp_stop_server,
             llamacpp_server_status,
+            // Llama embeddings server lifecycle
+            llamacpp_spawn_embeddings_server,
+            llamacpp_stop_embeddings_server,
+            llamacpp_embeddings_server_status,
             // Vault export (D1 — Obsidian export)
             vault_create_dir,
             vault_check_path,
@@ -985,6 +1009,11 @@ pub fn run() {
             vault_write_file_bytes,
             vault_copy_file,
         ])
+        .on_window_event(|_window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                kill_llamacpp_processes();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

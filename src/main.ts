@@ -5,6 +5,7 @@ import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-f
 import { loadAIFromPreferences } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
+import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
 import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initErrorBoundaries, showErrorToast, showInfoToast, showToast } from "./error-boundary";
@@ -47,6 +48,7 @@ interface ResourceInfo {
 }
 interface ResourcesStatus {
   llamacpp: ResourceInfo;
+  llamacpp_embeddings: ResourceInfo;
   nomic: ResourceInfo;
   ollama_installed: boolean;
   ollama_path: string;
@@ -616,9 +618,9 @@ function updateApiKeyGroupVisibility(): void {
   const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement;
   if (provider === "local-llamacpp") {
     modelInput.placeholder = "Select from list or type path...";
-    modelInput.value = "";
     modelInput.readOnly = false;
-    populateLocalModelSelect(modelInput.value);
+    const savedModel = modelInput.value.trim();
+    void populateLocalModelSelect(savedModel);
   } else if (modelInput && defaultModels[effectiveProvider]) {
     const newDefault = defaultModels[effectiveProvider];
     modelInput.placeholder = newDefault;
@@ -1025,10 +1027,10 @@ async function setupEmbeddingsTab(): Promise<void> {
   const removeAll = document.getElementById("embed-remove-all") as HTMLButtonElement | null;
   const reshowOnboarding = document.getElementById("embed-reshow-onboarding") as HTMLButtonElement | null;
 
-  if (llamaStatus) llamaStatus.textContent = `Status: ${status.llamacpp.present ? "installed" : "not installed"} (${status.platform}/${status.arch})`;
-  if (llamaMeta) llamaMeta.textContent = status.llamacpp.present ? `Version: ${status.llamacpp.version} · Size: ${formatBytes(status.llamacpp.size_bytes)}` : `Will download: ${status.llamacpp.download_url}`;
-  if (llamaDownload) llamaDownload.style.display = status.llamacpp.present ? "none" : "";
-  if (llamaRemove) llamaRemove.style.display = status.llamacpp.present ? "" : "none";
+  if (llamaStatus) llamaStatus.textContent = `Status: ${status.llamacpp_embeddings.present ? "installed" : "not installed"} (${status.platform}/${status.arch})`;
+  if (llamaMeta) llamaMeta.textContent = status.llamacpp_embeddings.present ? `Version: ${status.llamacpp_embeddings.version} · Size: ${formatBytes(status.llamacpp_embeddings.size_bytes)}` : `Will download: ${status.llamacpp_embeddings.download_url}`;
+  if (llamaDownload) llamaDownload.style.display = status.llamacpp_embeddings.present ? "none" : "";
+  if (llamaRemove) llamaRemove.style.display = status.llamacpp_embeddings.present ? "" : "none";
 
   if (nomicStatus) nomicStatus.textContent = `Status: ${status.nomic.present ? "installed" : "not installed"}`;
   if (nomicMeta) nomicMeta.textContent = status.nomic.present ? `Version: ${status.nomic.version} · Size: ${formatBytes(status.nomic.size_bytes)}` : `Will download: ${status.nomic.download_url}`;
@@ -1053,7 +1055,7 @@ async function setupEmbeddingsTab(): Promise<void> {
     }
   });
   removeAll?.addEventListener("click", async () => {
-    if (!window.confirm("Remove both llama.cpp and nomic? You can re-download at any time.")) return;
+    if (!window.confirm("Remove all local AI resources (llama.cpp, embeddings, nomic)? You can re-download at any time.")) return;
     await invoke("resources_remove_all");
     await setupEmbeddingsTab();
   });
@@ -1085,12 +1087,12 @@ function installEmbeddingsButtonHandlers(): void {
       console.warn("[llamacpp] download failed:", msg);
     } finally {
       llamaDownload.disabled = false;
-      llamaDownload.textContent = "Download llama.cpp";
+      llamaDownload.textContent = "Download llama.cpp (embeddings)";
     }
   });
   llamaRemove?.addEventListener("click", async () => {
-    if (!window.confirm("Remove llama.cpp? You can re-download it at any time.")) return;
-    await invoke("resources_remove_all");
+    if (!window.confirm("Remove llama.cpp (embeddings)? You can re-download it at any time.")) return;
+    await invoke("resources_remove_llamacpp_embeddings");
     await setupEmbeddingsTab();
   });
   nomicDownload?.addEventListener("click", async () => {
@@ -1132,6 +1134,10 @@ function maybeShowEmbeddingsOnboarding(): void {
       ])
         .then(() => setupEmbeddingsTab())
         .catch((e) => console.warn("[embeddings onboarding] download failed:", e));
+    }
+    // After embeddings wizard is dismissed, show AI wizard if needed
+    if (shouldShowWizard()) {
+      showAIWizard();
     }
   };
 
@@ -1203,8 +1209,8 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLocalModelsTab();
   setupLlamacppParamsTab();
 
-  // AI wizard first launch
-  if (shouldShowWizard()) {
+  // AI wizard first launch — only show after embeddings wizard is done
+  if (shouldShowWizard() && localStorage.getItem(EMBED_ONBOARDING_KEY)) {
     showAIWizard();
   }
 
@@ -1396,12 +1402,21 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCustomColorsVisibility();
   });
 
-  document.getElementById("pref-ai-provider")?.addEventListener("change", () => {
+  document.getElementById("pref-ai-provider")?.addEventListener("change", async () => {
+    const oldProvider = getCurrentProvider();
+    const newProviderName = (document.getElementById("pref-ai-provider") as HTMLSelectElement)?.value;
+    if (oldProvider && oldProvider instanceof LocalLlamacppProvider && newProviderName !== "local-llamacpp") {
+      await oldProvider.shutdownServer();
+    }
     updateApiKeyGroupVisibility();
     refreshModelList();
     savePreferencesFromModal();
   });
-  document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", () => {
+  document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", async () => {
+    const oldProvider = getCurrentProvider();
+    if (oldProvider && oldProvider instanceof LocalLlamacppProvider) {
+      await oldProvider.shutdownServer();
+    }
     updateApiKeyGroupVisibility();
     refreshModelList();
     savePreferencesFromModal();
@@ -1864,6 +1879,18 @@ function setupLlamacppParamsTab(): void {
       // Server not started yet, that's fine
     }
   })();
+
+  // Periodic status polling every 5 seconds (only when tab is visible)
+  setInterval(async () => {
+    const tabContent = document.querySelector('.pref-tab-content[data-tab="llamacpp-params"]');
+    if (!tabContent || !tabContent.classList.contains("active")) return;
+    try {
+      const status = await invoke("llamacpp_server_status") as any;
+      updateLlamacppServerStatus(status);
+    } catch {
+      // ignore
+    }
+  }, 5000);
 }
 
 function updateLlamacppServerStatus(status: any): void {

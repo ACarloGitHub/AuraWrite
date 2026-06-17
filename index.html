@@ -593,19 +593,19 @@
                   model (see the <em>AI Provider</em> tab).
                 </p>
                 <p class="preference-hint">
-                  nomic needs a small runtime called <strong>llama.cpp</strong> to load the
+                  nomic needs a small runtime called <strong>llama.cpp</strong> (CPU only, for embeddings) to load the
                   model. Both are downloaded the first time you choose to, and stored in your
                   user data folder. You can remove them at any time from this tab.
                 </p>
               </div>
 
               <div class="preference-group">
-                <h3>llama.cpp runtime</h3>
+                <h3>llama.cpp runtime (embeddings)</h3>
                 <p id="embed-llamacpp-status" class="preference-hint">Status: unknown</p>
                 <p id="embed-llamacpp-meta" class="preference-hint"></p>
                 <div class="preference-row">
-                  <button id="embed-llamacpp-download" class="pref-btn pref-btn-primary">Download llama.cpp</button>
-                  <button id="embed-llamacpp-remove" class="pref-btn pref-btn-danger" style="display:none;">Remove llama.cpp</button>
+                  <button id="embed-llamacpp-download" class="pref-btn pref-btn-primary">Download llama.cpp (embeddings)</button>
+                  <button id="embed-llamacpp-remove" class="pref-btn pref-btn-danger" style="display:none;">Remove llama.cpp (embeddings)</button>
                 </div>
                 <p class="preference-hint">
                   License: <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a> (open source, free for commercial use).
@@ -648,7 +648,7 @@
                   search by meaning you will be asked to download them again.
                 </p>
                 <div class="preference-row">
-                  <button id="embed-remove-all" class="pref-btn pref-btn-danger">Remove llama.cpp + nomic</button>
+                  <button id="embed-remove-all" class="pref-btn pref-btn-danger">Remove all (embeddings runtime + nomic)</button>
                 </div>
               </div>
 
@@ -977,10 +977,10 @@
             AI model, configured in the <em>AI Provider</em> tab.
           </p>
           <p style="margin: 0 0 12px 0;">
-            nomic needs a small runtime called <strong>llama.cpp</strong> to load and
+            nomic needs a small runtime called <strong>llama.cpp</strong> (CPU only, for embeddings) to load and
             run. Would you like to download both now? They will be stored in your user
             data folder and you can remove or update them at any time from
-            Preferences &rarr; Embeddings.
+            Preferences &rarr; Embeddings. Downloads continue in the background even if you close this dialog.
           </p>
           <p class="preference-hint" style="font-size: 0.85em; margin: 0;">
             llama.cpp is released under the
@@ -1093,19 +1093,18 @@
     </div>
     <div id="ai-wizard-modal" class="modal hidden">
       <div class="modal-overlay"></div>
-      <div class="modal-content" style="max-width:640px;">
+      <div class="modal-content">
         <div class="modal-header">
           <h2 id="ai-wizard-title">Set Up Local AI</h2>
-          <button id="ai-wizard-close" class="pref-btn" style="float:right;margin:0;padding:2px 10px;font-size:18px;line-height:1;" title="Close">&times;</button>
+          <button id="ai-wizard-close" class="modal-close">×</button>
         </div>
         <div class="modal-body" id="ai-wizard-body" style="padding: var(--spacing-md);">
           <!-- Step content injected by JS -->
         </div>
-        <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: space-between;">
+        <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: flex-end; gap: 8px;">
           <button id="ai-wizard-back" class="pref-btn" style="display:none;">Back</button>
-          <span></span>
-          <button id="ai-wizard-skip" class="pref-btn" style="display:none;">Skip</button>
-          <button id="ai-wizard-next" class="pref-btn pref-btn-primary">Next</button>
+          <button id="ai-wizard-skip" class="pref-btn" style="display:none;">Skip for now</button>
+          <button id="ai-wizard-next" class="pref-btn pref-btn-primary">Get Started</button>
         </div>
       </div>
     </div>

@@ -128,6 +128,8 @@ export class LocalLlamacppProvider implements AIProvider {
   private config: LlamaServerConfig;
   private abortController: AbortController | null = null;
   private serverRunning: boolean = false;
+  private currentModelPath: string | null = null;
+  private currentMmprojPath: string | null = null;
 
   constructor(config: LlamaServerConfig) {
     this.config = config;
@@ -138,14 +140,32 @@ export class LocalLlamacppProvider implements AIProvider {
     return `http://${DEFAULT_HOST}:${port}`;
   }
 
+  getConfig(): LlamaServerConfig {
+    return this.config;
+  }
+
   async ensureServerRunning(): Promise<boolean> {
-    if (this.serverRunning) return true;
+    const newModelPath = this.config.modelPath;
+    const newMmprojPath = this.config.mmprojPath || null;
+
+    if (this.serverRunning) {
+      if (this.currentModelPath === newModelPath && this.currentMmprojPath === newMmprojPath) {
+        return true;
+      }
+      console.log("[LocalLlamacpp] Model changed, restarting server:", this.currentModelPath, "→", newModelPath);
+      await this.shutdownServer();
+    }
 
     try {
       const status: LlamaServerStatus = await invoke("llamacpp_server_status");
-      if (status.running) {
+      if (status.running && status.model_path === newModelPath) {
         this.serverRunning = true;
+        this.currentModelPath = newModelPath;
+        this.currentMmprojPath = newMmprojPath;
         return true;
+      }
+      if (status.running) {
+        await invoke("llamacpp_stop_server");
       }
     } catch {
       // Server not running, try to start it
@@ -165,7 +185,8 @@ export class LocalLlamacppProvider implements AIProvider {
       });
       this.serverRunning = result.running;
       if (result.running) {
-        // Wait for server to be ready
+        this.currentModelPath = newModelPath;
+        this.currentMmprojPath = newMmprojPath;
         await this.waitForServerReady();
       }
       return result.running;
@@ -253,6 +274,11 @@ export class LocalLlamacppProvider implements AIProvider {
     }
   }
 
+  setModel(modelPath: string, mmprojPath?: string): void {
+    this.config.modelPath = modelPath;
+    this.config.mmprojPath = mmprojPath;
+  }
+
   stop(): void {
     if (this.abortController) {
       this.abortController.abort();
@@ -263,10 +289,12 @@ export class LocalLlamacppProvider implements AIProvider {
   async shutdownServer(): Promise<void> {
     try {
       await invoke("llamacpp_stop_server");
-      this.serverRunning = false;
     } catch (e) {
       console.error("[LocalLlamacpp] Failed to stop server:", e);
     }
+    this.serverRunning = false;
+    this.currentModelPath = null;
+    this.currentMmprojPath = null;
   }
 
   private extractModelName(): string {

@@ -3,7 +3,6 @@ import { MODEL_CATALOG, formatBytes as formatBytesCatalog, recommendModelsForHar
 import { updateDownloadProgress, setDownloadRetryHandler } from "../download-toast";
 
 const WIZARD_KEY = "aurawrite-ai-wizard-dismissed";
-const WIZARD_STEP_KEY = "aurawrite-ai-wizard-step";
 
 type WizardStep = "welcome" | "hardware" | "choose" | "download" | "done";
 
@@ -69,23 +68,29 @@ function renderStep(): void {
   const skipBtn = document.getElementById("ai-wizard-skip") as HTMLButtonElement;
   if (!title || !body || !backBtn || !nextBtn) return;
 
+  // Reset visibility
+  backBtn.style.display = "none";
+  skipBtn.style.display = "none";
+  nextBtn.style.display = "";
+  nextBtn.disabled = false;
+
   switch (currentStep) {
     case "welcome":
       title.textContent = "Set Up Local AI";
       body.innerHTML = `
-        <p>AuraWrite can use a local AI model for chat and suggestions — no cloud service needed.</p>
+        <p>AuraWrite can run a local AI model for chat and suggestions — no cloud service needed, all data stays on your machine.</p>
         <p>This wizard will help you:</p>
         <ul>
           <li>Detect your hardware (GPU, RAM)</li>
           <li>Choose the best model for your system</li>
           <li>Download the model and the llama.cpp runtime</li>
-          <li>Verify everything works</li>
         </ul>
-        <p class="preference-hint">All data stays on your machine. No data is sent to any cloud service.</p>
+        <p class="preference-hint">llama.cpp is released under the
+          <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT license</a>.
+          Model licenses vary and are shown during download.</p>
       `;
-      backBtn.style.display = "none";
+      skipBtn.style.display = "";
       nextBtn.textContent = "Get Started";
-      if (skipBtn) skipBtn.style.display = "";
       nextBtn.onclick = () => { currentStep = "hardware"; renderStep(); };
       break;
 
@@ -93,10 +98,10 @@ function renderStep(): void {
       title.textContent = "Hardware Detection";
       body.innerHTML = `<p>Detecting your hardware...</p>`;
       backBtn.style.display = "";
-      backBtn.onclick = () => { currentStep = "welcome"; renderStep(); };
+      skipBtn.style.display = "";
       nextBtn.textContent = "Next";
       nextBtn.disabled = true;
-      if (skipBtn) skipBtn.style.display = "";
+      backBtn.onclick = () => { currentStep = "welcome"; renderStep(); };
       detectHardware().then(() => {
         if (!hwData) {
           body.innerHTML = `<p style="color:var(--error);">Failed to detect hardware. You can still continue, but model recommendations may not be accurate.</p>`;
@@ -166,9 +171,9 @@ function renderStep(): void {
         `;
         backBtn.style.display = "";
         backBtn.onclick = () => { currentStep = "hardware"; renderStep(); };
+        skipBtn.style.display = "";
         nextBtn.textContent = "Download";
         nextBtn.disabled = !selectedQuantId;
-        if (skipBtn) skipBtn.style.display = "";
 
         body.querySelectorAll(".wizard-quant-btn").forEach((btn) => {
           btn.addEventListener("click", () => {
@@ -205,25 +210,23 @@ function renderStep(): void {
         }
         body.innerHTML = `
           <p>Downloading <strong>${model.name}</strong> (${quant.name})...</p>
-          <p class="preference-hint">File size: ${formatBytes(quant.size_bytes)}. The progress bar will appear at the bottom of the screen.</p>
+          <p class="preference-hint">File size: ${formatBytes(quant.size_bytes)}. The progress bar will appear at the bottom of the screen. You can close this dialog — downloads continue in the background.</p>
           <div id="wizard-download-status" style="margin-top:12px;">
             <p>Step 1/2: Downloading llama.cpp runtime...</p>
           </div>
         `;
         backBtn.style.display = "none";
         nextBtn.style.display = "none";
-        if (skipBtn) skipBtn.style.display = "none";
+        skipBtn.style.display = "none";
 
         (async () => {
           const statusEl = document.getElementById("wizard-download-status");
           try {
-            // Step 1: Download llama.cpp variant
             let variant = hwData?.recommended_llamacpp_variant || "cpu";
             try {
               await invoke("resources_download_llamacpp_variant", { variant });
               if (statusEl) statusEl.innerHTML = `<p>Step 1/2: llama.cpp ✓</p><p>Step 2/2: Downloading model...</p>`;
             } catch (e) {
-              // If CUDA/Vulkan fails, try CPU
               if (variant !== "cpu") {
                 variant = "cpu";
                 try {
@@ -242,9 +245,7 @@ function renderStep(): void {
               }
             }
 
-            // Step 2: Download model
             setDownloadRetryHandler(selectedModelId!, () => {
-              // Retry: re-run download step
               currentStep = "download";
               renderStep();
             });
@@ -279,11 +280,8 @@ function renderStep(): void {
         <p>You can now select <strong>"Local (llama.cpp)"</strong> as the AI Provider in Preferences → AI Provider.</p>
         <p class="preference-hint">You can always change models, adjust parameters, or add more models from Preferences → Local Models and llama.cpp Params.</p>
       `;
-      backBtn.style.display = "none";
       nextBtn.textContent = "Done";
-      nextBtn.style.display = "";
       nextBtn.disabled = false;
-      if (skipBtn) skipBtn.style.display = "none";
       nextBtn.onclick = () => {
         localStorage.setItem(WIZARD_KEY, "1");
         hideAIWizard();
