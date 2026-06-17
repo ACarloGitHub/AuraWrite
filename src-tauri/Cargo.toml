@@ -1,6 +1,6 @@
 [package]
 name = "aurawrite"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Carlo"]
 description = "A desktop writing application with AI assistance"
 edition = "2021"
