@@ -674,6 +674,18 @@
             <!-- TAB: Local Models -->
             <div class="pref-tab-content" data-tab="local-models">
               <div class="preference-group">
+                <h3>Models Directory</h3>
+                <p class="preference-hint">
+                  Choose where to store downloaded AI models. The default location is inside the app data folder.
+                </p>
+                <div class="preference-row">
+                  <input type="text" id="local-models-dir" readonly style="flex:1;" />
+                  <button id="local-models-dir-browse" class="pref-btn">Change</button>
+                  <button id="local-models-dir-reset" class="pref-btn">Reset to Default</button>
+                </div>
+              </div>
+
+              <div class="preference-group">
                 <h3>Hardware Detection</h3>
                 <p id="local-hardware-info" class="preference-hint">Detecting hardware...</p>
                 <button id="local-hardware-refresh" class="pref-btn">Refresh hardware info</button>

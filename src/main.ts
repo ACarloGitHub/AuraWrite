@@ -1573,6 +1573,40 @@ function updateWordCount(view: any): void {
 (window as any).updateWordCount = updateWordCount;
 
 async function setupLocalModelsTab(): Promise<void> {
+  // Models directory
+  try {
+    const currentDir = await invoke<string>("resources_get_models_dir");
+    const dirInput = document.getElementById("local-models-dir") as HTMLInputElement;
+    if (dirInput) dirInput.value = currentDir;
+  } catch (e) {
+    console.warn("[models-dir] failed to get models dir:", e);
+  }
+
+  document.getElementById("local-models-dir-browse")?.addEventListener("click", async () => {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({ directory: true, multiple: false });
+    if (!selected || typeof selected !== "string") return;
+    try {
+      const newDir = await invoke<string>("resources_set_models_dir", { path: selected });
+      const dirInput = document.getElementById("local-models-dir") as HTMLInputElement;
+      if (dirInput) dirInput.value = newDir;
+      await refreshLocalModelList();
+    } catch (e) {
+      alert("Failed to set models directory: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+
+  document.getElementById("local-models-dir-reset")?.addEventListener("click", async () => {
+    try {
+      const defaultDir = await invoke<string>("resources_reset_models_dir");
+      const dirInput = document.getElementById("local-models-dir") as HTMLInputElement;
+      if (dirInput) dirInput.value = defaultDir;
+      await refreshLocalModelList();
+    } catch (e) {
+      alert("Failed to reset models directory: " + (e instanceof Error ? e.message : String(e)));
+    }
+  });
+
   await refreshHardwareInfo();
   await refreshLocalModelList();
   await refreshLocalModelCatalog();

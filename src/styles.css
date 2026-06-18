@@ -1394,7 +1394,7 @@ body {
   height: auto;
   max-width: 95vw;
   max-height: 92vh;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   resize: both;
@@ -1413,6 +1413,7 @@ body {
   border-bottom: 1px solid var(--color-border);
   cursor: move;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -1438,7 +1439,8 @@ body {
 .modal-body {
   padding: var(--spacing-md);
   overflow-y: auto;
-  max-height: 70vh;
+  flex: 1;
+  min-height: 0;
 }
 
 .pref-tabs {
@@ -1449,6 +1451,7 @@ body {
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: thin;
+  flex-shrink: 0;
 }
 
 .pref-tab {
@@ -1461,6 +1464,7 @@ body {
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
   transition: color 0.2s, border-bottom-color 0.2s;
 }
 

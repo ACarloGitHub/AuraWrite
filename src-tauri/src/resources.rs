@@ -930,11 +930,61 @@ pub struct ModelInfo {
 
 fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = resources_dir(app)?;
+    let override_file = base.join("models-dir.txt");
+    if override_file.exists() {
+        if let Ok(custom_path) = fs::read_to_string(&override_file) {
+            let trimmed = custom_path.trim().to_string();
+            if !trimmed.is_empty() {
+                let dir = PathBuf::from(&trimmed);
+                if !dir.exists() {
+                    fs::create_dir_all(&dir)
+                        .map_err(|e| format!("create custom models dir '{}': {}", trimmed, e))?;
+                }
+                return Ok(dir);
+            }
+        }
+    }
     let dir = base.join("models");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("create models dir: {}", e))?;
     }
     Ok(dir)
+}
+
+#[tauri::command]
+pub fn resources_get_models_dir(app: AppHandle) -> Result<String, String> {
+    let dir = models_dir(&app)?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn resources_set_models_dir(app: AppHandle, path: String) -> Result<String, String> {
+    let custom_path = PathBuf::from(&path);
+    if !custom_path.exists() {
+        fs::create_dir_all(&custom_path)
+            .map_err(|e| format!("create directory '{}': {}", path, e))?;
+    }
+    if !custom_path.is_dir() {
+        return Err(format!("'{}' is not a directory", path));
+    }
+    let base = resources_dir(&app)?;
+    let override_file = base.join("models-dir.txt");
+    fs::write(&override_file, &path)
+        .map_err(|e| format!("write models-dir.txt: {}", e))?;
+    let dir = models_dir(&app)?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn resources_reset_models_dir(app: AppHandle) -> Result<String, String> {
+    let base = resources_dir(&app)?;
+    let override_file = base.join("models-dir.txt");
+    if override_file.exists() {
+        fs::remove_file(&override_file)
+            .map_err(|e| format!("remove models-dir.txt: {}", e))?;
+    }
+    let dir = models_dir(&app)?;
+    Ok(dir.to_string_lossy().to_string())
 }
 
 #[tauri::command]

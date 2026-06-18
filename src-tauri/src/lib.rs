@@ -1028,6 +1028,9 @@ pub fn run() {
             resources_register_local_model,
             resources_verify_model,
             resources_detect_mmproj,
+            resources_get_models_dir,
+            resources_set_models_dir,
+            resources_reset_models_dir,
             // Llama server lifecycle (M8.6)
             llamacpp_spawn_server,
             llamacpp_stop_server,
