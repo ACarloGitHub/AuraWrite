@@ -1,6 +1,4 @@
-# AuraWrite — README (DRAFT, 9 giu 2026)
-
-> ⚠️ **Bozza di lavoro, NON committata.** Stile mantenuto (hero, badge, video, Tolkien). Sezioni tagliate/compresse secondo audit `05_Assets/01_audit-readme-attuale.md`. In attesa di approvazione Carlo.
+# AuraWrite
 
 ---
 
@@ -109,15 +107,7 @@ Go to the [Releases](https://github.com/ACarloGitHub/AuraWrite/releases) page an
 
 AuraWrite is **not code-signed** — a one-person MIT project, the $200–$400/year for a signing certificate isn't in the budget yet. This means Windows SmartScreen will warn you the first time. It is a false positive: the code is auditable on GitHub.
 
-This is what you'll see, and what to do:
-
-![Windows protected your PC — first screen](path/to/windows-protected-your-pc.webp)
-
-Click **More info**:
-
-![Windows protected your PC — after clicking More info](path/to/windows-protected-your-pc-click1.webp)
-
-Then click **Run anyway**. The installer proceeds normally.
+This is what you'll see, and what to do: Windows shows a "Windows protected your PC" screen. Click **More info**, then **Run anyway**. The installer proceeds normally.
 
 (The same is true on macOS — right-click the `.dmg` and choose "Open" from the context menu. On Linux, no warnings.)
 
@@ -272,6 +262,5 @@ Local. Libre. Life-long.
 
 ### Notes
 
-- **DOCX export:** works, but roundtrip may lose some page-level metadata (A4 margins, custom headers/footers, advanced styles). For preserving full formatting, use Markdown or the native JSON format.
 - **Supported platforms:** Windows, macOS, Linux. Mobile / web / e-ink reader are not in the roadmap.
 - **AI memory:** the conversational assistant has long-term memory of your project's entities and documents. It cannot modify your database — only read from it.
