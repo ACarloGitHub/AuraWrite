@@ -117,6 +117,22 @@ fn llamacpp_url_for_variant(variant: &str) -> String {
     )
 }
 
+/// URL for the CUDA runtime DLLs (cudart) that match the CUDA binary.
+/// These contain cublas64_12.dll, cudart64_12.dll, etc.
+/// Without these, the CUDA binary starts but cannot load models.
+fn llamacpp_cudart_url() -> Option<String> {
+    if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
+        let ver = LLAMACPP_PINNED_VERSION;
+        let asset = format!("cudart-llama-bin-win-cuda-12.4-x64.zip");
+        Some(format!(
+            "https://github.com/ggml-org/llama.cpp/releases/download/{}/{}",
+            ver, asset
+        ))
+    } else {
+        None
+    }
+}
+
 fn is_zip_url(url: &str) -> bool {
     url.to_lowercase().ends_with(".zip")
 }
@@ -707,6 +723,22 @@ pub async fn resources_download_llamacpp_variant(
         let _ = fs::remove_dir_all(&target_dir);
     }
     let _ = fs::create_dir_all(&target_dir);
+
+    // On Windows with CUDA variant: download CUDA runtime DLLs (cudart) FIRST.
+    // Without these (cublas64_12.dll, cudart64_12.dll, etc.), the CUDA binary
+    // starts but cannot initialize CUDA, so models never load into VRAM.
+    if variant == "cuda" && cfg!(target_os = "windows") {
+        if let Some(cudart_url) = llamacpp_cudart_url() {
+            let cudart_archive = dir.join("llama.cpp-cuda-runtime.zip");
+            let cudart_id = "llamacpp-cudart".to_string();
+            download_to_file_async(&app, &cudart_id, "CUDA Runtime DLLs", &cudart_url, &cudart_archive)
+                .await
+                .map_err(|e| format!("download CUDA runtime DLLs: {}", e))?;
+            extract_zip(&cudart_archive, &target_dir)
+                .map_err(|e| format!("extract CUDA runtime DLLs: {}", e))?;
+            let _ = fs::remove_file(&cudart_archive);
+        }
+    }
 
     let display_name = if variant == "cuda" {
         "llama.cpp (CUDA)".to_string()
@@ -1549,23 +1581,64 @@ fn recommended_variant(gpus: &[GpuInfo]) -> String {
     }
     // On Linux, upstream llama.cpp does not publish CUDA prebuilt binaries;
     // use Vulkan (works on NVIDIA via the proprietary driver).
+    // detect_nvidia_gpu() and detect_gpu_linux() both set backend "cuda" for
+    // NVIDIA GPUs, so we must treat "cuda" as "vulkan" here.
     if cfg!(target_os = "linux") {
         for gpu in gpus {
-            if gpu.backend == "vulkan" {
+            if gpu.backend == "vulkan" || gpu.backend == "cuda" {
                 return "vulkan".to_string();
             }
         }
         return "cpu".to_string();
     }
+    // Windows: check that we actually have CUDA-capable hardware with a driver.
+    // detect_nvidia_gpu() sets backend "cuda" when nvidia-smi works, which means
+    // the driver is installed. If nvidia-smi fails, it falls through to WMIC
+    // which may also set "cuda" without a working driver — so we additionally
+    // verify the driver is present below.
     for gpu in gpus {
         match gpu.backend.as_str() {
-            "cuda" => return "cuda".to_string(),
+            "cuda" => {
+                if nvidia_driver_usable() {
+                    return "cuda".to_string();
+                }
+                // Driver missing or too old — try Vulkan, then CPU
+                return "vulkan".to_string();
+            }
             "vulkan" => return "vulkan".to_string(),
             "metal" => return "metal".to_string(),
             _ => {}
         }
     }
     "cpu".to_string()
+}
+
+/// Check that the NVIDIA driver is installed and recent enough for CUDA 12.4.
+/// CUDA 12.4 requires Windows driver >= 552.22.
+fn nvidia_driver_usable() -> bool {
+    if cfg!(target_os = "windows") {
+        if let Ok(output) = silent_command("nvidia-smi")
+            .args(["--query-gpu=driver_version", "--format=csv,noheader,nounits"])
+            .output()
+        {
+            if !output.status.success() {
+                return false;
+            }
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let version_str = stdout.lines().next().unwrap_or("").trim();
+            let parts: Vec<&str> = version_str.split('.').collect();
+            if parts.len() >= 2 {
+                let major: u32 = parts[0].parse().unwrap_or(0);
+                let minor: u32 = parts[1].parse().unwrap_or(0);
+                let combined = major * 100 + minor;
+                // CUDA 12.4 needs driver >= 552.22
+                return combined >= 55222;
+            }
+            return false;
+        }
+        return false;
+    }
+    true
 }
 
 #[tauri::command]
@@ -1685,6 +1758,31 @@ pub async fn llamacpp_spawn_server(
         let llama_dir = llamacpp_ai_dir(&dir);
         let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
             .map_err(|e| format!("llama-server binary not found: {}", e))?;
+
+        // Pre-start verification: if the installed variant is CUDA on Windows,
+        // verify that the CUDA runtime DLLs are present. Without them, the
+        // server starts but cannot load models into VRAM (silent failure).
+        #[cfg(target_os = "windows")]
+        {
+            let meta_path = llama_dir.join("variant.txt");
+            if meta_path.exists() {
+                let installed_variant = fs::read_to_string(&meta_path)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                if installed_variant == "cuda" {
+                    let dll_path = llama_dir.join("cublas64_12.dll");
+                    let cudart_path = llama_dir.join("cudart64_12.dll");
+                    if !dll_path.exists() || !cudart_path.exists() {
+                        return Err(format!(
+                            "CUDA runtime DLLs missing (expected cublas64_12.dll and cudart64_12.dll in {}). \
+                             Reinstall the CUDA variant from Preferences > Local Models, or switch to Vulkan/CPU.",
+                            llama_dir.display()
+                        ));
+                    }
+                }
+            }
+        }
 
         if !Path::new(&model_path).exists() {
             return Err(format!("model file not found: {}", model_path));
