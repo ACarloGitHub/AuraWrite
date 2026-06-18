@@ -754,8 +754,10 @@ fn embedding_save_document(
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
 
     // Delete existing embeddings for this document
-    embeddings::delete_embeddings_for_entity(&*conn, "document", &document_id)
-        .map_err(|e| e.to_string())?;
+    if let Err(e) = embeddings::delete_embeddings_for_entity(&*conn, "document", &document_id) {
+        eprintln!("[Embeddings] delete_embeddings_for_entity failed: {}", e);
+        return Err(e.to_string());
+    }
 
     // Chunk the content
     let chunks = embeddings::chunk_text(&content_text, chunk_size as usize, chunk_overlap as usize);
@@ -764,9 +766,7 @@ fn embedding_save_document(
         .unwrap()
         .as_secs() as i64;
 
-    // Generate embeddings and save (blocking for now - could be async)
-    // For now, we'll need to generate embeddings asynchronously from frontend
-    // and save them individually
+    println!("[Embeddings] Saving {} chunks for document {}", chunks.len(), document_id);
 
     // Save placeholders - actual embeddings will be added via embedding_save_chunk
     for (i, chunk) in chunks.iter().enumerate() {
@@ -783,10 +783,13 @@ fn embedding_save_document(
 
         // Save with zero vector initially
         let zero_vector = vec![0.0f32; 768];
-        embeddings::save_embedding(&*conn, &embedding, &zero_vector)
-            .map_err(|e| e.to_string())?;
+        if let Err(e) = embeddings::save_embedding(&*conn, &embedding, &zero_vector) {
+            eprintln!("[Embeddings] save_embedding failed for chunk {}: {}", i, e);
+            return Err(e.to_string());
+        }
     }
 
+    println!("[Embeddings] Saved {} chunks for document {}", chunks.len(), document_id);
     Ok(())
 }
 
@@ -896,10 +899,13 @@ fn embedding_delete_for_project(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Register sqlite-vec extension BEFORE opening any database connection
+    embeddings::register_vec_extension();
+
     // Initialize database connection
     let conn = init_database().expect("Failed to initialize database");
 
-    // Initialize embeddings table
+    // Initialize embeddings table (vec0 virtual table + metadata)
     embeddings::init_embeddings_table(&conn).expect("Failed to initialize embeddings table");
 
     // One-shot cleanup: remove orphan links left over from older versions

@@ -453,8 +453,8 @@ async function indexDocumentForSearch(
       baseUrl,
     });
     console.log(`Document ${documentId} indexed for search`);
-  } catch {
-    console.log(`Document ${documentId} not indexed (Ollama may not be available)`);
+  } catch (err) {
+    console.error(`Document ${documentId} not indexed:`, err);
   }
 }
 
