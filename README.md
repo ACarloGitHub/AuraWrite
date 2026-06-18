@@ -107,7 +107,15 @@ Go to the [Releases](https://github.com/ACarloGitHub/AuraWrite/releases) page an
 
 AuraWrite is **not code-signed** — a one-person MIT project, the $200–$400/year for a signing certificate isn't in the budget yet. This means Windows SmartScreen will warn you the first time. It is a false positive: the code is auditable on GitHub.
 
-This is what you'll see, and what to do: Windows shows a "Windows protected your PC" screen. Click **More info**, then **Run anyway**. The installer proceeds normally.
+This is what you'll see, and what to do:
+
+![Windows protected your PC — first screen](assets/windows-protected-your-pc.webp)
+
+Click **More info**:
+
+![Windows protected your PC — after clicking More info](assets/windows-protected-your-pc-click1.webp)
+
+Then click **Run anyway**. The installer proceeds normally.
 
 (The same is true on macOS — right-click the `.dmg` and choose "Open" from the context menu. On Linux, no warnings.)
 
