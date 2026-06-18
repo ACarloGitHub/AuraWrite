@@ -1,14 +1,20 @@
+# AuraWrite — README (DRAFT, 9 giu 2026)
+
+> ⚠️ **Bozza di lavoro, NON committata.** Stile mantenuto (hero, badge, video, Tolkien). Sezioni tagliate/compresse secondo audit `05_Assets/01_audit-readme-attuale.md`. In attesa di approvazione Carlo.
+
+---
+
 <h1 align="center">
   <img src="assets/aurawrite_logo.png" alt="AuraWrite Logo" width="80" style="vertical-align: middle; border-radius: 16px;">
   &nbsp;AuraWrite
 </h1>
 
 <p align="center">
-  <strong>Local. Libre. Life-long.</strong> 🌙
+  <strong>An editor that remembers your story.</strong>
 </p>
 
 <p align="center">
-  <em>Where lightning meets the page.</em>
+  <em>Local. Libre. Life-long.</em>
 </p>
 
 <p align="center">
@@ -45,482 +51,227 @@
 
 ## What is AuraWrite?
 
-AuraWrite is an open-source writing application designed to be a powerful, privacy-respecting alternative to mainstream word processors. It combines a professional rich-text editor with integrated AI assistance — all running locally on your machine.
+AuraWrite is a free, open-source writing app for desktop. It runs entirely on your machine: your text, your project, your AI — nothing leaves your computer.
 
-**For writers crafting novels:** Keep track of characters, locations, and plot threads with dedicated memory systems (database + semantic search).  
-**For professionals drafting documents:** Get style-appropriate suggestions, legal writing assistance, or business correspondence help.  
-**For anyone who writes:** Enjoy an AI companion that suggests sentence improvements, researches context, and helps overcome writer's block — without ever sending your words to the cloud.
+By default AuraWrite is fully offline and self-contained: no external service is required, no account, no telemetry. If you prefer to use a cloud or online provider, you can — AuraWrite supports seven of them, including OpenAI, Anthropic, DeepSeek, OpenRouter, and others. The choice is yours: local-first by design, cloud-ready when you want it.
 
-AuraWrite features two specialized memory systems: a precise database for names, places, and facts, plus a general semantic memory that understands themes and narrative flow. The AI can adopt specific roles (focused editor, creative assistant, research helper) or remain a free-form companion, adapting to your workflow rather than imposing its own.
+It's built for people who write — novels, screenplays, technical books, business documents, and anything else you want to put on the page.
 
-**The philosophy is simple:** Tools should liberate creativity, not constrain it. Every feature is designed to be helpful without being intrusive — empowering you to write better, not replacing your voice.
+![AuraWrite screenshot — editor with project panel] <!-- da inserire, vedi TODOAssets -->
 
----
+### Who it's for
 
-## 🚧 Development Status
-
-**AuraWrite is actively developed.** We're working on it full-time, with love and dedication.
-
-Some features are already available today; others will be added in the coming days and weeks. This is a living project that grows with every commit. We believe in releasing early, iterating often, and building together with our community.
-
-**Stay tuned — the best is yet to come.**
+| If you are... | AuraWrite gives you... |
+|---|---|
+| A novelist or screenwriter | a Project → Section → Document hierarchy, templates for books, characters and locations tracked automatically, an AI that remembers the plot across sessions |
+| A professional drafting long documents (legal, technical, business) | style-aware suggestions, a local AI you can interrogate on the whole document, export to DOCX/Markdown |
+| Anyone who doesn't trust cloud editors with their manuscript | works fully offline by default — no telemetry, no account, no subscription, no surprise paywall. Cloud providers are available as an option, never a requirement. |
 
 ---
 
-## 🌙 Why AuraWrite?
+## Why AuraWrite?
 
 **AuraWrite channels lightning.**
 
 > *"The electric lamp may indeed be ignored, for the simple reason that it is so insignificant and transitory. And anyway, it is certain that fairy-stories have much more permanent and fundamental things to talk about. The lightning, for instance."*
 > — J.R.R. Tolkien
 
-Modern technology — including AI — does not replace the human; it supports him. The light of technology is like the electric lamp: useful, but transient. The imagination of the human soul is like lightning: vast, untamed, fundamental.
+Modern tools — including AI — support the human, they don't replace the human. The light of the lamp is useful, but transient. The lightning of imagination is what lasts.
 
 AuraWrite exists to channel that lightning. A spark of an idea, caught in the right moment, guided by the right tool, can become something that outlasts us.
 
-**What you get:**
+### What you get
 
-- ⚡ **ProseMirror-powered editor** — Professional-grade rich text editing
-- 🤖 **Dual AI panels** — Proactive suggestions + conversational assistant
-- 🔒 **100% offline capable** — Your data never leaves your machine
-- 🎨 **Custom themes** — Light, Dark, and fully personalized color schemes
-- 🗄️ **Multiple formats** — JSON, Markdown, TXT, HTML, DOCX (see note below)
-- ♾️ **Life-long** — Download once, use forever. No cloud to cancel.
+- ⚡ **A serious editor** — ProseMirror underneath, with real A4 pagination, tables, images, links, undo/redo, find & replace
+- 🧠 **An AI that remembers** — proactive suggestions in the writing style you choose, plus a conversational assistant that can query your project's database, your characters, your documents
+- 🔒 **100% local, your data, your rules** — works offline, no telemetry, no cloud account
+- 🎨 **Themes per project** — Calvino-style for one manuscript, Hemingway-style for another, dark mode for late nights
+- 🗄️ **Your formats, your choice** — JSON, Markdown, HTML, DOCX. EPUB and Obsidian vault export coming soon.
+- ♾️ **Life-long** — MIT licensed, download once, keep it forever, no one to cancel
+
+AuraWrite is free and open source. It will stay that way — MIT guarantees it.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Option 1: Pre-built Executables (Recommended)
+### 1. Download
 
-Download ready-to-run binaries from the [Releases](https://github.com/ACarloGitHub/AuraWrite/releases) page:
+Go to the [Releases](https://github.com/ACarloGitHub/AuraWrite/releases) page and grab the installer for your platform:
 
-| Platform | File | Notes |
-|----------|------|-------|
-| **Linux** | `.deb` or `.rpm` | x86_64 |
-| **Windows** | `.msi` or `.exe` | x86_64, portable |
-| **macOS** | `.dmg` | x86_64/ARM64, unsigned |
+| Platform | Installer |
+|---|---|
+| **Windows** | `.msi` (WiX) or `.exe` setup (NSIS) |
+| **macOS** | `.dmg` (universal — Intel + Apple Silicon) |
+| **Linux** | `.deb` (Debian/Ubuntu), `.rpm` (Fedora/RHEL), or `.AppImage` (portable) |
 
-```bash
-# Linux example
-sudo dpkg -i aurawrite_0.1.0_amd64.deb
-aurawrite
-```
+### 2. Install on Windows
 
-### Option 2: Build from Source
+AuraWrite is **not code-signed** — a one-person MIT project, the $200–$400/year for a signing certificate isn't in the budget yet. This means Windows SmartScreen will warn you the first time. It is a false positive: the code is auditable on GitHub.
 
-**Prerequisites:**
+This is what you'll see, and what to do:
 
-| Tool | Required | Install |
-|------|----------|---------|
-| **Node.js 18+** | Yes | [nodejs.org](https://nodejs.org/) |
-| **Rust stable** | Yes | [rustup.rs](https://rustup.rs/) |
-| **Tauri CLI v2** | Yes | `cargo install tauri-cli --version "^2"` |
+![Windows protected your PC — first screen](path/to/windows-protected-your-pc.webp)
 
-**Build:**
+Click **More info**:
+
+![Windows protected your PC — after clicking More info](path/to/windows-protected-your-pc-click1.webp)
+
+Then click **Run anyway**. The installer proceeds normally.
+
+(The same is true on macOS — right-click the `.dmg` and choose "Open" from the context menu. On Linux, no warnings.)
+
+### 3. Open AuraWrite
+
+On first launch, a short **setup wizard** walks you through what AuraWrite can do for you. It will help you enable the features that match how you write: a memory layer that remembers the people, places, and themes you mention across your documents, and an AI that suggests rephrasings and edits to the text you've already written.
+
+The editor works on its own from the start — you can write, save, and export right away. The wizard is there to make sure the parts you care about are turned on, without forcing anything on you.
+
+### Build from source
+
+Requires Node.js 18+, Rust stable, and Tauri CLI v2.
 
 ```bash
 git clone https://github.com/ACarloGitHub/AuraWrite.git
 cd AuraWrite
 npm install
-npm run tauri:dev      # Dev mode
-npm run tauri:build    # Production build
+npm run tauri:dev      # development
+npm run tauri:build    # production build
 ```
 
 ---
 
-## ✨ Features
+## What's in the box
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **📝 Rich Text Editor** | ProseMirror-based with bold, italic, headings, lists, tables, undo/redo, find & replace | ✅ Ready |
-| **📄 A4 Pagination** | Page-by-page view with DOM-based split/merge, paged/scroll toggle, page breaks | ✅ Ready |
-| **🤖 AI Suggestions Panel** | Proactive sentence analysis triggered on `.` `!` `?` `:` (Accept / Switch / Reject) | ✅ Ready |
-| **💬 AI Assistant Panel** | Conversational AI with full document context, AURA_EDIT modifications, tool calling | ✅ Ready |
-| **🔀 Ollama Dual-Mode** | Local (http://localhost:11434) **or** Cloud (https://ollama.com) with API key — toggle in Preferences | ✅ Ready |
-| **🧩 Chunk System** | Handles large documents via intelligent sentence-based splitting | ✅ Ready |
-| **🌐 6 AI Providers** | Ollama (Local/Cloud), OpenAI, Anthropic, DeepSeek, OpenRouter, LM Studio | ✅ Ready |
-| **📡 Model Auto-Discovery** | Auto-populated model list per provider, manual refresh, 1h cache | ✅ Ready |
-| **🛠️ Tool Calling** | 7 tools for AI to query project DB (entities, documents, semantic search) | ✅ Ready |
-| **🗄️ Project System** | Project → Section → Document hierarchy in SQLite, per-doc save | ✅ Ready |
-| **🧠 Semantic Search** | Vector embeddings via `nomic-embed-text-v2-moe` (Ollama), cosine similarity in Rust | ✅ Ready |
-| **💾 File Operations** | Save, Save As, Open, Export with native dialogs | ✅ Ready |
-| **📄 Multiple Formats** | JSON, Markdown, TXT, HTML, DOCX (see note below) | ✅ Ready |
-| **🎨 Custom Themes** | Light, Dark, and fully customizable colors | ✅ Ready |
-| **🔒 Privacy-First** | Works offline, no telemetry, no tracking, 100% local data | ✅ Ready |
-| **⌨️ Keyboard Help** | Modal with all shortcuts (`?` or ⌨ button) | ✅ Ready |
-| **🛡️ Error Boundaries** | Global error toast notifications | ✅ Ready |
-| **📊 Incremental Save** | Versioning system with database | 📅 Roadmap |
-| **🤖 Internal AI Agent** | Character/world memory, continuation UI | 📅 Future |
-| **🧩 Plugin System** | Extensible architecture for v1.0 | 📅 Future |
+AuraWrite organises your work in **projects**. A project has sections, sections have documents, and every project is shaped by a **template** that gives you a head start.
 
-**Tech Stack:**
-- **Frontend:** TypeScript, Vite
-- **Editor:** ProseMirror (with A4 pagination plugin)
-- **Backend:** Rust (Tauri v2)
-- **UI:** Plain CSS, HTML5
-- **AI Integration:** Ollama API, OpenAI API, Anthropic API, DeepSeek API, OpenRouter API, LM Studio (all via `tauri-plugin-http`)
-- **Database:** SQLite via `rusqlite` (bundled, no external service)
-- **Vector Search:** SQLite + custom Rust cosine similarity (`nomic-embed-text-v2-moe` via Ollama, 768-dim)
-- **HTTP Layer:** `tauri-plugin-http` (bypasses browser CORS preflight, required for LM Studio / local Ollama)
+Four templates ship today:
+
+- **Custom** — empty, you build the structure
+- **Book** — for novels, screenplays, long-form fiction: 7 top-level sections (Plot, Characters, World, Props & Themes, Chapters, Research, Tracking) and 33+ tutorial documents, ready to fill. 12 writing styles to choose from — Hemingway, Calvino, Le Guin, King, Asimov, Tolkien, Murakami, Pushkin, Dostoevsky, plus a Custom one you write yourself
+- **Chef** — for cookbooks, restaurants, menus: recipes work as both **entities** (searchable by region, allergens, diet) and as free documents you write in. Two variants: a flat 12-section version, and a multi-branch one for big collections
+- **Legal** — for solo practitioners: organised by client, with 5 entity types (Case, Client, Counterparty, Deadline, Filing) and writing styles tuned for legal and plain-language work
+
+### The two AI panels
+
+AuraWrite has two AI panels that work together.
+
+The **Suggestions panel** (on the left) watches what you write. After you finish a sentence — a `.`, `!`, `?`, or `:` — it offers a rephrased version in the style you chose for that document. Styles range from formal and legal to the voice of a specific author — plus a Custom one you write yourself. Accept a suggestion, switch to another, or reject it. No interruption, no popup, no nag.
+
+The **Assistant panel** (on the right) is a conversation. You can ask it anything about your project:
+
+- "Who are the characters in chapter 3 and what motivates them?"
+- "What did I write last week about the lighthouse scene?"
+- "Is the timeline consistent between chapter 1 and chapter 5?"
+- "Rewrite this paragraph tighter, in Hemingway style."
+
+The Assistant has access to your project — characters, locations, themes, full document content — and can modify the document directly when you ask it to.
+
+### Memory, the way it works in practice
+
+AuraWrite stores your work in a local SQLite database, on your machine. There are three kinds of memory:
+
+- **A precise database** of the things you've named — characters, places, objects, events, recipes, cases. You write them, the database indexes them, the AI can query them.
+- **A semantic search** layer. Every document you save is automatically embedded (using a local model called `nomic-embed-text`, run by the built-in llama.cpp engine) and indexed. You can search by meaning, not just by keyword: "where do I talk about loneliness?" returns the right scenes even if the word "loneliness" never appears.
+- **The writing style cascade** — you can set a style at the project level, override it at the section level, override again at the document level. The most specific setting wins.
+
+This is what makes the AI feel less like a stranger typing in your document and more like a co-writer who actually read the previous chapters.
 
 ---
 
 ## 🤖 AI Configuration
 
-AuraWrite supports **6 AI providers** through a unified interface. Configure them in the app's settings panel (⚙️). All HTTP calls go through `tauri-plugin-http`, which bypasses browser CORS preflight — this is what makes local servers (LM Studio, Ollama) work reliably.
+AuraWrite works with the AI provider of your choice. You can mix and match, switch at any time, and your settings stay on your machine.
 
-### Supported Providers
+**Built-in local engine — llama.cpp**
 
-| Provider | Endpoint | API Key | Mode | Default Model | Notes |
-|----------|----------|---------|------|---------------|-------|
-| **Ollama (Local)** | `http://localhost:11434` | Not required | Local | — | Self-hosted, no auth needed |
-| **Ollama (Cloud)** | `https://ollama.com` | `OLLAMA_API_KEY` required | Cloud | `gpt-oss:120b-cloud` | Direct cloud, no local Ollama needed |
-| **OpenAI** | `https://api.openai.com/v1` | Required | Cloud | `gpt-4o` | Also `gpt-4o-mini`, `gpt-4-turbo` |
-| **Anthropic** | `https://api.anthropic.com/v1` | Required | Cloud | `claude-sonnet-4-20250514` | Native thinking blocks support |
-| **DeepSeek** | `https://api.deepseek.com` | Required | Cloud | `deepseek-chat` | Also `deepseek-reasoner` |
-| **OpenRouter** | `https://openrouter.ai/api/v1` | Required | Cloud | `openai/gpt-4o` | Aggregator, 300+ models |
-| **LM Studio** | `http://localhost:1234/v1` | Not required | Local | (auto-detect) | Self-hosted, loads any GGUF |
+AuraWrite ships with its own local inference engine based on llama.cpp, an open-source project (not developed by us, used under its own license). It runs inside AuraWrite: no installation of Ollama, LM Studio, or any other external tool is required. The engine supports an unlimited number of GGUF models, and AuraWrite includes a curated selection tuned for different hardware profiles — from a few gigabytes of RAM up to multi-GPU workstations. The first time you enable it, the wizard helps you pick a model that fits your machine.
 
-**Ollama dual-mode:** In Preferences, when "Ollama" is selected, you can toggle between **Local** (no auth, runs on your machine) and **Cloud** (requires API key, connects to `ollama.com`).
+**External providers (optional)**
+
+If you prefer a cloud or hosted provider, AuraWrite works with:
+
+- **Ollama (Local)** — `http://localhost:11434`, no API key, free, supports free `-cloud` models after `ollama signin`
+- **Ollama (Cloud)** — `https://ollama.com`, API key
+- **OpenAI** — `gpt-4o`, `gpt-4o-mini`, etc.
+- **Anthropic** — `claude-sonnet-4-20250514`
+- **DeepSeek** — `deepseek-chat`, `deepseek-reasoner`
+- **OpenRouter** — 300+ models
+- **LM Studio** — your local GGUF models, auto-detected
+- **MiniMax** — MiniMax M-series, 1M context window
 
 ### Model Auto-Discovery
 
-Every provider supports auto-discovery of available models:
+Every provider supports auto-discovery of available models. You don't need to memorise model names or copy them from documentation — the editor asks the provider what it has and shows you the list.
 
 | Provider | Endpoint | Auth |
-|----------|----------|------|
-| LM Studio | `GET /v1/models` | None |
-| Ollama (Local/Cloud) | `GET /api/tags` | None / Bearer |
-| OpenAI | `GET /v1/models` | Bearer |
-| Anthropic | `GET /v1/models` | `x-api-key` header |
+|---|---|---|
+| **Built-in (llama.cpp)** | local file system (`resources/models/`) | None |
+| Ollama (Local) | `GET /api/tags` | None |
+| Ollama (Cloud) | `GET /api/tags` | Bearer |
+| LM Studio | `GET /models` | None |
+| OpenAI | `GET /models` | Bearer |
+| Anthropic | `GET /models` | `x-api-key` header (with `anthropic-version: 2023-06-01`) |
 | DeepSeek | `GET /models` | Bearer |
-| OpenRouter | `GET /models` | Bearer |
+| OpenRouter | `GET /models` | Bearer (with `HTTP-Referer: https://aurawrite.app`) |
+| MiniMax | `GET /models` | Bearer |
 
-The model dropdown auto-refreshes when you change provider, base URL, or API key. Results are cached for 1 hour. You can always type a custom model name in the free-text input.
+The model dropdown auto-refreshes when you change provider, base URL, or API key. Results are cached for 1 hour. You can always type a custom model name in the free-text input if the one you want isn't listed.
 
-### Ollama (Local) — Required for Semantic Search
-
-For local models running on your machine:
-
-**For text generation (chat, suggestions):**
-1. Install [Ollama](https://ollama.ai/)
-2. Pull a model: `ollama pull llama3`
-3. In AuraWrite settings:
-   - **Provider:** Ollama
-   - **Mode:** Local
-   - **Model:** `llama3` (or your preferred model)
-
-**For semantic search (embeddings):**
-1. Ensure Ollama is running
-2. Pull the embedding model:
-   ```bash
-   ollama pull nomic-embed-text-v2-moe
-   ```
-3. The app will automatically use this model for semantic search
-
-**Why `nomic-embed-text-v2-moe`?**
-- 768-dimensional embeddings
-- Supports 100+ languages
-- State-of-the-art multilingual performance
-- Mixture of Experts (MoE) architecture for efficiency
-
-**Common Ollama models:**
-- `llama3` — General purpose, good balance
-- `llama3.1` — Updated version with longer context
-- `mistral` — Fast and efficient
-- `qwen2.5` — Good for creative writing
-- `phi3` — Smaller, faster model
-
-**Note:** If Ollama is not installed, semantic search features will be disabled, but all other app features continue to work normally.
-
-### Ollama (Cloud)
-For `https://ollama.com` direct cloud access (no local Ollama needed):
-- **Provider:** Ollama
-- **Mode:** Cloud
-- **API Key:** your `OLLAMA_API_KEY`
-- **Base URL:** auto-filled to `https://ollama.com`
-
-### OpenAI
-1. Get an API key from [OpenAI](https://platform.openai.com/api-keys)
-2. In AuraWrite settings:
-   - **Provider:** OpenAI
-   - **Model:** `gpt-4o` (or `gpt-4o-mini`, `gpt-4-turbo`)
-   - **API Key:** `sk-...`
-
-### Anthropic
-1. Get an API key from [Anthropic](https://console.anthropic.com/)
-2. In AuraWrite settings:
-   - **Provider:** Anthropic
-   - **Model:** `claude-sonnet-4-20250514`
-   - **API Key:** `sk-ant-...`
-
-### DeepSeek
-1. Get an API key from [DeepSeek](https://platform.deepseek.com/)
-2. In AuraWrite settings:
-   - **Provider:** DeepSeek
-   - **Model:** `deepseek-chat` (or `deepseek-reasoner`)
-   - **API Key:** `sk-...`
-   - **Base URL:** auto-filled to `https://api.deepseek.com` (no `/v1`)
-
-### OpenRouter
-1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
-2. In AuraWrite settings:
-   - **Provider:** OpenRouter
-   - **Model:** `openai/gpt-4o` (or any of 300+ models)
-   - **API Key:** `sk-or-...`
-
-### LM Studio
-For local GGUF models loaded in LM Studio:
-1. Start LM Studio's local server (default `http://localhost:1234`)
-2. Load a model in LM Studio
-3. In AuraWrite settings:
-   - **Provider:** LM Studio
-   - **Model:** click 🔄 Refresh to auto-detect loaded models
-   - **Base URL:** `http://localhost:1234/v1`
-
-### Privacy Note
-AI settings are stored in browser's `localStorage` as `aurawrite-ai-settings`. They persist across sessions and are **NEVER uploaded or shared**.
-
-### Tool Calling
-
-The AI Assistant can autonomously query your project database using **7 tools**:
-
-| Tool | Purpose |
-|------|---------|
-| `search_entities` | Find entities by name and type (characters, places, etc.) |
-| `get_entity_details` | Get full details for a specific entity |
-| `list_entities_by_type` | List all entities of a given type |
-| `search_documents` | Full-text search across all documents in the project |
-| `get_document_content` | Retrieve a specific document's full text |
-| `get_project_structure` | Get the project → section → document tree |
-| `semantic_search` | Vector similarity search across indexed content |
-
-Tool calls are read-only — the AI **cannot** modify your database, only query it.
-
-### Chunk Size
-For long documents, AuraWrite automatically splits text into chunks based on the model's context limit. Default: 8,000 tokens per chunk. Adjustable in AI Assistant panel settings.
-
-### Semantic Search Settings
-Configure semantic search behavior in the app's settings panel:
-
-- **Enable semantic search indexing** — Default: ON. When enabled, AuraWrite automatically indexes document content for semantic search using `nomic-embed-text-v2-moe` via Ollama. If disabled, documents are saved without indexing, and semantic search features will not be available.
-
-**Note:** Indexing occurs automatically when saving documents. It is optional and can be disabled if you prefer not to use Ollama or semantic search.
+For the **built-in local engine**, model discovery works differently: AuraWrite reads the GGUF files in its models folder (configurable — see Preferences → Local Models), combines them with the curated catalog, and shows the union. To add a new model, drop a `.gguf` file into the folder, click Refresh, and it appears in the dropdown.
 
 ---
 
 ## 💾 Data Storage
 
-Documents stored locally:
+Your work lives in your user data folder, in a local SQLite database:
+
 ```
 Linux:   ~/.config/aurawrite/
 Windows: %APPDATA%\aurawrite\
 macOS:   ~/Library/Application Support/aurawrite/
 ```
 
-**Backup:** Export to JSON, Markdown, or DOCX anytime. Your data, your control.
-
-### ⚠️ Note on DOCX Export
-
-The DOCX format exported by AuraWrite is **not equivalent to a standard word processor's output** (Microsoft Word, LibreOffice Writer, OnlyOffice). Opening an exported `.docx` in Word/LibreOffice may show plain flowing text without the original AuraWrite formatting (A4 pagination, custom styles, layout, header/footer).
-
-**Why:**
-- AuraWrite uses a simplified ProseMirror schema (bold, italic, underline, headings H1–H3, lists, blockquote, code, alignment, colors, highlights)
-- DOCX natively supports much more: tables, images, advanced styles, track changes, custom margins, page headers/footers, etc.
-- The converter (`src/formats/docx.ts`, based on the `docx` library v9) maps only a subset of ProseMirror nodes to DOCX
-- Page-level A4 metadata (margins, headers, footers) is not preserved in the roundtrip
-
-**Recommendation:**
-- For preserving **complete formatting** (including A4 pagination), use **JSON** (the native AuraWrite format) or **Markdown**
-- For sharing with people who don't have AuraWrite, use **DOCX for content only** (the text and basic formatting will be intact; the page layout will not)
-- Roadmap item: full DOCX roundtrip with table/image support and page metadata preservation
-
-**Roundtrip warning:** AuraWrite → DOCX → AuraWrite may lose information (A4 pagination, custom colors not in standard palette, custom line heights, etc.).
+Export anytime to JSON, Markdown, HTML, or DOCX. EPUB and Obsidian vault export are coming soon.
 
 ---
 
-## 🗺️ Roadmap
+## 🛡️ Security & Trust
 
-| Phase | Feature | Status |
-|-------|---------|--------|
-| ✅ **v0.1** | Editor, AI panels, File operations | Complete |
-| ✅ **v0.2** | SQLite + Vector DB (semantic search), Project system | Complete |
-| ✅ **v0.3** | Cross-platform installers, Tooltip plugin, Synonyms, Continuation, Tool Calling | **Complete (released 2026-06-04)** |
-| 📅 **v0.4** | Character/place memory, Internet search, **full DOCX roundtrip** (see [⚠️ Note on DOCX Export](#️-note-on-docx-export)) | Planned |
-| 🎁 **v1.0** | Plugin system, Polish | Future |
+AuraWrite is **not code-signed**. This is normal for a one-person MIT project — code signing costs $200–$400/year, and the budget isn't there yet.
 
-See detailed roadmap in [documentation/06-roadmap/](documentation/06-roadmap/).
+What this means in practice:
+- **Windows:** SmartScreen warns "Windows protected your PC" → click "More info" → "Run anyway"
+- **macOS:** Gatekeeper blocks the `.dmg` → right-click → "Open" from the context menu
+- **Linux:** `.deb` / `.rpm` / `.AppImage` install without warnings
 
----
+If you prefer not to trust the binary, you can **build from source** in 5 minutes — the entire codebase is auditable on GitHub under the MIT License.
 
-## 🛡️ Security & Trust — About the Installers
-
-AuraWrite is **not yet code-signed**. This means your operating system will show a security warning the first time you run the installer. **This is completely normal for unsigned open-source software** — it does **not** mean the software is malicious.
-
-### Why this happens
-
-- **Windows:** SmartScreen shows *"Windows protected your PC"* because the publisher is unknown. AuraWrite is open source under MIT License and the entire codebase is auditable on [GitHub](https://github.com/ACarloGitHub/AuraWrite).
-- **macOS:** Gatekeeper blocks the `.dmg` because it lacks a Developer ID signature.
-- **Linux:** `.deb` and `.rpm` packages install without warnings (no signing required).
-
-### How to install — step by step
-
-#### Windows (`.msi` or `.exe`)
-1. Download the installer from the [Releases](https://github.com/ACarloGitHub/AuraWrite/releases) page
-2. Double-click the installer
-3. If SmartScreen appears: click **"More info"** → **"Run anyway"**
-4. Follow the installer prompts
-
-#### macOS (`.dmg`)
-1. Download the `.dmg` file
-2. If macOS blocks it: **right-click** the `.dmg` → **"Open"** from the context menu
-3. Confirm with **"Open"** in the dialog
-4. Drag **AuraWrite** to the **Applications** folder
-
-#### Linux (`.deb` / `.rpm` / `.AppImage`)
-```bash
-# Debian / Ubuntu
-sudo dpkg -i aurawrite_0.3.0_amd64.deb
-sudo apt install -f  # resolve dependencies if needed
-
-# Fedora / RHEL
-sudo rpm -i aurawrite-0.3.0-1.x86_64.rpm
-
-# AppImage (any distro)
-chmod +x AuraWrite_0.3.0_amd64.AppImage
-./AuraWrite_0.3.0_amd64.AppImage
-```
-
-### Verify the source
-
-You don't have to trust us — you can **verify, audit, and build from source**:
-
-- 🔍 All code is public: https://github.com/ACarloGitHub/AuraWrite
-- 🏗️ Build instructions: see the **Quick Start → Build from Source** section above
-- 📜 License: [MIT](LICENSE) — you can read every line, modify it, redistribute it
-
-Code signing certificates cost $200–$400/year from Apple/Windows and are planned for a future release once the project is more mature. In the meantime, the warnings above are the only "cost" of running an unsigned open-source app.
+Code signing is on the roadmap once the project is more mature.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Issues, pull requests, and feedback are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-When opening issues:
-- Your OS and version
-- Node.js and Rust versions
+When opening an issue, please include:
+- OS and version
 - Steps to reproduce
-- Error messages
-
----
-
-## 🔤 Fonts — to investigate
-
-AuraWrite **currently uses only system fonts** (no bundled `.ttf`/`.otf` files, no `@font-face` declarations, no `assets/fonts/` directory). The font stack is defined as CSS custom properties in `src/styles.css`:
-
-```css
---font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
---font-editor: Georgia, "Times New Roman", serif;
-```
-
-**Consequences:**
-- On Windows the UI renders in Segoe UI, the editor in Georgia (if available) or Times New Roman fallback
-- On macOS the UI renders in San Francisco, the editor in Georgia
-- On Linux the UI renders in the distro's default sans-serif (e.g. Cantarell on Fedora, Noto Sans on Ubuntu), the editor in whatever serif is installed
-- **Missing font = fallback font is used** without warning, which may make the editor look inconsistent across systems
-
-**To investigate for v0.4:**
-- Whether to ship a `public/fonts/` (or `assets/fonts/`) directory with bundled `.woff2` files (Lora, Source Serif Pro, Inter, etc.) and register them via `@font-face` in `src/styles.css`
-- Whether to expose font selection in Preferences (similar to Word/LibreOffice font picker: font family, size, line height — all already supported in the editor)
-- Whether to allow user-installed fonts (drop a `.ttf` in `%APPDATA%\aurawrite\fonts\` on Windows, `~/.config/aurawrite/fonts/` on Linux, `~/Library/Application Support/aurawrite/fonts/` on macOS) and dynamically load them at startup
-- Licensing: any bundled font must be OFL/Apache-2.0/MIT to stay MIT-compatible
-
-**Related files:**
-- `src/styles.css:1-4` — `--font-family` and `--font-editor` declarations
-- `src/editor/toolbar.ts` — font family selector (already exposes a dropdown for font change in editor)
-
----
-
-## 📏 Headings (H1/H2/H3) — non prevedibili
-
-Le dimensioni dei titoli nell'editor sono **non prevedibili**: a volte H1 produce caratteri molto grandi, altre volte sono H3 a farlo.
-
-**Causa:** in `src/styles.css` ci sono **due set di regole** con la stessa specificità CSS per `.ProseMirror h1/h2/h3`:
-- `src/styles.css:425-433` — h1=2em, h2=1.5em (nessuna definizione per h3)
-- `src/styles.css:2833-2855` — h1=2em/700, h2=1.5em/600, h3=1.25em/600
-
-Entrambi hanno specificità identica (un selettore classe + un selettore tag), quindi l'ultimo caricato vince per cascade order. Tuttavia il primo set non definisce h3, quindi in alcuni contesti h3 cade sul default del browser (1.17em) o sul 1.25em del secondo set, causando un flip visibile.
-
-**Fix proposto per v0.4:**
-- Rimuovere il set duplicato a linee 425-433
-- Definire esplicitamente H1-H6 in un'unica sezione con dimensioni monotoniche standard:
-  - H1 = 2em / 700
-  - H2 = 1.5em / 600
-  - H3 = 1.17em / 600
-  - H4 = 1em / 600
-  - H5 = 0.83em / 600
-  - H6 = 0.67em / 600
-- Aggiungere un test visivo: aprire un documento con tutti i livelli e verificare che siano decrescenti
-
-**Workaround attuale:** ricaricare l'app — temporaneamente il rendering potrebbe stabilizzarsi, ma il bug si ripresenta al primo refresh del theme toggle o dell'A4 pagination.
-
----
-
-## 🙏 Acknowledgments
-
-**AuraWrite** was born from an idea by **Carlo** and developed through **vibecoding** with:
-- [OpenCode](https://github.com/opencode-ai/opencode) — AI coding assistant
-- [MiniMax M2.7](https://www.minimaxi.com/) — AI model
-- [Ollama Cloud](https://ollama.com/) — Local AI infrastructure
-
-This represents Carlo's most solid and fulfilling development system to date — a human idea, amplified by AI, grounded in local-first principles.
-
-### Core Libraries
-
-AuraWrite is built on the shoulders of exceptional open-source projects:
-
-- **[ProseMirror](https://prosemirror.net/)** (MIT License) — The foundation of our editor. Marijn Haverbeke created something remarkable: a toolkit that gives you complete control over the editing experience without imposing opinions. ProseMirror is elegant, extensible, and simply works. We're deeply grateful for this work.
-
-- **[prosemirror-pagination](https://github.com/todorstoev/prosemirror-pagination)** (ISC License) — By Todor Stoev. This plugin made it possible to implement page-based layout in AuraWrite. Pagination in a web editor is notoriously difficult, and this project tackles it head-on. Thank you for solving a problem many gave up on.
-
-Special thanks also to the open-source communities behind **Tauri** and **Rust**.
+- Error messages (if any)
 
 ---
 
 ## 📄 License
 
-Copyright © 2026 AuraWrite — **MIT License**
+[MIT](LICENSE) — Copyright © 2026 Carlo / PatataLab.
 
-```
-MIT License
-
-Copyright (c) 2026 Carlo / PatataLab
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-**AuraWrite will never become a paid product or require subscription.** The MIT License guarantees this remains **free and open source forever.**
+Local. Libre. Life-long.
 
 ---
 
-<p align="center">
-  <strong>Local. Libre. Life-long.</strong> 🌙
-</p>
+### Notes
+
+- **DOCX export:** works, but roundtrip may lose some page-level metadata (A4 margins, custom headers/footers, advanced styles). For preserving full formatting, use Markdown or the native JSON format.
+- **Supported platforms:** Windows, macOS, Linux. Mobile / web / e-ink reader are not in the roadmap.
+- **AI memory:** the conversational assistant has long-term memory of your project's entities and documents. It cannot modify your database — only read from it.
