@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { MODEL_CATALOG, formatBytes as formatBytesCatalog, recommendModelsForHardware, getRecommendedQuantization } from "../ai-panel/model-catalog";
-import { updateDownloadProgress, setDownloadRetryHandler } from "../download-toast";
+import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "../ai-panel/model-catalog";
+import { setDownloadRetryHandler } from "../download-toast";
 
 const WIZARD_KEY = "aurawrite-ai-wizard-dismissed";
 
@@ -142,7 +142,8 @@ function renderStep(): void {
           <p>Based on your hardware, these models are recommended (★ = best fit):</p>
           <div id="wizard-model-list">
             ${MODEL_CATALOG.map((model) => {
-              const isRec = recommended.some((r: any) => r.id === model.id);
+              const isRec = recommended.some(// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (r: any) => r.id === model.id);
               const bestQuant = getRecommendedQuantization(model, vram, hd.ram_total_bytes);
               const canFit = model.quantizations.some((q) =>
                 q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= hd.ram_total_bytes)

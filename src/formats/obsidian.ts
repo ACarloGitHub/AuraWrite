@@ -36,9 +36,9 @@
 // ============================================================================
 
 import { invoke } from "@tauri-apps/api/core";
-import { getProject, getSections, getDocument } from "../database/db";
+import { getProject, getSections } from "../database/db";
 import type { Project, Section, Document } from "../types/database";
-import { toMarkdown, toMarkdownWithRewrites } from "./markdown";
+import { toMarkdownWithRewrites } from "./markdown";
 
 // ---------------------------------------------------------------------------
 // Tauri command wrappers (mirror src-tauri/src/vault_export.rs)
@@ -76,7 +76,7 @@ export function sanitizeFilename(name: string): string {
   if (!name) return "untitled";
   // Replace illegal chars (Windows-forbidden: \ / : * ? " < > |, plus control chars)
   let s = name
-    .replace(/[\\/:*?"<>|\x00-\x1f]/g, "-")
+    .replace(/[\\/:*?"<>|\x00-\x1f]/g, "-") // eslint-disable-line no-control-regex
     .replace(/\s+/g, " ")
     .trim();
   // Trim trailing dots and spaces (Windows hates them)

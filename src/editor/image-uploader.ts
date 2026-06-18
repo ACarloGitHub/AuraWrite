@@ -69,7 +69,7 @@ export async function resolveImageSrc(relativePath: string): Promise<string> {
   ) {
     return relativePath;
   }
-  if (relativePath.match(/^[a-zA-Z]:[\\\/]/) || relativePath.startsWith("/")) {
+  if (relativePath.match(/^[a-zA-Z]:[\\/]/) || relativePath.startsWith("/")) {
     return convertFileSrc(relativePath);
   }
   try {

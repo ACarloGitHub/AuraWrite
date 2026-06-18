@@ -298,8 +298,8 @@ export function recommendModelsForHardware(
   vramBytes: number,
   ramBytes: number
 ): ModelCatalogEntry[] {
-  const vramGB = vramBytes / (1024 * 1024 * 1024);
-  const ramGB = ramBytes / (1024 * 1024 * 1024);
+  const _vramGB = vramBytes / (1024 * 1024 * 1024);
+  const _ramGB = ramBytes / (1024 * 1024 * 1024);
 
   return MODEL_CATALOG.filter((model) =>
     model.quantizations.some(

@@ -26,7 +26,7 @@ export default [
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
-        { argsIgnorePattern: "^_" },
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/no-explicit-any": "warn",
       "no-undef": "error",
@@ -44,6 +44,13 @@ export default [
   {
     // Model listing handles untyped HTTP responses from 6 different providers.
     files: ["src/ai-panel/model-listing.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    // Test files use `any` extensively for ProseMirror JSON traversal.
+    files: ["src/editor/walk-images.test.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
     },

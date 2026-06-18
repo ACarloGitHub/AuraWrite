@@ -19,7 +19,6 @@ import {
   saveDocumentVersion,
   getLatestVersion,
   getEntityIndexStatus,
-  updateSectionsOrder,
   updateDocumentsOrder,
 } from "../database/db";
 import { invoke } from "@tauri-apps/api/core";
@@ -32,7 +31,6 @@ import {
 import Sortable from "sortablejs";
 import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
 import { listTemplates, getTemplate, createProjectFromTemplate } from "../templates/apply";
-import { listUserStyles } from "../database/db";
 
 // State
 let currentProject: Project | null = null;
@@ -805,7 +803,7 @@ interface ProjectTypeResult {
   type: string;
 }
 
-function showProjectTypeDialog(): Promise<ProjectTypeResult | null> {
+function _showProjectTypeDialog(): Promise<ProjectTypeResult | null> {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'project-type-dialog-overlay';

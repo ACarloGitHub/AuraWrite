@@ -328,7 +328,7 @@ export const bookTemplate: Template = {
         docTutorial(
           "Visual Motifs",
           "Motifs are repeated visual or sensory patterns: the colour red, the sound of waves, the smell of antiseptic. They create atmosphere and subconscious connections between scenes.",
-          "Motif: Blue light\n- The forensic lab's UV灯 casts everything in blue.\n- The lighthouse beam is blue at night.\n- Elena's kitchen light is blue (she lives in a cold, sterile world).\n- Change: In the final scene, she turns on a warm yellow lamp. Her world warms.\n\nMotif: Salt\n- Salt air, salt water, salt on wound margins.\- Elena's hands are always salty from the harbour.\n- Jack offers her a salt-rimmed margarita in chapter 7 (false warmth).",
+          "Motif: Blue light\n- The forensic lab's UV灯 casts everything in blue.\n- The lighthouse beam is blue at night.\n- Elena's kitchen light is blue (she lives in a cold, sterile world).\n- Change: In the final scene, she turns on a warm yellow lamp. Her world warms.\n\nMotif: Salt\n- Salt air, salt water, salt on wound margins.\n- Elena's hands are always salty from the harbour.\n- Jack offers her a salt-rimmed margarita in chapter 7 (false warmth).",
           "## Your visual motifs\n[Define recurring sensory patterns]",
           [
             "What sensory motif could unify my chapters?",

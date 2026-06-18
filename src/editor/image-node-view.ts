@@ -246,7 +246,7 @@ export class ImageNodeView implements NodeView {
         height: Math.round(height),
       });
       this.view.dispatch(tr);
-    } catch {}
+    } catch { /* ignore schema mismatch on resize */ }
   }
 
   private onRotateMouseDown(e: MouseEvent): void {
@@ -256,7 +256,7 @@ export class ImageNodeView implements NodeView {
     if (pos == null) return;
     const node = this.view.state.doc.nodeAt(pos);
     if (!node) return;
-    const startRotation = (node.attrs.rotation as number) || 0;
+    const _startRotation = (node.attrs.rotation as number) || 0;
     const rect = this.wrapper.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
@@ -288,7 +288,7 @@ export class ImageNodeView implements NodeView {
           rotation: deg,
         });
         this.view.dispatch(tr);
-      } catch {}
+      } catch { /* safeSetNodeMarkup: ignore invalid content errors */ }
     };
 
     document.addEventListener("mousemove", onMove);
@@ -333,7 +333,7 @@ export class ImageNodeView implements NodeView {
           offsetTop,
         });
         this.view.dispatch(tr);
-      } catch {}
+      } catch { /* safeSetNodeMarkup: ignore invalid content errors */ }
     };
 
     document.addEventListener("mousemove", onMove);
@@ -366,7 +366,7 @@ export class ImageNodeView implements NodeView {
           height: uploaded.height,
         });
         this.view.dispatch(tr);
-      } catch {}
+      } catch { /* safeSetNodeMarkup: ignore invalid content errors */ }
     } catch (e) {
       console.warn("[image] replace failed:", e);
     }

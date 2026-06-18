@@ -163,6 +163,7 @@ function attach(id: string, name: string): DownloadState {
   cancelBtn.addEventListener("click", () => {
     state.cancelled = true;
     state.phase = "cancelled";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const t = (window as any).__TAURI__;
     t?.event?.emit?.("download-cancel", { id });
     renderOne(state);

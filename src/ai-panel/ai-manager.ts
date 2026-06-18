@@ -134,6 +134,7 @@ export async function sendToAI(
     }
     currentProvider = createProvider(settings);
   } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const providerAny = current as any;
     if (current.name === "local-llamacpp" && settings.aiModel) {
       const llamacppProv = current as LocalLlamacppProvider;

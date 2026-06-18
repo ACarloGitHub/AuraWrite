@@ -8,16 +8,16 @@ import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
 import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
-import { initErrorBoundaries, showErrorToast, showInfoToast, showToast } from "./error-boundary";
+import { initErrorBoundaries, showErrorToast } from "./error-boundary";
 import { checkForUpdatesOnStartup } from "./updates";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
 import { PROVIDER_BASE_URLS } from "./ai-panel/providers";
 import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
-import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
-import { updateDownloadProgress, setDownloadRetryHandler, clearDownload } from "./download-toast";
+import { listen as tauriListen } from "@tauri-apps/api/event";
+import { updateDownloadProgress, setDownloadRetryHandler } from "./download-toast";
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "./ai-panel/model-catalog";
-import { shouldShowWizard, showAIWizard, hideAIWizard } from "./setup/ai-wizard";
+import { shouldShowWizard, showAIWizard } from "./setup/ai-wizard";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import {
   populateUserFontsInToolbar,
@@ -1754,7 +1754,7 @@ async function refreshLocalModelCatalog(): Promise<void> {
       btn.addEventListener("click", async () => {
         const el = btn as HTMLElement;
         const modelId = el.dataset.modelId || "";
-        const quantId = el.dataset.quantId || "";
+        const _quantId = el.dataset.quantId || "";
         const url = el.dataset.url || "";
         const filename = el.dataset.filename || "";
         const quantName = el.dataset.quantName || "";

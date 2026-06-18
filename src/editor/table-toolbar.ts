@@ -286,6 +286,7 @@ export function createTableMonitorPlugin(): Plugin {
 
       if (tablesFound !== hadTables) {
         requestAnimationFrame(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const view = (window as any).__aurawrite_editor_view;
           if (view) {
             checkTablesAndPagedMode(view);

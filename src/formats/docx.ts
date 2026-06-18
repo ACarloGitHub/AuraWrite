@@ -29,7 +29,7 @@ import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
 const A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
-const PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+const _PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
 function getDOMParser(): any {
   const g: any = globalThis as any;
@@ -969,7 +969,7 @@ export async function toDocx(doc: any): Promise<Document> {
     for (const bp of breaks) {
       cassieBreaks.add(bp.pos);
     }
-  } catch {}
+  } catch { /* page breaks may fail on some docs */ }
 
   const children: any[] = [];
   let pos = 0;
@@ -1099,7 +1099,7 @@ function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
   return paragraphs;
 }
 
-function nodeToParagraphs(node: any): Paragraph[] {
+function _nodeToParagraphs(node: any): Paragraph[] {
   switch (node.type.name) {
     case "paragraph":
       return [paragraphFromNode(node, { align: node.attrs?.align })];
@@ -1141,7 +1141,7 @@ function nodeToParagraphs(node: any): Paragraph[] {
         }),
       ];
     case "page":
-      return contentToArray(node.content).flatMap((child: any) => nodeToParagraphs(child));
+      return contentToArray(node.content).flatMap((child: any) => _nodeToParagraphs(child));
     default:
       if (node.isBlock) {
         return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];

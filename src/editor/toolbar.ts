@@ -493,6 +493,7 @@ async function openTXT(path: string): Promise<void> {
   markSaved(JSON.stringify(json), path, "txt");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrateImageNodesInJson(node: any): any {
   if (!node || typeof node !== "object") return node;
   if (Array.isArray(node)) {
@@ -502,7 +503,9 @@ function migrateImageNodesInJson(node: any): any {
     return { type: "paragraph", content: [node] };
   }
   if (Array.isArray(node.content)) {
-    const newContent = node.content.map((child: any) => migrateImageNodesInJson(child));
+    const newContent = node.content.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (child: any) => migrateImageNodesInJson(child));
     return { ...node, content: newContent };
   }
   return node;
@@ -575,6 +578,7 @@ async function handleExportMarkdownSingle(mdPath: string): Promise<void> {
   await walkAndCopyImages(doc, attachmentsDir, baseDir, imageMap);
 
   // Generate markdown with rewritten image paths
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const json: any = doc;
   const body = toMarkdownWithRewrites(json, {
     imagePathFor: (src: string) => {
@@ -593,6 +597,7 @@ async function handleExportMarkdownSingle(mdPath: string): Promise<void> {
 }
 
 async function walkAndCopyImages(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   node: any,
   attachmentsDir: string,
   baseDir: string,
@@ -626,7 +631,9 @@ async function walkAndCopyImages(
   const content = node.content;
   if (content && typeof content.forEach === "function") {
     // Fragment: collect via forEach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const children: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     content.forEach((c: any) => children.push(c));
     for (const child of children) {
       await walkAndCopyImages(child, attachmentsDir, baseDir, out);
@@ -641,7 +648,7 @@ async function walkAndCopyImages(
 async function copyImageToDir(
   src: string,
   destDir: string,
-  baseDir: string
+  _baseDir: string
 ): Promise<string | null> {
   // Strip any query/hash
   const cleanSrc = src.split("?")[0].split("#")[0];
@@ -713,7 +720,7 @@ function joinPathLocal(...parts: string[]): string {
 function sanitizeFilenameLocal(name: string): string {
   if (!name) return "untitled";
   let s = name
-    .replace(/[\\/:*?"<>|\x00-\x1f]/g, "-")
+    .replace(/[\\/:*?"<>|\x00-\x1f]/g, "-") // eslint-disable-line no-control-regex
     .replace(/\s+/g, " ")
     .trim();
   s = s.replace(/[.\s]+$/, "");
