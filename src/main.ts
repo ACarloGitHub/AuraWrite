@@ -1454,6 +1454,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  document.getElementById("pref-reset-all-data")?.addEventListener("click", async () => {
+    const confirmed = confirm(
+      "This will permanently delete ALL user data:\n\n" +
+      "- All downloaded models and llama.cpp\n" +
+      "- The project database (all projects, documents, entities)\n" +
+      "- All preferences and AI settings\n" +
+      "- The AI setup wizard state\n\n" +
+      "The app will need to restart. Are you sure?"
+    );
+    if (!confirmed) return;
+    const btn = document.getElementById("pref-reset-all-data") as HTMLButtonElement | null;
+    const resultEl = document.getElementById("pref-reset-all-data-result");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Clearing...";
+    }
+    try {
+      await invoke("llamacpp_stop_server").catch(() => {});
+      localStorage.clear();
+      const msg = await invoke("resources_clear_all_user_data");
+      if (resultEl) resultEl.textContent = String(msg);
+      if (btn) btn.textContent = "Done — restart app";
+    } catch (e) {
+      if (resultEl) resultEl.textContent = "Error: " + (e instanceof Error ? e.message : String(e));
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Reset all data";
+      }
+    }
+  });
+
   function migrateOldAISettings(): void {
     const oldSettings = localStorage.getItem("aurawrite-ai-settings");
     if (!oldSettings) return;
@@ -1873,6 +1904,62 @@ function setupLlamacppParamsTab(): void {
     });
   }
 
+  document.getElementById("llamacpp-start-server")?.addEventListener("click", async () => {
+    const startBtn = document.getElementById("llamacpp-start-server") as HTMLButtonElement | null;
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.textContent = "Starting...";
+    }
+    try {
+      const modelPath = (document.getElementById("pref-ai-model") as HTMLInputElement | null)?.value?.trim();
+      if (!modelPath) {
+        alert("No model selected. Please select a model in the AI Provider tab first.");
+        return;
+      }
+      const nglValue = nglSelect?.value === "custom" ? nglCustom?.value : nglSelect?.value;
+      let mmprojPath: string | null = null;
+      try {
+        const models = await invoke("resources_list_chat_models") as Array<{ path: string; mmproj_path: string | null }>;
+        const matched = models.find((m) => m.path === modelPath);
+        mmprojPath = matched?.mmproj_path || null;
+      } catch {
+        // ignore
+      }
+      const result = await invoke("llamacpp_spawn_server", {
+        modelPath,
+        port: parseInt(localStorage.getItem("aurawrite-llamacpp-port") || "11435"),
+        ctxSize: parseInt(localStorage.getItem("aurawrite-llamacpp-ctx-size") || "4096"),
+        ngl: nglValue || "auto",
+        flashAttn: localStorage.getItem("aurawrite-llamacpp-flash-attn") || "auto",
+        cacheTypeK: localStorage.getItem("aurawrite-llamacpp-cache-type-k") || "f16",
+        cacheTypeV: localStorage.getItem("aurawrite-llamacpp-cache-type-v") || "f16",
+        threads: parseInt(localStorage.getItem("aurawrite-llamacpp-threads") || "0") || null,
+        mmprojPath,
+      });
+      const status = result as { running: boolean; pid: number | null; port: number | null; model_path: string | null };
+      updateLlamacppServerStatus(status);
+      if (!status.running) {
+        alert("Server failed to start. Check the server status and try again.");
+      }
+    } catch (e) {
+      alert("Failed to start server: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.textContent = "Start server";
+      }
+    }
+  });
+
+  document.getElementById("llamacpp-stop-server")?.addEventListener("click", async () => {
+    try {
+      await invoke("llamacpp_stop_server");
+      updateLlamacppServerStatus({ running: false, pid: null, port: null, model_path: null });
+    } catch (e) {
+      console.error("[llamacpp] stop failed:", e);
+    }
+  });
+
   // Initial status check
   (async () => {
     try {
@@ -1896,11 +1983,17 @@ function setupLlamacppParamsTab(): void {
 
 function updateLlamacppServerStatus(status: any): void {
   const el = document.getElementById("llamacpp-server-status");
+  const startBtn = document.getElementById("llamacpp-start-server") as HTMLButtonElement | null;
+  const stopBtn = document.getElementById("llamacpp-stop-server") as HTMLButtonElement | null;
   if (!el) return;
   if (status.running) {
     el.innerHTML = `<span style="color:#4caf50;">● Running</span> (PID ${status.pid}, port ${status.port})<br>Model: ${status.model_path || "unknown"}`;
+    if (startBtn) startBtn.style.display = "none";
+    if (stopBtn) stopBtn.style.display = "";
   } else {
     el.innerHTML = '<span style="color:#999;">○ Not running</span>';
+    if (startBtn) startBtn.style.display = "";
+    if (stopBtn) stopBtn.style.display = "none";
   }
   updateLlamacppServerStatusAI(status);
 }

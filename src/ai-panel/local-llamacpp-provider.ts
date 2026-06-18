@@ -216,7 +216,7 @@ export class LocalLlamacppProvider implements AIProvider {
       return {
         content: "",
         done: false,
-        error: "Local llama.cpp server is not running. Please start it from Preferences > Local Models.",
+        error: "Local llama.cpp server failed to start. Try starting it manually from Preferences > Local Models > Server Status, or check that a model is selected in the AI Provider tab.",
       };
     }
 

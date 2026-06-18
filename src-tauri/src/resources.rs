@@ -843,6 +843,58 @@ pub fn resources_remove_all(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn resources_clear_all_user_data(app: AppHandle) -> Result<String, String> {
+    let mut cleared: Vec<&str> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
+
+    // 1. Remove app_data_dir (models, llama.cpp, logs, resources, embeddings)
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        if data_dir.exists() {
+            match fs::remove_dir_all(&data_dir) {
+                Ok(_) => cleared.push("app data (models, llama.cpp, logs)"),
+                Err(e) => warnings.push(format!("app data dir: {}", e)),
+            }
+        }
+    }
+
+    // 2. Remove the SQLite database (~/.config/aurawrite/aurawrite.db)
+    let db_path = crate::database::get_database_path();
+    if db_path.exists() {
+        match fs::remove_file(&db_path) {
+            Ok(_) => cleared.push("database"),
+            Err(e) => warnings.push(format!("database: {}", e)),
+        }
+    }
+    if let Some(parent) = db_path.parent() {
+        if parent.exists() && parent.read_dir().map(|mut d| d.next().is_none()).unwrap_or(false) {
+            let _ = fs::remove_dir(parent);
+        }
+    }
+
+    // 3. Remove webview cache (localStorage, wizard dismissed flag)
+    //    Best effort: on Windows the webview may lock some files.
+    if let Ok(cache_dir) = app.path().app_cache_dir() {
+        if cache_dir.exists() {
+            match fs::remove_dir_all(&cache_dir) {
+                Ok(_) => cleared.push("webview cache (localStorage)"),
+                Err(e) => warnings.push(format!("webview cache: {} (restart app to complete)", e)),
+            }
+        }
+    }
+
+    let mut msg = if cleared.is_empty() {
+        "Nothing to clear.".to_string()
+    } else {
+        format!("Cleared: {}.", cleared.join(", "))
+    };
+    if !warnings.is_empty() {
+        msg.push_str(&format!(" Warnings: {}", warnings.join("; ")));
+    }
+    msg.push_str(" Please restart AuraWrite for changes to take effect.");
+    Ok(msg)
+}
+
+#[tauri::command]
 pub fn resources_remove_llamacpp_ai(app: AppHandle) -> Result<(), String> {
     let dir = resources_dir(&app)?;
     let ai_dir = llamacpp_ai_dir(&dir);

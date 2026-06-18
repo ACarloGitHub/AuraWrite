@@ -855,7 +855,11 @@
               <div class="preference-group">
                 <h3>Server Status</h3>
                 <p id="llamacpp-server-status" class="preference-hint">Not started</p>
-                <p class="preference-hint">The server starts automatically when you send a message. You can stop it from the AI Provider tab.</p>
+                <div class="preference-row">
+                  <button id="llamacpp-start-server" class="pref-btn pref-btn-primary">Start server</button>
+                  <button id="llamacpp-stop-server" class="pref-btn pref-btn-danger" style="display:none;">Stop server</button>
+                </div>
+                <p class="preference-hint">The server also starts automatically when you send a chat message.</p>
               </div>
             </div>
             <!-- TAB: Editor & Data -->
@@ -878,6 +882,14 @@
                   <input type="checkbox" id="pref-deselect-on-click" checked />
                   <span>Clear selection on editor click</span>
                 </div>
+              </div>
+              <div class="preference-group">
+                <label>Maintenance</label>
+                <span class="preference-hint">Remove all user data: models, llama.cpp, database, preferences, and AI wizard state.</span>
+                <div class="preference-row">
+                  <button id="pref-reset-all-data" class="pref-btn pref-btn-danger">Reset all data</button>
+                </div>
+                <span class="preference-hint" id="pref-reset-all-data-result"></span>
               </div>
             </div>
             <!-- TAB: Indexing & Tools -->

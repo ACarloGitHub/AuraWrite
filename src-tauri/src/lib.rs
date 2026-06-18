@@ -1013,6 +1013,7 @@ pub fn run() {
             resources_llamacpp_embeddings_variant,
             resources_download_nomic,
             resources_remove_all,
+            resources_clear_all_user_data,
             resources_remove_llamacpp_ai,
             resources_remove_llamacpp_embeddings,
             ollama_check,
