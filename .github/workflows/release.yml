@@ -64,6 +64,10 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Force re-embed frontend (invalidate Rust cache for our crate)
+        run: cargo clean -p aurawrite
+        working-directory: src-tauri
+
       - name: Build application
         uses: tauri-apps/tauri-action@v0
         env:
