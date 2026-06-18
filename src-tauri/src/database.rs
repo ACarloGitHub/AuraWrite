@@ -278,6 +278,15 @@ fn run_migrations(conn: &Connection) -> SqliteResult<()> {
         conn.execute_batch("ALTER TABLE documents ADD COLUMN selected_style TEXT;")?;
     }
 
+    // M3: Drop old embeddings table (replaced by vec_embeddings + embedding_metadata)
+    let has_old_embeddings: bool = conn
+        .prepare("SELECT embedding_id FROM embeddings LIMIT 1")
+        .map(|mut stmt| stmt.query([]).is_ok())
+        .unwrap_or(false);
+    if has_old_embeddings {
+        conn.execute_batch("DROP TABLE embeddings;")?;
+    }
+
     Ok(())
 }
 
@@ -1236,6 +1245,17 @@ pub fn delete_links_for_project(conn: &Connection, project_id: &str) -> SqliteRe
         for doc_id in &doc_ids {
             total_deleted += delete_links_for_entity(conn, "document", doc_id)?;
         }
+    }
+
+    let entity_ids: Vec<String> = conn.prepare(
+        "SELECT id FROM entities WHERE project_id = ?1"
+    )?
+    .query_map(params![project_id], |row| row.get(0))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+    for entity_id in &entity_ids {
+        total_deleted += delete_links_for_entity(conn, "entity", entity_id)?;
     }
 
     Ok(total_deleted)
