@@ -104,9 +104,8 @@ fn llamacpp_url_for_variant(variant: &str) -> String {
         // macOS: Metal is included in the standard build
         ("macos", "arm64", _) => format!("llama-{}-bin-macos-arm64.tar.gz", ver),
         ("macos", "x64", _) => format!("llama-{}-bin-macos-x64.tar.gz", ver),
-        // Linux: CPU, CUDA 12.4, Vulkan
+        // Linux: CPU, Vulkan (CUDA is not published as prebuilt for Linux by upstream)
         ("linux", "x64", "cpu") => format!("llama-{}-bin-ubuntu-x64.tar.gz", ver),
-        ("linux", "x64", "cuda") => format!("llama-{}-bin-ubuntu-cuda-12.4-x64.tar.gz", ver),
         ("linux", "x64", "vulkan") => format!("llama-{}-bin-ubuntu-vulkan-x64.tar.gz", ver),
         ("linux", "arm64", _) => format!("llama-{}-bin-ubuntu-arm64.tar.gz", ver),
         // Fallback
@@ -533,24 +532,50 @@ async fn download_stream_to_file(
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
     let f = File::open(zip_path).map_err(|e| format!("open zip: {}", e))?;
     let mut archive = zip::ZipArchive::new(f).map_err(|e| format!("read zip: {}", e))?;
-    fs::create_dir_all(dest_dir).map_err(|e| format!("create dest: {}", e))?;
+    // Extract to a temporary subdirectory first, then atomically move into place.
+    // This avoids partial extractions leaving locked files behind (Windows OS error 32)
+    // and protects the existing installation from corruption on failure.
+    let temp_dir = dest_dir.with_file_name(format!(
+        "{}.extract-{}",
+        dest_dir.file_name().and_then(|n| n.to_str()).unwrap_or("dest"),
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(&temp_dir).map_err(|e| format!("create temp dir: {}", e))?;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| format!("zip entry: {}", e))?;
         let name = entry.name().to_string();
         if name.contains("..") {
             continue;
         }
-        let outpath = dest_dir.join(&name);
+        let outpath = temp_dir.join(&name);
         if entry.is_dir() {
             fs::create_dir_all(&outpath).ok();
         } else {
             if let Some(parent) = outpath.parent() {
                 fs::create_dir_all(parent).ok();
             }
-            let mut out = File::create(&outpath).map_err(|e| format!("create {}: {}", outpath.display(), e))?;
+            // Retry on Windows sharing violations (OS error 32) — antivirus or
+            // another handle may briefly lock a file we just wrote.
+            let mut out = None;
+            let mut last_err: Option<String> = None;
+            for attempt in 0..5 {
+                match File::create(&outpath) {
+                    Ok(f) => { out = Some(f); break; }
+                    Err(e) => {
+                        last_err = Some(format!("create {}: {}", outpath.display(), e));
+                        std::thread::sleep(Duration::from_millis(150 * (attempt + 1)));
+                    }
+                }
+            }
+            let mut out = out.ok_or_else(|| last_err.unwrap_or_else(|| "create failed".to_string()))?;
             io::copy(&mut entry, &mut out).map_err(|e| format!("write: {}", e))?;
         }
     }
+    if dest_dir.exists() {
+        fs::remove_dir_all(dest_dir).map_err(|e| format!("remove old dest: {}", e))?;
+    }
+    fs::rename(&temp_dir, dest_dir).map_err(|e| format!("rename temp to dest: {}", e))?;
     Ok(())
 }
 
@@ -558,7 +583,18 @@ fn extract_tar_gz(tar_gz_path: &Path, dest_dir: &Path) -> Result<(), String> {
     let f = File::open(tar_gz_path).map_err(|e| format!("open tar.gz: {}", e))?;
     let gz = flate2::read::GzDecoder::new(f);
     let mut archive = tar::Archive::new(gz);
-    archive.unpack(dest_dir).map_err(|e| format!("unpack tar.gz: {}", e))?;
+    let temp_dir = dest_dir.with_file_name(format!(
+        "{}.extract-{}",
+        dest_dir.file_name().and_then(|n| n.to_str()).unwrap_or("dest"),
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(&temp_dir).map_err(|e| format!("create temp dir: {}", e))?;
+    archive.unpack(&temp_dir).map_err(|e| format!("unpack tar.gz: {}", e))?;
+    if dest_dir.exists() {
+        fs::remove_dir_all(dest_dir).map_err(|e| format!("remove old dest: {}", e))?;
+    }
+    fs::rename(&temp_dir, dest_dir).map_err(|e| format!("rename temp to dest: {}", e))?;
     Ok(())
 }
 
@@ -1458,6 +1494,16 @@ fn parse_vram_string(s: &str) -> u64 {
 fn recommended_variant(gpus: &[GpuInfo]) -> String {
     if cfg!(target_os = "macos") {
         return "metal".to_string();
+    }
+    // On Linux, upstream llama.cpp does not publish CUDA prebuilt binaries;
+    // use Vulkan (works on NVIDIA via the proprietary driver).
+    if cfg!(target_os = "linux") {
+        for gpu in gpus {
+            if gpu.backend == "vulkan" {
+                return "vulkan".to_string();
+            }
+        }
+        return "cpu".to_string();
     }
     for gpu in gpus {
         match gpu.backend.as_str() {
