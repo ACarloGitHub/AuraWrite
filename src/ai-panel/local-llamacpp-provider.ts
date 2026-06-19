@@ -15,6 +15,7 @@ interface LlamaServerConfig {
   cacheTypeV?: string;
   threads?: number;
   mmprojPath?: string;
+  noMmprojOffload?: boolean;
 }
 
 interface LlamaServerStatus {
@@ -182,6 +183,7 @@ export class LocalLlamacppProvider implements AIProvider {
         cacheTypeV: this.config.cacheTypeV,
         threads: this.config.threads,
         mmprojPath: this.config.mmprojPath,
+        noMmprojOffload: this.config.noMmprojOffload,
       });
       this.serverRunning = result.running;
       if (result.running) {

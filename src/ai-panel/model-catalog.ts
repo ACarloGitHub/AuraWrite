@@ -39,8 +39,8 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     license: "Apache-2.0",
     hf_repo: "unsloth/gemma-4-E2B-it-GGUF",
     is_multimodal: true,
-    mmproj_filename: "mmproj-gemma-4-E2B-it-F16.gguf",
-    mmproj_url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-F16.gguf",
+    mmproj_filename: "mmproj-F16.gguf",
+    mmproj_url: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-F16.gguf",
     mmproj_size_bytes: 987000000,
     quantizations: [
       {
@@ -87,8 +87,8 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     license: "Apache-2.0",
     hf_repo: "unsloth/gemma-4-E4B-it-GGUF",
     is_multimodal: true,
-    mmproj_filename: "mmproj-gemma-4-E4B-it-F16.gguf",
-    mmproj_url: "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-F16.gguf",
+    mmproj_filename: "mmproj-F16.gguf",
+    mmproj_url: "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-F16.gguf",
     mmproj_size_bytes: 990000000,
     quantizations: [
       {
@@ -135,8 +135,8 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     license: "Apache-2.0",
     hf_repo: "unsloth/gemma-4-12b-it-GGUF",
     is_multimodal: true,
-    mmproj_filename: "mmproj-gemma-4-12b-it-F16.gguf",
-    mmproj_url: "https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/main/mmproj-gemma-4-12b-it-F16.gguf",
+    mmproj_filename: "mmproj-F16.gguf",
+    mmproj_url: "https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/main/mmproj-F16.gguf",
     mmproj_size_bytes: 175000000,
     quantizations: [
       {

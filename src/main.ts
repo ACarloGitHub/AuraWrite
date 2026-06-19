@@ -1929,12 +1929,13 @@ function setupLlamacppParamsTab(): void {
         modelPath,
         port: parseInt(localStorage.getItem("aurawrite-llamacpp-port") || "11435"),
         ctxSize: parseInt(localStorage.getItem("aurawrite-llamacpp-ctx-size") || "4096"),
-        ngl: nglValue || "auto",
+        ngl: nglValue || "all",
         flashAttn: localStorage.getItem("aurawrite-llamacpp-flash-attn") || "auto",
         cacheTypeK: localStorage.getItem("aurawrite-llamacpp-cache-type-k") || "f16",
         cacheTypeV: localStorage.getItem("aurawrite-llamacpp-cache-type-v") || "f16",
         threads: parseInt(localStorage.getItem("aurawrite-llamacpp-threads") || "0") || null,
         mmprojPath,
+        noMmprojOffload: false,
       });
       const status = result as { running: boolean; pid: number | null; port: number | null; model_path: string | null };
       updateLlamacppServerStatus(status);

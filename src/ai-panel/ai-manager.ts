@@ -84,7 +84,7 @@ function createProvider(settings: PreferencesAI): AIProvider {
         modelPath: settings.aiModel,
         port: parseInt(localStorage.getItem("aurawrite-llamacpp-port") || "11435"),
         ctxSize: parseInt(localStorage.getItem("aurawrite-llamacpp-ctx-size") || "4096"),
-        ngl: localStorage.getItem("aurawrite-llamacpp-ngl") || "auto",
+        ngl: localStorage.getItem("aurawrite-llamacpp-ngl") || "all",
         flashAttn: localStorage.getItem("aurawrite-llamacpp-flash-attn") || "auto",
         cacheTypeK: localStorage.getItem("aurawrite-llamacpp-cache-type-k") || "f16",
         cacheTypeV: localStorage.getItem("aurawrite-llamacpp-cache-type-v") || "f16",

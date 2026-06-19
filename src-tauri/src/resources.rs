@@ -445,7 +445,7 @@ async fn download_stream_to_file(
     let mut stream = resp.bytes_stream();
 
     loop {
-        let chunk = match tokio::time::timeout(Duration::from_secs(60), stream.next()).await {
+        let chunk = match tokio::time::timeout(Duration::from_secs(120), stream.next()).await {
             Ok(Some(Ok(c))) => c,
             Ok(Some(Err(e))) => {
                 download_error = Some(format!("stream error: {}", e));
@@ -454,7 +454,7 @@ async fn download_stream_to_file(
             Ok(None) => break,
             Err(_) => {
                 download_error = Some(
-                    "download timed out (no data received for 60 seconds). \
+                    "download timed out (no data received for 120 seconds). \
                      The partial file is kept for resume."
                         .to_string(),
                 );
@@ -1742,6 +1742,106 @@ fn get_disk_space(path: &Path) -> (u64, u64) {
 // Llama Server Lifecycle (M8.6)
 // ============================================================================
 
+/// Pick the best Vulkan device for llama.cpp by running `--list-devices` once.
+/// Caches the result in `<llama_dir>/vulkan-device.txt` so we don't re-run on
+/// every spawn. Prefers NVIDIA discrete GPUs, then the device with the most
+/// free VRAM. Returns None if detection fails (llama.cpp will use its default).
+fn pick_best_vulkan_device(llama_dir: &Path, binary: &Path) -> Option<String> {
+    let cache_path = llama_dir.join("vulkan-device.txt");
+    if let Ok(cached) = fs::read_to_string(&cache_path) {
+        let cached = cached.trim().to_string();
+        if !cached.is_empty() {
+            return Some(cached);
+        }
+    }
+
+    // Run `llama-server --list-devices` on a separate thread with a timeout.
+    // This is a diagnostic flag that enumerates devices and exits; it should
+    // complete in under a second, but we cap at 10s for safety.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let binary = binary.to_path_buf();
+    std::thread::spawn(move || {
+        let mut cmd = silent_command(&binary.to_string_lossy());
+        cmd.arg("--list-devices");
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let _ = tx.send(cmd.output());
+    });
+
+    let output = match rx.recv_timeout(Duration::from_secs(10)) {
+        Ok(Ok(o)) if o.status.success() => o,
+        _ => return None,
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}\n{}", stdout, stderr);
+
+    // Best candidate: (device_id, vram_mib, is_nvidia)
+    let mut best: Option<(String, u64, bool)> = None;
+    for line in combined.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_lowercase();
+        let Some(vulkan_idx) = lower.find("vulkan") else { continue };
+        // Extract device id token: "Vulkan0", "Vulkan1", etc.
+        let rest = &trimmed[vulkan_idx..];
+        let id_end = rest
+            .find(|c: char| c == ':' || c.is_whitespace())
+            .unwrap_or(rest.len());
+        let dev_id = rest[..id_end].trim();
+        if !dev_id.starts_with("Vulkan") {
+            continue;
+        }
+        let is_nvidia = lower.contains("nvidia")
+            || lower.contains("gtx")
+            || lower.contains("rtx")
+            || lower.contains("geforce")
+            || lower.contains("quadro");
+        let vram_mib = extract_mib(trimmed);
+        let better = match &best {
+            None => true,
+            Some((_, bv, bn)) => {
+                if is_nvidia && !bn {
+                    true
+                } else if is_nvidia == *bn {
+                    vram_mib > *bv
+                } else {
+                    false
+                }
+            }
+        };
+        if better {
+            best = Some((dev_id.to_string(), vram_mib, is_nvidia));
+        }
+    }
+
+    if let Some((dev_id, _, _)) = &best {
+        let _ = fs::write(&cache_path, dev_id);
+        return Some(dev_id.clone());
+    }
+    None
+}
+
+/// Extract a VRAM size in MiB from a device line like "... (5492 MiB free)".
+fn extract_mib(line: &str) -> u64 {
+    let lower = line.to_lowercase();
+    let Some(idx) = lower.find("mib") else { return 0 };
+    let before = &line[..idx];
+    let digits: String = before
+        .chars()
+        .rev()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    digits.parse::<u64>().unwrap_or(0)
+}
+
 static LLAMA_SERVER: OnceLock<Mutex<Option<LlamaServerState>>> = OnceLock::new();
 static LLAMA_EMBEDDINGS_SERVER: OnceLock<Mutex<Option<LlamaServerState>>> = OnceLock::new();
 
@@ -1771,6 +1871,7 @@ pub async fn llamacpp_spawn_server(
     cache_type_v: Option<String>,
     threads: Option<u32>,
     mmproj_path: Option<String>,
+    no_mmproj_offload: Option<bool>,
 ) -> Result<LlamaServerStatus, String> {
     tokio::task::spawn_blocking(move || {
         // Check if already running
@@ -1871,6 +1972,39 @@ pub async fn llamacpp_spawn_server(
 
         if let Some(mmp) = mmproj_path.as_deref() {
             cmd.arg("--mmproj").arg(mmp);
+        }
+
+        // Read installed variant to drive device selection
+        let meta_path = llama_dir.join("variant.txt");
+        let installed_variant = if meta_path.exists() {
+            fs::read_to_string(&meta_path)
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        } else {
+            String::new()
+        };
+
+        // -fit off: disable automatic layer fitting. With `--n-gpu-layers 99`,
+        // llama.cpp would otherwise try to fit layers into VRAM and on old/edge
+        // drivers (e.g. NVIDIA 546.33 Pascal Vulkan) it computes 0 layers and
+        // falls back to CPU. `-fit off` forces the requested layer count.
+        cmd.arg("-fit").arg("off");
+
+        // --device selection for Vulkan: with multiple Vulkan devices (e.g. Intel
+        // iGPU + NVIDIA dGPU on Surface Book 2), llama.cpp picks the first one
+        // which is often the weak iGPU. We detect the best device once and cache
+        // it in <llama_dir>/vulkan-device.txt.
+        if installed_variant == "vulkan" {
+            if let Some(dev) = pick_best_vulkan_device(&llama_dir, &binary) {
+                cmd.arg("--device").arg(&dev);
+            }
+        }
+
+        // --no-mmproj-offload: keep the vision projector on CPU to avoid
+        // exhausting VRAM on large models. Useful for 12B+ models on 6-8 GB GPUs.
+        if no_mmproj_offload.unwrap_or(false) && mmproj_path.is_some() {
+            cmd.arg("--no-mmproj-offload");
         }
 
         // Production settings for a desktop app
