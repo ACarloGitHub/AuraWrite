@@ -1895,14 +1895,39 @@ async function refreshLlamacppVariant(): Promise<void> {
   }
 }
 
+function saveLlamacppParams(): void {
+  const val = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement)?.value || "";
+  localStorage.setItem("aurawrite-llamacpp-ctx-size", val("llamacpp-ctx-size"));
+  localStorage.setItem("aurawrite-llamacpp-ngl", val("llamacpp-ngl"));
+  if (val("llamacpp-ngl-custom")) {
+    localStorage.setItem("aurawrite-llamacpp-ngl-custom", val("llamacpp-ngl-custom"));
+  }
+  localStorage.setItem("aurawrite-llamacpp-fit-target", val("llamacpp-fit-target"));
+  localStorage.setItem("aurawrite-llamacpp-cache-type-k", val("llamacpp-cache-type-k"));
+  localStorage.setItem("aurawrite-llamacpp-cache-type-v", val("llamacpp-cache-type-v"));
+  localStorage.setItem("aurawrite-llamacpp-flash-attn", val("llamacpp-flash-attn"));
+  localStorage.setItem("aurawrite-llamacpp-threads", val("llamacpp-threads"));
+  localStorage.setItem("aurawrite-llamacpp-port", val("llamacpp-port"));
+  localStorage.setItem("aurawrite-llamacpp-batch-size", val("llamacpp-batch-size"));
+}
+
 function setupLlamacppParamsTab(): void {
   const nglSelect = document.getElementById("llamacpp-ngl") as HTMLSelectElement;
   const nglCustom = document.getElementById("llamacpp-ngl-custom") as HTMLInputElement;
   if (nglSelect && nglCustom) {
     nglSelect.addEventListener("change", () => {
       nglCustom.style.display = nglSelect.value === "custom" ? "" : "none";
+      saveLlamacppParams();
     });
   }
+
+  // Save all llamacpp params to localStorage when they change
+  document.querySelectorAll(
+    "#llamacpp-ctx-size, #llamacpp-ngl-custom, #llamacpp-fit-target, #llamacpp-cache-type-k, #llamacpp-cache-type-v, #llamacpp-flash-attn, #llamacpp-threads, #llamacpp-port, #llamacpp-batch-size",
+  ).forEach((el) => {
+    el.addEventListener("change", saveLlamacppParams);
+    el.addEventListener("input", saveLlamacppParams);
+  });
 
   document.getElementById("llamacpp-start-server")?.addEventListener("click", async () => {
     const startBtn = document.getElementById("llamacpp-start-server") as HTMLButtonElement | null;
@@ -1936,6 +1961,7 @@ function setupLlamacppParamsTab(): void {
         threads: parseInt(localStorage.getItem("aurawrite-llamacpp-threads") || "0") || null,
         mmprojPath,
         noMmprojOffload: false,
+        fitTarget: parseInt(localStorage.getItem("aurawrite-llamacpp-fit-target") || "1024") || 1024,
       });
       const status = result as { running: boolean; pid: number | null; port: number | null; model_path: string | null };
       updateLlamacppServerStatus(status);

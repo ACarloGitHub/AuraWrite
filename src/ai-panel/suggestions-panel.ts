@@ -180,6 +180,7 @@ const DEFAULT_INTERVAL = 30;
 function getPreferences(): {
   aiSuggestionsInterval: number;
   suggestionsPrompt: string;
+  aiInterfaceLanguage: string;
 } {
   const saved = localStorage.getItem(PREFERENCES_KEY);
   if (saved) {
@@ -187,9 +188,10 @@ function getPreferences(): {
     return {
       aiSuggestionsInterval: prefs.aiSuggestionsInterval || DEFAULT_INTERVAL,
       suggestionsPrompt: prefs.suggestionsPrompt || "",
+      aiInterfaceLanguage: prefs.aiInterfaceLanguage || "English",
     };
   }
-  return { aiSuggestionsInterval: DEFAULT_INTERVAL, suggestionsPrompt: "" };
+  return { aiSuggestionsInterval: DEFAULT_INTERVAL, suggestionsPrompt: "", aiInterfaceLanguage: "English" };
 }
 
 const DEFAULT_SUGGESTIONS_PROMPT = `You are a writing assistant. Analyze the sentence and suggest improvements for clarity, style, and grammar.`;
@@ -429,6 +431,7 @@ async function processNextSlot(): Promise<void> {
 
   const prompt = `${promptText}
 ${previousSuggestion ? `\nIMPORTANT: You must provide a COMPLETELY DIFFERENT suggestion. Do NOT suggest similar wording, synonyms of words used in: "${previousSuggestion}". Think of a completely different approach.` : ""}
+${prefs.aiInterfaceLanguage ? `\nIMPORTANT: Write the "reason" field in ${prefs.aiInterfaceLanguage}. The suggested text must stay in the original document language.` : ""}
 
 SINGLE SENTENCE TO ANALYZE:
 "${slot.text}"

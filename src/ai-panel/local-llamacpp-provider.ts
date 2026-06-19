@@ -16,6 +16,7 @@ interface LlamaServerConfig {
   threads?: number;
   mmprojPath?: string;
   noMmprojOffload?: boolean;
+  fitTarget?: number;
 }
 
 interface LlamaServerStatus {
@@ -184,6 +185,7 @@ export class LocalLlamacppProvider implements AIProvider {
         threads: this.config.threads,
         mmprojPath: this.config.mmprojPath,
         noMmprojOffload: this.config.noMmprojOffload,
+        fitTarget: this.config.fitTarget,
       });
       this.serverRunning = result.running;
       if (result.running) {

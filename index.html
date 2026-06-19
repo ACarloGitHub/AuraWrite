@@ -780,6 +780,11 @@
                   <input type="number" id="llamacpp-ngl-custom" value="0" min="0" max="999" style="width:80px;display:none;" />
                 </div>
                 <div class="preference-row">
+                  <label for="llamacpp-fit-target">GPU VRAM Margin (MiB)</label>
+                  <input type="number" id="llamacpp-fit-target" value="1024" min="0" max="8192" step="128" />
+                  <span class="preference-hint">VRAM to keep free for the OS and other apps. Lower = more VRAM for the model (faster). Default: 1024 MiB. Only applies to CUDA.</span>
+                </div>
+                <div class="preference-row">
                   <label for="llamacpp-cache-type-k">KV Cache K Type</label>
                   <select id="llamacpp-cache-type-k">
                     <option value="f16">f16 (default, best quality)</option>

@@ -89,6 +89,7 @@ function createProvider(settings: PreferencesAI): AIProvider {
         cacheTypeK: localStorage.getItem("aurawrite-llamacpp-cache-type-k") || "f16",
         cacheTypeV: localStorage.getItem("aurawrite-llamacpp-cache-type-v") || "f16",
         threads: parseInt(localStorage.getItem("aurawrite-llamacpp-threads") || "0") || undefined,
+        fitTarget: parseInt(localStorage.getItem("aurawrite-llamacpp-fit-target") || "1024") || 1024,
       });
     default:
       return new OllamaProvider();

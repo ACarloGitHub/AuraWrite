@@ -1872,6 +1872,7 @@ pub async fn llamacpp_spawn_server(
     threads: Option<u32>,
     mmproj_path: Option<String>,
     no_mmproj_offload: Option<bool>,
+    fit_target: Option<u32>,
 ) -> Result<LlamaServerStatus, String> {
     tokio::task::spawn_blocking(move || {
         // Check if already running
@@ -2000,6 +2001,15 @@ pub async fn llamacpp_spawn_server(
         if installed_variant == "vulkan" {
             if let Some(dev) = pick_best_vulkan_device(&llama_dir, &binary) {
                 cmd.arg("--device").arg(&dev);
+            }
+        }
+
+        // --fit-target: VRAM margin to keep free (MiB). Only meaningful when
+        // fitting is enabled (i.e. NOT Vulkan where we force -fit off). Lower
+        // values = more VRAM for the model (faster). Default 1024 MiB.
+        if installed_variant != "vulkan" {
+            if let Some(ft) = fit_target {
+                cmd.arg("--fit-target").arg(ft.to_string());
             }
         }
 
