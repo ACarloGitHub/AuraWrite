@@ -11,7 +11,9 @@
   --color-background: #f0f0f0;
   --color-toolbar: #ffffff;
   --color-surface: #ffffff;
-  --color-paper: #ffffff;
+    --color-paper: #ffffff;
+
+
   --color-border: #cccccc;
   --color-text: #222222;
   --color-text-muted: #666666;
@@ -80,7 +82,9 @@
   --color-background: #121212;
   --color-toolbar: #1e1e1e;
   --color-surface: #252525;
-  --color-paper: #2a2a2a;
+    --color-paper: #2a2a2a;
+
+
   --color-border: #444444;
   --color-text: #e0e0e0;
   --color-text-muted: #888888;
@@ -1964,135 +1968,11 @@ body {
     break-before: page;
   }
 
-  .auto-page-break {
-    display: none !important;
-  }
-
-  .pm-page {
-    box-shadow: none !important;
-    margin: 0 !important;
-    page-break-after: always;
-  }
-
-  .pm-page:last-child {
-    page-break-after: auto;
-  }
-
   .chunk-marker,
   .suggestion-marker,
   .selection-ai {
     display: none !important;
   }
-
-  .ProseMirror .pm-page {
-    width: 100%;
-    min-height: auto;
-    padding: 0;
-    margin: 0;
-    box-shadow: none;
-    page-break-after: always;
-  }
-
-  .ProseMirror .pm-page:last-child {
-    page-break-after: auto;
-  }
-
-  .ProseMirror .pm-page-header,
-  .ProseMirror .pm-page-footer {
-    position: static;
-    border: none;
-    text-align: center;
-  }
-}
-
-/* Auto page break â€” line + page number + small gap */
-.ProseMirror .auto-page-break {
-  width: 100%;
-  height: 40px;
-  margin: 8px 0;
-  position: relative;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ProseMirror .auto-page-break::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 0;
-  border-top: 1px dashed var(--color-border, #ccc);
-}
-
-.ProseMirror .auto-page-break .auto-page-number {
-  position: relative;
-  z-index: 1;
-  font-size: 11px;
-  color: var(--color-text-muted, #666);
-  background: var(--color-surface, #ffffff);
-  padding: 2px 12px;
-  border-radius: 10px;
-  font-family: var(--font-family, sans-serif);
-  white-space: nowrap;
-  letter-spacing: 0.5px;
-}
-
-/* ============================================================================
-   PAGED MODE â€” A4 pagination with page nodes
-   ============================================================================ */
-
-/* The pm-page is rendered by PageNodeView (div.pm-page > header + content + footer) */
-.ProseMirror .pm-page {
-  width: 794px;
-  min-height: 1123px;
-  padding: 96px;
-  margin: 24px auto;
-  background: var(--color-paper, #fff);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
-  position: relative;
-  box-sizing: border-box;
-  display: block;
-}
-
-.ProseMirror .pm-page-content {
-  position: relative;
-}
-
-.ProseMirror .pm-page-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 48px;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-}
-
-.ProseMirror .pm-page-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 24px;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ProseMirror.pm-page-wrapper {
-  margin: 0;
-  padding: 0;
 }
 
 /* ============================================================================
@@ -3114,6 +2994,28 @@ kbd {
   font-size: 11px;
   color: var(--color-text-muted, #888);
   font-style: italic;
+}
+
+.project-type-dialog .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.project-type-dialog .checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.project-type-dialog .checkbox-label input[type="checkbox"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .project-type-dialog input[type="text"],

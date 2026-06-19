@@ -22,7 +22,7 @@ import {
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
 } from "docx";
-import { calculatePageBreaks } from "../editor/pagination-cassie";
+import { calculatePageBreaks, PAGE_WIDTH_PX, PAGE_HEIGHT_PX, PAGE_HEADER_PX, PAGE_FOOTER_PX } from "../editor/pagination-cassie";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
@@ -987,11 +987,17 @@ export async function toDocx(doc: any): Promise<Document> {
       {
         properties: {
           page: {
+            size: {
+              width: pxToTwip(PAGE_WIDTH_PX),
+              height: pxToTwip(PAGE_HEIGHT_PX),
+            },
             margin: {
               top: pxToTwip(margins.top),
               bottom: pxToTwip(margins.bottom),
               left: pxToTwip(margins.left),
               right: pxToTwip(margins.right),
+              header: pxToTwip(PAGE_HEADER_PX),
+              footer: pxToTwip(PAGE_FOOTER_PX),
             },
           },
         },
@@ -1089,10 +1095,13 @@ function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
     }
   });
   if (firstPara) {
+    const lh = lineHeightToTwips(firstPara.attrs?.lineHeight);
+    const spacing: any = lh ? { line: lh, lineRule: "auto" } : undefined;
     paragraphs.push(
       new Paragraph({
         children: nodeContentToRuns(firstPara),
         numbering: { reference: numberingRef, level: 0 },
+        ...(spacing ? { spacing } : {}),
       }),
     );
   }
@@ -1413,7 +1422,17 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   if (align) opts.alignment = align;
 
   const lh = lineHeightToTwips(node.attrs?.lineHeight);
-  if (lh) opts.spacing = { ...(opts.spacing || {}), line: lh, lineRule: "auto" };
+  const spacing: any = { ...(opts.spacing || {}) };
+  if (lh) {
+    spacing.line = lh;
+    spacing.lineRule = "auto";
+  }
+  if (node.type?.name === "paragraph" && !extras.style) {
+    spacing.after = 200;
+  }
+  if (Object.keys(spacing).length > 0) {
+    opts.spacing = spacing;
+  }
 
   if (node.attrs?.pageBreakBefore || extras.pageBreakBefore) {
     opts.pageBreakBefore = true;

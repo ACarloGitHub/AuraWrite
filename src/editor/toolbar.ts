@@ -17,10 +17,6 @@ import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotat
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
-import {
-  initPagination,
-  updateOnTextChange,
-} from "./fake-pagination";
 import { getCassieMode, setCassieMode, getCassiePagedMode } from "./pagination-state";
 import { toggleCassiePagedMode } from "./editor";
 import {
@@ -106,7 +102,6 @@ export function setupToolbar(view: EditorView): void {
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
-  initPagination(document.getElementById("editor")!, view);
   setupOverflowMenu();
 }
 
@@ -130,7 +125,6 @@ function setupDirtyTracking(): void {
             }));
           }
         }
-        updateOnTextChange(editorView);
       }
     },
   });

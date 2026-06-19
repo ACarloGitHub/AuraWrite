@@ -18,12 +18,12 @@
  *
  * Why this is sound:
  *
- * - The editor uses Lora at 16px as the default. 8px per character
- *   and 24px line height are good approximations.
+ * - The editor uses Lora at 11pt (=14.67px). With 1.5 line-height
+ *   that is 22px per line, and ~7.3px per character average.
  * - Content width inside the A4 page is 794px - 2*96px = 602px
  *   (matches the CSS in src/styles.css).
  * - Content height per page is 1123 - 2*96 - 48 (header) - 24
- *   (footer) = 859px (matches the constant in pagination-plugin.ts).
+ *   (footer) = 859px (matches the constant below).
  *
  * The functions in this module are pure: given a node, return
  * metrics. They have no side effects, no DOM access, and no state.
@@ -67,11 +67,12 @@ export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - DEFAULT_MARGIN_LEFT - DEFAULT_MA
 export const CONTENT_HEIGHT_PX =
   PAGE_HEIGHT_PX - DEFAULT_MARGIN_TOP - DEFAULT_MARGIN_BOTTOM - PAGE_HEADER_PX - PAGE_FOOTER_PX;
 
-// Font and metrics for the editor body text. Tuned for Lora at
-// 16px with a 1.5 line-height. These constants are exported so
-// tests and other modules can refer to the same values.
+// Font and metrics for the editor body text. The editor uses Lora
+// at 11pt (=14.67px at 96 DPI) with a 1.5 line-height, giving 22px
+// per line. These constants are exported so tests and other modules
+// can refer to the same values.
 export const EDITOR_FONT = "11pt Lora, Georgia, serif";
-export const EDITOR_LINE_HEIGHT_PX = 25;
+export const EDITOR_LINE_HEIGHT_PX = 22;
 const EMPTY_BLOCK_HEIGHT_PX = EDITOR_LINE_HEIGHT_PX;
 
 export interface BlockMetrics {

@@ -647,6 +647,8 @@ async function handleNewProject(): Promise<void> {
         templateType: result.templateType,
         chefVariant: result.chefVariant,
         selectedStyle: result.selectedStyle,
+        createSections: result.createSections,
+        createDocuments: result.createDocuments,
       });
     }
     projects.push(projectResult.project);
@@ -681,6 +683,8 @@ interface TemplateDialogResult {
   templateType: string;
   chefVariant?: "a" | "b";
   selectedStyle?: string;
+  createSections?: boolean;
+  createDocuments?: boolean;
 }
 
 function showTemplateDialog(): Promise<TemplateDialogResult | null> {
@@ -717,6 +721,16 @@ function showTemplateDialog(): Promise<TemplateDialogResult | null> {
             Each document can have its own style, configurable from the Customize Document panel.
           </p>
         </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="tpl-create-sections" checked>
+            <span>Create sections</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="tpl-create-documents" checked>
+            <span>Create documents</span>
+          </label>
+        </div>
         <div class="project-type-dialog-buttons">
           <button class="save-dialog-btn" data-action="cancel">Cancel</button>
           <button class="save-dialog-btn primary" data-action="create">Create</button>
@@ -733,6 +747,17 @@ function showTemplateDialog(): Promise<TemplateDialogResult | null> {
     const styleHint = overlay.querySelector('#tpl-style-hint') as HTMLParagraphElement;
     const chefVariantGroup = overlay.querySelector('#tpl-chef-variant-group') as HTMLDivElement;
     const chefVariantSelect = overlay.querySelector('#tpl-chef-variant') as HTMLSelectElement;
+    const createSectionsCheckbox = overlay.querySelector('#tpl-create-sections') as HTMLInputElement;
+    const createDocumentsCheckbox = overlay.querySelector('#tpl-create-documents') as HTMLInputElement;
+
+    createSectionsCheckbox.addEventListener('change', () => {
+      if (!createSectionsCheckbox.checked) {
+        createDocumentsCheckbox.checked = false;
+        createDocumentsCheckbox.disabled = true;
+      } else {
+        createDocumentsCheckbox.disabled = false;
+      }
+    });
 
     const refreshStyleOptions = () => {
       const tpl = getTemplate(typeSelect.value);
@@ -784,6 +809,8 @@ function showTemplateDialog(): Promise<TemplateDialogResult | null> {
             templateType: typeSelect.value,
             chefVariant: typeSelect.value === 'chef' ? (chefVariantSelect.value as "a" | "b") : undefined,
             selectedStyle: (tpl && tpl.requiresStyleChoice && styleSelect.value) ? styleSelect.value : undefined,
+            createSections: createSectionsCheckbox.checked,
+            createDocuments: createDocumentsCheckbox.checked,
           });
         }
       });

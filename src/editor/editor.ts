@@ -5,7 +5,6 @@ import {
   DOMParser as ProseMirrorDOMParser,
   NodeSpec,
   MarkSpec,
-  Fragment,
   type NodeType,
   type MarkType,
   type Node as PMNode,
@@ -21,14 +20,11 @@ import { createTableMonitorPlugin } from "./table-toolbar";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
-import { createPageBreakPlugin } from "./page-break-plugin";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
-import { createPaginationPlugin } from "./pagination-plugin";
 import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
-import { PageNodeView } from "./page-node-view";
 import { ImageNodeView } from "./image-node-view";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
@@ -203,20 +199,6 @@ const blockquoteSpec: NodeSpec = {
   parseDOM: [{ tag: "blockquote" }],
   toDOM() {
     return ["blockquote", 0];
-  },
-};
-
-const pageSpec: NodeSpec = {
-  content: "block+",
-  group: "page",
-  isolating: true,
-  defining: true,
-  attrs: {
-    pageNumber: { default: 1 },
-  },
-  parseDOM: [{ tag: "div[data-page-node]" }],
-  toDOM() {
-    return ["div", { "data-page-node": "true", class: "pm-page-wrapper" }, 0];
   },
 };
 
@@ -474,14 +456,13 @@ const tableNodeSpecs = tableNodes({
 
 let nodes = basicSchema.spec.nodes.update("paragraph", paragraphWithPageBreak);
 nodes = nodes
-  .update("doc", { content: "(page | block)+" })
+  .update("doc", { content: "block+" })
   .append({
     heading: headingSpec,
     list_item: listItemSpec,
     bullet_list: bulletListSpec,
     ordered_list: orderedListSpec,
     blockquote: blockquoteSpec,
-    page: pageSpec,
     code_block: codeBlockSpec,
     image: imageSpec,
     ...tableNodeSpecs,
@@ -538,8 +519,6 @@ export type EditorViewType = EditorView;
 
 export function createEditor(element: HTMLElement): EditorViewType {
   initPagedMode();
-  const autoPageBreakPlugin = createPageBreakPlugin();
-  const paginationPluginInstance = createPaginationPlugin();
 
   const state = EditorState.create({
     schema: editorSchema,
@@ -560,10 +539,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
       selectionHighlightPlugin,
       chunkDecorationsPlugin,
       pageBreakPlugin,
-      autoPageBreakPlugin,
       suggestionsMarkerPlugin,
       findReplacePlugin,
-      paginationPluginInstance,
       createCassiePaginationPlugin({ enabled: getCassieMode }),
       linkPopoverPlugin,
       createImageDropPlugin(),
@@ -590,7 +567,6 @@ export function createEditor(element: HTMLElement): EditorViewType {
       class: "prosemirror-editor",
     },
     nodeViews: {
-      page: (node, view, getPos) => new PageNodeView(node, view, getPos),
       image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
     },
   });
@@ -639,60 +615,6 @@ export function parseHTML(html: string): PMNode {
   return pmParser.parse(div);
 }
 
-export function wrapInPages(view: EditorView): void {
-  const { doc, schema, tr } = view.state;
-  const pageType = schema.nodes.page;
-  if (!pageType) return;
-
-  if (doc.firstChild && doc.firstChild.type.name === "page") return;
-
-  const blocks: PMNode[] = [];
-  doc.forEach((node) => {
-    blocks.push(node);
-  });
-
-  if (blocks.length === 0) {
-    const paraType = schema.nodes.paragraph;
-    if (paraType) {
-      const page = pageType.create(null, paraType.create());
-      tr.replaceWith(0, doc.content.size, page);
-    }
-  } else {
-    const page = pageType.create(null, Fragment.from(blocks));
-    tr.replaceWith(0, doc.content.size, page);
-  }
-
-  tr.setMeta("pagination", true);
-  tr.setMeta("addToHistory", false);
-  view.dispatch(tr);
-}
-
-export function unwrapPages(view: EditorView): void {
-  const { doc, tr } = view.state;
-
-  let hasPages = false;
-  doc.forEach((node) => {
-    if (node.type.name === "page") hasPages = true;
-  });
-  if (!hasPages) return;
-
-  const allBlocks: PMNode[] = [];
-  doc.forEach((pageNode) => {
-    if (pageNode.type.name === "page") {
-      pageNode.forEach((block) => {
-        allBlocks.push(block);
-      });
-    } else {
-      allBlocks.push(pageNode);
-    }
-  });
-
-  tr.replaceWith(0, doc.content.size, Fragment.from(allBlocks));
-  tr.setMeta("pagination", true);
-  tr.setMeta("addToHistory", false);
-  view.dispatch(tr);
-}
-
 export function toggleCassiePagedMode(view: EditorView): void {
   const currentlyPaged = getCassiePagedMode();
   if (currentlyPaged) {
@@ -710,15 +632,7 @@ export function toggleCassiePagedMode(view: EditorView): void {
   view.dispatch(tr);
 }
 
-export function syncDocumentPaginationState(view: EditorView): void {
-  const doc = view.state.doc;
-
-  let hasPages = false;
-  doc.forEach((node) => {
-    if (node.type.name === "page") hasPages = true;
-  });
-
-  if (hasPages) {
-    unwrapPages(view);
-  }
+export function syncDocumentPaginationState(_view: EditorView): void {
+  // Legacy "page" node system removed. This function is kept as a no-op
+  // for backward compatibility with callers in main.ts and toolbar.ts.
 }

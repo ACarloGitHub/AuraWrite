@@ -125,6 +125,15 @@ function entityTypeToSpec(e: TemplateEntityTypeSpec): unknown {
   };
 }
 
+function stripDocumentsFromSections(sections: TemplateSectionSpec[]): TemplateSectionSpec[] {
+  return sections.map((s) => ({
+    ...s,
+    documents: [],
+    tutorial: undefined,
+    children: s.children ? stripDocumentsFromSections(s.children) : undefined,
+  }));
+}
+
 /**
  * High-level: create a project and apply the given template in one shot.
  * Returns the project + its sections.
@@ -134,6 +143,8 @@ export async function createProjectFromTemplate(opts: {
   templateType: string;
   chefVariant?: "a" | "b";
   selectedStyle?: string;
+  createSections?: boolean;
+  createDocuments?: boolean;
 }): Promise<{ project: Project; sections: Section[] }> {
   const template = getTemplate(opts.templateType);
   if (!template) throw new Error(`Unknown template: ${opts.templateType}`);
@@ -167,7 +178,13 @@ export async function createProjectFromTemplate(opts: {
   // 2) Apply the template (entity types + sections + documents + template_type).
   // Note: the Rust side sets template_type again. We pass it through to make
   // the operation atomic (all-or-nothing).
-  const spec = templateToSpec(effectiveTemplate, effectiveTemplate.sections);
+  let sectionsSpec = effectiveTemplate.sections;
+  if (opts.createSections === false) {
+    sectionsSpec = [];
+  } else if (opts.createDocuments === false) {
+    sectionsSpec = stripDocumentsFromSections(sectionsSpec);
+  }
+  const spec = templateToSpec(effectiveTemplate, sectionsSpec);
   await applyTemplate(projectId, spec);
 
   // 3) If a writing style was chosen and not already set, update project.
