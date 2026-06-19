@@ -144,29 +144,34 @@ function createDecorationForSlot(
   log(`DECO: Created decoration for slot ${slot.id} at ${from}-${to}`);
 }
 
-function findProseMirrorPosition(
+/**
+ * Map a textContent character index to a ProseMirror document position.
+ *
+ * doc.textContent concatenates all text nodes without gaps, but ProseMirror
+ * positions account for node boundaries (paragraph, page, etc.). Each block
+ * node adds offset that textContent does not. Without this mapping, positions
+ * drift after every paragraph/page break — causing the suggestions panel to
+ * "eat" characters when replacing text.
+ */
+function mapTextContentIndexToProseMirrorPos(
   view: EditorView,
-  text: string,
-  fallbackIndex: number,
+  textIndex: number,
 ): number {
-  let foundPos = -1;
+  let charCount = 0;
+  let result = -1;
   view.state.doc.nodesBetween(0, view.state.doc.content.size, (node, pos) => {
+    if (result !== -1) return false;
     if (node.isText && node.text) {
-      const idx = node.text.indexOf(text);
-      if (idx !== -1) {
-        foundPos = pos + idx;
+      const nextCount = charCount + node.text.length;
+      if (textIndex < nextCount) {
+        result = pos + (textIndex - charCount);
         return false;
       }
+      charCount = nextCount;
     }
+    return true;
   });
-  if (foundPos !== -1) return foundPos;
-
-  const docText = view.state.doc.textContent;
-  const textIndex = docText.indexOf(text, fallbackIndex);
-  if (textIndex !== -1) {
-    return textIndex;
-  }
-  return fallbackIndex;
+  return result;
 }
 
 const PREFERENCES_KEY = "aurawrite-preferences";
@@ -245,18 +250,18 @@ function setupDotTrigger(view: EditorView): void {
       const fullText = doc.textContent;
 
       const sentenceRegex = /[^.!?:]+[.!?:]+\s*/g;
-      const sentences: { text: string; index: number }[] = [];
+      const sentences: { text: string; rawLength: number; index: number }[] = [];
       let match;
 
       while ((match = sentenceRegex.exec(fullText)) !== null) {
         const rawSentence = match[0];
         const sentence = rawSentence.replace(/\s+/g, " ").trim();
         if (sentence.length >= 10) {
-          sentences.push({ text: sentence, index: match.index });
+          sentences.push({ text: sentence, rawLength: rawSentence.length, index: match.index });
         }
       }
 
-      for (const { text: sentence, index: sentenceIndex } of sentences) {
+      for (const { text: sentence, rawLength, index: sentenceIndex } of sentences) {
         const normalized = sentence.toLowerCase();
 
         if (closedSentences.has(normalized)) continue;
@@ -271,7 +276,7 @@ function setupDotTrigger(view: EditorView): void {
         );
         if (existingBox) continue;
 
-        const pmFrom = findProseMirrorPosition(view, sentence, sentenceIndex);
+        const pmFrom = mapTextContentIndexToProseMirrorPos(view, sentenceIndex);
         if (pmFrom === -1) {
           log(
             `SLOT: Could not find position for "${sentence.slice(0, 30)}..."`,
@@ -287,11 +292,11 @@ function setupDotTrigger(view: EditorView): void {
           reason: null,
         };
 
-        createDecorationForSlot(slot, pmFrom, pmFrom + sentence.length);
+        createDecorationForSlot(slot, pmFrom, pmFrom + rawLength);
 
         slots.push(slot);
         log(
-          `SLOT: Created slot ${slot.id} at PM pos ${pmFrom}-${pmFrom + sentence.length} for "${sentence.slice(0, 30)}..."`,
+          `SLOT: Created slot ${slot.id} at PM pos ${pmFrom}-${pmFrom + rawLength} for "${sentence.slice(0, 30)}..."`,
         );
       }
 
