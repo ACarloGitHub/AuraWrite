@@ -110,6 +110,13 @@ function renderStep(): void {
           const gpus = hwData.gpus.length > 0
             ? hwData.gpus.map((g) => `${g.vendor} ${g.model} (${formatBytes(g.vram_bytes)} VRAM, ${g.backend})`).join("<br>")
             : "No GPU detected — will use CPU mode";
+          const hasNvidia = hwData.gpus.some((g) => g.vendor === "NVIDIA");
+          const isWindows = hwData.os.toLowerCase().includes("windows");
+          const nvidiaDriverHint = (hasNvidia && isWindows && hwData.recommended_llamacpp_variant === "vulkan")
+            ? `<div style="margin-top:8px;padding:8px;border:1px solid #ff9800;border-radius:4px;background:rgba(255,152,0,0.1);">
+                 <strong>&#9888; NVIDIA drivers may be outdated.</strong> CUDA acceleration requires recent NVIDIA drivers (version 552.22 or newer). For best performance, update your drivers from <a href="https://www.nvidia.com/drivers" target="_blank" rel="noopener">nvidia.com/drivers</a>, then restart this wizard.
+               </div>`
+            : "";
           body.innerHTML = `
             <div style="margin-bottom:12px;">
               <strong>Operating System:</strong> ${hwData.os}/${hwData.arch}<br>
@@ -119,6 +126,7 @@ function renderStep(): void {
               <strong>Free Disk:</strong> ${formatBytes(hwData.disk_free_bytes)}<br>
               <strong>Recommended runtime:</strong> ${hwData.recommended_llamacpp_variant}
             </div>
+            ${nvidiaDriverHint}
             <p class="preference-hint">These values are detected automatically. The recommended runtime will be downloaded on the next step.</p>
           `;
           nextBtn.disabled = false;

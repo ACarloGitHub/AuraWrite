@@ -196,18 +196,18 @@ export class LocalLlamacppProvider implements AIProvider {
     }
   }
 
-  private async waitForServerReady(maxRetries: number = 30, delayMs: number = 500): Promise<void> {
-    const url = `${this.getBaseUrl()}/v1/models`;
+  private async waitForServerReady(maxRetries: number = 60, delayMs: number = 2000): Promise<void> {
+    const url = `${this.getBaseUrl()}/health`;
     for (let i = 0; i < maxRetries; i++) {
       try {
         const resp = await tauriFetch(url, { method: "GET" });
         if (resp.ok) return;
       } catch {
-        // Not ready yet
+        // Connection refused — server process not up yet
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
-    throw new Error("llama-server did not become ready in time");
+    throw new Error("llama-server did not become ready in time (120s timeout)");
   }
 
   async stream(prompt: string, context?: AIContext): Promise<AIResponse> {

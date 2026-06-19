@@ -185,6 +185,8 @@ AuraWrite works with the AI provider of your choice. You can mix and match, swit
 
 AuraWrite ships with its own local inference engine based on llama.cpp, an open-source project (not developed by us, used under its own license). It runs inside AuraWrite: no installation of Ollama, LM Studio, or any other external tool is required. The engine supports an unlimited number of GGUF models, and AuraWrite includes a curated selection tuned for different hardware profiles — from a few gigabytes of RAM up to multi-GPU workstations. The first time you enable it, the wizard helps you pick a model that fits your machine.
 
+**GPU acceleration (NVIDIA).** If you have an NVIDIA GPU, AuraWrite will try to use it via CUDA. This requires **recent NVIDIA drivers** (version 552.22 or newer on Windows). If your drivers are older, the wizard will fall back to Vulkan or CPU mode. For best performance, download the latest drivers from [nvidia.com/drivers](https://www.nvidia.com/drivers) before running the setup wizard.
+
 **External providers (optional)**
 
 If you prefer a cloud or hosted provider, AuraWrite works with:

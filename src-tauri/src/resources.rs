@@ -295,7 +295,7 @@ async fn download_to_file_async(
     }
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(600))
+        .connect_timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("http client: {}", e))?;
 
@@ -444,11 +444,20 @@ async fn download_stream_to_file(
     let mut download_error: Option<String> = None;
     let mut stream = resp.bytes_stream();
 
-    while let Some(chunk_result) = stream.next().await {
-        let chunk = match chunk_result {
-            Ok(c) => c,
-            Err(e) => {
+    loop {
+        let chunk = match tokio::time::timeout(Duration::from_secs(60), stream.next()).await {
+            Ok(Some(Ok(c))) => c,
+            Ok(Some(Err(e))) => {
                 download_error = Some(format!("stream error: {}", e));
+                break;
+            }
+            Ok(None) => break,
+            Err(_) => {
+                download_error = Some(
+                    "download timed out (no data received for 60 seconds). \
+                     The partial file is kept for resume."
+                        .to_string(),
+                );
                 break;
             }
         };
@@ -595,6 +604,44 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Extract a zip archive into dest_dir WITHOUT clearing it first.
+/// Existing files (e.g. the binary extracted by extract_zip) are preserved.
+/// Used to merge CUDA runtime DLLs into the same directory as the CUDA binary.
+fn extract_zip_into(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
+    let f = File::open(zip_path).map_err(|e| format!("open zip: {}", e))?;
+    let mut archive = zip::ZipArchive::new(f).map_err(|e| format!("read zip: {}", e))?;
+    fs::create_dir_all(dest_dir).map_err(|e| format!("create dir: {}", e))?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| format!("zip entry: {}", e))?;
+        let name = entry.name().to_string();
+        if name.contains("..") {
+            continue;
+        }
+        let outpath = dest_dir.join(&name);
+        if entry.is_dir() {
+            fs::create_dir_all(&outpath).ok();
+        } else {
+            if let Some(parent) = outpath.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            let mut out = None;
+            let mut last_err: Option<String> = None;
+            for attempt in 0..5 {
+                match File::create(&outpath) {
+                    Ok(f) => { out = Some(f); break; }
+                    Err(e) => {
+                        last_err = Some(format!("create {}: {}", outpath.display(), e));
+                        std::thread::sleep(Duration::from_millis(150 * (attempt + 1)));
+                    }
+                }
+            }
+            let mut out = out.ok_or_else(|| last_err.unwrap_or_else(|| "create failed".to_string()))?;
+            io::copy(&mut entry, &mut out).map_err(|e| format!("write: {}", e))?;
+        }
+    }
+    Ok(())
+}
+
 fn extract_tar_gz(tar_gz_path: &Path, dest_dir: &Path) -> Result<(), String> {
     let f = File::open(tar_gz_path).map_err(|e| format!("open tar.gz: {}", e))?;
     let gz = flate2::read::GzDecoder::new(f);
@@ -724,22 +771,6 @@ pub async fn resources_download_llamacpp_variant(
     }
     let _ = fs::create_dir_all(&target_dir);
 
-    // On Windows with CUDA variant: download CUDA runtime DLLs (cudart) FIRST.
-    // Without these (cublas64_12.dll, cudart64_12.dll, etc.), the CUDA binary
-    // starts but cannot initialize CUDA, so models never load into VRAM.
-    if variant == "cuda" && cfg!(target_os = "windows") {
-        if let Some(cudart_url) = llamacpp_cudart_url() {
-            let cudart_archive = dir.join("llama.cpp-cuda-runtime.zip");
-            let cudart_id = "llamacpp-cudart".to_string();
-            download_to_file_async(&app, &cudart_id, "CUDA Runtime DLLs", &cudart_url, &cudart_archive)
-                .await
-                .map_err(|e| format!("download CUDA runtime DLLs: {}", e))?;
-            extract_zip(&cudart_archive, &target_dir)
-                .map_err(|e| format!("extract CUDA runtime DLLs: {}", e))?;
-            let _ = fs::remove_file(&cudart_archive);
-        }
-    }
-
     let display_name = if variant == "cuda" {
         "llama.cpp (CUDA)".to_string()
     } else if variant == "vulkan" {
@@ -754,6 +785,7 @@ pub async fn resources_download_llamacpp_variant(
         .await
         .map_err(|e| format!("download llama.cpp {}: {}", variant, e))?;
 
+    // Extract the binary FIRST (extract_zip clears dest_dir and replaces it)
     if is_zip {
         extract_zip(&archive_path, &target_dir)
             .map_err(|e| format!("extract llama.cpp {} zip: {}", variant, e))?;
@@ -762,6 +794,23 @@ pub async fn resources_download_llamacpp_variant(
             .map_err(|e| format!("extract llama.cpp {} tar.gz: {}", variant, e))?;
     }
     let _ = fs::remove_file(&archive_path);
+
+    // On Windows with CUDA variant: download CUDA runtime DLLs (cudart) AFTER the binary.
+    // extract_zip_into merges the DLLs into target_dir without clearing it.
+    // Without these (cublas64_12.dll, cudart64_12.dll, etc.), the CUDA binary
+    // starts but cannot initialize CUDA, so models never load into VRAM.
+    if variant == "cuda" && cfg!(target_os = "windows") {
+        if let Some(cudart_url) = llamacpp_cudart_url() {
+            let cudart_archive = dir.join("llama.cpp-cuda-runtime.zip");
+            let cudart_id = "llamacpp-cudart".to_string();
+            download_to_file_async(&app, &cudart_id, "CUDA Runtime DLLs", &cudart_url, &cudart_archive)
+                .await
+                .map_err(|e| format!("download CUDA runtime DLLs: {}", e))?;
+            extract_zip_into(&cudart_archive, &target_dir)
+                .map_err(|e| format!("extract CUDA runtime DLLs: {}", e))?;
+            let _ = fs::remove_file(&cudart_archive);
+        }
+    }
 
     let bin = find_binary_in_dir(&target_dir, llamacpp_binary_name())?;
     #[cfg(unix)]
