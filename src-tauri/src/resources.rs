@@ -1985,11 +1985,13 @@ pub async fn llamacpp_spawn_server(
             String::new()
         };
 
-        // -fit off: disable automatic layer fitting. With `--n-gpu-layers 99`,
-        // llama.cpp would otherwise try to fit layers into VRAM and on old/edge
-        // drivers (e.g. NVIDIA 546.33 Pascal Vulkan) it computes 0 layers and
-        // falls back to CPU. `-fit off` forces the requested layer count.
-        cmd.arg("-fit").arg("off");
+        // -fit off: only for Vulkan. On old NVIDIA drivers (e.g. 546.33 Pascal),
+        // the Vulkan fitting logic computes 0 GPU layers and falls back to CPU.
+        // On CUDA with recent drivers, fitting works correctly and should stay
+        // enabled — disabling it on CUDA caused suboptimal VRAM/RAM split.
+        if installed_variant == "vulkan" {
+            cmd.arg("-fit").arg("off");
+        }
 
         // --device selection for Vulkan: with multiple Vulkan devices (e.g. Intel
         // iGPU + NVIDIA dGPU on Surface Book 2), llama.cpp picks the first one
