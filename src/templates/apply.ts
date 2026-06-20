@@ -6,6 +6,7 @@ import { bookTemplate } from "./book";
 import { chefTemplate, chefTemplateBMultibranch } from "./chef";
 import { legalTemplate } from "./legal";
 import { notesTemplate } from "./notes";
+import { articleTemplate } from "./article";
 import type {
   Template,
   TemplateSectionSpec,
@@ -45,6 +46,7 @@ export const ALL_TEMPLATES: Template[] = [
   chefTemplate,
   legalTemplate,
   notesTemplate,
+  articleTemplate,
 ];
 
 export function getTemplate(type: string): Template | null {
