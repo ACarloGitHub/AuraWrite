@@ -1,5 +1,6 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import type { AIProvider, AIContext, AIResponse } from "./providers";
+import type { AIProvider, AIContext, AIResponse, ContentPart } from "./providers";
+import { buildContentParts } from "./providers";
 import { invoke } from "@tauri-apps/api/core";
 
 const DEFAULT_PORT = 11435;
@@ -38,18 +39,18 @@ function extractLlamaCppUsage(data: unknown): { inputTokens: number; outputToken
 function buildLlamaCppMessages(
   prompt: string,
   context?: AIContext,
-): Array<{ role: string; content: string }> {
-  const messages: Array<{ role: string; content: string }> = [
+): Array<{ role: string; content: string | ContentPart[] }> {
+  const messages: Array<{ role: string; content: string | ContentPart[] }> = [
     { role: "system", content: buildLlamaCppSystemPrompt(context) },
   ];
 
   if (context?.messageHistory && context.messageHistory.length > 0) {
     for (const msg of context.messageHistory) {
-      messages.push({ role: msg.role, content: msg.content });
+      messages.push({ role: msg.role, content: buildContentParts(msg.content, msg.attachments) });
     }
   }
 
-  messages.push({ role: "user", content: prompt });
+  messages.push({ role: "user", content: buildContentParts(prompt, context?.attachments) });
   return messages;
 }
 

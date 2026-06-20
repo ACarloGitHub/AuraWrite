@@ -98,15 +98,24 @@ export class OllamaProvider implements AIProvider {
         headers["Authorization"] = `Bearer ${this.apiKey.trim()}`;
       }
 
+      const body: Record<string, unknown> = {
+        model: this.model,
+        prompt: this.buildPrompt(prompt, context),
+        stream: false,
+      };
+
+      const images = context?.attachments
+        ?.filter((a) => a.kind === "image")
+        .map((a) => a.data) || [];
+      if (images.length > 0) {
+        body.images = images;
+      }
+
       const response = await withRetry(
         () => tauriFetch(`${this.baseUrl}/api/generate`, {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            model: this.model,
-            prompt: this.buildPrompt(prompt, context),
-            stream: false,
-          }),
+          body: JSON.stringify(body),
           signal,
         }),
         { signal },

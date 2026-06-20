@@ -1,4 +1,4 @@
-export type ProviderName = "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax";
+export type ProviderName = "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai";
 
 export interface ContextWindowEntry {
   context: number;
@@ -9,6 +9,10 @@ const KNOWN_CONTEXT_WINDOWS: Array<{ match: (provider: ProviderName, model: stri
   { match: (_p, m) => m.toLowerCase().startsWith("minimax-m3"), context: 1_000_000 },
   { match: (_p, m) => m.toLowerCase().startsWith("minimax-m2"), context: 256_000 },
   { match: (_p, m) => m.toLowerCase().startsWith("minimax-"), context: 256_000 },
+  { match: (p, m) => p === "zai" && m === "glm-5.2", context: 1_000_000 },
+  { match: (p, m) => p === "zai" && (m === "glm-5.1" || m === "glm-4.6"), context: 200_000 },
+  { match: (p, m) => p === "zai" && (m === "glm-4.5" || m === "glm-4.5-air" || m === "glm-4.7" || m === "glm-5-turbo"), context: 128_000 },
+  { match: (p, _m) => p === "zai", context: 128_000 },
   { match: (_p, m) => m.toLowerCase().includes("deepseek"), context: 128_000 },
   { match: (p, m) => p === "openai" && m.toLowerCase().includes("gpt-4o"), context: 128_000 },
   { match: (p, m) => p === "openai" && m.toLowerCase().includes("gpt-4"), context: 128_000 },

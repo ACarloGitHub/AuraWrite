@@ -12,11 +12,13 @@ mod updates;
 mod fonts;
 mod resources;
 mod vault_export;
+mod secrets;
 use database::*;
 use updates::*;
 use fonts::*;
 use resources::*;
 use vault_export::*;
+use secrets::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -1046,6 +1048,10 @@ pub fn run() {
             vault_write_file,
             vault_write_file_bytes,
             vault_copy_file,
+            // Secrets (keychain)
+            secrets_set,
+            secrets_get,
+            secrets_delete,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {

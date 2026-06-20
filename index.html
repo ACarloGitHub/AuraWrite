@@ -348,9 +348,11 @@
           </div>
           <div class="ai-panel__input">
             <div class="ai-panel__input-resize-handle" id="ai-input-resize-handle" title="Drag up to expand, down to shrink"></div>
+            <div class="ai-panel__attachments" id="ai-attachments-preview"></div>
             <div class="ai-panel__input-row">
               <textarea id="ai-input" placeholder="Ask Aura..."></textarea>
-              <button id="ai-send">Send</button>
+              <button id="ai-attach" class="ai-panel__attach-btn" title="Attach image or document">+</button>
+              <button id="ai-send" title="Send" aria-label="Send">↑</button>
             </div>
             <div class="ai-panel__actions">
               <button id="ai-synonyms" class="ai-panel__action-btn" disabled title="Synonyms — Select a word first">
@@ -400,6 +402,7 @@
             <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
             <button class="pref-tab" data-tab="fonts">Fonts</button>
+            <button class="pref-tab" data-tab="security">Security & Privacy</button>
             <button class="pref-tab" data-tab="maintenance">Maintenance</button>
           </div>
           <div class="modal-body">
@@ -467,6 +470,7 @@
                   <option value="openrouter">OpenRouter</option>
                   <option value="lmstudio">LM Studio (Local)</option>
                   <option value="minimax">MiniMax</option>
+                  <option value="zai">Z.ai (GLM)</option>
                   <option value="local-llamacpp">Local (llama.cpp)</option>
                 </select>
               </div>
@@ -983,6 +987,47 @@
                 <div class="folder-row">
                   <button id="pref-maintenance-clean-links" class="btn-small">Clean orphan links</button>
                 </div>
+              </div>
+            </div>
+            <!-- TAB: Security & Privacy -->
+            <div class="pref-tab-content" data-tab="security">
+              <div class="preference-group">
+                <label>API Key Storage</label>
+                <span class="preference-hint" id="security-keychain-status">Checking keychain status…</span>
+                <div class="folder-row">
+                  <button id="pref-security-test-keychain" class="btn-small">Test keychain</button>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>Network Access</label>
+                <span class="preference-hint">
+                  AuraWrite connects to the internet only for AI provider APIs
+                  (OpenAI, Anthropic, DeepSeek, OpenRouter, MiniMax), model
+                  downloads from Hugging Face, and update checks from
+                  <code>api.github.com</code>. Local AI (Ollama, LM Studio,
+                  llama.cpp) connects to <code>localhost</code> only. No
+                  telemetry or analytics are sent.
+                </span>
+              </div>
+              <div class="preference-group">
+                <label>Local Data</label>
+                <span class="preference-hint">
+                  All projects, documents, and settings are stored locally on
+                  your machine. The database is a SQLite file in the app data
+                  directory. Downloaded AI models are stored in the models
+                  directory (configurable in <em>Local Models</em>). Nothing is
+                  uploaded to any server unless you explicitly use a cloud AI
+                  provider.
+                </span>
+              </div>
+              <div class="preference-group">
+                <label>AI Context</label>
+                <span class="preference-hint">
+                  When you send a message in the AI panel, AuraWrite includes
+                  the current document content and your selected text. Images
+                  and documents you attach are sent to the AI provider you have
+                  chosen. No content is stored on AuraWrite servers.
+                </span>
               </div>
             </div>
           </div>

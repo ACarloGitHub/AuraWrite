@@ -2,7 +2,7 @@ import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
-import { loadAIFromPreferences } from "./ai-panel/ai-manager";
+import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
@@ -68,7 +68,7 @@ interface Preferences {
   customTextButtons: string;
   incrementalEnabled: boolean;
   incrementalMax: number;
-  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio";
+  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
   aiOllamaMode: "local" | "cloud";
   aiModel: string;
   aiApiKey: string;
@@ -222,8 +222,41 @@ function getPreferences(): Preferences {
   return defaultPreferences;
 }
 
+async function updateKeychainStatus(): Promise<void> {
+  const statusEl = document.getElementById("security-keychain-status");
+  if (!statusEl) return;
+  const prefs = getPreferences();
+  const provider = prefs.aiProvider;
+  try {
+    const key = await invoke<string | null>("secrets_get", { key: `ai-api-key:${provider}` });
+    if (key) {
+      statusEl.textContent = `API key for ${provider} stored securely in the OS keychain.`;
+      statusEl.style.color = "";
+    } else {
+      statusEl.textContent = `OS keychain available. No API key stored for ${provider} (set one in AI Provider tab).`;
+      statusEl.style.color = "";
+    }
+  } catch {
+    statusEl.textContent = "Keychain not available on this system. API key is stored in browser storage (less secure).";
+    statusEl.style.color = "var(--color-danger, #e53e3e)";
+  }
+}
+
 function savePreferences(prefs: Preferences): void {
-  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefs));
+  const prefsToStore = { ...prefs, aiApiKey: "" };
+  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefsToStore));
+  if (prefs.aiApiKey !== undefined) {
+    setCachedApiKey(prefs.aiProvider, prefs.aiApiKey);
+    if (prefs.aiApiKey.trim()) {
+      invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey }).catch((e: unknown) =>
+        console.error("[secrets] failed to save API key:", e)
+      );
+    } else {
+      invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` }).catch((e: unknown) =>
+        console.error("[secrets] failed to delete API key:", e)
+      );
+    }
+  }
   applyPreferences(prefs);
 }
 
@@ -373,7 +406,7 @@ function openPreferencesModal(): void {
   (document.getElementById("pref-ai-model") as HTMLInputElement).value =
     prefs.aiModel;
   (document.getElementById("pref-ai-api-key") as HTMLInputElement).value =
-    prefs.aiApiKey;
+    getCachedApiKey(prefs.aiProvider) ?? "";
   (document.getElementById("pref-ai-base-url") as HTMLInputElement).value =
     prefs.aiBaseUrl;
   // Mark the base URL as "auto-filled" if it matches a known default.
@@ -571,6 +604,7 @@ function updateApiKeyGroupVisibility(): void {
     openrouter: "openai/gpt-4o",
     lmstudio: "loaded-model",
     minimax: "MiniMax-M3",
+    zai: "glm-5.1",
     "local-llamacpp": "local-model",
   };
 
@@ -605,6 +639,8 @@ function updateApiKeyGroupVisibility(): void {
       apiKeyHint.textContent = "Not required for LM Studio.";
     } else if (provider === "minimax") {
       apiKeyHint.textContent = "Required. Get your MiniMax API key from platform.minimax.io/user-center/payment-token-plan.";
+    } else if (provider === "zai") {
+      apiKeyHint.textContent = "Required. Get your Z.ai API key from z.ai/manage-apikey/apikey-list.";
     } else if (provider === "local-llamacpp") {
       apiKeyHint.textContent = "Local model — no API key needed. Configure models in the Local Models tab.";
     } else {
@@ -1144,11 +1180,12 @@ function maybeShowEmbeddingsOnboarding(): void {
   document.getElementById("embeddings-onboarding-download")?.addEventListener("click", () => close(true));
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initErrorBoundaries();
   initTheme();
   initZoom();
 
+  await preloadApiKey();
   const prefs = getPreferences();
   applyPreferences(prefs);
 
@@ -1407,6 +1444,13 @@ document.addEventListener("DOMContentLoaded", () => {
       await oldProvider.shutdownServer();
     }
     updateApiKeyGroupVisibility();
+    // Aggiorna il campo API key con la key del nuovo provider (se presente nel keychain),
+    // e aggiorna lo stato del keychain nella tab Security.
+    const apiKeyField = document.getElementById("pref-ai-api-key") as HTMLInputElement | null;
+    if (apiKeyField) {
+      apiKeyField.value = getCachedApiKey(newProviderName) ?? "";
+    }
+    void updateKeychainStatus();
     refreshModelList();
     savePreferencesFromModal();
   });
@@ -1472,6 +1516,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     try {
       await invoke("llamacpp_stop_server").catch(() => {});
+      const apiProviders = ["openai", "anthropic", "deepseek", "openrouter", "minimax", "zai"];
+      for (const p of apiProviders) {
+        await invoke("secrets_delete", { key: `ai-api-key:${p}` }).catch(() => {});
+      }
+      await invoke("secrets_delete", { key: "ai-api-key" }).catch(() => {});
+      await preloadApiKey();
       localStorage.clear();
       const msg = await invoke("resources_clear_all_user_data");
       if (resultEl) resultEl.textContent = String(msg);
@@ -1526,6 +1576,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnZoomOut = document.getElementById("btn-zoom-out");
   btnZoomIn?.addEventListener("click", () => setZoom(10));
   btnZoomOut?.addEventListener("click", () => setZoom(-10));
+
+  updateKeychainStatus();
+  document.getElementById("pref-security-test-keychain")?.addEventListener("click", updateKeychainStatus);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "n") {

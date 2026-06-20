@@ -63,6 +63,10 @@ describe("AI provider base URL auto-fill marker (regression test for c719e04)", 
     expect(shouldMarkAsAutoFilled("https://api.minimax.io/v1")).toBe(true);
   });
 
+  it("marks Z.ai default as auto-filled", () => {
+    expect(shouldMarkAsAutoFilled("https://api.z.ai/api/paas/v4")).toBe(true);
+  });
+
   it("marks Ollama cloud default as auto-filled", () => {
     expect(shouldMarkAsAutoFilled("https://ollama.com")).toBe(true);
   });

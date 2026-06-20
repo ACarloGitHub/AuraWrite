@@ -1,5 +1,6 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import type { AIProvider, AIContext, AIResponse } from "./providers";
+import type { AIProvider, AIContext, AIResponse, ContentPart, Attachment } from "./providers";
+import { buildContentParts } from "./providers";
 import { withRetry, isValidHttpUrl } from "./fetch-retry";
 
 function extractOpenAIStyleReasoning(data: unknown): string | undefined {
@@ -45,18 +46,18 @@ function extractAnthropicUsage(data: unknown): { inputTokens: number; outputToke
 function buildOpenAICompatibleMessages(
   prompt: string,
   context?: AIContext,
-): Array<{ role: string; content: string }> {
-  const messages: Array<{ role: string; content: string }> = [
+): Array<{ role: string; content: string | ContentPart[] }> {
+  const messages: Array<{ role: string; content: string | ContentPart[] }> = [
     { role: "system", content: buildOpenAICompatibleSystemPrompt(context) },
   ];
 
   if (context?.messageHistory && context.messageHistory.length > 0) {
     for (const msg of context.messageHistory) {
-      messages.push({ role: msg.role, content: msg.content });
+      messages.push({ role: msg.role, content: buildContentParts(msg.content, msg.attachments) });
     }
   }
 
-  messages.push({ role: "user", content: prompt });
+  messages.push({ role: "user", content: buildContentParts(prompt, context?.attachments) });
   return messages;
 }
 
@@ -387,20 +388,52 @@ Do NOT use AURA_EDIT for normal conversation - only for document edits.`);
   private buildUserMessages(
     prompt: string,
     context?: AIContext,
-  ): Array<{ role: string; content: string }> {
-    const messages: Array<{ role: string; content: string }> = [];
+  ): Array<{ role: string; content: unknown }> {
+    const messages: Array<{ role: string; content: unknown }> = [];
 
     if (context?.messageHistory && context.messageHistory.length > 0) {
       for (const msg of context.messageHistory) {
         if (msg.role === "user" || msg.role === "assistant") {
-          messages.push({ role: msg.role, content: msg.content });
+          messages.push({ role: msg.role, content: this.toAnthropicContent(msg.content, msg.attachments) });
         }
       }
     }
 
-    messages.push({ role: "user", content: prompt });
+    messages.push({ role: "user", content: this.toAnthropicContent(prompt, context?.attachments) });
 
     return messages;
+  }
+
+  private toAnthropicContent(
+    text: string,
+    attachments?: Attachment[],
+  ): string | Array<Record<string, unknown>> {
+    if (!attachments || attachments.length === 0) return text;
+
+    const blocks: Array<Record<string, unknown>> = [];
+    const imageAttachments = attachments.filter((a) => a.kind === "image");
+    const docAttachments = attachments.filter((a) => a.kind === "document");
+
+    for (const img of imageAttachments) {
+      blocks.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: img.mimeType,
+          data: img.data,
+        },
+      });
+    }
+
+    let textContent = text;
+    for (const doc of docAttachments) {
+      textContent += `\n\n[Attached document: ${doc.filename}]\n"""\n${doc.data}\n"""`;
+    }
+    if (textContent.trim()) {
+      blocks.push({ type: "text", text: textContent });
+    }
+
+    return blocks.length > 0 ? blocks : text;
   }
 }
 
@@ -721,6 +754,99 @@ export class MiniMaxProvider implements AIProvider {
         return { content: "", done: true, error: "Request cancelled" };
       }
       console.error(`[MiniMax] Request failed:`, error);
+      return { content: "", done: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  stop(): void {
+    if (this.abortController) { this.abortController.abort(); this.abortController = null; }
+  }
+}
+
+export class ZAIProvider implements AIProvider {
+  name = "zai";
+  displayName = "Z.ai (GLM)";
+  isLocal = false;
+  private apiKey: string;
+  private model: string;
+  private baseUrl: string;
+  private abortController: AbortController | null = null;
+
+  constructor(
+    apiKey: string = "",
+    model: string = "glm-5.1",
+    baseUrl: string = "https://api.z.ai/api/paas/v4",
+  ) {
+    this.apiKey = apiKey;
+    this.model = model;
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+
+  setModel(model: string): void {
+    this.model = model;
+  }
+
+  setApiKey(apiKey: string): void {
+    this.apiKey = apiKey;
+  }
+
+  setBaseUrl(baseUrl: string): void {
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+  }
+
+  async stream(prompt: string, context?: AIContext): Promise<AIResponse> {
+    if (!isValidHttpUrl(this.baseUrl)) {
+      return { content: "", done: false, error: `Z.ai: invalid baseUrl "${this.baseUrl}". Must start with http:// or https://.` };
+    }
+    if (!this.apiKey.trim()) {
+      return { content: "", done: false, error: "Z.ai: missing API key. Add your Z.ai API key in Preferences > AI Provider." };
+    }
+    if (!this.model.trim()) {
+      return { content: "", done: false, error: `Z.ai: missing model name. Default: glm-5.1. See https://docs.z.ai for the full list.` };
+    }
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
+
+    try {
+      const body: Record<string, unknown> = {
+        messages: buildOpenAICompatibleMessages(prompt, context),
+        stream: false,
+        model: this.model,
+      };
+
+      const response = await withRetry(
+        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+        { signal },
+      );
+
+      const data = await response.json().catch(() => null);
+      if (!data) {
+        return { content: "", done: false, error: `Z.ai error: empty response (status ${response.status})` };
+      }
+      if (data.error) {
+        const errMsg = typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error));
+        return { content: "", done: false, error: `Z.ai error: ${errMsg}` };
+      }
+      if (!response.ok) {
+        return { content: "", done: false, error: `Z.ai error: HTTP ${response.status} ${response.statusText}` };
+      }
+      const content = data.choices?.[0]?.message?.content || "";
+      const thinking = extractOpenAIStyleReasoning(data);
+      const usage = extractOpenAICompatibleUsage(data);
+      return { content, done: true, ...(thinking ? { thinking } : {}), ...(usage ? { usage } : {}) };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return { content: "", done: true, error: "Request cancelled" };
+      }
+      console.error(`[ZAI] Request failed:`, error);
       return { content: "", done: false, error: error instanceof Error ? error.message : String(error) };
     }
   }

@@ -6,14 +6,65 @@ import {
   PROVIDER_DEFAULT_MODELS,
 } from "./providers";
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
-import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider } from "./remote-providers";
+import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider, ZAIProvider } from "./remote-providers";
 import { LocalLlamacppProvider } from "./local-llamacpp-provider";
 import { buildToolSystemPrompt } from "./tools";
 import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
+import { invoke } from "@tauri-apps/api/core";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
 
-type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "local-llamacpp";
+const API_KEY_PROVIDERS = [
+  "openai",
+  "anthropic",
+  "deepseek",
+  "openrouter",
+  "minimax",
+  "zai",
+] as const;
+
+let cachedApiKeys: Record<string, string> = {};
+
+export async function preloadApiKey(): Promise<void> {
+  cachedApiKeys = {};
+  for (const p of API_KEY_PROVIDERS) {
+    try {
+      const k = await invoke<string | null>("secrets_get", { key: `ai-api-key:${p}` });
+      if (k) cachedApiKeys[p] = k;
+    } catch {
+      /* skip */
+    }
+  }
+  // Pulisci la chiave da localStorage se mai presente (legacy pre-keychain)
+  stripApiKeyFromLocalStorage();
+}
+
+export function getCachedApiKey(provider?: string): string | null {
+  if (!provider) return null;
+  return cachedApiKeys[provider] ?? null;
+}
+
+export function setCachedApiKey(provider: string, key: string): void {
+  if (!provider) return;
+  if (key) cachedApiKeys[provider] = key;
+  else delete cachedApiKeys[provider];
+}
+
+function stripApiKeyFromLocalStorage(): void {
+  const stored = localStorage.getItem(PREFERENCES_KEY);
+  if (!stored) return;
+  try {
+    const parsed = JSON.parse(stored);
+    if (parsed.aiApiKey) {
+      parsed.aiApiKey = "";
+      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(parsed));
+    }
+  } catch {
+    // ignore parse errors
+  }
+}
+
+type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
 
 interface PreferencesAI {
   aiProvider: ProviderName;
@@ -34,10 +85,11 @@ export function loadAIFromPreferences(): PreferencesAI {
         ? "ollama-cloud"
         : (storedProvider as ProviderName);
       const defaultModel = PROVIDER_DEFAULT_MODELS[provider] || "";
+      const apiKey = getCachedApiKey(provider) || "";
       return {
         aiProvider: provider,
         aiModel: parsed.aiModel || defaultModel,
-        aiApiKey: parsed.aiApiKey || "",
+        aiApiKey: apiKey,
         aiBaseUrl: parsed.aiBaseUrl || "",
         aiOllamaMode: ollamaMode,
       };
@@ -79,6 +131,8 @@ function createProvider(settings: PreferencesAI): AIProvider {
       return new LMStudioProvider(settings.aiModel, baseUrl);
     case "minimax":
       return new MiniMaxProvider(settings.aiApiKey, settings.aiModel, baseUrl);
+    case "zai":
+      return new ZAIProvider(settings.aiApiKey, settings.aiModel, baseUrl);
     case "local-llamacpp":
       return new LocalLlamacppProvider({
         modelPath: settings.aiModel,
@@ -160,7 +214,7 @@ export async function sendToAI(
   }
   const active = currentProvider!;
 
-  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud", "minimax"];
+  const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud", "minimax", "zai"];
   if (providersRequiringKey.includes(settings.aiProvider) && !settings.aiApiKey.trim()) {
     const msg =
       `Missing API key for ${settings.aiProvider}. Please add your API key in Preferences > AI Provider.`;

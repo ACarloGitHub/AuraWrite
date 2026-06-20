@@ -1,5 +1,7 @@
 import type { EditorView } from "prosemirror-view";
-import type { AIContext } from "./providers";
+import { DOMParser as PMDOMParser } from "prosemirror-model";
+import type { AIContext, Attachment } from "./providers";
+import mammoth from "mammoth";
 import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools, handlePreferencesChanged } from "./ai-manager";
 import { selectionHighlightPluginKey } from "../editor/selection-highlight";
 import { showSynonymPopup } from "../editor/synonym-popup";
@@ -27,6 +29,244 @@ interface Message {
   role: "user" | "assistant" | "system" | "tool_result";
   content: string;
   timestamp: number;
+  attachments?: Attachment[];
+}
+
+let pendingAttachments: Attachment[] = [];
+
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
+const DOCUMENT_EXTENSIONS = ["txt", "md", "json", "csv", "html", "xml", "log", "ts", "js", "py", "rs", "go", "java", "c", "cpp", "h"];
+const DOCX_EXTENSIONS = ["docx"];
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
+const MAX_DOCUMENT_SIZE = 500 * 1024;
+const MAX_DOCX_SIZE = 10 * 1024 * 1024;
+
+function getMimeType(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+function isImageFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return IMAGE_EXTENSIONS.some((ext) => lower.endsWith("." + ext));
+}
+
+function isDocumentFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return DOCUMENT_EXTENSIONS.some((ext) => lower.endsWith("." + ext));
+}
+
+function isDocxFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return DOCX_EXTENSIONS.some((ext) => lower.endsWith("." + ext));
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const commaIdx = result.indexOf(",");
+      resolve(commaIdx >= 0 ? result.substring(commaIdx + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addDocxAttachment(file: File): Promise<void> {
+  if (file.size > MAX_DOCX_SIZE) {
+    console.warn(`[attachments] DOCX ${file.name} is ${(file.size / 1024 / 1024).toFixed(1)}MB, exceeds ${MAX_DOCX_SIZE / 1024 / 1024}MB limit`);
+    return;
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mammothInput: any = (globalThis as { Buffer?: unknown }).Buffer
+    ? { buffer: (globalThis as { Buffer: { from: (ab: ArrayBuffer) => unknown } }).Buffer.from(arrayBuffer) }
+    : { arrayBuffer };
+
+  const textResult = await mammoth.extractRawText(mammothInput);
+  const text = textResult.value;
+
+  if (!text.trim()) {
+    console.warn(`[attachments] DOCX ${file.name} has no extractable text`);
+    return;
+  }
+
+  const htmlResult = await mammoth.convertToHtml(mammothInput);
+
+  pendingAttachments.push({
+    id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: "document",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    filename: file.name,
+    data: text,
+    html: htmlResult.value,
+    size: text.length,
+  });
+}
+
+async function addAttachmentFromFile(file: File): Promise<void> {
+  const filename = file.name;
+
+  if (isImageFile(filename)) {
+    if (file.size > MAX_IMAGE_SIZE) {
+      console.warn(`[attachments] Image ${filename} is ${(file.size / 1024 / 1024).toFixed(1)}MB, exceeds ${MAX_IMAGE_SIZE / 1024 / 1024}MB limit`);
+      return;
+    }
+    const base64 = await readFileAsBase64(file);
+    pendingAttachments.push({
+      id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: "image",
+      mimeType: getMimeType(filename),
+      filename,
+      data: base64,
+      size: file.size,
+    });
+  } else if (isDocxFile(filename)) {
+    await addDocxAttachment(file);
+  } else if (isDocumentFile(filename)) {
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      console.warn(`[attachments] Document ${filename} is ${(file.size / 1024).toFixed(0)}KB, exceeds ${MAX_DOCUMENT_SIZE / 1024}KB limit`);
+      return;
+    }
+    const text = await file.text();
+    pendingAttachments.push({
+      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: "document",
+      mimeType: "text/plain",
+      filename,
+      data: text,
+      size: file.size,
+    });
+  }
+}
+
+function insertDocumentIntoEditor(text: string, html?: string): void {
+  if (!editorViewRef) return;
+  const view = editorViewRef;
+  const { state } = view;
+  const { schema, selection } = state;
+
+  let nodes: import("prosemirror-model").Node[];
+
+  if (html && html.trim()) {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    const parser = PMDOMParser.fromSchema(schema);
+    const parsedDoc = parser.parse(div);
+    const collected: import("prosemirror-model").Node[] = [];
+    parsedDoc.content.forEach((node) => collected.push(node));
+    nodes = collected;
+  } else {
+    const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter((b) => b.length > 0);
+    if (blocks.length === 0) return;
+    nodes = blocks.map((block) => {
+      const cleanText = block.replace(/\n/g, " ");
+      return schema.nodes.paragraph.create({}, schema.text(cleanText));
+    });
+  }
+
+  if (nodes.length === 0) return;
+
+  const insertPos = selection.$to.after();
+  let tr = state.tr;
+  let pos = insertPos;
+  for (const node of nodes) {
+    tr = tr.insert(pos, node);
+    pos += node.nodeSize;
+  }
+  tr = tr.scrollIntoView();
+  view.dispatch(tr);
+  view.focus();
+}
+
+function renderAttachmentPreviews(): void {
+  const container = document.getElementById("ai-attachments-preview");
+  if (!container) return;
+
+  if (pendingAttachments.length === 0) {
+    container.innerHTML = "";
+    container.classList.remove("active");
+    return;
+  }
+
+  container.classList.add("active");
+  container.innerHTML = "";
+
+  for (const att of pendingAttachments) {
+    const chip = document.createElement("div");
+    chip.className = `ai-attachment-chip ai-attachment-chip--${att.kind}`;
+
+    if (att.kind === "image") {
+      const img = document.createElement("img");
+      img.src = `data:${att.mimeType};base64,${att.data}`;
+      img.alt = att.filename;
+      img.className = "ai-attachment-chip__thumb";
+      chip.appendChild(img);
+    } else {
+      const icon = document.createElement("span");
+      icon.className = "ai-attachment-chip__icon";
+      icon.textContent = "📄";
+      chip.appendChild(icon);
+    }
+
+    const label = document.createElement("span");
+    label.className = "ai-attachment-chip__name";
+    label.textContent = att.filename;
+    chip.appendChild(label);
+
+    if (att.kind === "document") {
+      const insertBtn = document.createElement("button");
+      insertBtn.className = "ai-attachment-chip__insert";
+      insertBtn.textContent = "\u21A7";
+      insertBtn.title = "Insert into editor";
+      insertBtn.addEventListener("click", () => {
+        insertDocumentIntoEditor(att.data, att.html);
+      });
+      chip.appendChild(insertBtn);
+    }
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "ai-attachment-chip__remove";
+    removeBtn.textContent = "✕";
+    removeBtn.title = "Remove attachment";
+    removeBtn.addEventListener("click", () => {
+      pendingAttachments = pendingAttachments.filter((a) => a.id !== att.id);
+      renderAttachmentPreviews();
+    });
+    chip.appendChild(removeBtn);
+
+    container.appendChild(chip);
+  }
+}
+
+function openAttachDialog(): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.multiple = true;
+  const exts = [...IMAGE_EXTENSIONS, ...DOCUMENT_EXTENSIONS, ...DOCX_EXTENSIONS].join(",");
+  input.accept = `image/*,.${exts.split(",").join(",.")}`;
+  input.onchange = async () => {
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      try {
+        await addAttachmentFromFile(file);
+      } catch (e) {
+        console.error(`[attachments] Failed to read ${file.name}:`, e);
+      }
+    }
+    renderAttachmentPreviews();
+  };
+  input.click();
 }
 
 interface SelectionRange {
@@ -239,6 +479,7 @@ function setupPanelEvents(view: EditorView): void {
   const aiClose = document.getElementById("ai-close");
   const aiSend = document.getElementById("ai-send");
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
+  const aiAttach = document.getElementById("ai-attach");
 
   btnAI?.addEventListener("click", () => {
     const wasHidden = aiPanel?.classList.contains("hidden");
@@ -316,26 +557,30 @@ function setupPanelEvents(view: EditorView): void {
     showSynonymPopup(editorViewRef, currentSelection);
   });
 
+  aiAttach?.addEventListener("click", () => {
+    openAttachDialog();
+  });
+
   aiSend?.addEventListener("click", () => {
     const text = aiInput?.value.trim();
-    if (!text) return;
+    if (!text && pendingAttachments.length === 0) return;
     if (editorViewRef && currentSelection && !highlighted) {
       applySelectionHighlight(editorViewRef, currentSelection);
       updateContextDisplay();
     }
-    sendMessage(text);
+    sendMessage(text, [...pendingAttachments]);
   });
 
   aiInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const text = aiInput.value.trim();
-      if (!text) return;
+      if (!text && pendingAttachments.length === 0) return;
       if (editorViewRef && currentSelection && !highlighted) {
         applySelectionHighlight(editorViewRef, currentSelection);
         updateContextDisplay();
       }
-      sendMessage(text);
+      sendMessage(text, [...pendingAttachments]);
     }
   });
 }
@@ -533,7 +778,7 @@ function removeToolCallIndicator(indicator: HTMLDivElement): void {
   indicator.remove();
 }
 
-async function sendMessage(text: string): Promise<void> {
+async function sendMessage(text: string, attachments?: Attachment[]): Promise<void> {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const historyEl = document.querySelector(".ai-panel__history");
 
@@ -541,8 +786,14 @@ async function sendMessage(text: string): Promise<void> {
     return;
   }
 
-  appendMessage("user", text);
+  const sentAttachments = attachments && attachments.length > 0 ? attachments : undefined;
+  appendMessage("user", text, sentAttachments);
   if (aiInput) aiInput.value = "";
+
+  if (sentAttachments) {
+    pendingAttachments = [];
+    renderAttachmentPreviews();
+  }
 
   if (historyEl) {
     historyEl.scrollTop = historyEl.scrollHeight;
@@ -579,7 +830,12 @@ async function sendMessage(text: string): Promise<void> {
     messageHistory: messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(0, -1)
-      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        ...(m.attachments ? { attachments: m.attachments } : {}),
+      })),
+    attachments: sentAttachments,
   };
 
   if (context.projectId) {
@@ -754,21 +1010,46 @@ Based on these results, provide your final response to the user's question. ${ha
     historyEl.scrollTop = historyEl.scrollHeight;
   }
 }
-
 function appendMessage(
   role: "user" | "assistant" | "system" | "tool_result",
   content: string,
+  attachments?: Attachment[],
 ): HTMLDivElement | null {
   const historyEl = document.querySelector(".ai-panel__history");
   if (!historyEl) return null;
 
-  messages.push({ role, content, timestamp: Date.now() });
+  messages.push({ role, content, timestamp: Date.now(), ...(attachments ? { attachments } : {}) });
 
   const msgEl = document.createElement("div");
   msgEl.className = `ai-message ai-message--${role === "tool_result" ? "system" : role}`;
-  msgEl.textContent = content;
-  historyEl.appendChild(msgEl);
 
+  if (attachments && attachments.length > 0) {
+    const textNode = document.createElement("span");
+    textNode.textContent = content;
+    msgEl.appendChild(textNode);
+
+    const previewWrap = document.createElement("div");
+    previewWrap.className = "ai-message__attachments";
+    for (const att of attachments) {
+      if (att.kind === "image") {
+        const img = document.createElement("img");
+        img.src = `data:${att.mimeType};base64,${att.data}`;
+        img.alt = att.filename;
+        img.className = "ai-message__attachment-img";
+        previewWrap.appendChild(img);
+      } else {
+        const chip = document.createElement("span");
+        chip.className = "ai-message__attachment-doc";
+        chip.textContent = `📄 ${att.filename}`;
+        previewWrap.appendChild(chip);
+      }
+    }
+    msgEl.appendChild(previewWrap);
+  } else {
+    msgEl.textContent = content;
+  }
+
+  historyEl.appendChild(msgEl);
   return msgEl;
 }
 
