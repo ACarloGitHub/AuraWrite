@@ -252,9 +252,9 @@ fn apply_template_section_recursive(
 
 fn document_to_prosemirror_json(text: &str) -> String {
     // Wrap plain text in a ProseMirror doc. Empty string = empty doc.
-    // The editor schema has `doc.content = "(page | block)+"`, so we MUST
-    // wrap blocks in a `page` node, otherwise `nodeFromJSON` throws and the
-    // catch in main.ts silently clears the editor (making the doc appear empty).
+    // The "page" node was removed from the schema (see editor.ts syncDocumentPaginationState),
+    // so blocks go directly under "doc". ProseMirror accepts block+ as doc content
+    // (paragraph, heading, list, blockquote).
     if text.is_empty() {
         return String::new();
     }
@@ -274,7 +274,7 @@ fn document_to_prosemirror_json(text: &str) -> String {
         .collect();
     let inner = paragraphs.join(",");
     format!(
-        r#"{{"type":"doc","content":[{{"type":"page","attrs":{{"pageNumber":1}},"content":[{}]}}]}}"#,
+        r#"{{"type":"doc","content":[{}]}}"#,
         inner
     )
 }

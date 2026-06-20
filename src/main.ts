@@ -1278,6 +1278,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       } catch (e) {
         console.error("Failed to parse document content:", e);
+        console.error("Raw content_json (first 500 chars):", doc.content_json?.slice(0, 500));
+        console.error("Document id:", doc.id, "title:", doc.title);
         // Fallback: clear editor on parse error
         const tr = editorView.state.tr;
         tr.delete(0, tr.doc.content.size);
