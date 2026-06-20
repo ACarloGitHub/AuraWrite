@@ -8,6 +8,7 @@ import { legalTemplate } from "./legal";
 import { notesTemplate } from "./notes";
 import { articleTemplate } from "./article";
 import { thesisTemplate } from "./thesis";
+import { doctorTemplate } from "./doctor";
 import type {
   Template,
   TemplateSectionSpec,
@@ -49,6 +50,7 @@ export const ALL_TEMPLATES: Template[] = [
   notesTemplate,
   articleTemplate,
   thesisTemplate,
+  doctorTemplate,
 ];
 
 export function getTemplate(type: string): Template | null {

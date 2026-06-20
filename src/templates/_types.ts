@@ -8,7 +8,10 @@ export type TemplateType =
   | "developer"
   | "notes"
   | "article"
-  | "thesis";
+  | "thesis"
+  | "doctor"
+  | "school"
+  | "university";
 
 export type ChefVariant = "a" | "b";
 
