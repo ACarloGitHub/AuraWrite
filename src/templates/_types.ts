@@ -10,6 +10,8 @@ export type TemplateType =
   | "article"
   | "thesis"
   | "doctor"
+  | "student"
+  | "teacher"
   | "school"
   | "university";
 
