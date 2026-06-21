@@ -181,20 +181,20 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
-// Fixed palette of 12 harmonious bg+text color combinations for new projects
+// Fixed palette of 12 harmonious bg+text color combinations
 const PROJECT_COLORS: Array<{ bg: string; text: string }> = [
-  { bg: "#E8F4FD", text: "#1A3A5C" },
-  { bg: "#FFF3E0", text: "#5D4037" },
-  { bg: "#E8F5E9", text: "#1B5E20" },
-  { bg: "#F3E5F5", text: "#4A148C" },
-  { bg: "#FFF8E1", text: "#F57F17" },
-  { bg: "#FFEBEE", text: "#B71C1C" },
-  { bg: "#E0F2F1", text: "#004D40" },
-  { bg: "#EDE7F6", text: "#311B92" },
-  { bg: "#FBE9E7", text: "#BF360C" },
-  { bg: "#F1F8E9", text: "#33691E" },
-  { bg: "#E1F5FE", text: "#01579B" },
-  { bg: "#FCE4EC", text: "#880E4F" },
+  { bg: "#093150", text: "#93999e" },  // blu chiaro
+  { bg: "#442d08", text: "#ffd1c3" },  // arancione caldo
+  { bg: "#05420a", text: "#c2d1c3" },  // verde
+  { bg: "#560463", text: "#8f8a96" },  // viola
+  { bg: "#c49600", text: "#e0e0e0" },  // giallo
+  { bg: "#8a0519", text: "#797979" },  // rosso
+  { bg: "#03c9bf", text: "#000000" },  // teal
+  { bg: "#3f009e", text: "#cfc9ec" },  // indaco
+  { bg: "#fc1900", text: "#000000" },  // arancione bruno
+  { bg: "#76dd00", text: "#fafafa" },  // verde chiaro
+  { bg: "#00aaf8", text: "#ffffff" },  // azzurro
+  { bg: "#fd0054", text: "#ffffff" },  // rosa
 ];
 
 function randomProjectColors(): { bg_color: string; text_color: string } {
