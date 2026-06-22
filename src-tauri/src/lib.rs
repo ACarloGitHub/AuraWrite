@@ -13,12 +13,18 @@ mod fonts;
 mod resources;
 mod vault_export;
 mod secrets;
+mod workspace;
+mod permissions;
+mod planner;
 use database::*;
 use updates::*;
 use fonts::*;
 use resources::*;
 use vault_export::*;
 use secrets::*;
+use workspace::*;
+use permissions::*;
+use planner::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -645,6 +651,23 @@ fn read_image_asset(
 }
 
 #[tauri::command]
+fn read_image_asset_base64(
+    app: tauri::AppHandle,
+    relative_path: String,
+) -> Result<String, String> {
+    if relative_path.contains("..") {
+        return Err("Invalid path".into());
+    }
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?;
+    let full = app_data.join(&relative_path);
+    let bytes = std::fs::read(&full).map_err(|e| e.to_string())?;
+    Ok(base64_encode(&bytes))
+}
+
+#[tauri::command]
 fn read_image_asset_path(
     app: tauri::AppHandle,
     relative_path: String,
@@ -923,6 +946,10 @@ pub fn run() {
         db: Mutex::new(conn),
     };
 
+    let permission_state = PermissionState {
+        store: Mutex::new(PermissionsStore::empty()),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -930,6 +957,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .manage(app_state)
+        .manage(permission_state)
         .invoke_handler(tauri::generate_handler![
             // File commands
             save_document,
@@ -938,6 +966,7 @@ pub fn run() {
             save_binary_file,
             save_image_to_assets,
             read_image_asset,
+            read_image_asset_base64,
             read_image_asset_path,
             get_image_asset_url,
             get_app_version,
@@ -1052,6 +1081,26 @@ pub fn run() {
             secrets_set,
             secrets_get,
             secrets_delete,
+            // Workspace sandbox
+            workspace_get_path,
+            workspace_init,
+            workspace_info,
+            workspace_open,
+            workspace_reset,
+            // Permissions
+            permissions_check,
+            permissions_grant,
+            permissions_revoke,
+            permissions_list,
+            permissions_clear_session,
+            // Planner
+            plan_create,
+            plan_read,
+            plan_list,
+            plan_update,
+            plan_delete,
+            plan_next,
+            plan_status,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {

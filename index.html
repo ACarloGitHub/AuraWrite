@@ -303,7 +303,7 @@
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
       </div>
       <main class="editor-container">
-        <aside id="project-panel" class="project-panel">
+        <aside id="project-panel" class="project-panel hidden">
           <div class="panel-resize-handle panel-resize-handle--projects" data-resize="projects" title="Drag to resize, double-click to reset"></div>
           <div class="project-panel__header">
             <div class="project-panel__header-left">
@@ -334,6 +334,35 @@
         </aside>
           <div id="editor"></div>
         <div id="paginated-container" style="display: none"></div>
+        <aside id="mcp-panel" class="mcp-panel hidden">
+          <div class="panel-resize-handle panel-resize-handle--mcp" data-resize="mcp" title="Drag to resize, double-click to reset"></div>
+          <div class="mcp-panel__header">
+            <h3>MCP</h3>
+            <button id="mcp-close" class="mcp-panel__toggle">−</button>
+          </div>
+          <div class="mcp-panel__content">
+            <div class="mcp-panel__section">
+              <label class="mcp-panel__label">Planner</label>
+              <select id="mcp-plan-select" class="mcp-panel__select">
+                <option value="">— Select plan —</option>
+              </select>
+              <div class="mcp-panel__plan-actions">
+                <button id="mcp-plan-new" class="mcp-panel__btn" title="New plan">+ New</button>
+                <button id="mcp-plan-delete" class="mcp-panel__btn mcp-panel__btn--danger" title="Delete plan">🗑</button>
+                <button id="mcp-plan-open-editor" class="mcp-panel__btn" title="Open in editor">📂</button>
+              </div>
+              <div id="mcp-plan-new-form" class="mcp-panel__new-plan-form">
+                <input id="mcp-new-plan-name" type="text" placeholder="Plan name..." />
+                <button id="mcp-new-plan-confirm" class="mcp-panel__btn">Create</button>
+              </div>
+              <div id="mcp-plan-progress" class="mcp-panel__progress" style="display:none;">
+                <div class="mcp-panel__progress-bar"><div id="mcp-plan-progress-fill" class="mcp-panel__progress-fill"></div></div>
+                <span id="mcp-plan-progress-text" class="mcp-panel__progress-text">0/0</span>
+              </div>
+              <div id="mcp-plan-list" class="mcp-panel__plan-list"></div>
+            </div>
+          </div>
+        </aside>
         <aside id="ai-panel" class="ai-panel hidden">
           <div class="panel-resize-handle panel-resize-handle--ai" data-resize="ai" title="Drag to resize, double-click to reset"></div>
           <div class="ai-panel__header">
@@ -341,6 +370,19 @@
             <button id="ai-close" class="ai-panel__toggle">−</button>
           </div>
           <div class="ai-panel__context" id="ai-context"></div>
+          <div id="ai-permission-banner" class="ai-panel__permission-banner" style="display:none;">
+            <div class="ai-panel__permission-icon">🔒</div>
+            <div class="ai-panel__permission-info">
+              <div class="ai-panel__permission-tool" id="ai-permission-tool"></div>
+              <div class="ai-panel__permission-path" id="ai-permission-path"></div>
+            </div>
+            <div class="ai-panel__permission-actions">
+              <button class="ai-panel__permission-btn ai-panel__permission-btn--deny" id="ai-permission-deny">Deny</button>
+              <button class="ai-panel__permission-btn ai-panel__permission-btn--once" id="ai-permission-once">Allow once</button>
+              <button class="ai-panel__permission-btn ai-panel__permission-btn--session" id="ai-permission-session">Allow for session</button>
+              <button class="ai-panel__permission-btn ai-panel__permission-btn--always" id="ai-permission-always">Allow always</button>
+            </div>
+          </div>
           <div class="ai-panel__history"></div>
           <div class="ai-panel__context-footer" id="ai-context-footer" title="Token usage for the current chat session">
             <div class="ai-panel__context-bar"><div class="ai-panel__context-bar-fill" id="ai-context-bar-fill"></div></div>
@@ -369,6 +411,9 @@
           </button>
           <button id="btn-suggestions" class="footer-btn" title="Suggestions (Proactive)">
             💡 Suggestions
+          </button>
+          <button id="btn-mcp" class="footer-btn" title="MCP Panel">
+            🧩 MCP
           </button>
           <button id="btn-ai" class="footer-btn" title="AI Assistant (Reactive)">
             ✨ AI
@@ -402,6 +447,7 @@
             <button class="pref-tab" data-tab="editor-data">Editor & Data</button>
             <button class="pref-tab" data-tab="indexing-tools">Indexing & Tools</button>
             <button class="pref-tab" data-tab="fonts">Fonts</button>
+            <button class="pref-tab" data-tab="agent">Agent</button>
             <button class="pref-tab" data-tab="security">Security & Privacy</button>
             <button class="pref-tab" data-tab="maintenance">Maintenance</button>
           </div>
@@ -971,6 +1017,55 @@
                   <option value="Inter">Inter (bundled, default)</option>
                   <option value="system-ui">System default</option>
                 </select>
+              </div>
+            </div>
+            <!-- TAB: Agent -->
+            <div class="pref-tab-content" data-tab="agent">
+              <div class="preference-group">
+                <label>Agent Workspace</label>
+                <span class="preference-hint">
+                  The workspace is a sandbox directory where the AI agent can read and
+                  write operational files (plans, drafts, notes, attachments). It is
+                  created automatically on first launch. Persistent data (memory, RAG) is stored separately.
+                </span>
+                <div class="folder-row">
+                  <input type="text" id="pref-agent-workspace-path" readonly class="pref-folder-path" />
+                  <button id="pref-agent-workspace-open" class="btn-small">Open in Explorer</button>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>Agent Tools</label>
+                <span class="preference-hint">
+                  Enable or disable categories of agent tools. When a tool is disabled,
+                  the agent cannot use it even if explicitly asked.
+                </span>
+                <div class="preference-toggles">
+                  <label><input type="checkbox" id="pref-agent-web-search" disabled /> Web search</label>
+                  <label><input type="checkbox" id="pref-agent-file-system" disabled /> File system access</label>
+                  <label><input type="checkbox" id="pref-agent-shell-exec" disabled /> Shell execution</label>
+                  <label><input type="checkbox" id="pref-agent-planner" /> Planner</label>
+                  <label><input type="checkbox" id="pref-agent-rag" disabled /> RAG (local)</label>
+                </div>
+                <span class="preference-hint">Tool categories are coming in a future update.</span>
+              </div>
+              <div class="preference-group">
+                <label>Authorized Folders</label>
+                <span class="preference-hint">
+                  Folders the agent can access outside the workspace without asking.
+                  The agent will ask for permission before accessing any folder not listed here.
+                </span>
+                <div id="agent-permissions-list"></div>
+                <div class="folder-row">
+                  <button id="pref-agent-add-folder" class="btn-small">Add folder</button>
+                  <button id="pref-agent-clear-session" class="btn-small">Clear session permissions</button>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>Reset Workspace</label>
+                <span class="preference-hint">Delete all files inside the workspace (plans, drafts, notes, attachments). The workspace folder itself is kept.</span>
+                <div class="folder-row">
+                  <button id="pref-agent-reset-workspace" class="btn-small" style="color: var(--color-danger, #e53e3e);">Reset workspace</button>
+                </div>
               </div>
             </div>
             <!-- TAB: Maintenance -->

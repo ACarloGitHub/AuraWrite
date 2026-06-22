@@ -35,8 +35,34 @@ export async function preloadApiKey(): Promise<void> {
       /* skip */
     }
   }
-  // Pulisci la chiave da localStorage se mai presente (legacy pre-keychain)
+  // Migrate legacy aiApiKey from localStorage to per-provider keychain entry.
+  // If a provider has no key in the keychain but the legacy aiApiKey exists and
+  // the stored provider matches, migrate it before stripping.
+  await migrateLegacyApiKey();
   stripApiKeyFromLocalStorage();
+}
+
+async function migrateLegacyApiKey(): Promise<void> {
+  const stored = localStorage.getItem(PREFERENCES_KEY);
+  if (!stored) return;
+  try {
+    const parsed = JSON.parse(stored);
+    const legacyKey = parsed.aiApiKey;
+    const provider = parsed.aiProvider;
+    if (legacyKey && legacyKey.trim() && provider && API_KEY_PROVIDERS.includes(provider)) {
+      if (!cachedApiKeys[provider]) {
+        try {
+          await invoke("secrets_set", { key: `ai-api-key:${provider}`, value: legacyKey });
+          cachedApiKeys[provider] = legacyKey;
+        } catch {
+          // Keychain not available, key will stay in localStorage
+          // and be stripped below (user must re-enter it)
+        }
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
 }
 
 export function getCachedApiKey(provider?: string): string | null {
@@ -369,8 +395,17 @@ export function getCurrentProvider(): AIProvider | null {
 }
 
 export function buildContextWithTools(context: AIContext): AIContext {
+  const saved = localStorage.getItem("aurawrite-preferences");
+  const plannerEnabled = saved ? (JSON.parse(saved).plannerEnabled ?? true) : true;
   if (context.projectId) {
-    const toolPrompt = buildToolSystemPrompt(context.projectId);
+    const toolPrompt = buildToolSystemPrompt(context.projectId, plannerEnabled);
+    return {
+      ...context,
+      toolInstructions: toolPrompt,
+    };
+  }
+  if (plannerEnabled) {
+    const toolPrompt = buildToolSystemPrompt(undefined, plannerEnabled);
     return {
       ...context,
       toolInstructions: toolPrompt,

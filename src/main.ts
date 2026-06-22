@@ -1,6 +1,7 @@
 import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
+import { setupMCPPanel } from "./ai-panel/mcp-panel";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
 import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
@@ -92,6 +93,7 @@ interface Preferences {
   fontsUseBundled: boolean;
   fontEditor: string;
   fontUi: string;
+  plannerEnabled: boolean;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -201,6 +203,7 @@ const defaultPreferences: Preferences = {
   fontsUseBundled: true,
   fontEditor: "Lora",
   fontUi: "Inter",
+  plannerEnabled: true,
 };
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -242,21 +245,35 @@ async function updateKeychainStatus(): Promise<void> {
   }
 }
 
-function savePreferences(prefs: Preferences): void {
+async function updateAgentWorkspaceInfo(): Promise<void> {
+  const pathInput = document.getElementById("pref-agent-workspace-path") as HTMLInputElement | null;
+  try {
+    const info = await invoke<{ path: string; exists: boolean }>("workspace_info");
+    if (pathInput) pathInput.value = info.path;
+  } catch {
+    if (pathInput) pathInput.value = "Error";
+  }
+}
+
+async function savePreferences(prefs: Preferences): Promise<void> {
   const prefsToStore = { ...prefs, aiApiKey: "" };
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefsToStore));
   if (prefs.aiApiKey !== undefined) {
     setCachedApiKey(prefs.aiProvider, prefs.aiApiKey);
     if (prefs.aiApiKey.trim()) {
-      invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey }).catch((e: unknown) =>
-        console.error("[secrets] failed to save API key:", e)
-      );
+      try {
+        await invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey });
+      } catch (e) {
+        console.error("[secrets] failed to save API key:", e);
+      }
     } else {
-      invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` }).catch((e: unknown) =>
-        console.error("[secrets] failed to delete API key:", e)
-      );
+      try {
+        await invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` });
+      } catch (e) {
+        console.error("[secrets] failed to delete API key:", e);
     }
   }
+}
   applyPreferences(prefs);
 }
 
@@ -479,6 +496,9 @@ function openPreferencesModal(): void {
     prefs.fontEditor || "Lora";
   (document.getElementById("pref-fonts-ui") as HTMLSelectElement).value =
     prefs.fontUi || "Inter";
+  (
+    document.getElementById("pref-agent-planner") as HTMLInputElement
+  ).checked = prefs.plannerEnabled !== false;
 
   updateCustomColorsVisibility();
   updateApiKeyGroupVisibility();
@@ -893,6 +913,7 @@ function savePreferencesFromModal(): void {
     fontsUseBundled: chk("pref-fonts-use-bundled"),
     fontEditor: sel("pref-fonts-editor") || "Lora",
     fontUi: sel("pref-fonts-ui") || "Inter",
+    plannerEnabled: chk("pref-agent-planner"),
   };
 
   savePreferences(prefs);
@@ -905,22 +926,24 @@ function savePreferencesFromModal(): void {
 
 function setupResizablePanels(): void {
   const STORAGE_KEY = "aurawrite-preferences";
-  const DEFAULTS = { ai: 360, projects: 280, suggestions: 320 } as const;
-  const MIN = { ai: 200, projects: 180, suggestions: 200 } as const;
-  const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6 } as const;
+  const DEFAULTS = { ai: 360, projects: 280, suggestions: 320, mcp: 320 } as const;
+  const MIN = { ai: 200, projects: 180, suggestions: 200, mcp: 200 } as const;
+  const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6, mcp: 0.6 } as const;
   const STORAGE_KEYS = {
     ai: "aiChatPanelWidth",
     projects: "projectPanelWidth",
     suggestions: "suggestionsPanelWidth",
+    mcp: "mcpPanelWidth",
   } as const;
   const CSS_VARS = {
     ai: "--ai-panel-width",
     projects: "--project-panel-width",
     suggestions: "--suggestions-panel-width",
+    mcp: "--mcp-panel-width",
   } as const;
-  const LEFT_EDGED: ReadonlyArray<"ai" | "projects" | "suggestions"> = ["ai"];
+  const LEFT_EDGED: ReadonlyArray<PanelKey> = ["ai", "mcp"];
 
-  type PanelKey = "ai" | "projects" | "suggestions";
+  type PanelKey = "ai" | "projects" | "suggestions" | "mcp";
   type Widths = Record<PanelKey, number>;
 
   function loadWidths(): Widths {
@@ -1178,6 +1201,38 @@ function maybeShowEmbeddingsOnboarding(): void {
   document.getElementById("embeddings-onboarding-close")?.addEventListener("click", () => close(false));
   document.getElementById("embeddings-onboarding-skip")?.addEventListener("click", () => close(false));
   document.getElementById("embeddings-onboarding-download")?.addEventListener("click", () => close(true));
+              }
+
+async function loadPermissionsList(): Promise<void> {
+  const listEl = document.getElementById("agent-permissions-list");
+  if (!listEl) return;
+  try {
+    const permissions = await invoke<Array<{ path: string; scope: string; tool: string; granted_at: number }>>("permissions_list");
+    if (permissions.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--color-text-muted);font-size:12px;">No authorized folders yet.</div>';
+      return;
+    }
+    listEl.innerHTML = permissions.map((p) =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--color-border);">
+        <span style="flex:1;font-size:12px;font-family:monospace;word-break:break-all;">${p.path}</span>
+        <span style="font-size:11px;color:var(--color-text-muted);padding:2px 6px;border:1px solid var(--color-border);border-radius:3px;">${p.scope}</span>
+        <button class="btn-small permission-remove-btn" data-path="${p.path}" style="color:var(--color-danger, #e53e3e);">Remove</button>
+      </div>`
+    ).join("");
+    listEl.querySelectorAll(".permission-remove-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const path = (btn as HTMLElement).dataset.path || "";
+        try {
+          await invoke("permissions_revoke", { path });
+          await loadPermissionsList();
+        } catch (e) {
+          console.error("[agent] revoke permission failed:", e);
+        }
+      });
+    });
+  } catch {
+    listEl.innerHTML = '<div style="color:var(--color-danger);font-size:12px;">Could not load permissions.</div>';
+  }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1186,6 +1241,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initZoom();
 
   await preloadApiKey();
+  invoke("workspace_init").catch(() => {});
   const prefs = getPreferences();
   applyPreferences(prefs);
 
@@ -1296,6 +1352,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   setupAIPanel(editorView);
+  setupMCPPanel();
   setupSuggestionsPanel(editorView);
   setupToolbar(editorView);
 
@@ -1425,6 +1482,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     tab.addEventListener("click", () => {
       const tabName = (tab as HTMLElement).dataset.tab;
       if (tabName) switchPreferencesTab(tabName);
+      if (tabName === "agent") loadPermissionsList();
     });
   });
 
@@ -1567,7 +1625,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);
@@ -1581,6 +1639,49 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   updateKeychainStatus();
   document.getElementById("pref-security-test-keychain")?.addEventListener("click", updateKeychainStatus);
+
+  updateAgentWorkspaceInfo();
+  document.getElementById("pref-agent-workspace-open")?.addEventListener("click", async () => {
+    try {
+      await invoke("workspace_open");
+    } catch (e) {
+      console.error("[agent] workspace open failed:", e);
+    }
+  });
+  document.getElementById("pref-agent-reset-workspace")?.addEventListener("click", async () => {
+    const confirmed = confirm("This will delete all files inside the workspace (plans, drafts, notes, attachments).\nThe workspace folder itself will be kept.\n\nAre you sure?");
+    if (!confirmed) return;
+    try {
+      await invoke("workspace_reset");
+      updateAgentWorkspaceInfo();
+    } catch (e) {
+      console.error("[agent] workspace reset failed:", e);
+    }
+  });
+
+  document.getElementById("pref-agent-add-folder")?.addEventListener("click", async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({ directory: true, multiple: false });
+      if (selected && typeof selected === "string") {
+        await invoke("permissions_grant", { path: selected, scope: "always", tool: "*" });
+        await loadPermissionsList();
+      }
+    } catch {
+      // user cancelled
+    }
+  });
+
+  document.getElementById("pref-agent-clear-session")?.addEventListener("click", async () => {
+    try {
+      await invoke("permissions_clear_session");
+      await loadPermissionsList();
+    } catch (e) {
+      console.error("[agent] clear session permissions failed:", e);
+    }
+  });
+
+  loadPermissionsList();
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "n") {
@@ -1921,7 +2022,7 @@ async function refreshLocalModelCatalog(): Promise<void> {
                 (confirmBtn as HTMLButtonElement).textContent = "✓ Done";
                 await refreshLocalModelList();
                 await refreshLocalModelCatalog();
-              } catch (e) {
+  } catch (e) {
                 (confirmBtn as HTMLButtonElement).textContent = "Failed";
                 alert("Download failed: " + (e instanceof Error ? e.message : String(e)));
                 setTimeout(() => {
@@ -1929,6 +2030,7 @@ async function refreshLocalModelCatalog(): Promise<void> {
                   (confirmBtn as HTMLButtonElement).textContent = "Download";
                 }, 2000);
               }
+
             });
           }
         }

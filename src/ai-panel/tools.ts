@@ -205,6 +205,111 @@ export const AVAILABLE_TOOLS = [
       },
       required: ["document_id", "project_id"]
     }
+  },
+  {
+    name: "plan_create",
+    description: "Create a new plan with tasks as markdown checkboxes. Tasks use '- [ ]' for open and '- [x]' for completed. Questions for the user use '- [ ] Question (for user): ...'",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Plan name (used as filename, e.g. 'chapter-outline')"
+        },
+        content: {
+          type: "string",
+          description: "Plan content in markdown with checkboxes. Start with 'status: active' and use '- [ ]' for tasks, '- [ ] Question (for user): ...' for blocking questions"
+        }
+      },
+      required: ["name", "content"]
+    }
+  },
+  {
+    name: "plan_read",
+    description: "Read the content of an existing plan",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Plan name to read"
+        }
+      },
+      required: ["name"]
+    }
+  },
+  {
+    name: "plan_list",
+    description: "List all existing plans",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "plan_update",
+    description: "Update an existing plan with new content (overwrites entire plan)",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Plan name to update"
+        },
+        content: {
+          type: "string",
+          description: "New plan content in markdown"
+        }
+      },
+      required: ["name", "content"]
+    }
+  },
+  {
+    name: "plan_delete",
+    description: "Delete a plan",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Plan name to delete"
+        }
+      },
+      required: ["name"]
+    }
+  },
+  {
+    name: "plan_next",
+    description: "Mark the first unchecked task as completed and return the next task. If all tasks are done, marks the plan as completed. If there is a blocking question, returns it for the user to answer.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Plan name"
+        },
+        answer: {
+          type: "string",
+          description: "Answer to a blocking question (optional, only if the plan has a question for the user)"
+        }
+      },
+      required: ["name"]
+    }
+  },
+  {
+    name: "plan_status",
+    description: "Get the status of a plan: total tasks, completed, remaining, progress percentage, and any blocking question",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Plan name"
+        }
+      },
+      required: ["name"]
+    }
   }
 ];
 
@@ -612,9 +717,18 @@ export interface ToolResult {
 }
 
 export async function executeTool(
-  toolCall: ToolCall
+  toolCall: ToolCall,
+  plannerEnabled = true
 ): Promise<ToolResult> {
   const { name, arguments: args } = toolCall;
+
+  if (!plannerEnabled && name.startsWith("plan_")) {
+    return {
+      tool: name,
+      result: null,
+      error: "Planner tool is disabled. Enable it in Settings > Agent.",
+    };
+  }
 
   try {
     let result: unknown;
@@ -687,6 +801,49 @@ export async function executeTool(
         );
         break;
 
+      case "plan_create":
+        result = await invoke<string>("plan_create", {
+          name: args.name as string,
+          content: args.content as string,
+        });
+        break;
+
+      case "plan_read":
+        result = await invoke<string>("plan_read", {
+          name: args.name as string,
+        });
+        break;
+
+      case "plan_list":
+        result = await invoke<string[]>("plan_list");
+        break;
+
+      case "plan_update":
+        result = await invoke<string>("plan_update", {
+          name: args.name as string,
+          content: args.content as string,
+        });
+        break;
+
+      case "plan_delete":
+        result = await invoke<string>("plan_delete", {
+          name: args.name as string,
+        });
+        break;
+
+      case "plan_next":
+        result = await invoke<string>("plan_next", {
+          name: args.name as string,
+          answer: args.answer as string | undefined,
+        });
+        break;
+
+      case "plan_status":
+        result = await invoke<string>("plan_status", {
+          name: args.name as string,
+        });
+        break;
+
       default:
         return {
           tool: name,
@@ -757,19 +914,27 @@ export function parseToolCalls(response: string): ToolCall[] {
 /**
  * Build system prompt with available tools
  */
-export function buildToolSystemPrompt(projectId?: string): string {
+export function buildToolSystemPrompt(projectId?: string, plannerEnabled = true): string {
   const projectInfo = projectId
     ? `\nThe current project ID is: "${projectId}". Always use this as the project_id parameter when calling tools.\n`
     : "";
 
-  return `You are AuraWrite AI, an intelligent writing assistant with access to a project database.
-${projectInfo}
-IMPORTANT: When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering. Do NOT say "no entities found" without actually calling the tools first.
+  const hasProject = !!projectId;
 
-CRITICAL: Rispondi sempre mostrando entities relative al progetto aperto. Non includere entities di altri progetti. Ogni tool ha un parametro project_id: usalo SEMPRE con il project_id del progetto aperto, MAI lasciarlo vuoto o usare un altro ID.
+  return `You are AuraWrite AI, an intelligent writing assistant with access to tools.
+${projectInfo}
+${hasProject ? `IMPORTANT: When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering. Do NOT say "no entities found" without actually calling the tools first.
+
+CRITICAL: Rispondi sempre mostrando entities relative al progetto aperto. Non includere entities di altri progetti. Ogni tool ha un parametro project_id: usalo SEMPRE con il project_id del progetto aperto, MAI lasciarlo vuoto o usare un altro ID.` : "Note: No project is currently open. Only planner tools are available. You can create, read, update, and manage plans in the workspace."}
 
 Available tools:
-${AVAILABLE_TOOLS.map((tool) => `
+${AVAILABLE_TOOLS
+  .filter((tool) => {
+    if (!plannerEnabled && tool.name.startsWith("plan_")) return false;
+    if (!hasProject && !tool.name.startsWith("plan_")) return false;
+    return true;
+  })
+  .map((tool) => `
 - ${tool.name}: ${tool.description}
   Parameters: ${Object.keys(tool.parameters.properties).join(", ")}
 `).join("\n")}
@@ -798,11 +963,36 @@ Example 4 — User asks "Which characters appear in chapter 1?":
 Example 5 — User asks "Search the document for the word 'dragon'":
 <tool name="search_documents">{"project_id": "${projectId || "PROJECT_ID"}", "query": "dragon"}</tool>
 
+${plannerEnabled ? `
+Example 6 — User asks "Create a plan for rewriting chapter 3":
+<tool name="plan_create">{"name": "rewrite-chapter-3", "content": "status: active\\n\\n# Rewrite Chapter 3\\n\\n- [ ] Read current chapter 3\\n- [ ] Identify weak sections\\n- [ ] Rewrite dialogue scenes\\n- [ ] Add sensory descriptions\\n- [ ] Review pacing\\n- [ ] Final read-through"}</tool>
+
+Example 7 — User asks "What's next on my plan?":
+<tool name="plan_next">{"name": "rewrite-chapter-3"}</tool>
+
+Example 8 — User asks "How is the plan going?":
+<tool name="plan_status">{"name": "rewrite-chapter-3"}</tool>
+` : ""}
 === CRITICAL RULES ===
 - When the query mentions a TYPE of entity (characters, locations, places, objects, events), ALWAYS prefer list_entities_by_type with the appropriate entity_type.
 - When the query mentions a SPECIFIC NAME (a person, a place name), use search_entities with that name as query.
 - Entity type names in this project may be plural ("Characters") or singular ("Character"). The tool accepts both forms.
-- After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.`;
+- After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.
+${plannerEnabled ? `
+=== PLANNER RULES (MANDATORY) ===
+When you use planner tools, the plan appears in the MCP panel (🧩 button in the status bar). The user can see and interact with it there — you do NOT need to show it in chat.
+
+YOUR RESPONSE AFTER A PLANNER TOOL CALL MUST BE EXACTLY 1-2 SHORT SENTENCES. This is a hard constraint:
+
+- plan_create: "Plan '[name]' created with X tasks — check the MCP panel (🧩)." Then STOP.
+- plan_next: "Completed: [task]. Next: [task]." Nothing else.
+- plan_status: "X/Y tasks completed (Z%)." Nothing else.
+- plan_read: "Plan '[name]' has X tasks, Y completed." Nothing else.
+- plan_update: "Plan updated." Nothing else.
+- plan_list: "Plans: name1, name2, name3." Nothing else.
+
+NEVER output the plan content, task lists, or markdown in your chat response. The MCP panel already shows it. Your job is to confirm the action in ONE line.
+` : ""}`;
 }
 
 

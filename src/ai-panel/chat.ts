@@ -1,5 +1,6 @@
 import type { EditorView } from "prosemirror-view";
 import { DOMParser as PMDOMParser } from "prosemirror-model";
+import { invoke } from "@tauri-apps/api/core";
 import type { AIContext, Attachment } from "./providers";
 import mammoth from "mammoth";
 import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools, handlePreferencesChanged } from "./ai-manager";
@@ -55,6 +56,25 @@ function getMimeType(filename: string): string {
 function isImageFile(filename: string): boolean {
   const lower = filename.toLowerCase();
   return IMAGE_EXTENSIONS.some((ext) => lower.endsWith("." + ext));
+}
+
+async function resolveImageSrcToAttachment(src: string): Promise<Attachment | undefined> {
+  try {
+    const base64: string = await invoke("read_image_asset_base64", { relativePath: src });
+    const filename = src.split("/").pop() || src.split("\\").pop() || "image";
+    const mimeType = getMimeType(filename);
+    return {
+      id: `sel-img-${Date.now()}`,
+      kind: "image",
+      mimeType,
+      filename,
+      data: base64,
+      size: Math.round(base64.length * 3 / 4),
+    };
+  } catch (e) {
+    console.warn("[chat] resolveImageSrcToAttachment failed:", e);
+    return undefined;
+  }
 }
 
 function isDocumentFile(filename: string): boolean {
@@ -273,6 +293,7 @@ interface SelectionRange {
   from: number;
   to: number;
   text: string;
+  selectedImageSrc?: string;
 }
 
 interface Preferences {
@@ -283,6 +304,7 @@ interface Preferences {
   aiWritingLanguage: string;
   aiAssistantName: string;
   aiUserName: string;
+  plannerEnabled: boolean;
 }
 
 let messages: Message[] = [];
@@ -309,6 +331,7 @@ function getPreferences(): Preferences {
       aiWritingLanguage: prefs.aiWritingLanguage || "English",
       aiAssistantName: prefs.aiAssistantName || "Aura",
       aiUserName: prefs.aiUserName || "",
+      plannerEnabled: prefs.plannerEnabled ?? true,
     };
   }
   return {
@@ -319,6 +342,7 @@ function getPreferences(): Preferences {
     aiWritingLanguage: "English",
     aiAssistantName: "Aura",
     aiUserName: "",
+    plannerEnabled: true,
   };
 }
 
@@ -520,7 +544,9 @@ function setupPanelEvents(view: EditorView): void {
     }
     // Prevent default only for non-input elements so the editor keeps its
     // DOM selection alive long enough for selectionchange to have fired.
-    if (tag !== "TEXTAREA" && tag !== "INPUT" && tag !== "SELECT") {
+    // But allow text selection inside AI messages.
+    const isMessage = (e.target as HTMLElement).closest(".ai-message");
+    if (tag !== "TEXTAREA" && tag !== "INPUT" && tag !== "SELECT" && !isMessage) {
       e.preventDefault();
     }
   });
@@ -665,10 +691,39 @@ function updateChunkSelector(): void {
 }
 
 function getSelectionRange(view: EditorView): SelectionRange | null {
-  const { from, to } = view.state.selection;
-  if (from === to) return null;
+  const sel = view.state.selection;
+  const { from, to } = sel;
+
+  const nodeSelected = (sel as { node?: import("prosemirror-model").Node }).node;
+  if (nodeSelected && nodeSelected.type.name === "image") {
+    const src = String(nodeSelected.attrs.src || "");
+    if (src && !src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("data:")) {
+      return { from, to, text: "", selectedImageSrc: src };
+    }
+  }
+
+  if (sel.empty) {
+    const nodeAfter = sel.$from.nodeAfter;
+    if (nodeAfter && nodeAfter.type.name === "image") {
+      const src = String(nodeAfter.attrs.src || "");
+      if (src && !src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("data:")) {
+        return { from: sel.$from.pos, to: sel.$from.pos + nodeAfter.nodeSize, text: "", selectedImageSrc: src };
+      }
+    }
+    return null;
+  }
+
   const text = view.state.doc.textBetween(from, to);
-  if (!text.trim()) return null;
+  if (!text.trim()) {
+    const nodeAfter = sel.$from.nodeAfter;
+    if (nodeAfter && nodeAfter.type.name === "image") {
+      const src = String(nodeAfter.attrs.src || "");
+      if (src && !src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("data:")) {
+        return { from, to, text: "", selectedImageSrc: src };
+      }
+    }
+    return null;
+  }
   return { from, to, text };
 }
 
@@ -679,11 +734,20 @@ function updateContextDisplay(): void {
   const parts: string[] = [];
 
   if (currentSelection) {
-    parts.push(`<div class="ai-panel__context-selection">
-      <div class="ai-panel__context-label">Selected:</div>
-      <div class="ai-panel__context-text">"${truncateText(currentSelection.text, 100)}"</div>
-      <button id="ai-clear-selection" class="ai-panel__clear-btn" title="Clear selection">✕</button>
-    </div>`);
+    if (currentSelection.selectedImageSrc) {
+      const imgName = currentSelection.selectedImageSrc.split("/").pop() || "image";
+      parts.push(`<div class="ai-panel__context-selection">
+        <div class="ai-panel__context-label">Selected image:</div>
+        <div class="ai-panel__context-text">📷 ${truncateText(imgName, 60)}</div>
+        <button id="ai-clear-selection" class="ai-panel__clear-btn" title="Clear selection">✕</button>
+      </div>`);
+    } else if (currentSelection.text.trim()) {
+      parts.push(`<div class="ai-panel__context-selection">
+        <div class="ai-panel__context-label">Selected:</div>
+        <div class="ai-panel__context-text">"${truncateText(currentSelection.text, 100)}"</div>
+        <button id="ai-clear-selection" class="ai-panel__clear-btn" title="Clear selection">✕</button>
+      </div>`);
+    }
   }
 
   if (selectedChunkId && chunks.length > 1) {
@@ -778,6 +842,39 @@ function removeToolCallIndicator(indicator: HTMLDivElement): void {
   indicator.remove();
 }
 
+function showPlannerToolCard(
+  toolName: string,
+  result: string,
+): void {
+  const historyEl = document.querySelector(".ai-panel__history");
+  if (!historyEl) return;
+
+  const card = document.createElement("div");
+  card.className = "ai-message ai-message--planner-card";
+
+  const icons: Record<string, string> = {
+    plan_create: "📄",
+    plan_read: "📖",
+    plan_update: "✏️",
+    plan_delete: "🗑️",
+    plan_next: "✅",
+    plan_status: "📊",
+    plan_list: "📋",
+  };
+  const icon = icons[toolName] || "🧩";
+  const cleanResult = result.replace(/\[INSTRUCTION:.*?\]\s*/, "").trim();
+  const displayResult = cleanResult.length > 120 ? cleanResult.slice(0, 117) + "..." : cleanResult;
+
+  card.innerHTML = `
+    <span class="planner-tool-card">
+      <span class="planner-tool-card__icon">${icon}</span>
+      <span class="planner-tool-card__text">${displayResult}</span>
+    </span>
+  `;
+  historyEl.appendChild(card);
+  historyEl.scrollTop = historyEl.scrollHeight;
+}
+
 async function sendMessage(text: string, attachments?: Attachment[]): Promise<void> {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const historyEl = document.querySelector(".ai-panel__history");
@@ -814,6 +911,17 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
     ? documentText
     : undefined;
 
+  let selectedImageAttachment: Attachment | undefined;
+  if (currentSelection?.selectedImageSrc) {
+    selectedImageAttachment = await resolveImageSrcToAttachment(currentSelection.selectedImageSrc);
+  }
+
+  const allAttachments = [
+    ...(sentAttachments || []),
+    ...(selectedImageAttachment ? [selectedImageAttachment] : []),
+  ];
+  const contextAttachments = allAttachments.length > 0 ? allAttachments : undefined;
+
   let context: AIContext = {
     selectedText: currentSelection?.text || undefined,
     documentTitle: document.title.replace(" - AuraWrite", ""),
@@ -835,12 +943,10 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         content: m.content,
         ...(m.attachments ? { attachments: m.attachments } : {}),
       })),
-    attachments: sentAttachments,
+    attachments: contextAttachments,
   };
 
-  if (context.projectId) {
-    context = buildContextWithTools(context);
-  }
+  context = buildContextWithTools(context);
 
   const placeholder = appendMessage("assistant", "Thinking...");
 
@@ -859,32 +965,11 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
 
     let aiContent = response.content;
 
-    if (context.projectId && aiContent) {
+    if (aiContent) {
       let iteration = 0;
-      let forcedToolRetry = false;
 
       while (iteration < MAX_TOOL_ITERATIONS) {
         const toolCalls = parseToolCalls(aiContent);
-
-        // Se l'AI non ha chiamato nessun tool e siamo nel primo giro,
-        // forziamo un retry: l'AI deve passare per i tool quando c'è
-        // un progetto aperto, altrimenti replica la risposta precedente
-        // attingendo dalla history della chat.
-        if (toolCalls.length === 0 && iteration === 0 && !forcedToolRetry) {
-          forcedToolRetry = true;
-          const forcePrompt = `The user asked: "${text}". A project is currently open. You MUST call at least one database tool (e.g. list_entities_by_type, search_entities, get_entity_details, entities_in_document) before answering. Do not answer from the chat history alone.
-
-To call a tool, include this tag in your response:
-<tool name="TOOL_NAME">{"param1": "value1", "param2": "value2"}</tool>`;
-          const forceContext = { ...context };
-          const forceResponse = await sendToAI(forcePrompt, forceContext);
-          if (forceResponse.error || !forceResponse.content) {
-            // Se il retry fallisce, esci e usa la risposta precedente
-            break;
-          }
-          aiContent = forceResponse.content;
-          continue;
-        }
 
         if (toolCalls.length === 0) {
           break;
@@ -896,20 +981,24 @@ To call a tool, include this tag in your response:
           updateToolCallIndicator(indicator, toolNames);
         }
 
-        const enrichedToolCalls = toolCalls.map((call) => ({
-          ...call,
-          arguments: {
-            project_id: context.projectId,
-            ...call.arguments,
-          },
-        }));
+        const enrichedToolCalls = toolCalls.map((call) => {
+          if (call.name.startsWith("plan_")) {
+            return call;
+          }
+          return {
+            ...call,
+            arguments: {
+              project_id: context.projectId,
+              ...call.arguments,
+            },
+          };
+        });
 
         const toolResults: ToolResult[] = [];
         for (const call of enrichedToolCalls) {
-          // Defensive: refuse to execute a tool without a valid project_id
-          // unless it's a global tool (none today, all are project-scoped).
           const args = call.arguments as Record<string, unknown>;
-          if (args.project_id !== undefined) {
+          const isGlobalTool = call.name.startsWith("plan_");
+          if (!isGlobalTool && args.project_id !== undefined) {
             if (
               typeof args.project_id !== "string" ||
               args.project_id.trim() === "" ||
@@ -928,10 +1017,16 @@ To call a tool, include this tag in your response:
               continue;
             }
           }
-          const result = await executeTool(call);
+          const result = await executeTool(call, getPreferences().plannerEnabled);
           toolResults.push(result);
+          if (result.tool && result.tool.startsWith("plan_") && !result.error) {
+            const planName = (call.arguments as Record<string, unknown>)?.name as string | undefined;
+            window.dispatchEvent(new CustomEvent("aurawrite:plan-changed", { detail: { planName } }));
+            showPlannerToolCard(result.tool, String(result.result));
+          }
         }
 
+        const hasPlannerTools = toolResults.some((r) => r.tool && r.tool.startsWith("plan_"));
         if (indicator) {
           removeToolCallIndicator(indicator);
         }
@@ -940,6 +1035,8 @@ To call a tool, include this tag in your response:
         for (const result of toolResults) {
           if (result.error) {
             toolResultsText += `\n[Error with ${result.tool}: ${result.error}]\n`;
+          } else if (result.tool && result.tool.startsWith("plan_")) {
+            toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
           } else {
             toolResultsText += `\n[Result from ${result.tool}: ${JSON.stringify(result.result, null, 2)}]\n`;
           }
@@ -947,7 +1044,15 @@ To call a tool, include this tag in your response:
 
         const cleanResponse = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
 
-        const followUpPrompt = `The user originally asked: "${text}"
+        let followUpPrompt: string;
+        if (hasPlannerTools && toolResults.every((r) => r.tool && r.tool.startsWith("plan_"))) {
+          followUpPrompt = `The user asked: "${text}"
+
+You called planner tool(s): ${toolNames.join(", ")}
+
+The tool results are shown to the user in the MCP panel. Your text response must be exactly ONE brief sentence confirming what was done. Do NOT repeat any plan content, task lists, or status details. The user can see everything in the MCP panel.`;
+        } else {
+          followUpPrompt = `The user originally asked: "${text}"
 
 You called the following database tool(s):
 ${toolNames.map((n) => `- ${n}`).join("\n")}
@@ -956,6 +1061,7 @@ Here are the results from the database tools:
 ${toolResultsText}
 
 Based on these results, provide your final response to the user's question. ${hasDocumentContent ? "You may also reference the document text that was provided." : "Answer ONLY based on the tool results above. If the tools returned empty results, say so clearly rather than answering from chat history."}`;
+        }
 
         iteration++;
 
