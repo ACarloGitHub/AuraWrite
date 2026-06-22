@@ -2198,10 +2198,31 @@ body {
   cursor: pointer;
 }
 
-.preference-group input[type="checkbox"] {
+.preferation-group input[type="checkbox"] {
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+
+.pref-range-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.pref-range-row input[type="range"] {
+  flex: 1;
+  cursor: pointer;
+  accent-color: var(--color-primary, #4a90d9);
+}
+
+.pref-range-label {
+  min-width: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: right;
 }
 
 .preference-group textarea {

@@ -10,6 +10,8 @@ import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider
 import { LocalLlamacppProvider } from "./local-llamacpp-provider";
 import { buildToolSystemPrompt } from "./tools";
 import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
+import { resolveContextWindowFromAPI, setCachedContextWindow, getCachedContextWindow } from "./context-window";
+import { setContextFooterModel } from "./context-footer";
 import { invoke } from "@tauri-apps/api/core";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
@@ -186,10 +188,30 @@ export async function updateAISettings(): Promise<void> {
     await (currentProvider as LocalLlamacppProvider).shutdownServer();
   }
   currentProvider = createProvider(settings);
+  setContextFooterModel(settings.aiProvider, settings.aiModel);
+  resolveAndCacheContextWindow(settings.aiProvider, settings.aiModel);
 }
 
 export function handlePreferencesChanged(): void {
   updateAISettings();
+}
+
+async function resolveAndCacheContextWindow(provider: string, model: string): Promise<void> {
+  if (!model) return;
+  if (provider === "local-llamacpp" || provider === "ollama" || provider === "lmstudio") return;
+  const cached = getCachedContextWindow(provider, model);
+  if (cached !== null) return;
+  const settings = loadAIFromPreferences();
+  const apiKey = getCachedApiKey(provider) || "";
+  const baseUrl = getProviderBaseUrl(provider as any, settings.aiBaseUrl);
+  try {
+    const ctx = await resolveContextWindowFromAPI(provider, model, apiKey, baseUrl);
+    if (ctx !== null && ctx > 0) {
+      setCachedContextWindow(provider, model, ctx);
+    }
+  } catch {
+    // Silently fall back to hardcoded table
+  }
 }
 
 export async function sendToAI(

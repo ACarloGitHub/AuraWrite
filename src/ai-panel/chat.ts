@@ -23,6 +23,7 @@ import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
+import { getContextWindow } from "./context-window";
 
 const MAX_TOOL_ITERATIONS = 3;
 
