@@ -32,5 +32,5 @@ export function updateContextFooter(): void {
   const used = formatContextNumber(usage.totalTokens);
   const cap = formatContextNumber(window.context);
   const pctStr = `${pct.toFixed(1)}%`;
-  textEl.textContent = `Contesto ${used} / ${cap} (${pctStr})${usage.source === "estimated" ? " ~stima" : ""}`;
+  textEl.textContent = `Context ${used} / ${cap} (${pctStr})${usage.source === "estimated" ? " ~est." : ""}`;
 }

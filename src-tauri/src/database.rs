@@ -478,6 +478,26 @@ fn get_schema() -> String {
         PRIMARY KEY (project_id, key)
     );
 
+    -- Chat messages (Phase 1 of chat compaction)
+    -- Each message is persisted after every turn (user + assistant).
+    -- session_id identifies a single app session (generated on startup).
+    -- attachments_json holds a JSON array of {filename, kind, mimeType, size}
+    -- (base64 data is intentionally NOT stored to keep the DB small —
+    --  it is already shown to the user in the chat panel).
+    -- project_id is captured at send time for future per-project queries,
+    -- but messages are NOT deleted when a project is deleted
+    -- (chat sessions span across projects).
+    CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool_result')),
+        content TEXT NOT NULL,
+        attachments_json TEXT,
+        project_id TEXT,
+        timestamp INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+    );
+
     -- ============================================================================
     -- INDICES
     -- ============================================================================
@@ -495,6 +515,9 @@ fn get_schema() -> String {
     CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
     CREATE INDEX IF NOT EXISTS idx_search_project ON search_index(project_id);
     CREATE INDEX IF NOT EXISTS idx_search_entity ON search_index(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_timestamp ON chat_messages(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_messages(project_id);
     "#
     .to_string()
 }

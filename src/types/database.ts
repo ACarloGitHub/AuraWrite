@@ -119,6 +119,36 @@ export interface DocumentVersion {
 }
 
 // ============================================================================
+// Chat (Phase 1 of chat compaction)
+// ============================================================================
+
+/**
+ * One persisted chat turn. Inserted after every user + assistant message.
+ * attachments_json stores a JSON array of {filename, kind, mimeType, size}
+ * (base64 is intentionally NOT persisted).
+ * project_id is captured at send time for future per-project queries;
+ * messages are NOT deleted when a project is deleted.
+ */
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | "system" | "tool_result";
+  content: string;
+  attachments_json?: string | null;
+  project_id?: string | null;
+  timestamp: number;
+  created_at: number;
+}
+
+/** Summary of one persisted chat session (for future history UI). */
+export interface ChatSessionSummary {
+  session_id: string;
+  message_count: number;
+  last_timestamp: number;
+  first_timestamp: number;
+}
+
+// ============================================================================
 // Enums
 // ============================================================================
 

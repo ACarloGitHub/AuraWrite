@@ -24,6 +24,7 @@ import { currentProject, currentSection, currentDocument } from "../editor/proje
 import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
 import { getContextWindow } from "./context-window";
+import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
 
 const MAX_TOOL_ITERATIONS = 3;
 
@@ -355,6 +356,9 @@ export function setupAIPanel(view: EditorView): void {
   setupEditorSelectionListener(view);
   setupChatInputResizePersistence();
   window.addEventListener("aurawrite:preferences-changed", handlePreferencesChanged);
+  // Phase 1 of chat compaction: initialize the session_id on panel boot.
+  // The id is generated lazily on first call and cached in localStorage.
+  getCurrentSessionId();
 }
 
 const CHAT_INPUT_HEIGHT_KEY = "aurawrite-chat-input-height";
@@ -951,6 +955,12 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
 
   const placeholder = appendMessage("assistant", "Thinking...");
 
+  // Track the actual AI content for DB persistence. The placeholder may show
+  // a summary line ("✓ 2 edits applied") but the DB should store the full
+  // cleaned AI response so it's useful for future RAG search.
+  let persistedAssistantContent: string | null = null;
+  let hadError = false;
+
   try {
     setProcessing(true);
     const response = await sendToAI(text, context);
@@ -959,6 +969,7 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
       if (response.error) {
         placeholder.textContent = `Error: ${response.error}`;
         placeholder.classList.add("ai-message--error");
+        hadError = true;
         setProcessing(false);
         return;
       }
@@ -1074,6 +1085,10 @@ Based on these results, provide your final response to the user's question. ${ha
             placeholder.textContent = `${cleanResponse}\n\n[Tool error: ${followUpResponse.error}]`;
             placeholder.classList.add("ai-message--error");
           }
+          hadError = true;
+          // Persist the partial response even on tool error — it may contain
+          // useful information the user saw before the error.
+          persistedAssistantContent = cleanResponse || aiContent;
           setProcessing(false);
           return;
         }
@@ -1091,15 +1106,22 @@ Based on these results, provide your final response to the user's question. ${ha
         );
 
         if (editResult.operationsApplied > 0) {
-          placeholder.textContent = `✓ ${editResult.operationsApplied} modifica/e applicata/e`;
+          placeholder.textContent = `✓ ${editResult.operationsApplied} edit(s) applied`;
           if (editResult.operationsFailed > 0) {
-            placeholder.textContent += `, ${editResult.operationsFailed} fallita/e`;
+            placeholder.textContent += `, ${editResult.operationsFailed} failed`;
           }
+          // For edit operations the full AI content (stripped of tool tags)
+          // is what the user cares about for future RAG, not the summary line.
+          const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+          persistedAssistantContent = cleanedContent || aiContent;
         } else if (editResult.error) {
           placeholder.textContent = aiContent;
+          const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+          persistedAssistantContent = cleanedContent || aiContent;
         } else {
           const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
           placeholder.textContent = cleanedContent || aiContent;
+          persistedAssistantContent = cleanedContent || aiContent;
         }
       }
     }
@@ -1107,10 +1129,23 @@ Based on these results, provide your final response to the user's question. ${ha
     if (placeholder) {
       placeholder.textContent = `Error: ${error instanceof Error ? error.message : "Unknown error"}`;
       placeholder.classList.add("ai-message--error");
+      hadError = true;
     }
   } finally {
     setProcessing(false);
     updateContextFooter();
+    // Persist the assistant turn using the actual AI content (stripped of
+    // tool tags), NOT the display text. The placeholder may show a summary
+    // like "✓ 2 edits applied" but the DB must store the real content for
+    // future RAG search. Errors are NOT persisted — they are ephemeral.
+    if (persistedAssistantContent && !hadError) {
+      void saveChatMessage(
+        "assistant",
+        persistedAssistantContent,
+        undefined,
+        currentProject?.id,
+      );
+    }
   }
 
   if (historyEl) {
@@ -1126,6 +1161,20 @@ function appendMessage(
   if (!historyEl) return null;
 
   messages.push({ role, content, timestamp: Date.now(), ...(attachments ? { attachments } : {}) });
+
+  // Phase 1 of chat compaction: only user turns are persisted here.
+  // Assistant turns are persisted by `sendMessage` in its `finally`
+  // block, using the final placeholder text after the response has
+  // arrived (see comment there). system/tool_result messages stay in
+  // memory only — they're internal noise for the future RAG.
+  if (role === "user") {
+    void saveChatMessage(
+      role,
+      content,
+      attachments,
+      currentProject?.id,
+    );
+  }
 
   const msgEl = document.createElement("div");
   msgEl.className = `ai-message ai-message--${role === "tool_result" ? "system" : role}`;

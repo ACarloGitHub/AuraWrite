@@ -16,6 +16,7 @@ mod secrets;
 mod workspace;
 mod permissions;
 mod planner;
+mod chat_db;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -25,6 +26,7 @@ use secrets::*;
 use workspace::*;
 use permissions::*;
 use planner::*;
+use chat_db::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -919,6 +921,155 @@ fn embedding_delete_for_project(
 }
 
 // ============================================================================
+// CHAT PERSISTENCE COMMANDS (Phase 1 of chat compaction)
+// ============================================================================
+
+#[tauri::command]
+fn chat_save_message(
+    state: State<AppState>,
+    message: ChatMessage,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    save_chat_message(&*conn, &message).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn chat_get_messages_by_session(
+    state: State<AppState>,
+    session_id: String,
+) -> Result<Vec<ChatMessage>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_chat_messages_by_session(&*conn, &session_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn chat_list_recent_sessions(
+    state: State<AppState>,
+    limit: Option<i32>,
+) -> Result<Vec<ChatSessionSummary>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    list_recent_sessions(&*conn, limit.unwrap_or(20)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn chat_count_messages(state: State<AppState>) -> Result<i64, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    count_chat_messages(&*conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn chat_delete_session(
+    state: State<AppState>,
+    session_id: String,
+) -> Result<usize, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    // Cascade-clean the embeddings for this session so the vec0 table
+    // doesn't keep orphan vectors around.
+    let _ = embeddings::delete_chat_embeddings_for_session(&*conn, &session_id);
+    delete_chat_session(&*conn, &session_id).map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// CHAT MESSAGE EMBEDDING COMMANDS (Phase 2 of chat compaction)
+// ============================================================================
+
+#[tauri::command]
+fn embedding_save_chat_message(
+    state: State<AppState>,
+    message_id: String,
+    session_id: String,
+    role: String,
+    message_timestamp: i64,
+    content_text: String,
+    project_id: Option<String>,
+    embedding_vector: Vec<f32>,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let embedding = embeddings::ChatMessageEmbedding {
+        message_id,
+        session_id,
+        role,
+        message_timestamp,
+        content_text,
+        project_id,
+        created_at: now,
+    };
+
+    embeddings::save_chat_message_embedding(&*conn, &embedding, &embedding_vector)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_search_chat_messages(
+    state: State<AppState>,
+    session_id: String,
+    project_id: Option<String>,
+    query_vector: Vec<f32>,
+    limit: i32,
+) -> Result<Vec<embeddings::ChatSearchResult>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::search_similar_chat_messages(
+        &*conn,
+        &session_id,
+        project_id.as_deref(),
+        &query_vector,
+        limit,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_search_chat_messages_cross_session(
+    state: State<AppState>,
+    session_ids: Vec<String>,
+    project_id: Option<String>,
+    query_vector: Vec<f32>,
+    limit: i32,
+) -> Result<Vec<embeddings::ChatSearchResult>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::search_similar_chat_messages_cross_session(
+        &*conn,
+        &session_ids,
+        project_id.as_deref(),
+        &query_vector,
+        limit,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_delete_chat_message(
+    state: State<AppState>,
+    message_id: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_chat_message_embedding(&*conn, &message_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_delete_chat_for_session(
+    state: State<AppState>,
+    session_id: String,
+) -> Result<usize, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::delete_chat_embeddings_for_session(&*conn, &session_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn embedding_count_chat_messages(state: State<AppState>) -> Result<i64, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    embeddings::count_chat_message_embeddings(&*conn).map_err(|e| e.to_string())
+}
+
+// ============================================================================
 // APP SETUP
 // ============================================================================
 
@@ -932,6 +1083,13 @@ pub fn run() {
 
     // Initialize embeddings table (vec0 virtual table + metadata)
     embeddings::init_embeddings_table(&conn).expect("Failed to initialize embeddings table");
+
+    // Initialize chat_embeddings table (Phase 2 of chat compaction)
+    embeddings::init_chat_embeddings_table(&conn)
+        .expect("Failed to initialize chat embeddings table");
+
+    // Initialize chat_messages table (Phase 1 of chat compaction)
+    chat_db::init_chat_table(&conn).expect("Failed to initialize chat table");
 
     // One-shot cleanup: remove orphan links left over from older versions
     // where deleting a document/section/project/entity did not cascade to the
@@ -1101,6 +1259,19 @@ pub fn run() {
             plan_delete,
             plan_next,
             plan_status,
+            // Chat persistence (Phase 1 of chat compaction)
+            chat_save_message,
+            chat_get_messages_by_session,
+            chat_list_recent_sessions,
+            chat_count_messages,
+            chat_delete_session,
+            // Chat message embeddings (Phase 2 of chat compaction)
+            embedding_save_chat_message,
+            embedding_search_chat_messages,
+            embedding_search_chat_messages_cross_session,
+            embedding_delete_chat_message,
+            embedding_delete_chat_for_session,
+            embedding_count_chat_messages,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
