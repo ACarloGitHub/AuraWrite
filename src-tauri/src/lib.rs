@@ -17,6 +17,7 @@ mod workspace;
 mod permissions;
 mod planner;
 mod chat_db;
+mod compaction;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -27,6 +28,7 @@ use workspace::*;
 use permissions::*;
 use planner::*;
 use chat_db::*;
+use compaction::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -1272,6 +1274,11 @@ pub fn run() {
             embedding_delete_chat_message,
             embedding_delete_chat_for_session,
             embedding_count_chat_messages,
+            // Compaction summary files (Phase 3 of chat compaction)
+            compaction_save_summary,
+            compaction_read_latest_summary,
+            compaction_list_summaries,
+            compaction_delete_summary,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {

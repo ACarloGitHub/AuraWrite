@@ -25,6 +25,7 @@ import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
 import { getContextWindow } from "./context-window";
 import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
+import { shouldCompact, compactConversation, getCompactionSystemContext } from "./compaction";
 
 const MAX_TOOL_ITERATIONS = 3;
 
@@ -953,6 +954,22 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
 
   context = buildContextWithTools(context);
 
+  // Phase 3: inject compaction summary as context if available.
+  // The summary replaces old messages that have been compacted out
+  // of the active history, giving the AI continuity without consuming
+  // the full context window.
+  const compactionContext = getCompactionSystemContext();
+  if (compactionContext) {
+    const existingHistory = context.messageHistory || [];
+    context = {
+      ...context,
+      messageHistory: [
+        { role: "user" as const, content: compactionContext },
+        ...existingHistory,
+      ],
+    };
+  }
+
   const placeholder = appendMessage("assistant", "Thinking...");
 
   // Track the actual AI content for DB persistence. The placeholder may show
@@ -1145,6 +1162,66 @@ Based on these results, provide your final response to the user's question. ${ha
         undefined,
         currentProject?.id,
       );
+    }
+
+    // Phase 3: check if context exceeds the compaction threshold.
+    // If so, compact the conversation: summarize old messages and replace
+    // them in the in-memory history with the summary, keeping the tail.
+    // The original messages stay in SQLite/RAG for future search.
+    if (!hadError && shouldCompact()) {
+      try {
+        const allMessages = getMessages();
+        const result = await compactConversation(
+          allMessages.filter((m) => m.role === "user" || m.role === "assistant"),
+        );
+        if (result.compacted && result.summary) {
+          // Remove head messages from the in-memory array and DOM.
+          // Keep the tail (most recent messages) and add a system message
+          // with the summary at the top.
+          const tailStart = Math.max(0, allMessages.length - 6);
+          const tail = allMessages.slice(tailStart);
+          const historyEl = document.querySelector(".ai-panel__history");
+          if (historyEl) {
+            const existingMessages = historyEl.querySelectorAll(".ai-message");
+            existingMessages.forEach((el) => el.remove());
+            // Compaction notice
+            const notice = document.createElement("div");
+            notice.className = "ai-message ai-message--system";
+            notice.textContent = `[Previous context summarized — ${result.messagesRemoved} messages compacted]`;
+            historyEl.appendChild(notice);
+            // Re-add tail messages to DOM
+            for (const msg of tail) {
+              if (msg.role === "user" || msg.role === "assistant") {
+                const msgEl = document.createElement("div");
+                msgEl.className = `ai-message ai-message--${msg.role}`;
+                msgEl.textContent = msg.content;
+                if (msg.attachments && msg.attachments.length > 0) {
+                  const textNode = document.createElement("span");
+                  textNode.textContent = msg.content;
+                  msgEl.textContent = "";
+                  msgEl.appendChild(textNode);
+                }
+                historyEl.appendChild(msgEl);
+              }
+            }
+            historyEl.scrollTop = historyEl.scrollHeight;
+          }
+          // Reset in-memory messages to: [system summary] + tail
+          messages.length = 0;
+          messages.push({
+            role: "system",
+            content: `[Context summary]\n\n${result.summary}`,
+            timestamp: Date.now(),
+          });
+          for (const msg of tail) {
+            if (msg.role === "user" || msg.role === "assistant") {
+              messages.push(msg);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[compaction] Compaction failed, continuing with full history:", err);
+      }
     }
   }
 
