@@ -310,6 +310,29 @@ export const AVAILABLE_TOOLS = [
       },
       required: ["name"]
     }
+  },
+  {
+    name: "chat_search",
+    description: "Search past chat messages using semantic similarity. Finds relevant previous conversations even across sessions. Use this when you need specific details that were discussed earlier but are no longer in the active conversation context (because they were compacted into a summary). Returns the original full messages, not summaries.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Natural language query describing what you're looking for (e.g. 'the discussion about the magic system', 'character names mentioned for the protagonist')"
+        },
+        project_id: {
+          type: "string",
+          description: "Optional: filter results to a specific project ID"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10)",
+          default: 10
+        }
+      },
+      required: ["query"]
+    }
   }
 ];
 
@@ -663,6 +686,53 @@ async function entitiesInDocument(
   }
 }
 
+// Tool: chat_search — search past chat messages via semantic similarity
+async function chatSearch(
+  query: string,
+  projectId?: string,
+  limit: number = 10
+): Promise<Array<{ message_id: string; session_id: string; role: string; message_timestamp: number; content_text: string; project_id: string | null; distance: number }>> {
+  try {
+    const PREFERENCES_KEY = "aurawrite-preferences";
+    const saved = localStorage.getItem(PREFERENCES_KEY);
+    const prefs = saved ? JSON.parse(saved) : {};
+    const baseUrl = prefs.aiBaseUrl || undefined;
+
+    const queryVector: number[] = await invoke("embedding_generate", {
+      text: query,
+      isQuery: true,
+      baseUrl,
+    });
+
+    // Get the current and recent session IDs for cross-session search
+    const sessions = await invoke<Array<{ session_id: string; message_count: number; last_timestamp: number }>>(
+      "chat_list_recent_sessions",
+      { limit: 10 }
+    );
+
+    if (sessions.length === 0) {
+      return [];
+    }
+
+    const sessionIds = sessions.map((s) => s.session_id);
+
+    const results = await invoke<Array<{ message_id: string; session_id: string; role: string; message_timestamp: number; content_text: string; project_id: string | null; distance: number }>>(
+      "embedding_search_chat_messages_cross_session",
+      {
+        sessionIds,
+        projectId: projectId || null,
+        queryVector,
+        limit,
+      }
+    );
+
+    return results;
+  } catch (error) {
+    console.error("Chat search failed:", error);
+    return [];
+  }
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -844,6 +914,14 @@ export async function executeTool(
         });
         break;
 
+      case "chat_search":
+        result = await chatSearch(
+          args.query as string,
+          (args.project_id as string) || undefined,
+          (args.limit as number) || 10
+        );
+        break;
+
       default:
         return {
           tool: name,
@@ -972,6 +1050,12 @@ Example 7 — User asks "What's next on my plan?":
 
 Example 8 — User asks "How is the plan going?":
 <tool name="plan_status">{"name": "rewrite-chapter-3"}</tool>
+
+Example 9 — User asks "What did we decide about the magic system earlier?":
+<tool name="chat_search">{"query": "magic system decisions"}</tool>
+
+Example 10 — User asks "What names did we discuss for the protagonist?":
+<tool name="chat_search">{"query": "protagonist names discussed", "project_id": "${projectId || "PROJECT_ID"}"}</tool>
 ` : ""}
 === CRITICAL RULES ===
 - When the query mentions a TYPE of entity (characters, locations, places, objects, events), ALWAYS prefer list_entities_by_type with the appropriate entity_type.
