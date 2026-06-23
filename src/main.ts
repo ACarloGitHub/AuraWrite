@@ -94,6 +94,10 @@ interface Preferences {
   fontEditor: string;
   fontUi: string;
   plannerEnabled: boolean;
+  webSearchEnabled: boolean;
+  fileSystemEnabled: boolean;
+  shellExecEnabled: boolean;
+  ragEnabled: boolean;
 }
 
 const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
@@ -204,6 +208,10 @@ const defaultPreferences: Preferences = {
   fontEditor: "Lora",
   fontUi: "Inter",
   plannerEnabled: true,
+  webSearchEnabled: true,
+  fileSystemEnabled: true,
+  shellExecEnabled: false,
+  ragEnabled: false,
 };
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -499,6 +507,18 @@ function openPreferencesModal(): void {
   (
     document.getElementById("pref-agent-planner") as HTMLInputElement
   ).checked = prefs.plannerEnabled !== false;
+  (
+    document.getElementById("pref-agent-web-search") as HTMLInputElement
+  ).checked = prefs.webSearchEnabled !== false;
+  (
+    document.getElementById("pref-agent-file-system") as HTMLInputElement
+  ).checked = prefs.fileSystemEnabled !== false;
+  (
+    document.getElementById("pref-agent-shell-exec") as HTMLInputElement
+  ).checked = prefs.shellExecEnabled === true;
+  (
+    document.getElementById("pref-agent-rag") as HTMLInputElement
+  ).checked = prefs.ragEnabled === true;
 
   updateCustomColorsVisibility();
   updateApiKeyGroupVisibility();
@@ -914,6 +934,10 @@ function savePreferencesFromModal(): void {
     fontEditor: sel("pref-fonts-editor") || "Lora",
     fontUi: sel("pref-fonts-ui") || "Inter",
     plannerEnabled: chk("pref-agent-planner"),
+    webSearchEnabled: chk("pref-agent-web-search"),
+    fileSystemEnabled: chk("pref-agent-file-system"),
+    shellExecEnabled: chk("pref-agent-shell-exec"),
+    ragEnabled: chk("pref-agent-rag"),
   };
 
   savePreferences(prefs);
@@ -1625,7 +1649,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);

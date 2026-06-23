@@ -1599,6 +1599,19 @@ body {
   padding: var(--spacing-md);
 }
 
+.mcp-wiki-content {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  padding: 4px;
+  color: var(--color-text);
+}
+
+.mcp-wiki-content a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
 .mcp-panel__new-plan-form {
   display: none;
   flex-direction: column;

@@ -32,7 +32,6 @@ pub struct PermissionEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum PermissionScope {
-    Once,
     Session,
     Always,
 }
@@ -53,6 +52,12 @@ impl PermissionsStore {
             session: Vec::new(),
             loaded: false,
         }
+    }
+
+    pub fn all_entries(&self) -> Vec<&PermissionEntry> {
+        let mut entries: Vec<&PermissionEntry> = self.always.iter().collect();
+        entries.extend(self.session.iter());
+        entries
     }
 
     fn load(app: &AppHandle) -> Result<Self, String> {
@@ -166,10 +171,6 @@ pub fn permissions_grant(
     let mut store = state.store.lock().map_err(|e| format!("lock: {}", e))?;
 
     match scope {
-        PermissionScope::Once => {
-            // Once permissions are not stored; they're checked at call time
-            // by the frontend passing the approval. Nothing to persist.
-        }
         PermissionScope::Session => {
             store.session.push(entry);
         }

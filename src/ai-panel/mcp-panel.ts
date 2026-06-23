@@ -104,6 +104,59 @@ export function setupMCPPanel(): void {
       btnMcp.classList.add("active");
     }
   }) as EventListener);
+
+  // Wiki & Web panel setup
+  const btnWikiRefresh = document.getElementById("mcp-wiki-refresh");
+  const btnWikiNew = document.getElementById("mcp-wiki-new");
+  const wikiNewForm = document.getElementById("mcp-wiki-new-form") as HTMLDivElement | null;
+
+  btnWikiRefresh?.addEventListener("click", () => loadWikiList());
+
+  btnWikiNew?.addEventListener("click", () => {
+    if (wikiNewForm) {
+      wikiNewForm.style.display = wikiNewForm.style.display === "none" ? "flex" : "none";
+      const nameInput = wikiNewForm.querySelector("input");
+      if (nameInput) nameInput.focus();
+    }
+  });
+
+  const wikiNewConfirm = document.getElementById("mcp-wiki-new-confirm");
+  const wikiNewNameInput = document.getElementById("mcp-wiki-new-name") as HTMLInputElement | null;
+
+  wikiNewConfirm?.addEventListener("click", async () => {
+    const name = wikiNewNameInput?.value.trim();
+    if (!name) return;
+    await createWikiPage(name);
+    if (wikiNewForm) wikiNewForm.style.display = "none";
+    if (wikiNewNameInput) wikiNewNameInput.value = "";
+  });
+
+  wikiNewNameInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      wikiNewConfirm?.click();
+    }
+  });
+
+  window.addEventListener("aurawrite:wiki-changed", (() => {
+    loadWikiList();
+    const mcpPanel = document.getElementById("mcp-panel");
+    const mcpBtn = document.getElementById("btn-mcp");
+    if (mcpPanel?.classList.contains("hidden")) {
+      mcpPanel.classList.remove("hidden");
+      mcpBtn?.classList.add("active");
+    }
+  }) as EventListener);
+
+  window.addEventListener("aurawrite:web-activity", ((e: CustomEvent) => {
+    const { type, query } = e.detail as { type: "search" | "fetch" | "images"; query: string };
+    logWebActivity(type, query);
+    const mcpPanel = document.getElementById("mcp-panel");
+    const mcpBtn = document.getElementById("btn-mcp");
+    if (mcpPanel?.classList.contains("hidden")) {
+      mcpPanel.classList.remove("hidden");
+      mcpBtn?.classList.add("active");
+    }
+  }) as EventListener);
 }
 
 async function loadPlanList(): Promise<void> {
@@ -262,5 +315,131 @@ async function updateTaskText(planName: string, lineIndex: number, newText: stri
     }
   } catch (e) {
     console.error("[mcp] update task text failed:", e);
+  }
+}
+
+// ============================================================================
+// Wiki Explorer
+// ============================================================================
+
+async function loadWikiList(): Promise<void> {
+  const wikiList = document.getElementById("mcp-wiki-list");
+  if (!wikiList) return;
+
+  try {
+    wikiList.innerHTML = '<div class="mcp-plan-empty">Loading...</div>';
+    const result = await invoke<string>("wiki_list");
+    // Strip [INSTRUCTION: ...] prefix
+    const cleanResult = result.replace(/\[INSTRUCTION:.*?\]\s*/, "").trim();
+    const lines = cleanResult.split("\n").filter(l => l.trim().startsWith("-"));
+
+    if (lines.length === 0) {
+      wikiList.innerHTML = '<div class="mcp-plan-empty">No wiki pages yet</div>';
+      return;
+    }
+
+    wikiList.innerHTML = "";
+    for (const line of lines) {
+      // Parse "- pagename (N lines)"
+      const match = line.match(/^- (.+?) \((\d+) lines\)/);
+      if (!match) continue;
+      const [, pageName, lineCount] = match;
+
+      const div = document.createElement("div");
+      div.className = "mcp-plan-task";
+      div.innerHTML = `<span class="mcp-plan-task-text" style="cursor:pointer" title="Click to read">📝 ${pageName} <small>(${lineCount} lines)</small></span>`;
+      div.addEventListener("click", () => readWikiPage(pageName));
+      wikiList.appendChild(div);
+    }
+  } catch (e) {
+    console.error("[mcp] load wiki list failed:", e);
+    wikiList.innerHTML = '<div class="mcp-plan-empty">Error loading wiki</div>';
+  }
+}
+
+async function readWikiPage(name: string): Promise<void> {
+  const wikiList = document.getElementById("mcp-wiki-list");
+  if (!wikiList) return;
+
+  try {
+    const result = await invoke<string>("wiki_read", { name });
+    // Strip [INSTRUCTION: ...] prefix
+    const cleanResult = result.replace(/\[INSTRUCTION:.*?\]\s*/, "").trim();
+    // Show page content inline in the panel
+    wikiList.innerHTML = `<div class="mcp-plan-empty" style="margin-bottom:8px">
+      <button class="mcp-panel__btn" id="mcp-wiki-back" style="margin-right:8px">← Back</button>
+      <strong>📝 ${name}</strong>
+    </div>`;
+
+    const backBtn = document.getElementById("mcp-wiki-back");
+    backBtn?.addEventListener("click", () => loadWikiList());
+
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "mcp-wiki-content";
+    contentDiv.style.cssText = "font-size: 12px; line-height: 1.5; white-space: pre-wrap; max-height: 300px; overflow-y: auto; padding: 4px;";
+    // Show first 2000 chars of the page content
+    const displayContent = cleanResult.length > 2000 ? cleanResult.slice(0, 2000) + "..." : cleanResult;
+    contentDiv.textContent = displayContent;
+    wikiList.appendChild(contentDiv);
+  } catch (e) {
+    console.error("[mcp] read wiki page failed:", e);
+    wikiList.innerHTML = '<div class="mcp-plan-empty">Error reading page</div>';
+  }
+}
+
+async function createWikiPage(name: string): Promise<void> {
+  try {
+    const content = `# ${name}\n\n`;
+    await invoke<string>("wiki_write", { name, content, frontmatter: null });
+    await loadWikiList();
+  } catch (e) {
+    console.error("[mcp] create wiki page failed:", e);
+    alert("Failed to create wiki page: " + (e as Error).message);
+  }
+}
+
+// ============================================================================
+// Web Activity
+// ============================================================================
+
+interface WebActivityEntry {
+  type: "search" | "fetch" | "images";
+  query: string;
+  timestamp: number;
+}
+
+const webActivityLog: WebActivityEntry[] = [];
+const MAX_WEB_ACTIVITY = 20;
+
+export function logWebActivity(type: "search" | "fetch" | "images", query: string): void {
+  webActivityLog.unshift({ type, query, timestamp: Date.now() });
+  if (webActivityLog.length > MAX_WEB_ACTIVITY) {
+    webActivityLog.pop();
+  }
+  renderWebActivity();
+}
+
+function renderWebActivity(): void {
+  const container = document.getElementById("mcp-web-activity");
+  if (!container) return;
+
+  if (webActivityLog.length === 0) {
+    container.innerHTML = '<div class="mcp-plan-empty">Web activity will appear here</div>';
+    return;
+  }
+
+  const typeIcons: Record<string, string> = {
+    search: "🔍",
+    fetch: "🌐",
+    images: "🖼️",
+  };
+
+  container.innerHTML = "";
+  for (const entry of webActivityLog) {
+    const div = document.createElement("div");
+    div.className = "mcp-plan-task";
+    const timeStr = new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    div.innerHTML = `<span class="mcp-plan-task-text">${typeIcons[entry.type] || "🔗"} <small>${timeStr}</small> ${entry.query.length > 60 ? entry.query.slice(0, 57) + "..." : entry.query}</span>`;
+    container.appendChild(div);
   }
 }

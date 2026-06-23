@@ -4,6 +4,11 @@
 // ============================================================================
 
 import { invoke } from "@tauri-apps/api/core";
+import { requestPermission } from "./permissions";
+
+function isAbsolutePath(path: string): boolean {
+  return /^(?:[A-Za-z]:[/\\]|\/)/.test(path);
+}
 
 // ============================================================================
 // Tool Definitions (for AI)
@@ -332,6 +337,290 @@ export const AVAILABLE_TOOLS = [
         }
       },
       required: ["query"]
+    }
+  },
+  // ====== Web tools (native MCP) ======
+  {
+    name: "web_search",
+    description: "Search the web using DuckDuckGo (or Brave Search API if configured). Returns an array of results with title, url, and snippet.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10, max: 20)",
+          default: 10
+        }
+      },
+      required: ["query"]
+    }
+  },
+  {
+    name: "web_fetch",
+    description: "Fetch the content of a URL and return it as markdown or plain text. Useful for reading web pages, articles, documentation. Timeout: 30s. Content limit: 200KB.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: {
+          type: "string",
+          description: "The URL to fetch"
+        },
+        format: {
+          type: "string",
+          description: "Output format: 'markdown' (default) or 'text'",
+          default: "markdown"
+        }
+      },
+      required: ["url"]
+    }
+  },
+  {
+    name: "web_search_images",
+    description: "Search for images on the web. Returns an array of results with url, title, thumbnail_url, width, height, and source.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Image search query"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10, max: 20)",
+          default: 10
+        }
+      },
+      required: ["query"]
+    }
+  },
+  // ====== Wiki tools (native MCP) ======
+  {
+    name: "wiki_search",
+    description: "Search the memory wiki (workspace/memory/) for pages matching a query. Performs recursive case-insensitive search in page content and names.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query (case-insensitive)"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 20, max: 50)",
+          default: 20
+        }
+      },
+      required: ["query"]
+    }
+  },
+  {
+    name: "wiki_read",
+    description: "Read a wiki page by name from the memory wiki (workspace/memory/). Returns the page content and optional YAML frontmatter.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "The wiki page name (e.g. 'worldbuilding' or 'magic-system')"
+        }
+      },
+      required: ["name"]
+    }
+  },
+  {
+    name: "wiki_write",
+    description: "Create or update a wiki page in the memory wiki (workspace/memory/). Content is markdown, optionally with YAML frontmatter.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "The wiki page name (will be sanitized for filesystem)"
+        },
+        content: {
+          type: "string",
+          description: "The page content in markdown"
+        },
+        frontmatter: {
+          type: "object",
+          description: "Optional YAML frontmatter as a JSON object (e.g. {tags: ['magic', 'world'], created: '2025-01-01'})",
+        }
+      },
+      required: ["name", "content"]
+    }
+  },
+  {
+    name: "wiki_list",
+    description: "List all wiki pages in the memory wiki (workspace/memory/). Returns page names, paths, and preview content.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "wiki_ingest",
+    description: "Create multiple wiki pages at once from source text. The AI decides the page structure and content, the tool saves them all. Use this to organize knowledge from a conversation into the memory wiki.",
+    parameters: {
+      type: "object",
+      properties: {
+        pages: {
+          type: "array",
+          description: "Array of wiki pages to create",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Page name" },
+              content: { type: "string", description: "Page content in markdown" },
+              frontmatter: { type: "object", description: "Optional YAML frontmatter" }
+            },
+            required: ["name", "content"]
+          }
+        }
+      },
+      required: ["pages"]
+    }
+  },
+  // ====== File system tools (native MCP) ======
+  {
+    name: "file_read",
+    description: "Read a file from the filesystem. By default confined to the workspace directory. Paths outside the workspace require user permission.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "File path (relative to workspace root, or absolute)"
+        }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "file_write",
+    description: "Write content to a file. By default confined to the workspace directory. Paths outside the workspace require user permission. Creates parent directories if needed.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "File path (relative to workspace root, or absolute)"
+        },
+        content: {
+          type: "string",
+          description: "The content to write"
+        }
+      },
+      required: ["path", "content"]
+    }
+  },
+  {
+    name: "file_list",
+    description: "List files and directories at a given path. By default confined to the workspace directory. Returns name, path, is_dir, and size.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Directory path (relative to workspace root, or absolute)",
+          default: "."
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "file_edit",
+    description: "Edit a file by replacing specific text segments. By default confined to the workspace directory. Each edit specifies old_text to find and new_text to replace it with.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "File path (relative to workspace root, or absolute)"
+        },
+        edits: {
+          type: "array",
+          description: "Array of edit operations",
+          items: {
+            type: "object",
+            properties: {
+              old_text: { type: "string", description: "The text to find" },
+              new_text: { type: "string", description: "The replacement text" }
+            },
+            required: ["old_text", "new_text"]
+          }
+        }
+      },
+      required: ["path", "edits"]
+    }
+  },
+  // ====== RAG tools (native MCP) ======
+  {
+    name: "rag_add",
+    description: "Index text content into the RAG vector database. Generates embeddings and saves chunks for later semantic search.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          description: "The project ID"
+        },
+        entity_type: {
+          type: "string",
+          description: "Type of entity (e.g. 'wiki', 'note', 'external')"
+        },
+        entity_id: {
+          type: "string",
+          description: "Unique identifier for this entity"
+        },
+        content_text: {
+          type: "string",
+          description: "The text content to index"
+        }
+      },
+      required: ["project_id", "entity_type", "entity_id", "content_text"]
+    }
+  },
+  {
+    name: "rag_search",
+    description: "Search the RAG vector database by semantic similarity. Returns matching chunks sorted by relevance.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          description: "The project ID"
+        },
+        query: {
+          type: "string",
+          description: "Natural language search query"
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 10)",
+          default: 10
+        }
+      },
+      required: ["project_id", "query"]
+    }
+  },
+  {
+    name: "rag_list",
+    description: "List all indexed entities in the RAG database for a project, with chunk counts and total characters.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          description: "The project ID"
+        }
+      },
+      required: ["project_id"]
     }
   }
 ];
@@ -788,15 +1077,49 @@ export interface ToolResult {
 
 export async function executeTool(
   toolCall: ToolCall,
-  plannerEnabled = true
+  prefs: ToolPreferences = {}
 ): Promise<ToolResult> {
   const { name, arguments: args } = toolCall;
+
+  const plannerEnabled = prefs.plannerEnabled !== false;
+  const webSearchEnabled = prefs.webSearchEnabled !== false;
+  const fileSystemEnabled = prefs.fileSystemEnabled !== false;
+  const ragEnabled = prefs.ragEnabled === true;
+  const shellExecEnabled = prefs.shellExecEnabled === true;
 
   if (!plannerEnabled && name.startsWith("plan_")) {
     return {
       tool: name,
       result: null,
       error: "Planner tool is disabled. Enable it in Settings > Agent.",
+    };
+  }
+  if (!webSearchEnabled && name.startsWith("web_")) {
+    return {
+      tool: name,
+      result: null,
+      error: "Web search tools are disabled. Enable them in Settings > Agent.",
+    };
+  }
+  if (!fileSystemEnabled && name.startsWith("file_")) {
+    return {
+      tool: name,
+      result: null,
+      error: "File system tools are disabled. Enable them in Settings > Agent.",
+    };
+  }
+  if (!ragEnabled && name.startsWith("rag_")) {
+    return {
+      tool: name,
+      result: null,
+      error: "RAG tools are disabled. Enable them in Settings > Agent.",
+    };
+  }
+  if (!shellExecEnabled && name === "exec") {
+    return {
+      tool: name,
+      result: null,
+      error: "Shell execution is disabled. Enable it in Settings > Agent.",
     };
   }
 
@@ -922,6 +1245,144 @@ export async function executeTool(
         );
         break;
 
+      // ====== Web tools (native MCP) ======
+      // All return strings with [INSTRUCTION: ...] prefix (Tool Result Injection pattern)
+      case "web_search":
+        result = await invoke<string>("web_search", {
+          query: args.query as string,
+          limit: (args.limit as number) || 10,
+        });
+        break;
+
+      case "web_fetch":
+        result = await invoke<string>("web_fetch", {
+          url: args.url as string,
+          format: (args.format as string) || "markdown",
+        });
+        break;
+
+      case "web_search_images":
+        result = await invoke<string>("web_search_images", {
+          query: args.query as string,
+          limit: (args.limit as number) || 10,
+        });
+        break;
+
+      // ====== Wiki tools (native MCP) ======
+      case "wiki_search":
+        result = await invoke<string>("wiki_search", {
+          query: args.query as string,
+          limit: (args.limit as number) || 20,
+        });
+        break;
+
+      case "wiki_read":
+        result = await invoke<string>("wiki_read", {
+          name: args.name as string,
+        });
+        break;
+
+      case "wiki_write":
+        result = await invoke<string>("wiki_write", {
+          name: args.name as string,
+          content: args.content as string,
+          frontmatter: args.frontmatter || null,
+        });
+        break;
+
+      case "wiki_list":
+        result = await invoke<string>("wiki_list");
+        break;
+
+      case "wiki_ingest":
+        result = await invoke<string>("wiki_ingest", {
+          pages: args.pages as Array<{ name: string; content: string; frontmatter?: unknown }>,
+        });
+        break;
+
+      // ====== File system tools (native MCP) ======
+      case "file_read": {
+        const filePath = args.path as string;
+        if (isAbsolutePath(filePath)) {
+          const allowed = await requestPermission("file_read", filePath);
+          if (!allowed) {
+            return { tool: name, result: null, error: `Permission denied: user did not grant access to '${filePath}'.` };
+          }
+        }
+        result = await invoke<string>("file_read", {
+          path: filePath,
+        });
+        break;
+      }
+
+      case "file_write": {
+        const filePath = args.path as string;
+        if (isAbsolutePath(filePath)) {
+          const allowed = await requestPermission("file_write", filePath);
+          if (!allowed) {
+            return { tool: name, result: null, error: `Permission denied: user did not grant access to '${filePath}'.` };
+          }
+        }
+        result = await invoke<string>("file_write", {
+          path: filePath,
+          content: args.content as string,
+        });
+        break;
+      }
+
+      case "file_list": {
+        const dirPath = (args.path as string) || ".";
+        if (isAbsolutePath(dirPath)) {
+          const allowed = await requestPermission("file_list", dirPath);
+          if (!allowed) {
+            return { tool: name, result: null, error: `Permission denied: user did not grant access to '${dirPath}'.` };
+          }
+        }
+        result = await invoke<string>("file_list", {
+          path: dirPath,
+        });
+        break;
+      }
+
+      case "file_edit": {
+        const filePath = args.path as string;
+        if (isAbsolutePath(filePath)) {
+          const allowed = await requestPermission("file_edit", filePath);
+          if (!allowed) {
+            return { tool: name, result: null, error: `Permission denied: user did not grant access to '${filePath}'.` };
+          }
+        }
+        result = await invoke<string>("file_edit", {
+          path: filePath,
+          edits: args.edits as Array<{ old_text: string; new_text: string }>,
+        });
+        break;
+      }
+
+      // ====== RAG tools (native MCP) ======
+      case "rag_add":
+        result = await invoke<string>("rag_add", {
+          projectId: args.project_id as string,
+          entityType: args.entity_type as string,
+          entityId: args.entity_id as string,
+          contentText: args.content_text as string,
+        });
+        break;
+
+      case "rag_search":
+        result = await invoke<string>("rag_search", {
+          projectId: args.project_id as string,
+          query: args.query as string,
+          limit: (args.limit as number) || 10,
+        });
+        break;
+
+      case "rag_list":
+        result = await invoke<string>("rag_list", {
+          projectId: args.project_id as string,
+        });
+        break;
+
       default:
         return {
           tool: name,
@@ -992,7 +1453,20 @@ export function parseToolCalls(response: string): ToolCall[] {
 /**
  * Build system prompt with available tools
  */
-export function buildToolSystemPrompt(projectId?: string, plannerEnabled = true): string {
+export interface ToolPreferences {
+  plannerEnabled?: boolean;
+  webSearchEnabled?: boolean;
+  fileSystemEnabled?: boolean;
+  shellExecEnabled?: boolean;
+  ragEnabled?: boolean;
+}
+
+export function buildToolSystemPrompt(projectId?: string, prefs: ToolPreferences = {}): string {
+  const plannerEnabled = prefs.plannerEnabled !== false;
+  const webSearchEnabled = prefs.webSearchEnabled !== false;
+  const fileSystemEnabled = prefs.fileSystemEnabled !== false;
+  const shellExecEnabled = prefs.shellExecEnabled === true;
+  const ragEnabled = prefs.ragEnabled === true;
   const projectInfo = projectId
     ? `\nThe current project ID is: "${projectId}". Always use this as the project_id parameter when calling tools.\n`
     : "";
@@ -1003,13 +1477,16 @@ export function buildToolSystemPrompt(projectId?: string, plannerEnabled = true)
 ${projectInfo}
 ${hasProject ? `IMPORTANT: When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering. Do NOT say "no entities found" without actually calling the tools first.
 
-CRITICAL: Rispondi sempre mostrando entities relative al progetto aperto. Non includere entities di altri progetti. Ogni tool ha un parametro project_id: usalo SEMPRE con il project_id del progetto aperto, MAI lasciarlo vuoto o usare un altro ID.` : "Note: No project is currently open. Only planner tools are available. You can create, read, update, and manage plans in the workspace."}
+CRITICAL: Rispondi sempre mostrando entities relative al progetto aperto. Non includere entities di altri progetti. Ogni tool ha un parametro project_id: usalo SEMPRE con il project_id del progetto aperto, MAI lasciarlo vuoto o usare un altro ID.` : "Note: No project is currently open. Project-specific tools (entities, documents, semantic search) require an open project with a project_id. However, wiki, web, file system, and planner tools are always available — you can read/write files, search the web, manage wiki pages, and create plans without a project."}
 
 Available tools:
 ${AVAILABLE_TOOLS
   .filter((tool) => {
     if (!plannerEnabled && tool.name.startsWith("plan_")) return false;
-    if (!hasProject && !tool.name.startsWith("plan_")) return false;
+    if (!webSearchEnabled && tool.name.startsWith("web_")) return false;
+    if (!fileSystemEnabled && tool.name.startsWith("file_")) return false;
+    if (!ragEnabled && tool.name.startsWith("rag_")) return false;
+    if (!shellExecEnabled && tool.name === "exec") return false;
     return true;
   })
   .map((tool) => `
@@ -1056,6 +1533,36 @@ Example 9 — User asks "What did we decide about the magic system earlier?":
 
 Example 10 — User asks "What names did we discuss for the protagonist?":
 <tool name="chat_search">{"query": "protagonist names discussed", "project_id": "${projectId || "PROJECT_ID"}"}</tool>
+ ` : ""}
+${webSearchEnabled ? `Example 11 — User asks "Search the web for writing tips for fantasy":
+<tool name="web_search">{"query": "writing tips for fantasy novels", "limit": 5}</tool>
+
+Example 12 — User asks "What does this URL say?":
+<tool name="web_fetch">{"url": "https://example.com/article", "format": "markdown"}</tool>
+
+Example 13 — User asks "Find images of medieval castles":
+<tool name="web_search_images">{"query": "medieval castles fantasy", "limit": 5}</tool>
+` : ""}
+Example 14 — User asks "Search my notes about the magic system":
+<tool name="wiki_search">{"query": "magic system"}</tool>
+
+Example 15 — User asks "Save this to the wiki":
+<tool name="wiki_write">{"name": "magic-system", "content": "# Magic System\\n\\nThe world uses elemental magic...", "frontmatter": {"tags": ["magic", "worldbuilding"]}}</tool>
+
+Example 16 — User asks "List all wiki pages":
+<tool name="wiki_list">{}</tool>
+
+${fileSystemEnabled ? `Example 17 — User asks "Read a file in my workspace":
+<tool name="file_read">{"path": "notes/outline.md"}</tool>
+
+Example 18 — User asks "Save this to a file":
+<tool name="file_write">{"path": "drafts/chapter-1-draft.md", "content": "# Chapter 1\\n\\nIt was a dark and stormy night..."}</tool>
+` : ""}
+${ragEnabled ? `Example 19 — User asks "Index this text for semantic search":
+<tool name="rag_add">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "wiki", "entity_id": "magic-system", "content_text": "The magic system is based on elemental forces..."}</tool>
+
+Example 20 — User asks "Search the knowledge base":
+<tool name="rag_search">{"project_id": "${projectId || "PROJECT_ID"}", "query": "how does magic work"}</tool>
 ` : ""}
 === CRITICAL RULES ===
 - When the query mentions a TYPE of entity (characters, locations, places, objects, events), ALWAYS prefer list_entities_by_type with the appropriate entity_type.

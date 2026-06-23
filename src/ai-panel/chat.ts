@@ -19,7 +19,7 @@ import {
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
 import { applyAuraEdit } from "./edit-executor";
-import { parseToolCalls, executeTool, type ToolResult } from "./tools";
+import { parseToolCalls, executeTool, type ToolResult, type ToolPreferences } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
@@ -27,7 +27,7 @@ import { getContextWindow } from "./context-window";
 import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
 import { shouldCompact, compactConversation, getCompactionSystemContext } from "./compaction";
 
-const MAX_TOOL_ITERATIONS = 3;
+const MAX_TOOL_ITERATIONS = 10;
 
 interface Message {
   role: "user" | "assistant" | "system" | "tool_result";
@@ -308,6 +308,10 @@ interface Preferences {
   aiAssistantName: string;
   aiUserName: string;
   plannerEnabled: boolean;
+  webSearchEnabled: boolean;
+  fileSystemEnabled: boolean;
+  shellExecEnabled: boolean;
+  ragEnabled: boolean;
 }
 
 let messages: Message[] = [];
@@ -335,6 +339,10 @@ function getPreferences(): Preferences {
       aiAssistantName: prefs.aiAssistantName || "Aura",
       aiUserName: prefs.aiUserName || "",
       plannerEnabled: prefs.plannerEnabled ?? true,
+      webSearchEnabled: prefs.webSearchEnabled ?? true,
+      fileSystemEnabled: prefs.fileSystemEnabled ?? true,
+      shellExecEnabled: prefs.shellExecEnabled ?? false,
+      ragEnabled: prefs.ragEnabled ?? false,
     };
   }
   return {
@@ -346,6 +354,10 @@ function getPreferences(): Preferences {
     aiAssistantName: "Aura",
     aiUserName: "",
     plannerEnabled: true,
+    webSearchEnabled: true,
+    fileSystemEnabled: true,
+    shellExecEnabled: false,
+    ragEnabled: false,
   };
 }
 
@@ -847,8 +859,7 @@ function updateToolCallIndicator(
 function removeToolCallIndicator(indicator: HTMLDivElement): void {
   indicator.remove();
 }
-
-function showPlannerToolCard(
+function showToolResultCard(
   toolName: string,
   result: string,
 ): void {
@@ -866,7 +877,23 @@ function showPlannerToolCard(
     plan_next: "✅",
     plan_status: "📊",
     plan_list: "📋",
+    web_search: "🔍",
+    web_fetch: "🌐",
+    web_search_images: "🖼️",
+    wiki_search: "📝",
+    wiki_read: "📖",
+    wiki_write: "✏️",
+    wiki_list: "📋",
+    wiki_ingest: "📥",
+    file_read: "📂",
+    file_write: "💾",
+    file_list: "📁",
+    file_edit: "✏️",
+    rag_add: "🧠",
+    rag_search: "🔎",
+    rag_list: "📊",
   };
+
   const icon = icons[toolName] || "🧩";
   const cleanResult = result.replace(/\[INSTRUCTION:.*?\]\s*/, "").trim();
   const displayResult = cleanResult.length > 120 ? cleanResult.slice(0, 117) + "..." : cleanResult;
@@ -1046,16 +1073,37 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
               continue;
             }
           }
-          const result = await executeTool(call, getPreferences().plannerEnabled);
+          const result = await executeTool(call, {
+            plannerEnabled: prefs.plannerEnabled,
+            webSearchEnabled: prefs.webSearchEnabled,
+            fileSystemEnabled: prefs.fileSystemEnabled,
+            shellExecEnabled: prefs.shellExecEnabled,
+            ragEnabled: prefs.ragEnabled,
+          });
           toolResults.push(result);
+          if (result.tool && !result.error) {
+            showToolResultCard(result.tool, String(result.result));
+          }
           if (result.tool && result.tool.startsWith("plan_") && !result.error) {
             const planName = (call.arguments as Record<string, unknown>)?.name as string | undefined;
             window.dispatchEvent(new CustomEvent("aurawrite:plan-changed", { detail: { planName } }));
-            showPlannerToolCard(result.tool, String(result.result));
+          }
+          if (result.tool && result.tool.startsWith("wiki_") && !result.error) {
+            window.dispatchEvent(new CustomEvent("aurawrite:wiki-changed", { detail: { tool: result.tool } }));
+          }
+          if (result.tool && result.tool.startsWith("web_") && !result.error) {
+            const query = (call.arguments as Record<string, unknown>)?.query as string || (call.arguments as Record<string, unknown>)?.url as string || "";
+            window.dispatchEvent(new CustomEvent("aurawrite:web-activity", { detail: { type: result.tool === "web_search" ? "search" : result.tool === "web_search_images" ? "images" : "fetch", query } }));
           }
         }
 
         const hasPlannerTools = toolResults.some((r) => r.tool && r.tool.startsWith("plan_"));
+        const hasAgenticTools = toolResults.some((r) =>
+          r.tool && !r.tool.startsWith("plan_") &&
+          !r.tool.startsWith("search_") && !r.tool.startsWith("get_") &&
+          !r.tool.startsWith("list_") && !r.tool.startsWith("semantic_") &&
+          r.tool !== "entities_in_document" && r.tool !== "chat_search"
+        );
         if (indicator) {
           removeToolCallIndicator(indicator);
         }
@@ -1064,6 +1112,9 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         for (const result of toolResults) {
           if (result.error) {
             toolResultsText += `\n[Error with ${result.tool}: ${result.error}]\n`;
+          } else if (typeof result.result === "string" && result.result.startsWith("[INSTRUCTION:")) {
+            // Tool Result Injection pattern: pass the full result including instructions
+            toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
           } else if (result.tool && result.tool.startsWith("plan_")) {
             toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
           } else {
@@ -1083,13 +1134,13 @@ The tool results are shown to the user in the MCP panel. Your text response must
         } else {
           followUpPrompt = `The user originally asked: "${text}"
 
-You called the following database tool(s):
+You called the following tool(s):
 ${toolNames.map((n) => `- ${n}`).join("\n")}
 
-Here are the results from the database tools:
+Here are the results:
 ${toolResultsText}
 
-Based on these results, provide your final response to the user's question. ${hasDocumentContent ? "You may also reference the document text that was provided." : "Answer ONLY based on the tool results above. If the tools returned empty results, say so clearly rather than answering from chat history."}`;
+Based on these results, provide your final response to the user's question. ${hasDocumentContent ? "You may also reference the document text that was provided." : ""}`;
         }
 
         iteration++;

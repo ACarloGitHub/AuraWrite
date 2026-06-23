@@ -34,6 +34,9 @@ flate2 = "1"
 base64 = "0.22"
 sysinfo = "0.39.3"
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
+regex = "1"
+serde_yaml = "0.9"
+urlencoding = "2"
 
 [profile.dev]
 incremental = true

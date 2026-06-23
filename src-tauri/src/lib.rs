@@ -18,6 +18,10 @@ mod permissions;
 mod planner;
 mod chat_db;
 mod compaction;
+mod web_tools;
+mod wiki;
+mod fs_tools;
+mod rag_tools;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -29,6 +33,10 @@ use permissions::*;
 use planner::*;
 use chat_db::*;
 use compaction::*;
+use web_tools::*;
+use wiki::*;
+use fs_tools::*;
+use rag_tools::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -1279,6 +1287,25 @@ pub fn run() {
             compaction_read_latest_summary,
             compaction_list_summaries,
             compaction_delete_summary,
+            // Web tools (native MCP)
+            web_search,
+            web_fetch,
+            web_search_images,
+            // Wiki tools (native MCP)
+            wiki_search,
+            wiki_read,
+            wiki_write,
+            wiki_list,
+            wiki_ingest,
+            // File system tools (native MCP)
+            file_read,
+            file_write,
+            file_list,
+            file_edit,
+            // RAG tools (native MCP)
+            rag_add,
+            rag_search,
+            rag_list,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {

@@ -7,7 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-type PermissionScope = "once" | "session" | "always";
+type PermissionScope = "session" | "always";
 
 interface PermissionEntry {
   path: string;
@@ -32,8 +32,6 @@ export async function requestPermission(
 
   if (result === "deny") return false;
 
-  if (result === "once") return true;
-
   const scope: PermissionScope = result === "always" ? "always" : "session";
   try {
     await invoke("permissions_grant", {
@@ -57,7 +55,6 @@ function showPermissionBanner(
     const toolEl = document.getElementById("ai-permission-tool");
     const pathEl = document.getElementById("ai-permission-path");
     const denyBtn = document.getElementById("ai-permission-deny");
-    const onceBtn = document.getElementById("ai-permission-once");
     const sessionBtn = document.getElementById("ai-permission-session");
     const alwaysBtn = document.getElementById("ai-permission-always");
 
@@ -81,17 +78,14 @@ function showPermissionBanner(
     };
 
     const onDeny = () => { cleanup(); resolve("deny"); };
-    const onOnce = () => { cleanup(); resolve("once"); };
     const onSession = () => { cleanup(); resolve("session"); };
     const onAlways = () => { cleanup(); resolve("always"); };
 
     denyBtn?.removeEventListener("click", onDeny);
-    onceBtn?.removeEventListener("click", onOnce);
     sessionBtn?.removeEventListener("click", onSession);
     alwaysBtn?.removeEventListener("click", onAlways);
 
     denyBtn?.addEventListener("click", onDeny);
-    onceBtn?.addEventListener("click", onOnce);
     sessionBtn?.addEventListener("click", onSession);
     alwaysBtn?.addEventListener("click", onAlways);
 

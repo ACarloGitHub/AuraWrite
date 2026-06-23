@@ -8,7 +8,7 @@ import {
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider, ZAIProvider } from "./remote-providers";
 import { LocalLlamacppProvider } from "./local-llamacpp-provider";
-import { buildToolSystemPrompt } from "./tools";
+import { buildToolSystemPrompt, type ToolPreferences } from "./tools";
 import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
 import { resolveContextWindowFromAPI, setCachedContextWindow, getCachedContextWindow } from "./context-window";
 import { setContextFooterModel } from "./context-footer";
@@ -418,20 +418,25 @@ export function getCurrentProvider(): AIProvider | null {
 
 export function buildContextWithTools(context: AIContext): AIContext {
   const saved = localStorage.getItem("aurawrite-preferences");
-  const plannerEnabled = saved ? (JSON.parse(saved).plannerEnabled ?? true) : true;
-  if (context.projectId) {
-    const toolPrompt = buildToolSystemPrompt(context.projectId, plannerEnabled);
-    return {
-      ...context,
-      toolInstructions: toolPrompt,
-    };
+  const prefs = saved ? JSON.parse(saved) : {};
+  const toolPrefs: ToolPreferences = {
+    plannerEnabled: prefs.plannerEnabled ?? true,
+    webSearchEnabled: prefs.webSearchEnabled ?? true,
+    fileSystemEnabled: prefs.fileSystemEnabled ?? true,
+    shellExecEnabled: prefs.shellExecEnabled ?? false,
+    ragEnabled: prefs.ragEnabled ?? false,
+  };
+
+  const hasAnyTool = toolPrefs.plannerEnabled || toolPrefs.webSearchEnabled ||
+    toolPrefs.fileSystemEnabled || toolPrefs.ragEnabled || toolPrefs.shellExecEnabled;
+
+  if (!hasAnyTool) {
+    return context;
   }
-  if (plannerEnabled) {
-    const toolPrompt = buildToolSystemPrompt(undefined, plannerEnabled);
-    return {
-      ...context,
-      toolInstructions: toolPrompt,
-    };
-  }
-  return context;
+
+  const toolPrompt = buildToolSystemPrompt(context.projectId, toolPrefs);
+  return {
+    ...context,
+    toolInstructions: toolPrompt,
+  };
 }
