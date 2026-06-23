@@ -622,6 +622,117 @@ export const AVAILABLE_TOOLS = [
       },
       required: ["project_id"]
     }
+  },
+  {
+    name: "rag_delete",
+    description: "Delete a specific entity from the RAG index. Removes all chunks associated with the entity. Use this when the user asks to forget or remove specific information from the AI's memory.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          description: "The project ID"
+        },
+        entity_type: {
+          type: "string",
+          description: "The entity type (e.g., 'document', 'character', 'location')"
+        },
+        entity_id: {
+          type: "string",
+          description: "The entity ID to delete"
+        }
+      },
+      required: ["project_id", "entity_type", "entity_id"]
+    }
+  },
+  {
+    name: "exec",
+    description: "Execute a shell command. The command runs in the workspace directory by default. Use 'workdir' to specify a different directory. Always requires user confirmation before execution. Commands that could destroy data (rm -rf /, format, etc.) are blocked.",
+    parameters: {
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description: "The shell command to execute"
+        },
+        workdir: {
+          type: "string",
+          description: "Working directory (relative to workspace or absolute path). Defaults to workspace root."
+        },
+        timeout: {
+          type: "number",
+          description: "Timeout in seconds (default: 120, max: 7200)"
+        },
+        background: {
+          type: "boolean",
+          description: "Run command in background (default: false). Use exec_poll to check status, exec_kill to stop."
+        },
+        env: {
+          type: "object",
+          description: "Environment variables to set (key-value pairs)"
+        }
+      },
+      required: ["command"]
+    }
+  },
+  {
+    name: "exec_poll",
+    description: "Check the status of a background command. Returns the last N lines of stdout/stderr.",
+    parameters: {
+      type: "object",
+      properties: {
+        job_id: {
+          type: "string",
+          description: "The background job ID returned by exec"
+        },
+        tail: {
+          type: "number",
+          description: "Number of last lines to show (default: 100)"
+        }
+      },
+      required: ["job_id"]
+    }
+  },
+  {
+    name: "exec_kill",
+    description: "Kill a running background command.",
+    parameters: {
+      type: "object",
+      properties: {
+        job_id: {
+          type: "string",
+          description: "The background job ID to kill"
+        }
+      },
+      required: ["job_id"]
+    }
+  },
+  {
+    name: "exec_list",
+    description: "List all background commands with their status.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "exec_clean",
+    description: "Clean up old background command jobs. Removes completed jobs older than the specified age.",
+    parameters: {
+      type: "object",
+      properties: {
+        max_age_hours: {
+          type: "number",
+          description: "Remove jobs older than this many hours (default: 24)"
+        },
+        all: {
+          type: "boolean",
+          description: "Remove all jobs regardless of age (default: false)"
+        }
+      },
+      required: []
+    }
   }
 ];
 
@@ -1383,6 +1494,55 @@ export async function executeTool(
         });
         break;
 
+      case "rag_delete":
+        result = await invoke<string>("rag_delete", {
+          projectId: args.project_id as string,
+          entityType: args.entity_type as string,
+          entityId: args.entity_id as string,
+        });
+        break;
+
+      // ====== Shell exec tools (native MCP) ======
+      case "exec": {
+        const command = args.command as string;
+        const allowed = await requestPermission("exec", command);
+        if (!allowed) {
+          return { tool: name, result: null, error: `Permission denied: user did not grant permission to execute '${command}'.` };
+        }
+        result = await invoke<string>("exec", {
+          command,
+          workdir: args.workdir as string || null,
+          timeout: args.timeout as number || null,
+          background: args.background as boolean || null,
+          env: args.env as Record<string, string> || null,
+        });
+        break;
+      }
+
+      case "exec_poll":
+        result = await invoke<string>("exec_poll", {
+          jobId: args.job_id as string,
+          tail: args.tail as number || null,
+        });
+        break;
+
+      case "exec_kill":
+        result = await invoke<string>("exec_kill", {
+          jobId: args.job_id as string,
+        });
+        break;
+
+      case "exec_list":
+        result = await invoke<string>("exec_list");
+        break;
+
+      case "exec_clean":
+        result = await invoke<string>("exec_clean", {
+          maxAgeHours: args.max_age_hours as number || null,
+          all: args.all as boolean || null,
+        });
+        break;
+
       default:
         return {
           tool: name,
@@ -1563,6 +1723,21 @@ ${ragEnabled ? `Example 19 — User asks "Index this text for semantic search":
 
 Example 20 — User asks "Search the knowledge base":
 <tool name="rag_search">{"project_id": "${projectId || "PROJECT_ID"}", "query": "how does magic work"}</tool>
+
+Example 21 — User asks "Forget what you know about the character Marco":
+<tool name="rag_delete">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "character", "entity_id": "marco"}</tool>
+ ` : ""}
+${shellExecEnabled ? `Example 21 — User asks "Run git status in the project":
+<tool name="exec">{"command": "git status"}</tool>
+
+Example 22 — User asks "List files in the notes directory":
+<tool name="exec">{"command": "ls -la notes/", "workdir": "."}</tool>
+
+Example 23 — User asks "Start a long-running build and check later":
+<tool name="exec">{"command": "npm run build", "background": true, "timeout": 300}</tool>
+
+Example 24 — User asks "Check on the background job":
+<tool name="exec_poll">{"job_id": "bg-1719000000-12345", "tail": 20}</tool>
 ` : ""}
 === CRITICAL RULES ===
 - When the query mentions a TYPE of entity (characters, locations, places, objects, events), ALWAYS prefer list_entities_by_type with the appropriate entity_type.

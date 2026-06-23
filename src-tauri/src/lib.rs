@@ -22,6 +22,8 @@ mod web_tools;
 mod wiki;
 mod fs_tools;
 mod rag_tools;
+mod exec_tools;
+mod data_privacy;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -37,6 +39,8 @@ use web_tools::*;
 use wiki::*;
 use fs_tools::*;
 use rag_tools::*;
+use exec_tools::*;
+use data_privacy::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -1306,6 +1310,25 @@ pub fn run() {
             rag_add,
             rag_search,
             rag_list,
+            // Shell exec tools (native MCP)
+            exec,
+            exec_poll,
+            exec_kill,
+            exec_list,
+            exec_clean,
+            // Data & Privacy
+            data_stats,
+            chat_stats,
+            rag_stats,
+            wiki_stats,
+            plan_stats,
+            chat_reset_all,
+            rag_reset_all,
+            rag_reset_project,
+            rag_delete,
+            wiki_reset_all,
+            plan_reset_all,
+            data_reset_all,
         ])
         .on_window_event(|_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {

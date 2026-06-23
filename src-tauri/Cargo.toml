@@ -1,6 +1,6 @@
 [package]
 name = "aurawrite"
-version = "0.7.9"
+version = "0.8.1"
 authors = ["Carlo"]
 description = "A desktop writing application with AI assistance"
 edition = "2021"
@@ -37,6 +37,9 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "linux-
 regex = "1"
 serde_yaml = "0.9"
 urlencoding = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [profile.dev]
 incremental = true

@@ -1259,6 +1259,31 @@ async function loadPermissionsList(): Promise<void> {
   }
 }
 
+async function loadPrivacyStats(): Promise<void> {
+  try {
+    const stats = await invoke<{
+      chat_sessions: number;
+      chat_messages: number;
+      rag_entities: number;
+      rag_chunks: number;
+      wiki_pages: number;
+      plans: number;
+    }>("data_stats");
+
+    const chatCount = document.getElementById("pref-data-chat-count");
+    const ragCount = document.getElementById("pref-data-rag-count");
+    const wikiCount = document.getElementById("pref-data-wiki-count");
+    const plansCount = document.getElementById("pref-data-plans-count");
+
+    if (chatCount) chatCount.textContent = `${stats.chat_sessions} sessions, ${stats.chat_messages} messages`;
+    if (ragCount) ragCount.textContent = `${stats.rag_entities} entities, ${stats.rag_chunks} chunks`;
+    if (wikiCount) wikiCount.textContent = `${stats.wiki_pages} pages`;
+    if (plansCount) plansCount.textContent = `${stats.plans} plans`;
+  } catch (e) {
+    console.error("[agent] failed to load privacy stats:", e);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   initErrorBoundaries();
   initTheme();
@@ -1706,6 +1731,69 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   loadPermissionsList();
+
+  // Data & Privacy buttons in Preferences
+  loadPrivacyStats();
+
+  document.getElementById("pref-data-chat-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL chat history? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("chat_reset_all");
+      alert(result);
+      loadPrivacyStats();
+    } catch (e) {
+      console.error("[agent] chat reset failed:", e);
+      alert("Failed: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("pref-data-rag-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL RAG data? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("rag_reset_all");
+      alert(result);
+      loadPrivacyStats();
+    } catch (e) {
+      console.error("[agent] rag reset failed:", e);
+      alert("Failed: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("pref-data-wiki-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL wiki pages? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("wiki_reset_all");
+      alert(result);
+      loadPrivacyStats();
+    } catch (e) {
+      console.error("[agent] wiki reset failed:", e);
+      alert("Failed: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("pref-data-plans-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL plans? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("plan_reset_all");
+      alert(result);
+      loadPrivacyStats();
+    } catch (e) {
+      console.error("[agent] plans reset failed:", e);
+      alert("Failed: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("pref-data-delete-all")?.addEventListener("click", async () => {
+    if (!confirm("⚠️ Delete ALL AI data? This includes chat history, RAG index, wiki pages, and plans. This CANNOT be undone.")) return;
+    try {
+      const result = await invoke<string>("data_reset_all");
+      alert(result);
+      loadPrivacyStats();
+    } catch (e) {
+      console.error("[agent] data reset all failed:", e);
+      alert("Failed: " + (e as Error).message);
+    }
+  });
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "n") {

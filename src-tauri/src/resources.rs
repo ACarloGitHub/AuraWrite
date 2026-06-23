@@ -31,12 +31,14 @@ use tauri::{AppHandle, Emitter, Manager};
 /// would flash a terminal window. This helper adds CREATE_NO_WINDOW on Windows
 /// to suppress that.
 fn silent_command(program: &str) -> Command {
-    let mut cmd = Command::new(program);
+    let cmd = Command::new(program);
     #[cfg(target_os = "windows")]
-    {
+    let cmd = {
         use std::os::windows::process::CommandExt;
+        let mut cmd = cmd;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+        cmd
+    };
     cmd
 }
 

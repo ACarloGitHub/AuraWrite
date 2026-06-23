@@ -157,6 +157,73 @@ export function setupMCPPanel(): void {
       mcpBtn?.classList.add("active");
     }
   }) as EventListener);
+
+  // Data & Privacy section
+  loadDataPrivacyStats();
+
+  document.getElementById("mcp-data-chat-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL chat history? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("chat_reset_all");
+      alert(result);
+      loadDataPrivacyStats();
+    } catch (e) {
+      console.error("[mcp] chat reset failed:", e);
+      alert("Failed to delete chat history: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("mcp-data-rag-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL RAG data? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("rag_reset_all");
+      alert(result);
+      loadDataPrivacyStats();
+    } catch (e) {
+      console.error("[mcp] rag reset failed:", e);
+      alert("Failed to delete RAG data: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("mcp-data-wiki-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL wiki pages? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("wiki_reset_all");
+      alert(result);
+      loadDataPrivacyStats();
+      loadWikiList();
+    } catch (e) {
+      console.error("[mcp] wiki reset failed:", e);
+      alert("Failed to delete wiki pages: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("mcp-data-plans-delete")?.addEventListener("click", async () => {
+    if (!confirm("Delete ALL plans? This cannot be undone.")) return;
+    try {
+      const result = await invoke<string>("plan_reset_all");
+      alert(result);
+      loadDataPrivacyStats();
+      loadPlanList();
+    } catch (e) {
+      console.error("[mcp] plans reset failed:", e);
+      alert("Failed to delete plans: " + (e as Error).message);
+    }
+  });
+
+  document.getElementById("mcp-data-delete-all")?.addEventListener("click", async () => {
+    if (!confirm("⚠️ Delete ALL AI data? This includes chat history, RAG index, wiki pages, and plans. This CANNOT be undone.")) return;
+    try {
+      const result = await invoke<string>("data_reset_all");
+      alert(result);
+      loadDataPrivacyStats();
+      loadPlanList();
+      loadWikiList();
+    } catch (e) {
+      console.error("[mcp] data reset all failed:", e);
+      alert("Failed to delete all AI data: " + (e as Error).message);
+    }
+  });
 }
 
 async function loadPlanList(): Promise<void> {
@@ -441,5 +508,30 @@ function renderWebActivity(): void {
     const timeStr = new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     div.innerHTML = `<span class="mcp-plan-task-text">${typeIcons[entry.type] || "🔗"} <small>${timeStr}</small> ${entry.query.length > 60 ? entry.query.slice(0, 57) + "..." : entry.query}</span>`;
     container.appendChild(div);
+  }
+}
+
+async function loadDataPrivacyStats(): Promise<void> {
+  try {
+    const stats = await invoke<{
+      chat_sessions: number;
+      chat_messages: number;
+      rag_entities: number;
+      rag_chunks: number;
+      wiki_pages: number;
+      plans: number;
+    }>("data_stats");
+
+    const chatCount = document.getElementById("mcp-data-chat-count");
+    const ragCount = document.getElementById("mcp-data-rag-count");
+    const wikiCount = document.getElementById("mcp-data-wiki-count");
+    const plansCount = document.getElementById("mcp-data-plans-count");
+
+    if (chatCount) chatCount.textContent = `${stats.chat_sessions} sessions, ${stats.chat_messages} messages`;
+    if (ragCount) ragCount.textContent = `${stats.rag_entities} entities, ${stats.rag_chunks} chunks`;
+    if (wikiCount) wikiCount.textContent = `${stats.wiki_pages} pages`;
+    if (plansCount) plansCount.textContent = `${stats.plans} plans`;
+  } catch (e) {
+    console.error("[mcp] failed to load data stats:", e);
   }
 }

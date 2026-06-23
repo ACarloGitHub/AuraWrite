@@ -1450,7 +1450,28 @@ body {
 }
 
 .mcp-panel__section {
-  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.mcp-panel__section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  cursor: default;
+}
+
+.mcp-panel__section-header .mcp-panel__label {
+  margin-bottom: 0;
+}
+
+.mcp-panel__section-body {
+  padding: 8px 12px;
 }
 
 .mcp-panel__label {
@@ -1460,7 +1481,6 @@ body {
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: var(--spacing-xs);
 }
 
 .mcp-panel__select {
@@ -1484,6 +1504,9 @@ body {
   display: flex;
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-sm);
+  padding: 4px 8px;
+  background: var(--color-background);
+  border-radius: 4px;
 }
 
 .mcp-panel__btn {
@@ -1610,6 +1633,109 @@ body {
 .mcp-wiki-content a {
   color: var(--color-primary);
   text-decoration: none;
+}
+
+.mcp-data-privacy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcp-data-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.mcp-data-label {
+  font-size: 12px;
+  color: var(--color-text);
+  min-width: 70px;
+}
+
+.mcp-data-count {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex: 1;
+}
+
+.mcp-data-delete {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.mcp-data-delete:hover {
+  background: var(--color-danger, #e53e3e);
+  color: white;
+}
+
+.mcp-data-delete-all {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--color-danger, #e53e3e);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-danger, #e53e3e);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.mcp-data-delete-all:hover {
+  background: var(--color-danger, #e53e3e);
+  color: white;
+}
+
+.pref-data-privacy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pref-data-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.pref-data-label {
+  font-size: 13px;
+  color: var(--color-text);
+  min-width: 100px;
+}
+
+.pref-data-count {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  flex: 1;
+}
+
+.pref-data-delete {
+  background: none;
+  border: 1px solid var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 2px 8px;
+  border-radius: 3px;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.pref-data-delete:hover {
+  background: var(--color-danger, #e53e3e);
+  color: white;
+  border-color: var(--color-danger, #e53e3e);
 }
 
 .mcp-panel__new-plan-form {

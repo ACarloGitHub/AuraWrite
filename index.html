@@ -342,45 +342,88 @@
           </div>
           <div class="mcp-panel__content">
             <div class="mcp-panel__section">
-              <label class="mcp-panel__label">Planner</label>
-              <select id="mcp-plan-select" class="mcp-panel__select">
-                <option value="">— Select plan —</option>
-              </select>
-              <div class="mcp-panel__plan-actions">
-                <button id="mcp-plan-new" class="mcp-panel__btn" title="New plan">+ New</button>
-                <button id="mcp-plan-delete" class="mcp-panel__btn mcp-panel__btn--danger" title="Delete plan">🗑</button>
-                <button id="mcp-plan-open-editor" class="mcp-panel__btn" title="Open in editor">📂</button>
+              <div class="mcp-panel__section-header">
+                <label class="mcp-panel__label">📋 Planner</label>
               </div>
-              <div id="mcp-plan-new-form" class="mcp-panel__new-plan-form">
-                <input id="mcp-new-plan-name" type="text" placeholder="Plan name..." />
-                <button id="mcp-new-plan-confirm" class="mcp-panel__btn">Create</button>
-              </div>
-              <div id="mcp-plan-progress" class="mcp-panel__progress" style="display:none;">
-                <div class="mcp-panel__progress-bar"><div id="mcp-plan-progress-fill" class="mcp-panel__progress-fill"></div></div>
-                <span id="mcp-plan-progress-text" class="mcp-panel__progress-text">0/0</span>
-              </div>
-              <div id="mcp-plan-list" class="mcp-panel__plan-list"></div>
-            </div>
-
-            <div class="mcp-panel__section">
-              <label class="mcp-panel__label">Wiki</label>
-              <div class="mcp-panel__plan-actions">
-                <button id="mcp-wiki-refresh" class="mcp-panel__btn" title="Refresh wiki pages">🔄</button>
-                <button id="mcp-wiki-new" class="mcp-panel__btn" title="New wiki page">+ New</button>
-              </div>
-              <div id="mcp-wiki-new-form" class="mcp-panel__new-plan-form" style="display:none;">
-                <input id="mcp-wiki-new-name" type="text" placeholder="Page name..." />
-                <button id="mcp-wiki-new-confirm" class="mcp-panel__btn">Create</button>
-              </div>
-              <div id="mcp-wiki-list" class="mcp-panel__plan-list">
-                <div class="mcp-plan-empty">Click 🔄 to load wiki pages</div>
+              <div class="mcp-panel__section-body">
+                <select id="mcp-plan-select" class="mcp-panel__select">
+                  <option value="">— Select plan —</option>
+                </select>
+                <div class="mcp-panel__plan-actions">
+                  <button id="mcp-plan-new" class="mcp-panel__btn" title="New plan">+ New</button>
+                  <button id="mcp-plan-delete" class="mcp-panel__btn mcp-panel__btn--danger" title="Delete plan">🗑</button>
+                  <button id="mcp-plan-open-editor" class="mcp-panel__btn" title="Open in editor">📂</button>
+                </div>
+                <div id="mcp-plan-new-form" class="mcp-panel__new-plan-form">
+                  <input id="mcp-new-plan-name" type="text" placeholder="Plan name..." />
+                  <button id="mcp-new-plan-confirm" class="mcp-panel__btn">Create</button>
+                </div>
+                <div id="mcp-plan-progress" class="mcp-panel__progress" style="display:none;">
+                  <div class="mcp-panel__progress-bar"><div id="mcp-plan-progress-fill" class="mcp-panel__progress-fill"></div></div>
+                  <span id="mcp-plan-progress-text" class="mcp-panel__progress-text">0/0</span>
+                </div>
+                <div id="mcp-plan-list" class="mcp-panel__plan-list"></div>
               </div>
             </div>
 
             <div class="mcp-panel__section">
-              <label class="mcp-panel__label">Web</label>
-              <div id="mcp-web-activity" class="mcp-panel__plan-list">
-                <div class="mcp-plan-empty">Web activity will appear here</div>
+              <div class="mcp-panel__section-header">
+                <label class="mcp-panel__label">📝 Wiki</label>
+              </div>
+              <div class="mcp-panel__section-body">
+                <div class="mcp-panel__plan-actions">
+                  <button id="mcp-wiki-refresh" class="mcp-panel__btn" title="Refresh wiki pages">🔄</button>
+                  <button id="mcp-wiki-new" class="mcp-panel__btn" title="New wiki page">+ New</button>
+                </div>
+                <div id="mcp-wiki-new-form" class="mcp-panel__new-plan-form" style="display:none;">
+                  <input id="mcp-wiki-new-name" type="text" placeholder="Page name..." />
+                  <button id="mcp-wiki-new-confirm" class="mcp-panel__btn">Create</button>
+                </div>
+                <div id="mcp-wiki-list" class="mcp-panel__plan-list">
+                  <div class="mcp-plan-empty">Click 🔄 to load wiki pages</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mcp-panel__section">
+              <div class="mcp-panel__section-header">
+                <label class="mcp-panel__label">🌐 Web</label>
+              </div>
+              <div class="mcp-panel__section-body">
+                <div id="mcp-web-activity" class="mcp-panel__plan-list">
+                  <div class="mcp-plan-empty">Web activity will appear here</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mcp-panel__section">
+              <div class="mcp-panel__section-header">
+                <label class="mcp-panel__label">🔒 Data &amp; Privacy</label>
+              </div>
+              <div class="mcp-panel__section-body">
+                <div class="mcp-data-privacy">
+                  <div class="mcp-data-row">
+                    <span class="mcp-data-label">💬 Chat</span>
+                    <span class="mcp-data-count" id="mcp-data-chat-count">0 sessions</span>
+                    <button class="mcp-data-delete" id="mcp-data-chat-delete" title="Delete all chat history">🗑</button>
+                  </div>
+                  <div class="mcp-data-row">
+                    <span class="mcp-data-label">🔍 RAG</span>
+                    <span class="mcp-data-count" id="mcp-data-rag-count">0 entities</span>
+                    <button class="mcp-data-delete" id="mcp-data-rag-delete" title="Delete all RAG data">🗑</button>
+                  </div>
+                  <div class="mcp-data-row">
+                    <span class="mcp-data-label">📝 Wiki</span>
+                    <span class="mcp-data-count" id="mcp-data-wiki-count">0 pages</span>
+                    <button class="mcp-data-delete" id="mcp-data-wiki-delete" title="Delete all wiki pages">🗑</button>
+                  </div>
+                  <div class="mcp-data-row">
+                    <span class="mcp-data-label">📋 Plans</span>
+                    <span class="mcp-data-count" id="mcp-data-plans-count">0 plans</span>
+                    <button class="mcp-data-delete" id="mcp-data-plans-delete" title="Delete all plans">🗑</button>
+                  </div>
+                </div>
+                <button class="mcp-data-delete-all" id="mcp-data-delete-all" title="Delete ALL AI data">⚠️ Delete ALL AI data</button>
               </div>
             </div>
           </div>
@@ -1078,6 +1121,39 @@
                 <div class="folder-row">
                   <button id="pref-agent-add-folder" class="btn-small">Add folder</button>
                   <button id="pref-agent-clear-session" class="btn-small">Clear session permissions</button>
+                </div>
+              </div>
+              <div class="preference-group">
+                <label>AI Data &amp; Privacy</label>
+                <span class="preference-hint">
+                  See how much data the AI has stored and delete it if needed.
+                  The agent memorizes conversations (chat), document indexes (RAG),
+                  wiki pages, and plans. You can delete individual categories or all data at once.
+                </span>
+                <div class="pref-data-privacy">
+                  <div class="pref-data-row">
+                    <span class="pref-data-label">💬 Chat</span>
+                    <span class="pref-data-count" id="pref-data-chat-count">—</span>
+                    <button class="pref-data-delete" id="pref-data-chat-delete">Delete</button>
+                  </div>
+                  <div class="pref-data-row">
+                    <span class="pref-data-label">🔍 RAG Index</span>
+                    <span class="pref-data-count" id="pref-data-rag-count">—</span>
+                    <button class="pref-data-delete" id="pref-data-rag-delete">Delete</button>
+                  </div>
+                  <div class="pref-data-row">
+                    <span class="pref-data-label">📝 Wiki Pages</span>
+                    <span class="pref-data-count" id="pref-data-wiki-count">—</span>
+                    <button class="pref-data-delete" id="pref-data-wiki-delete">Delete</button>
+                  </div>
+                  <div class="pref-data-row">
+                    <span class="pref-data-label">📋 Plans</span>
+                    <span class="pref-data-count" id="pref-data-plans-count">—</span>
+                    <button class="pref-data-delete" id="pref-data-plans-delete">Delete</button>
+                  </div>
+                </div>
+                <div class="folder-row" style="margin-top: 8px;">
+                  <button id="pref-data-delete-all" class="btn-small" style="color: var(--color-danger, #e53e3e); border-color: var(--color-danger, #e53e3e);">⚠️ Delete ALL AI data</button>
                 </div>
               </div>
               <div class="preference-group">
