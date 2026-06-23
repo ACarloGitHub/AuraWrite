@@ -57,7 +57,7 @@
 
         <!-- STYLE GROUP -->
         <div class="toolbar-group">
-          <select id="sel-font-family" class="toolbar__select" title="Font Family">
+          <select id="sel-font-family" class="toolbar__select" title="Font Family" aria-label="Font Family">
             <option value="">Default</option>
             <optgroup label="Bundled">
               <option value="Georgia, serif">Georgia</option>
@@ -71,7 +71,7 @@
             </optgroup>
           </select>
           <span id="font-family-preview" class="font-preview" aria-hidden="true">Text</span>
-          <select id="sel-font-size" class="toolbar__select" title="Font Size">
+          <select id="sel-font-size" class="toolbar__select" title="Font Size" aria-label="Font Size">
             <option value="">Size</option>
             <option value="10px">10</option>
             <option value="12px">12</option>
@@ -84,11 +84,11 @@
             <option value="36px">36</option>
             <option value="48px">48</option>
           </select>
-          <input type="color" id="btn-text-color" class="toolbar__color" title="Text Color" value="#000000" />
+          <input type="color" id="btn-text-color" class="toolbar__color" title="Text Color" value="#000000" aria-label="Text Color" />
           <button id="btn-highlight-toggle" class="toolbar__btn" title="Toggle Highlight">
             <span class="toolbar__btn-icon">🖍</span>
           </button>
-          <input type="color" id="btn-highlight" class="toolbar__color" title="Highlight Color" value="#ffff00" />
+          <input type="color" id="btn-highlight" class="toolbar__color" title="Highlight Color" value="#ffff00" aria-label="Highlight Color" />
         </div>
 
         <!-- FORMAT GROUP -->
@@ -114,7 +114,7 @@
           <button id="btn-image" class="toolbar__btn" title="Insert Image">
             <span class="toolbar__btn-icon">🖼</span>
           </button>
-          <select id="sel-heading" class="toolbar__select" title="Heading">
+          <select id="sel-heading" class="toolbar__select" title="Heading" aria-label="Heading level">
             <option value="0">Normal</option>
             <option value="1">Heading 1</option>
             <option value="2">Heading 2</option>
@@ -190,7 +190,7 @@
 
         <!-- LINE HEIGHT GROUP -->
         <div class="toolbar-group">
-          <select id="sel-line-height" class="toolbar__select" title="Line Height">
+          <select id="sel-line-height" class="toolbar__select" title="Line Height" aria-label="Line Height">
             <option value="1.0">1.0</option>
             <option value="1.15">1.15</option>
             <option value="1.5" selected>1.5</option>
@@ -267,11 +267,11 @@
       </header>
 
       <div id="find-bar" class="find-bar hidden">
-        <input type="text" id="find-input" class="find-bar__input" placeholder="Find..." />
+        <input type="text" id="find-input" class="find-bar__input" placeholder="Find..." aria-label="Find text" />
         <span id="find-count" class="find-bar__count"></span>
         <button id="find-prev" class="find-bar__btn" title="Previous (Shift+Enter)">▲</button>
         <button id="find-next" class="find-bar__btn" title="Next (Enter)">▼</button>
-        <input type="text" id="replace-input" class="find-bar__input find-bar__replace" placeholder="Replace..." />
+        <input type="text" id="replace-input" class="find-bar__input find-bar__replace" placeholder="Replace..." aria-label="Replace text" />
         <button id="replace-one" class="find-bar__btn" title="Replace">Replace</button>
         <button id="replace-all" class="find-bar__btn" title="Replace All">All</button>
         <button id="find-close" class="find-bar__btn" title="Close (Escape)">✕</button>
@@ -346,7 +346,7 @@
                 <label class="mcp-panel__label">📋 Planner</label>
               </div>
               <div class="mcp-panel__section-body">
-                <select id="mcp-plan-select" class="mcp-panel__select">
+                <select id="mcp-plan-select" class="mcp-panel__select" aria-label="Select plan">
                   <option value="">— Select plan —</option>
                 </select>
                 <div class="mcp-panel__plan-actions">
@@ -355,7 +355,7 @@
                   <button id="mcp-plan-open-editor" class="mcp-panel__btn" title="Open in editor">📂</button>
                 </div>
                 <div id="mcp-plan-new-form" class="mcp-panel__new-plan-form">
-                  <input id="mcp-new-plan-name" type="text" placeholder="Plan name..." />
+                  <input id="mcp-new-plan-name" type="text" placeholder="Plan name..." aria-label="New plan name" />
                   <button id="mcp-new-plan-confirm" class="mcp-panel__btn">Create</button>
                 </div>
                 <div id="mcp-plan-progress" class="mcp-panel__progress" style="display:none;">
@@ -376,7 +376,7 @@
                   <button id="mcp-wiki-new" class="mcp-panel__btn" title="New wiki page">+ New</button>
                 </div>
                 <div id="mcp-wiki-new-form" class="mcp-panel__new-plan-form" style="display:none;">
-                  <input id="mcp-wiki-new-name" type="text" placeholder="Page name..." />
+                  <input id="mcp-wiki-new-name" type="text" placeholder="Page name..." aria-label="New wiki page name" />
                   <button id="mcp-wiki-new-confirm" class="mcp-panel__btn">Create</button>
                 </div>
                 <div id="mcp-wiki-list" class="mcp-panel__plan-list">
@@ -456,7 +456,7 @@
             <div class="ai-panel__input-resize-handle" id="ai-input-resize-handle" title="Drag up to expand, down to shrink"></div>
             <div class="ai-panel__attachments" id="ai-attachments-preview"></div>
             <div class="ai-panel__input-row">
-              <textarea id="ai-input" placeholder="Ask Aura..."></textarea>
+              <textarea id="ai-input" placeholder="Ask Aura..." aria-label="AI chat input"></textarea>
               <button id="ai-attach" class="ai-panel__attach-btn" title="Attach image or document">+</button>
               <button id="ai-send" title="Send" aria-label="Send">↑</button>
             </div>
@@ -519,7 +519,7 @@
             <!-- TAB: General -->
             <div class="pref-tab-content active" data-tab="general">
               <div class="preference-group">
-                <label>Theme</label>
+                <label for="pref-theme">Theme</label>
                 <span class="preference-hint">Application color scheme</span>
                 <select id="pref-theme">
                   <option value="light">Light</option>
@@ -531,23 +531,23 @@
                 <label>Custom Colors</label>
                 <span class="preference-hint">Only visible when Theme is set to Custom</span>
                 <div class="color-picker-row">
-                  <span>Background:</span>
+                  <label for="pref-custom-bg">Background:</label>
                   <input type="color" id="pref-custom-bg" value="#f0f0f0" />
                 </div>
                 <div class="color-picker-row">
-                  <span>Toolbar:</span>
+                  <label for="pref-custom-toolbar">Toolbar:</label>
                   <input type="color" id="pref-custom-toolbar" value="#ffffff" />
                 </div>
                 <div class="color-picker-row">
-                  <span>Paper:</span>
+                  <label for="pref-custom-paper">Paper:</label>
                   <input type="color" id="pref-custom-paper" value="#ffffff" />
                 </div>
                 <div class="color-picker-row">
-                  <span>Editor Text:</span>
+                  <label for="pref-custom-text-editor">Editor Text:</label>
                   <input type="color" id="pref-custom-text-editor" value="#222222" />
                 </div>
                 <div class="color-picker-row">
-                  <span>Button Text:</span>
+                  <label for="pref-custom-text-buttons">Button Text:</label>
                   <input type="color" id="pref-custom-text-buttons" value="#222222" />
                 </div>
               </div>
@@ -555,8 +555,8 @@
                 <label>AI Selection Highlight</label>
                 <span class="preference-hint">Color of the highlight when the AI panel captures selected text</span>
                 <div class="color-picker-row">
-                  <span>Highlight color:</span>
-                  <input type="color" id="pref-selection-highlight" value="#ffff00" />
+                  <label for="pref-selection-highlight">Highlight color:</label>
+                  <input type="color" id="pref-selection-highlight" value="#ffff00" aria-label="AI Selection Highlight color" />
                 </div>
               </div>
               <div class="preference-group">
@@ -570,7 +570,7 @@
             <!-- TAB: AI Provider -->
             <div class="pref-tab-content" data-tab="ai-provider">
               <div class="preference-group">
-                <label>AI Provider</label>
+                <label for="pref-ai-provider">AI Provider</label>
                 <span class="preference-hint">Select which AI service to use</span>
                 <select id="pref-ai-provider">
                   <option value="ollama">Ollama</option>
@@ -585,7 +585,7 @@
                 </select>
               </div>
               <div class="preference-group hidden" id="ollama-mode-group">
-                <label>Ollama Mode</label>
+                <label for="pref-ai-ollama-mode">Ollama Mode</label>
                 <span class="preference-hint">Local: connect to your running Ollama. Cloud: connect directly to ollama.com (requires API key).</span>
                 <select id="pref-ai-ollama-mode">
                   <option value="local">Local (http://localhost:11434)</option>
@@ -593,15 +593,15 @@
                 </select>
               </div>
               <div class="preference-group">
-                <label>Model</label>
+                <label for="pref-ai-model-select">Model</label>
                 <span class="preference-hint">Model name as recognized by the provider</span>
                 <div class="model-picker-row">
-                  <select id="pref-ai-model-select" class="model-select">
+                  <select id="pref-ai-model-select" class="model-select" aria-label="Select model">
                     <option value="">— Refresh to load models —</option>
                   </select>
                   <button type="button" id="pref-ai-model-refresh" class="model-refresh-btn" title="Refresh model list from provider">&#x21bb;</button>
                 </div>
-                <input type="text" id="pref-ai-model" placeholder="e.g. kimi-k2.5:cloud" />
+                <input type="text" id="pref-ai-model" placeholder="e.g. kimi-k2.5:cloud" aria-label="Model name" />
                 <span class="preference-hint" id="pref-ai-model-status">Select a model from the list, or type a custom name above.</span>
               </div>
               <div class="preference-group hidden" id="llamacpp-server-group">
@@ -612,20 +612,20 @@
                 </div>
               </div>
               <div class="preference-group" id="api-key-group">
-                <label>API Key</label>
+                <label for="pref-ai-api-key">API Key</label>
                 <span class="preference-hint">Required for non-local providers</span>
-                <input type="password" id="pref-ai-api-key" placeholder="sk-..." />
+                <input type="password" id="pref-ai-api-key" placeholder="sk-..." aria-label="API Key" />
               </div>
               <div class="preference-group" id="base-url-group">
-                <label>Base URL</label>
+                <label for="pref-ai-base-url">Base URL</label>
                 <span class="preference-hint">Override the default API endpoint</span>
-                <input type="text" id="pref-ai-base-url" placeholder="http://localhost:11434" />
+                <input type="text" id="pref-ai-base-url" placeholder="http://localhost:11434" aria-label="Base URL" />
               </div>
             </div>
             <!-- TAB: AI Behavior -->
             <div class="pref-tab-content" data-tab="ai-behavior">
               <div class="preference-group">
-                <label>Interface Language</label>
+                <label for="pref-ai-interface-language">Interface Language</label>
                 <span class="preference-hint">Language the AI uses to talk to you</span>
                 <select id="pref-ai-interface-language">
                   <option value="English">English</option>
@@ -639,7 +639,7 @@
                 </select>
               </div>
               <div class="preference-group">
-                <label>Writing Language</label>
+                <label for="pref-ai-writing-language">Writing Language</label>
                 <span class="preference-hint">Language the AI uses when writing/suggesting</span>
                 <select id="pref-ai-writing-language">
                   <option value="English">English</option>
@@ -653,17 +653,17 @@
                 </select>
               </div>
               <div class="preference-group">
-                <label>Assistant Name</label>
+                <label for="pref-ai-assistant-name">Assistant Name</label>
                 <span class="preference-hint">Name the AI uses to refer to itself</span>
                 <input type="text" id="pref-ai-assistant-name" placeholder="Aura" />
               </div>
               <div class="preference-group">
-                <label>User Name</label>
+                <label for="pref-ai-user-name">User Name</label>
                 <span class="preference-hint">Name the AI uses to refer to you</span>
                 <input type="text" id="pref-ai-user-name" placeholder="Your name" />
               </div>
               <div class="preference-group">
-                <label>Suggestions Interval (seconds)</label>
+                <label for="pref-ai-suggestions-interval">Suggestions Interval (seconds)</label>
                 <span class="preference-hint">How often the AI analyzes text for suggestions</span>
                 <input type="number" id="pref-ai-suggestions-interval" value="30" min="5" max="300" />
               </div>
@@ -675,12 +675,12 @@
                 <span class="preference-hint">Show a live log of suggestion panel events in the panel footer. Also accessible via the 🐛 button in each item header.</span>
               </div>
               <div class="preference-group">
-                <label>Context Update Interval (seconds)</label>
+                <label for="pref-ai-context-interval">Context Update Interval (seconds)</label>
                 <span class="preference-hint">How often the AI panel refreshes context</span>
                 <input type="number" id="pref-ai-context-interval" value="30" min="5" max="300" />
               </div>
               <div class="preference-group">
-                <label>Suggestions Prompt</label>
+                <label for="pref-suggestions-prompt">Suggestions Prompt</label>
                 <span class="preference-hint">System prompt for sentence suggestions</span>
                 <div class="prompt-with-reset">
                   <textarea id="pref-suggestions-prompt" rows="4"></textarea>
@@ -688,7 +688,7 @@
                 </div>
               </div>
               <div class="preference-group">
-                <label>AI Assistant Prompt</label>
+                <label for="pref-ai-assistant-prompt">AI Assistant Prompt</label>
                 <span class="preference-hint">System prompt for AI chat</span>
                 <div class="prompt-with-reset">
                   <textarea id="pref-ai-assistant-prompt" rows="4"></textarea>
@@ -793,7 +793,7 @@
                   Choose where to store downloaded AI models. The default location is inside the app data folder.
                 </p>
                 <div class="preference-row">
-                  <input type="text" id="local-models-dir" readonly style="flex:1;" />
+                  <input type="text" id="local-models-dir" readonly style="flex:1;" aria-label="Models directory path" />
                   <button id="local-models-dir-browse" class="pref-btn">Change</button>
                   <button id="local-models-dir-reset" class="pref-btn">Reset to Default</button>
                 </div>
@@ -833,8 +833,8 @@
                   any model not in the catalog. The URL must point directly to a .gguf file.
                 </p>
                 <div class="preference-row">
-                  <input type="text" id="local-model-url" placeholder="https://huggingface.co/.../resolve/main/model-Q4_K_M.gguf" style="flex:1;" />
-                  <input type="text" id="local-model-url-id" placeholder="Model ID (e.g. my-model-q4km)" style="width:180px;" />
+                  <input type="text" id="local-model-url" placeholder="https://huggingface.co/.../resolve/main/model-Q4_K_M.gguf" style="flex:1;" aria-label="Model download URL" />
+                  <input type="text" id="local-model-url-id" placeholder="Model ID (e.g. my-model-q4km)" style="width:180px;" aria-label="Model ID for download" />
                   <button id="local-model-url-download" class="pref-btn pref-btn-primary">Download</button>
                 </div>
               </div>
@@ -846,8 +846,8 @@
                   it here so AuraWrite can use it. The file will not be copied.
                 </p>
                 <div class="preference-row">
-                  <input type="text" id="local-model-path" placeholder="C:\Users\...\model.gguf" style="flex:1;" />
-                  <input type="text" id="local-model-path-id" placeholder="Model ID" style="width:180px;" />
+                  <input type="text" id="local-model-path" placeholder="C:\Users\...\model.gguf" style="flex:1;" aria-label="Path to local GGUF model file" />
+                  <input type="text" id="local-model-path-id" placeholder="Model ID" style="width:180px;" aria-label="Model ID for local file" />
                   <button id="local-model-path-register" class="pref-btn pref-btn-primary">Register</button>
                 </div>
               </div>
@@ -861,7 +861,7 @@
                   specific variant below if needed.
                 </p>
                 <div class="preference-row">
-                  <select id="local-llamacpp-variant-select" style="width:180px;">
+                  <select id="local-llamacpp-variant-select" style="width:180px;" aria-label="llama.cpp runtime variant">
                     <option value="auto">Auto (recommended)</option>
                     <option value="cpu">CPU only</option>
                     <option value="cuda">CUDA (NVIDIA GPU)</option>
@@ -891,7 +891,7 @@
                     <option value="0">0 (CPU only)</option>
                     <option value="custom">Custom...</option>
                   </select>
-                  <input type="number" id="llamacpp-ngl-custom" value="0" min="0" max="999" style="width:80px;display:none;" />
+                  <input type="number" id="llamacpp-ngl-custom" value="0" min="0" max="999" style="width:80px;display:none;" aria-label="Custom GPU layers count" />
                 </div>
                 <div class="preference-row">
                   <label for="llamacpp-fit-target">GPU VRAM Margin (MiB)</label>
@@ -959,13 +959,13 @@
                 </div>
                 <div class="preference-row">
                   <div class="checkbox-row">
-                    <input type="checkbox" id="llamacpp-mmap" checked />
+                    <input type="checkbox" id="llamacpp-mmap" checked aria-label="Memory-mapped model (mmap)" />
                     <span>Memory-mapped model (mmap)</span>
                   </div>
                 </div>
                 <div class="preference-row">
                   <div class="checkbox-row">
-                    <input type="checkbox" id="llamacpp-context-shift" />
+                    <input type="checkbox" id="llamacpp-context-shift" aria-label="Context shift (continue past context limit)" />
                     <span>Context shift (continue past context limit)</span>
                   </div>
                 </div>
@@ -991,9 +991,9 @@
                 </div>
               </div>
               <div class="preference-group">
-                <label>Max Snapshots</label>
+                <label for="pref-incremental-max">Max Snapshots</label>
                 <span class="preference-hint">0 = unlimited</span>
-                <input type="number" id="pref-incremental-max" value="10" min="0" />
+                <input type="number" id="pref-incremental-max" value="10" min="0" aria-label="Max snapshots" />
               </div>
               <div class="preference-group">
                 <label>Auto-clear Selection</label>
@@ -1021,12 +1021,12 @@
                 </div>
               </div>
               <div class="preference-group">
-                <label>Entity Extraction Role</label>
+                <label for="pref-entity-extraction-role">Entity Extraction Role</label>
                 <span class="preference-hint">Perspective for entity extraction</span>
                 <input type="text" id="pref-entity-extraction-role" placeholder="e.g. fantasy novelist" />
               </div>
               <div class="preference-group">
-                <label>Extraction Prompt</label>
+                <label for="pref-entity-extraction-prompt">Extraction Prompt</label>
                 <span class="preference-hint">Prompt for entity extraction</span>
                 <div class="prompt-with-reset">
                   <textarea id="pref-entity-extraction-prompt" rows="4"></textarea>
@@ -1034,7 +1034,7 @@
                 </div>
               </div>
               <div class="preference-group">
-                <label>Tool Calling Prompt</label>
+                <label for="pref-tool-calling-prompt">Tool Calling Prompt</label>
                 <span class="preference-hint">Instructions for AI database queries</span>
                 <div class="prompt-with-reset">
                   <textarea id="pref-tool-calling-prompt" rows="4"></textarea>
@@ -1068,7 +1068,7 @@
                 </p>
               </div>
               <div class="preference-group">
-                <label>Editor font (prose)</label>
+                <label for="pref-fonts-editor">Editor font (prose)</label>
                 <select id="pref-fonts-editor">
                   <option value="Lora">Lora (bundled, default)</option>
                   <option value="Georgia">Georgia (system)</option>
@@ -1076,7 +1076,7 @@
                 </select>
               </div>
               <div class="preference-group">
-                <label>UI font (interface)</label>
+                <label for="pref-fonts-ui">UI font (interface)</label>
                 <select id="pref-fonts-ui">
                   <option value="Inter">Inter (bundled, default)</option>
                   <option value="system-ui">System default</option>
@@ -1086,14 +1086,14 @@
             <!-- TAB: Agent -->
             <div class="pref-tab-content" data-tab="agent">
               <div class="preference-group">
-                <label>Agent Workspace</label>
+                <label for="pref-agent-workspace-path">Agent Workspace</label>
                 <span class="preference-hint">
                   The workspace is a sandbox directory where the AI agent can read and
                   write operational files (plans, drafts, notes, attachments). It is
                   created automatically on first launch. Persistent data (memory, RAG) is stored separately.
                 </span>
                 <div class="folder-row">
-                  <input type="text" id="pref-agent-workspace-path" readonly class="pref-folder-path" />
+                  <input type="text" id="pref-agent-workspace-path" readonly class="pref-folder-path" aria-label="Agent workspace path" />
                   <button id="pref-agent-workspace-open" class="btn-small">Open in Explorer</button>
                 </div>
               </div>
@@ -1320,9 +1320,9 @@
           </p>
 
           <div class="preference-group">
-            <label>Vault name</label>
+            <label for="export-project-vault-name">Vault name</label>
             <span class="preference-hint">Name of the folder that will contain the vault</span>
-            <input type="text" id="export-project-vault-name" placeholder="My Project Vault" />
+            <input type="text" id="export-project-vault-name" placeholder="My Project Vault" aria-label="Vault name" />
           </div>
 
           <div class="preference-group">

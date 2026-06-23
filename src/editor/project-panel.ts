@@ -2012,6 +2012,7 @@ function startInlineRename(
   input.type = "text";
   input.value = currentName;
   input.className = "inline-rename-input";
+  input.setAttribute("aria-label", "Rename");
 
   el.textContent = "";
   el.appendChild(input);

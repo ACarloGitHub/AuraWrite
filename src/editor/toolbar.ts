@@ -1871,6 +1871,7 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
             proxyInput.value = input.value;
             proxyInput.className = "toolbar__number-input";
             proxyInput.style.width = "56px";
+            proxyInput.setAttribute("aria-label", input.getAttribute("aria-label") || input.title || "");
 
             proxyInput.addEventListener("change", () => {
               input.value = proxyInput.value;
@@ -1999,6 +2000,7 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
     input.value = original.value;
     input.className = original.className;
     input.title = original.title || "";
+    input.setAttribute("aria-label", original.getAttribute("aria-label") || original.title || "");
 
     input.addEventListener("input", () => {
       original.value = input.value;
@@ -2017,6 +2019,7 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
     input.value = original.value;
     input.className = original.className;
     input.title = original.title || "";
+    input.setAttribute("aria-label", original.getAttribute("aria-label") || original.title || "");
 
     input.addEventListener("change", () => {
       original.value = input.value;

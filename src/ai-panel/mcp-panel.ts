@@ -303,6 +303,7 @@ async function loadPlanContent(name: string): Promise<void> {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = checked;
+        checkbox.setAttribute("aria-label", `Task: ${taskMatch[2]}`);
         checkbox.addEventListener("change", () => {
           toggleTask(name, i, checkbox.checked);
         });

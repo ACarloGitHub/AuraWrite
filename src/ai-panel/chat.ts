@@ -275,6 +275,7 @@ function openAttachDialog(): void {
   const input = document.createElement("input");
   input.type = "file";
   input.multiple = true;
+  input.setAttribute("aria-label", "Attach file");
   const exts = [...IMAGE_EXTENSIONS, ...DOCUMENT_EXTENSIONS, ...DOCX_EXTENSIONS].join(",");
   input.accept = `image/*,.${exts.split(",").join(",.")}`;
   input.onchange = async () => {
