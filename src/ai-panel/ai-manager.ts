@@ -286,11 +286,23 @@ export async function sendToAI(
   }
 }
 
+let stoppedByUser = false;
+
 export function stopAI(): void {
+  stoppedByUser = true;
   if (currentProvider) {
     currentProvider.stop();
   }
   isProcessing = false;
+}
+
+export function wasStoppedByUser(): boolean {
+  const val = stoppedByUser;
+  return val;
+}
+
+export function clearStoppedFlag(): void {
+  stoppedByUser = false;
 }
 
 export function isAIProcessing(): boolean {

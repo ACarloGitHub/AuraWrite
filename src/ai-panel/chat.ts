@@ -3,7 +3,7 @@ import { DOMParser as PMDOMParser } from "prosemirror-model";
 import { invoke } from "@tauri-apps/api/core";
 import type { AIContext, Attachment } from "./providers";
 import mammoth from "mammoth";
-import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools, handlePreferencesChanged } from "./ai-manager";
+import { initAI, sendToAI, isAIProcessing, setProcessing, buildContextWithTools, handlePreferencesChanged, stopAI, wasStoppedByUser, clearStoppedFlag } from "./ai-manager";
 import { selectionHighlightPluginKey } from "../editor/selection-highlight";
 import { showSynonymPopup } from "../editor/synonym-popup";
 import {
@@ -27,6 +27,17 @@ import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
 import { shouldCompact, compactConversation, getCompactionSystemContext } from "./compaction";
 
 const MAX_TOOL_ITERATIONS = 10;
+
+const AI_REQUEST_TIMEOUT_MS = 180_000;
+
+function updateStopButton(): void {
+  const aiStop = document.getElementById("ai-stop");
+  const aiSend = document.getElementById("ai-send");
+  if (!aiStop || !aiSend) return;
+  const processing = isAIProcessing();
+  (aiStop as HTMLElement).style.display = processing ? "flex" : "none";
+  (aiSend as HTMLElement).style.display = processing ? "none" : "flex";
+}
 
 interface Message {
   role: "user" | "assistant" | "system" | "tool_result";
@@ -520,6 +531,7 @@ function setupPanelEvents(view: EditorView): void {
   const aiPanel = document.getElementById("ai-panel");
   const aiClose = document.getElementById("ai-close");
   const aiSend = document.getElementById("ai-send");
+  const aiStop = document.getElementById("ai-stop");
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const aiAttach = document.getElementById("ai-attach");
 
@@ -615,9 +627,15 @@ function setupPanelEvents(view: EditorView): void {
     sendMessage(text, [...pendingAttachments]);
   });
 
+  aiStop?.addEventListener("click", () => {
+    stopAI();
+    updateStopButton();
+  });
+
   aiInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (isAIProcessing()) return;
       const text = aiInput.value.trim();
       if (!text && pendingAttachments.length === 0) return;
       if (editorViewRef && currentSelection && !highlighted) {
@@ -625,6 +643,10 @@ function setupPanelEvents(view: EditorView): void {
         updateContextDisplay();
       }
       sendMessage(text, [...pendingAttachments]);
+    } else if (e.key === "Escape" && isAIProcessing()) {
+      e.preventDefault();
+      stopAI();
+      updateStopButton();
     }
   });
 }
@@ -843,7 +865,9 @@ function showToolCallIndicator(): HTMLDivElement | null {
 function updateToolCallIndicator(
   indicator: HTMLDivElement,
   toolNames: string[],
+  iteration: number = 1,
 ): void {
+  const iterationLabel = iteration > 1 ? ` (step ${iteration})` : "";
   indicator.innerHTML = `
     <span class="tool-call-indicator">
       <span class="tool-call-dots">
@@ -851,7 +875,7 @@ function updateToolCallIndicator(
         <span class="dot"></span>
         <span class="dot"></span>
       </span>
-      Querying: ${toolNames.join(", ")}
+      Querying: ${toolNames.join(", ")}${iterationLabel}
     </span>
   `;
 }
@@ -944,17 +968,6 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
     ? documentText
     : undefined;
 
-  let selectedImageAttachment: Attachment | undefined;
-  if (currentSelection?.selectedImageSrc) {
-    selectedImageAttachment = await resolveImageSrcToAttachment(currentSelection.selectedImageSrc);
-  }
-
-  const allAttachments = [
-    ...(sentAttachments || []),
-    ...(selectedImageAttachment ? [selectedImageAttachment] : []),
-  ];
-  const contextAttachments = allAttachments.length > 0 ? allAttachments : undefined;
-
   let context: AIContext = {
     selectedText: currentSelection?.text || undefined,
     documentTitle: document.title.replace(" - AuraWrite", ""),
@@ -976,15 +989,10 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         content: m.content,
         ...(m.attachments ? { attachments: m.attachments } : {}),
       })),
-    attachments: contextAttachments,
   };
 
   context = buildContextWithTools(context);
 
-  // Phase 3: inject compaction summary as context if available.
-  // The summary replaces old messages that have been compacted out
-  // of the active history, giving the AI continuity without consuming
-  // the full context window.
   const compactionContext = getCompactionSystemContext();
   if (compactionContext) {
     const existingHistory = context.messageHistory || [];
@@ -999,15 +1007,67 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
 
   const placeholder = appendMessage("assistant", "Thinking...");
 
-  // Track the actual AI content for DB persistence. The placeholder may show
-  // a summary line ("✓ 2 edits applied") but the DB should store the full
-  // cleaned AI response so it's useful for future RAG search.
   let persistedAssistantContent: string | null = null;
   let hadError = false;
 
   try {
+    clearStoppedFlag();
     setProcessing(true);
-    const response = await sendToAI(text, context);
+    updateStopButton();
+
+    let selectedImageAttachment: Attachment | undefined;
+    if (currentSelection?.selectedImageSrc) {
+      try {
+        selectedImageAttachment = await resolveImageSrcToAttachment(currentSelection.selectedImageSrc);
+      } catch (e) {
+        console.warn("[chat] resolveImageSrcToAttachment failed:", e);
+      }
+    }
+
+    const allAttachments = [
+      ...(sentAttachments || []),
+      ...(selectedImageAttachment ? [selectedImageAttachment] : []),
+    ];
+    const contextAttachments = allAttachments.length > 0 ? allAttachments : undefined;
+
+    const contextWithImage: AIContext = contextAttachments
+      ? { ...context, attachments: contextAttachments }
+      : context;
+
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      stopAI();
+    }, AI_REQUEST_TIMEOUT_MS);
+
+    let response: import("./providers").AIResponse;
+    try {
+      response = await sendToAI(text, contextWithImage);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (timedOut) {
+      if (placeholder) {
+        placeholder.textContent = "Request timed out after 3 minutes. The AI provider did not respond in time.";
+        placeholder.classList.add("ai-message--error");
+      }
+      hadError = true;
+      setProcessing(false);
+      updateStopButton();
+      return;
+    }
+
+    if (wasStoppedByUser()) {
+      if (placeholder) {
+        placeholder.textContent = "Stopped by user.";
+        placeholder.classList.add("ai-message--error");
+      }
+      hadError = true;
+      setProcessing(false);
+      updateStopButton();
+      return;
+    }
 
     if (placeholder) {
       if (response.error) {
@@ -1015,6 +1075,7 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         placeholder.classList.add("ai-message--error");
         hadError = true;
         setProcessing(false);
+        updateStopButton();
         return;
       }
     }
@@ -1025,6 +1086,15 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
       let iteration = 0;
 
       while (iteration < MAX_TOOL_ITERATIONS) {
+        if (wasStoppedByUser()) {
+          if (placeholder) {
+            placeholder.textContent = "Stopped by user.";
+            placeholder.classList.add("ai-message--error");
+          }
+          hadError = true;
+          break;
+        }
+
         const toolCalls = parseToolCalls(aiContent);
 
         if (toolCalls.length === 0) {
@@ -1034,7 +1104,7 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         const toolNames = toolCalls.map((tc) => tc.name);
         const indicator = showToolCallIndicator();
         if (indicator) {
-          updateToolCallIndicator(indicator, toolNames);
+          updateToolCallIndicator(indicator, toolNames, iteration + 1);
         }
 
         const enrichedToolCalls = toolCalls.map((call) => {
@@ -1081,6 +1151,7 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
             ragEnabled: prefs.ragEnabled,
           });
           toolResults.push(result);
+          if (wasStoppedByUser()) break;
           if (result.tool && !result.error) {
             showToolResultCard(result.tool, String(result.result));
           }
@@ -1140,7 +1211,43 @@ Based on these results, provide your final response to the user's question. ${ha
         iteration++;
 
         const followUpContext = { ...context };
-        const followUpResponse = await sendToAI(followUpPrompt, followUpContext);
+        let followUpTimedOut = false;
+        const followUpTimeoutId = setTimeout(() => {
+          followUpTimedOut = true;
+          stopAI();
+        }, AI_REQUEST_TIMEOUT_MS);
+
+        let followUpResponse: import("./providers").AIResponse;
+        try {
+          followUpResponse = await sendToAI(followUpPrompt, followUpContext);
+        } finally {
+          clearTimeout(followUpTimeoutId);
+        }
+
+        if (followUpTimedOut) {
+          if (placeholder) {
+            placeholder.textContent = `${cleanResponse}\n\n[Request timed out during tool follow-up. The AI provider did not respond in time.]`;
+            placeholder.classList.add("ai-message--error");
+          }
+          persistedAssistantContent = cleanResponse || aiContent;
+          hadError = true;
+          setProcessing(false);
+          updateStopButton();
+          return;
+        }
+
+        if (wasStoppedByUser()) {
+          if (placeholder) {
+            const stoppedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+            placeholder.textContent = stoppedContent || "Stopped by user.";
+            placeholder.classList.add("ai-message--error");
+          }
+          persistedAssistantContent = cleanResponse || aiContent;
+          hadError = true;
+          setProcessing(false);
+          updateStopButton();
+          return;
+        }
 
         if (followUpResponse.error) {
           if (placeholder) {
@@ -1148,10 +1255,9 @@ Based on these results, provide your final response to the user's question. ${ha
             placeholder.classList.add("ai-message--error");
           }
           hadError = true;
-          // Persist the partial response even on tool error — it may contain
-          // useful information the user saw before the error.
           persistedAssistantContent = cleanResponse || aiContent;
           setProcessing(false);
+          updateStopButton();
           return;
         }
 
@@ -1195,6 +1301,7 @@ Based on these results, provide your final response to the user's question. ${ha
     }
   } finally {
     setProcessing(false);
+    updateStopButton();
     updateContextFooter();
     // Persist the assistant turn using the actual AI content (stripped of
     // tool tags), NOT the display text. The placeholder may show a summary
@@ -1213,13 +1320,21 @@ Based on these results, provide your final response to the user's question. ${ha
     // If so, compact the conversation: summarize old messages and replace
     // them in the in-memory history with the summary, keeping the tail.
     // The original messages stay in SQLite/RAG for future search.
-    if (!hadError && shouldCompact()) {
+    if (!hadError && shouldCompact() && !wasStoppedByUser()) {
       try {
         const allMessages = getMessages();
-        const result = await compactConversation(
+        const compactionPromise = compactConversation(
           allMessages.filter((m) => m.role === "user" || m.role === "assistant"),
         );
-        if (result.compacted && result.summary) {
+
+        // Add a timeout to compaction to avoid blocking indefinitely.
+        // Compaction calls sendToAI which could hang. We give it 60 seconds.
+        const compactionResult = await Promise.race([
+          compactionPromise,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 60_000)),
+        ]);
+
+        if (compactionResult && compactionResult.compacted && compactionResult.summary) {
           // Remove head messages from the in-memory array and DOM.
           // Keep the tail (most recent messages) and add a system message
           // with the summary at the top.
@@ -1232,7 +1347,7 @@ Based on these results, provide your final response to the user's question. ${ha
             // Compaction notice
             const notice = document.createElement("div");
             notice.className = "ai-message ai-message--system";
-            notice.textContent = `[Previous context summarized — ${result.messagesRemoved} messages compacted]`;
+            notice.textContent = `[Previous context summarized — ${compactionResult.messagesRemoved} messages compacted]`;
             historyEl.appendChild(notice);
             // Re-add tail messages to DOM
             for (const msg of tail) {
@@ -1255,7 +1370,7 @@ Based on these results, provide your final response to the user's question. ${ha
           messages.length = 0;
           messages.push({
             role: "system",
-            content: `[Context summary]\n\n${result.summary}`,
+            content: `[Context summary]\n\n${compactionResult.summary}`,
             timestamp: Date.now(),
           });
           for (const msg of tail) {

@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State, WindowEvent};
+use tracing_subscriber::EnvFilter;
 
 // Import modules
 mod database;
@@ -1093,23 +1094,73 @@ fn embedding_count_chat_messages(state: State<AppState>) -> Result<i64, String> 
 // APP SETUP
 // ============================================================================
 
+fn init_logging() {
+    let log_dir = dirs::data_dir()
+        .map(|d| d.join("aurawrite").join("logs"))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    // Create log directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        eprintln!("[WARN] Could not create log directory {:?}: {}", log_dir, e);
+    }
+
+    let file_appender = tracing_appender::rolling::daily(log_dir, "aurawrite.log");
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("warn"));
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(file_appender)
+        .with_ansi(false)
+        .finish();
+
+    if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+        eprintln!("[WARN] Could not set tracing subscriber: {}", e);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize file logging: logs are written to <data_dir>/aurawrite/logs/
+    // On Windows: %APPDATA%/aurawrite/logs/
+    // On Linux: ~/.local/share/aurawrite/logs/
+    // On macOS: ~/Library/Application Support/aurawrite/logs/
+    init_logging();
+
     // Register sqlite-vec extension BEFORE opening any database connection
     embeddings::register_vec_extension();
 
-    // Initialize database connection
-    let conn = init_database().expect("Failed to initialize database");
+    // Initialize database connection — use eprintln + std::process::exit instead of
+    // .expect() so the user gets a clear error message instead of a silent crash.
+    let conn = match init_database() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Failed to initialize database: {}", e);
+            eprintln!("[FATAL] Failed to initialize database: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     // Initialize embeddings table (vec0 virtual table + metadata)
-    embeddings::init_embeddings_table(&conn).expect("Failed to initialize embeddings table");
+    if let Err(e) = embeddings::init_embeddings_table(&conn) {
+        tracing::error!("Failed to initialize embeddings table: {}", e);
+        eprintln!("[FATAL] Failed to initialize embeddings table: {}", e);
+        std::process::exit(1);
+    }
 
     // Initialize chat_embeddings table (Phase 2 of chat compaction)
-    embeddings::init_chat_embeddings_table(&conn)
-        .expect("Failed to initialize chat embeddings table");
+    if let Err(e) = embeddings::init_chat_embeddings_table(&conn) {
+        tracing::error!("Failed to initialize chat embeddings table: {}", e);
+        eprintln!("[FATAL] Failed to initialize chat embeddings table: {}", e);
+        std::process::exit(1);
+    }
 
     // Initialize chat_messages table (Phase 1 of chat compaction)
-    chat_db::init_chat_table(&conn).expect("Failed to initialize chat table");
+    if let Err(e) = chat_db::init_chat_table(&conn) {
+        tracing::error!("Failed to initialize chat table: {}", e);
+        eprintln!("[FATAL] Failed to initialize chat table: {}", e);
+        std::process::exit(1);
+    }
 
     // One-shot cleanup: remove orphan links left over from older versions
     // where deleting a document/section/project/entity did not cascade to the

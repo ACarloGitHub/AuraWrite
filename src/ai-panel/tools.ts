@@ -10,6 +10,18 @@ function isAbsolutePath(path: string): boolean {
   return /^(?:[A-Za-z]:[/\\]|\/)/.test(path);
 }
 
+const WEB_TOOL_TIMEOUT_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((_resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); _resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
 // ============================================================================
 // Tool Definitions (for AI)
 // ============================================================================
@@ -1507,24 +1519,36 @@ export async function executeTool(
       // ====== Web tools (native MCP) ======
       // All return strings with [INSTRUCTION: ...] prefix (Tool Result Injection pattern)
       case "web_search":
-        result = await invoke<string>("web_search", {
-          query: args.query as string,
-          limit: (args.limit as number) || 10,
-        });
+        result = await withTimeout(
+          invoke<string>("web_search", {
+            query: args.query as string,
+            limit: (args.limit as number) || 10,
+          }),
+          WEB_TOOL_TIMEOUT_MS,
+          "web_search"
+        );
         break;
 
       case "web_fetch":
-        result = await invoke<string>("web_fetch", {
-          url: args.url as string,
-          format: (args.format as string) || "markdown",
-        });
+        result = await withTimeout(
+          invoke<string>("web_fetch", {
+            url: args.url as string,
+            format: (args.format as string) || "markdown",
+          }),
+          WEB_TOOL_TIMEOUT_MS,
+          "web_fetch"
+        );
         break;
 
       case "web_search_images":
-        result = await invoke<string>("web_search_images", {
-          query: args.query as string,
-          limit: (args.limit as number) || 10,
-        });
+        result = await withTimeout(
+          invoke<string>("web_search_images", {
+            query: args.query as string,
+            limit: (args.limit as number) || 10,
+          }),
+          WEB_TOOL_TIMEOUT_MS,
+          "web_search_images"
+        );
         break;
 
       // ====== Wiki tools (native MCP) ======

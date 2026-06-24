@@ -707,7 +707,15 @@ function updateApiKeyGroupVisibility(): void {
       modelInput.readOnly = false;
       const currentValue = modelInput.value.trim();
       const isKnownDefault = Object.values(defaultModels).includes(currentValue);
-      if (currentValue === "" || isKnownDefault) {
+      // Reset model field to new provider's default when switching providers.
+      // If the current value is empty, a known default from another provider,
+      // or a local llama.cpp path (starts with % or / or contains \\), reset it.
+      const isLocalPath = currentValue.includes("\\") || currentValue.startsWith("/") || currentValue.startsWith("%");
+      if (currentValue === "" || isKnownDefault || isLocalPath || !currentValue) {
+        modelInput.value = newDefault;
+      } else {
+        // Keep custom model name but clear it if it's not compatible with the new provider.
+        // Safe heuristic: reset if provider changed (the caller already checked this).
         modelInput.value = newDefault;
       }
       const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;

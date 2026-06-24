@@ -7,6 +7,7 @@
 // Tool Result Injection pattern (see planner.rs for reference).
 
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 use crate::secrets;
 
@@ -14,6 +15,67 @@ const MAX_FETCH_BYTES: usize = 200 * 1024;
 const MAX_FETCH_DISPLAY: usize = 5 * 1024;
 const FETCH_TIMEOUT_SECS: u64 = 30;
 const MAX_SNIPPET_LEN: usize = 300;
+
+// Pre-compiled regexes (computed once, reused on every call)
+static LINK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<a\s+[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*class='result-link'[^>]*>(.*?)</a>"#).unwrap()
+});
+static LINK_RE_ALT: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<a\s+[^>]*class='result-link'[^>]*href="([^"]+)"[^>]*rel="nofollow"[^>]*>(.*?)</a>"#).unwrap()
+});
+static LINK_RE_DQ: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).unwrap()
+});
+static SNIPPET_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<td\s+class='result-snippet'[^>]*>(.*?)</td>"#).unwrap()
+});
+static SNIPPET_RE_DQ: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<td[^>]*class="result-snippet"[^>]*>(.*?)</td>"#).unwrap()
+});
+static VQD_JSON_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"vqd['"]\s*:\s*['"]([^'"]+)"#).unwrap()
+});
+static VQD_INPUT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<input[^>]*name="vqd"[^>]*value="([^"]*)""#).unwrap()
+});
+static SCRIPT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?s)<script[^>]*>.*?</script>").unwrap()
+});
+static STYLE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?s)<style[^>]*>.*?</style>").unwrap()
+});
+static LINK_MD_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).unwrap()
+});
+static BLOCK_TAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"</(p|div|br|h[1-6]|li|tr)>").unwrap()
+});
+static BR_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"<br\s*/?\s*>").unwrap()
+});
+static LI_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"<li[^>]*>").unwrap()
+});
+static BOLD_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"<(strong|b)[^>]*>(.*?)</(strong|b)>").unwrap()
+});
+static ITALIC_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"<(em|i)[^>]*>(.*?)</(em|i)>").unwrap()
+});
+static HTML_TAG_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"<[^>]+>").unwrap()
+});
+static MULTI_NEWLINE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\n{3,}").unwrap()
+});
+static HEADING_RE: [LazyLock<regex::Regex>; 6] = [
+    LazyLock::new(|| regex::Regex::new(r#"<h1[^>]*>(.*?)</h1>"#).unwrap()),
+    LazyLock::new(|| regex::Regex::new(r#"<h2[^>]*>(.*?)</h2>"#).unwrap()),
+    LazyLock::new(|| regex::Regex::new(r#"<h3[^>]*>(.*?)</h3>"#).unwrap()),
+    LazyLock::new(|| regex::Regex::new(r#"<h4[^>]*>(.*?)</h4>"#).unwrap()),
+    LazyLock::new(|| regex::Regex::new(r#"<h5[^>]*>(.*?)</h5>"#).unwrap()),
+    LazyLock::new(|| regex::Regex::new(r#"<h6[^>]*>(.*?)</h6>"#).unwrap()),
+];
 
 fn client() -> reqwest::Client {
     reqwest::Client::builder()
@@ -50,6 +112,7 @@ pub struct ImageSearchResult {
 
 #[tauri::command]
 pub async fn web_search(query: String, limit: Option<i32>) -> Result<String, String> {
+    tracing::info!(query = %query, "web_search called");
     let max = limit.unwrap_or(10).min(20) as usize;
     let client = client();
 
@@ -118,6 +181,7 @@ async fn search_ddg(
         .map_err(|e| format!("DDG read body failed: {}", e))?;
 
     if html.contains("anomaly-modal") || html.contains("bots use DuckDuckGo") {
+        tracing::warn!("DDG anti-bot CAPTCHA detected for query");
         return Err("DuckDuckGo requested anti-bot verification (CAPTCHA). Try again in a few minutes.".to_string());
     }
 
@@ -127,15 +191,7 @@ async fn search_ddg(
 fn parse_ddg_html(html: &str, max: usize) -> Result<Vec<WebSearchResult>, String> {
     let mut results = Vec::new();
 
-    // DDG Lite uses <tr> rows for each result. Split on <tr> tags first,
-    // then extract link + snippet from each row — same approach as the legacy MCP server.
     let rows = html.split("<tr").collect::<Vec<_>>();
-
-    let link_re = regex::Regex::new(r#"<a\s+[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*class='result-link'[^>]*>(.*?)</a>"#).unwrap();
-    let link_re_alt = regex::Regex::new(r#"<a\s+[^>]*class='result-link'[^>]*href="([^"]+)"[^>]*rel="nofollow"[^>]*>(.*?)</a>"#).unwrap();
-    let link_re_dq = regex::Regex::new(r#"<a[^>]*class="result-link"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).unwrap();
-    let snippet_re = regex::Regex::new(r#"<td\s+class='result-snippet'[^>]*>(.*?)</td>"#).unwrap();
-    let snippet_re_dq = regex::Regex::new(r#"<td[^>]*class="result-snippet"[^>]*>(.*?)</td>"#).unwrap();
 
     for row in &rows {
         if results.len() >= max {
@@ -145,8 +201,7 @@ fn parse_ddg_html(html: &str, max: usize) -> Result<Vec<WebSearchResult>, String
         let mut url = String::new();
         let mut title = String::new();
 
-        // Try each regex pattern (single-quote classes first — DDG Lite uses single quotes)
-        for re in [&link_re, &link_re_alt, &link_re_dq] {
+        for re in [&*LINK_RE, &*LINK_RE_ALT, &*LINK_RE_DQ] {
             if let Some(cap) = re.captures(row) {
                 let u = html_unescape(&cap[1]);
                 if u.starts_with("http") || u.starts_with("//") {
@@ -161,10 +216,9 @@ fn parse_ddg_html(html: &str, max: usize) -> Result<Vec<WebSearchResult>, String
             continue;
         }
 
-        // Try single-quote snippet first, then double-quote
-        let snippet = if let Some(cap) = snippet_re.captures(row) {
+        let snippet = if let Some(cap) = SNIPPET_RE.captures(row) {
             strip_html(&cap[1])
-        } else if let Some(cap) = snippet_re_dq.captures(row) {
+        } else if let Some(cap) = SNIPPET_RE_DQ.captures(row) {
             strip_html(&cap[1])
         } else {
             String::new()
@@ -227,6 +281,7 @@ async fn search_brave(
 
 #[tauri::command]
 pub async fn web_fetch(url: String, format: Option<String>) -> Result<String, String> {
+    tracing::info!(url = %url, "web_fetch called");
     let client = client();
     let resp = client
         .get(&url)
@@ -275,9 +330,11 @@ pub async fn web_fetch(url: String, format: Option<String>) -> Result<String, St
 
 #[tauri::command]
 pub async fn web_search_images(query: String, limit: Option<i32>) -> Result<String, String> {
+    tracing::info!(query = %query, "web_search_images called");
     let max = limit.unwrap_or(10).min(20) as usize;
     let client = client();
 
+    // First request: load DDG image search page to get VQD token
     let url = format!(
         "https://duckduckgo.com/?q={}&iax=images&ia=images",
         urlencoding::encode(&query)
@@ -294,8 +351,18 @@ pub async fn web_search_images(query: String, limit: Option<i32>) -> Result<Stri
         .await
         .map_err(|e| format!("DDG image read failed: {}", e))?;
 
-    let vqd = extract_vqd(&html).ok_or_else(|| "Could not extract DDG search token".to_string())?;
+    // Check for CAPTCHA/anti-bot page
+    if html.contains("anomaly-modal") || html.contains("bots use DuckDuckGo") {
+        tracing::warn!("DDG anti-bot CAPTCHA detected for image search");
+        return Err("DuckDuckGo requested anti-bot verification (CAPTCHA) for image search. Try again in a few minutes.".to_string());
+    }
 
+    let vqd = extract_vqd(&html).ok_or_else(|| {
+        tracing::warn!("VQD token not found in DDG image search page");
+        "Could not extract DDG search token. DuckDuckGo may have changed its page format or is blocking automated requests. Try a different search or use web_search instead.".to_string()
+    })?;
+
+    // Second request: get image results using VQD token
     let api_url = format!(
         "https://duckduckgo.com/i.js?l=wt-wt&o=json&q={}&vqd={}&f=,,,",
         urlencoding::encode(&query),
@@ -308,6 +375,10 @@ pub async fn web_search_images(query: String, limit: Option<i32>) -> Result<Stri
         .send()
         .await
         .map_err(|e| format!("DDG image API failed: {}", e))?;
+
+    if !resp2.status().is_success() {
+        return Err(format!("DDG image API returned status: {}", resp2.status()));
+    }
 
     let json: serde_json::Value = resp2
         .json()
@@ -350,17 +421,14 @@ pub async fn web_search_images(query: String, limit: Option<i32>) -> Result<Stri
 }
 
 fn extract_vqd(html: &str) -> Option<String> {
-    let re = regex::Regex::new(r#"vqd['"]\s*:\s*['"]([^'"]+)"#).ok()?;
-    if let Some(cap) = re.captures(html) {
+    if let Some(cap) = VQD_JSON_RE.captures(html) {
         return Some(cap[1].to_string());
     }
-    let re2 = regex::Regex::new(r#"<input[^>]*name="vqd"[^>]*value="([^"]*)""#).ok()?;
-    re2.captures(html).map(|cap| cap[1].to_string())
+    VQD_INPUT_RE.captures(html).map(|cap| cap[1].to_string())
 }
 
 fn strip_html(html: &str) -> String {
-    let re = regex::Regex::new(r"<[^>]+>").unwrap();
-    let text = re.replace_all(html, " ");
+    let text = HTML_TAG_RE.replace_all(html, " ");
     decode_html_entities(&text)
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -368,43 +436,24 @@ fn strip_html(html: &str) -> String {
 }
 
 fn html_to_markdown(html: &str) -> String {
-    let re_script = regex::Regex::new(r"(?s)<script[^>]*>.*?</script>").unwrap();
-    let s1 = re_script.replace_all(html, "");
-    let re_style = regex::Regex::new(r"(?s)<style[^>]*>.*?</style>").unwrap();
-    let s2 = re_style.replace_all(&s1, "");
+    let s1 = SCRIPT_RE.replace_all(html, "");
+    let s2 = STYLE_RE.replace_all(&s1, "");
 
     let mut s = s2.to_string();
-    for level in 1..=6 {
-        let re = regex::Regex::new(&format!(
-            r#"<h{level}[^>]*>(.*?)</h{level}>"#,
-            level = level
-        ))
-        .unwrap();
-        let prefix = "#".repeat(level);
+    for (level, re) in HEADING_RE.iter().enumerate() {
+        let prefix = "#".repeat(level + 1);
         s = re.replace_all(&s, format!("{} $1\n\n", prefix)).to_string();
     }
 
-    let link_re = regex::Regex::new(r#"<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).unwrap();
-    s = link_re.replace_all(&s, "[$2]($1)").to_string();
-
-    let block_re = regex::Regex::new(r"</(p|div|br|h[1-6]|li|tr)>").unwrap();
-    s = block_re.replace_all(&s, "\n").to_string();
-
-    let br_re = regex::Regex::new(r"<br\s*/?\s*>").unwrap();
-    s = br_re.replace_all(&s, "\n").to_string();
-
-    let li_re = regex::Regex::new(r"<li[^>]*>").unwrap();
-    s = li_re.replace_all(&s, "- ").to_string();
-
-    let bold_re = regex::Regex::new(r"<(strong|b)[^>]*>(.*?)</(strong|b)>").unwrap();
-    s = bold_re.replace_all(&s, "**$2**").to_string();
-    let italic_re = regex::Regex::new(r"<(em|i)[^>]*>(.*?)</(em|i)>").unwrap();
-    s = italic_re.replace_all(&s, "*$2*").to_string();
+    s = LINK_MD_RE.replace_all(&s, "[$2]($1)").to_string();
+    s = BLOCK_TAG_RE.replace_all(&s, "\n").to_string();
+    s = BR_RE.replace_all(&s, "\n").to_string();
+    s = LI_RE.replace_all(&s, "- ").to_string();
+    s = BOLD_RE.replace_all(&s, "**$2**").to_string();
+    s = ITALIC_RE.replace_all(&s, "*$2*").to_string();
 
     let text = strip_html(&s);
-
-    let re = regex::Regex::new(r"\n{3,}").unwrap();
-    let text = re.replace_all(&text, "\n\n");
+    let text = MULTI_NEWLINE_RE.replace_all(&text, "\n\n");
 
     text.trim().to_string()
 }
