@@ -97,8 +97,9 @@ function buildListingConfig(provider: string, baseUrl: string, apiKey: string): 
       if (provider === "ollama-cloud" && trimmedKey) {
         headers["Authorization"] = `Bearer ${trimmedKey}`;
       }
+      const tagsPath = provider === "ollama-cloud" ? "/tags" : "/api/tags";
       return {
-        url: `${cleanBase}/api/tags`,
+        url: `${cleanBase}${tagsPath}`,
         headers,
         parse: (body: any) => {
           if (!body || !Array.isArray(body.models)) return [];

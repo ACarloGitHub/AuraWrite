@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "./fetch-retry";
+
 export type ProviderName = "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
 
 export interface ContextWindowEntry {
@@ -161,8 +163,7 @@ export async function resolveContextWindowFromAPI(provider: string, model: strin
     if (provider === "openrouter") {
       const headers: Record<string, string> = { "HTTP-Referer": "https://aurawrite.app" };
       if (trimmedKey) headers["Authorization"] = `Bearer ${trimmedKey}`;
-      const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
-      const resp = await tauriFetch(`${cleanBase}/models`, { headers });
+      const resp = await fetchWithTimeout(`${cleanBase}/models`, { headers });
       if (!resp.ok) return null;
       const body = await resp.json();
       if (body?.data && Array.isArray(body.data)) {
@@ -174,8 +175,7 @@ export async function resolveContextWindowFromAPI(provider: string, model: strin
     } else if (provider === "openai") {
       const headers: Record<string, string> = {};
       if (trimmedKey) headers["Authorization"] = `Bearer ${trimmedKey}`;
-      const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
-      const resp = await tauriFetch(`${cleanBase}/models/${model}`, { headers });
+      const resp = await fetchWithTimeout(`${cleanBase}/models/${model}`, { headers });
       if (!resp.ok) return null;
       const body = await resp.json();
       if (body?.data && typeof body.data.context_length === "number" && body.data.context_length > 0) {
@@ -184,8 +184,7 @@ export async function resolveContextWindowFromAPI(provider: string, model: strin
     } else if (provider === "anthropic") {
       const headers: Record<string, string> = { "anthropic-version": "2023-06-01" };
       if (trimmedKey) headers["x-api-key"] = trimmedKey;
-      const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
-      const resp = await tauriFetch(`${cleanBase}/models/${model}`, { headers });
+      const resp = await fetchWithTimeout(`${cleanBase}/models/${model}`, { headers });
       if (!resp.ok) return null;
       const body = await resp.json();
       if (typeof body?.max_input_tokens === "number" && body.max_input_tokens > 0) {

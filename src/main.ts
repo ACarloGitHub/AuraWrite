@@ -436,19 +436,17 @@ function openPreferencesModal(): void {
     prefs.aiModel;
   (document.getElementById("pref-ai-api-key") as HTMLInputElement).value =
     getCachedApiKey(prefs.aiProvider) ?? "";
-  (document.getElementById("pref-ai-base-url") as HTMLInputElement).value =
-    prefs.aiBaseUrl;
-  // Mark the base URL as "auto-filled" if it matches a known default.
-  // This is critical: when the user later changes the provider, the
-  // updateApiKeyGroupVisibility() function only re-populates the base
-  // URL when dataset.autoFilled === "true" (or the field is empty).
-  // Without this marker, a base URL saved from a previous session would
-  // prevent the field from updating when the user switches provider,
-  // making it look like the feature is broken.
+  const effectiveProviderForUrl = (prefs.aiProvider === "ollama" && prefs.aiOllamaMode === "cloud")
+    ? "ollama-cloud" : prefs.aiProvider;
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
   if (baseUrlInput) {
-    const knownDefaults = Object.values(PROVIDER_BASE_URLS) as string[];
-    baseUrlInput.dataset.autoFilled = knownDefaults.includes(prefs.aiBaseUrl) ? "true" : "false";
+    const savedUrl = prefs.aiBaseUrl.trim().replace(/\/+$/, "");
+    const defaultUrl = PROVIDER_BASE_URLS[effectiveProviderForUrl] || "";
+    if (savedUrl) {
+      baseUrlInput.value = savedUrl;
+    } else {
+      baseUrlInput.value = defaultUrl;
+    }
   }
   (
     document.getElementById("pref-ai-interface-language") as HTMLSelectElement
@@ -724,9 +722,10 @@ function updateApiKeyGroupVisibility(): void {
   if (baseUrlInput) {
     const defaultUrl = PROVIDER_BASE_URLS[effectiveProvider] || "";
     baseUrlInput.placeholder = defaultUrl;
-    if (!baseUrlInput.value.trim() || baseUrlInput.dataset.autoFilled === "true") {
+    const currentUrl = baseUrlInput.value.trim().replace(/\/+$/, "");
+    const isKnownDefault = currentUrl && Object.values(PROVIDER_BASE_URLS).includes(currentUrl);
+    if (!currentUrl || isKnownDefault) {
       baseUrlInput.value = defaultUrl;
-      baseUrlInput.dataset.autoFilled = defaultUrl ? "true" : "false";
     }
   }
 }
@@ -1571,6 +1570,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (newDefault) {
         modelInput.value = newDefault;
       }
+      const newBaseUrl = PROVIDER_BASE_URLS[effectiveProvider] || "";
+      const baseUrlField = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
+      if (baseUrlField) {
+        baseUrlField.value = newBaseUrl;
+      }
     }
     void updateSecretsStatus();
     refreshModelList();
@@ -1580,6 +1584,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const oldProvider = getCurrentProvider();
     if (oldProvider && oldProvider instanceof LocalLlamacppProvider) {
       await oldProvider.shutdownServer();
+    }
+    const provider = (document.getElementById("pref-ai-provider") as HTMLSelectElement)?.value || "ollama";
+    const ollamaMode = (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement)?.value || "local";
+    const effectiveProvider = (provider === "ollama" && ollamaMode === "cloud") ? "ollama-cloud" : provider;
+    const baseUrlField = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
+    if (baseUrlField) {
+      baseUrlField.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
     }
     updateApiKeyGroupVisibility();
     refreshModelList();

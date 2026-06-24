@@ -12,7 +12,7 @@ function extractOllamaUsage(data: unknown): { inputTokens: number; outputTokens:
 export type OllamaMode = "local" | "cloud";
 
 const OLLAMA_LOCAL_BASE_URL = "http://localhost:11434";
-const OLLAMA_CLOUD_BASE_URL = "https://ollama.com";
+const OLLAMA_CLOUD_BASE_URL = "https://ollama.com/api";
 
 export class OllamaProvider implements AIProvider {
   name = "ollama";
@@ -110,8 +110,11 @@ export class OllamaProvider implements AIProvider {
         body.images = images;
       }
 
+      const isCloud = this.mode === "cloud";
+      const endpoint = isCloud ? "/generate" : "/api/generate";
+
       const response = await withRetry(
-        () => fetchWithTimeout(`${this.baseUrl}/api/generate`, {
+        () => fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
           method: "POST",
           headers,
           body: JSON.stringify(body),

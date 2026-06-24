@@ -102,7 +102,7 @@ export interface AIProviderConfig {
 
 export const PROVIDER_BASE_URLS: Record<string, string> = {
   ollama: "http://localhost:11434",
-  "ollama-cloud": "https://ollama.com",
+  "ollama-cloud": "https://ollama.com/api",
   openai: "https://api.openai.com/v1",
   anthropic: "https://api.anthropic.com/v1",
   deepseek: "https://api.deepseek.com",
