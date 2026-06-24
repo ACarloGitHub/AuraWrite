@@ -3,7 +3,7 @@ import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupMCPPanel } from "./ai-panel/mcp-panel";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
-import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey } from "./ai-panel/ai-manager";
+import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey, getEffectiveProviderName } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
@@ -237,14 +237,14 @@ async function updateSecretsStatus(): Promise<void> {
   const statusEl = document.getElementById("security-keychain-status");
   if (!statusEl) return;
   const prefs = getPreferences();
-  const provider = prefs.aiProvider;
+  const effectiveProvider = getEffectiveProviderName(prefs.aiProvider, prefs.aiOllamaMode);
   try {
-    const key = await invoke<string | null>("secrets_get", { key: `ai-api-key:${provider}` });
+    const key = await invoke<string | null>("secrets_get", { key: `ai-api-key:${effectiveProvider}` });
     if (key) {
-      statusEl.textContent = `API key for ${provider} stored securely (encrypted).`;
+      statusEl.textContent = `API key for ${effectiveProvider} stored securely (encrypted).`;
       statusEl.style.color = "";
     } else {
-      statusEl.textContent = `No API key stored for ${provider} (set one in AI Provider tab).`;
+      statusEl.textContent = `No API key stored for ${effectiveProvider} (set one in AI Provider tab).`;
       statusEl.style.color = "";
     }
   } catch {
@@ -266,24 +266,13 @@ async function updateAgentWorkspaceInfo(): Promise<void> {
 async function savePreferences(prefs: Preferences): Promise<void> {
   const prefsToStore = { ...prefs, aiApiKey: "" };
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefsToStore));
-  if (prefs.aiApiKey !== undefined) {
-    if (prefs.aiApiKey.trim()) {
-      setCachedApiKey(prefs.aiProvider, prefs.aiApiKey);
-      try {
-        await invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey });
-      } catch (e) {
-        console.error("[secrets] failed to save API key:", e);
-      }
-    } else {
-      const existing = getCachedApiKey(prefs.aiProvider);
-      if (existing && existing.trim()) {
-        try {
-          await invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` });
-        } catch (e) {
-          console.error("[secrets] failed to delete API key:", e);
-        }
-      }
-      setCachedApiKey(prefs.aiProvider, "");
+  const effectiveProvider = getEffectiveProviderName(prefs.aiProvider, prefs.aiOllamaMode);
+  if (prefs.aiApiKey !== undefined && prefs.aiApiKey.trim()) {
+    setCachedApiKey(effectiveProvider, prefs.aiApiKey);
+    try {
+      await invoke("secrets_set", { key: `ai-api-key:${effectiveProvider}`, value: prefs.aiApiKey });
+    } catch (e) {
+      console.error("[secrets] failed to save API key:", e);
     }
   }
   applyPreferences(prefs);
@@ -434,8 +423,9 @@ function openPreferencesModal(): void {
     prefs.aiOllamaMode;
   (document.getElementById("pref-ai-model") as HTMLInputElement).value =
     prefs.aiModel;
+  const effectiveProviderForKey = getEffectiveProviderName(prefs.aiProvider, prefs.aiOllamaMode);
   (document.getElementById("pref-ai-api-key") as HTMLInputElement).value =
-    getCachedApiKey(prefs.aiProvider) ?? "";
+    getCachedApiKey(effectiveProviderForKey) ?? "";
   const effectiveProviderForUrl = (prefs.aiProvider === "ollama" && prefs.aiOllamaMode === "cloud")
     ? "ollama-cloud" : prefs.aiProvider;
   const baseUrlInput = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
@@ -1545,9 +1535,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       await oldProvider.shutdownServer();
     }
     updateApiKeyGroupVisibility();
+    const newOllamaMode = (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement)?.value || "local";
+    const effectiveProvider = getEffectiveProviderName(newProviderName, newOllamaMode);
     const apiKeyField = document.getElementById("pref-ai-api-key") as HTMLInputElement | null;
     if (apiKeyField) {
-      apiKeyField.value = getCachedApiKey(newProviderName) ?? "";
+      apiKeyField.value = getCachedApiKey(effectiveProvider) ?? "";
     }
     const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
     if (modelInput) {
@@ -1591,6 +1583,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const baseUrlField = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
     if (baseUrlField) {
       baseUrlField.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
+    }
+    const apiKeyField = document.getElementById("pref-ai-api-key") as HTMLInputElement | null;
+    if (apiKeyField) {
+      apiKeyField.value = getCachedApiKey(effectiveProvider) ?? "";
     }
     updateApiKeyGroupVisibility();
     refreshModelList();
@@ -1649,7 +1645,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     try {
       await invoke("llamacpp_stop_server").catch(() => {});
-      const apiProviders = ["openai", "anthropic", "deepseek", "openrouter", "minimax", "zai"];
+      const apiProviders = ["openai", "anthropic", "deepseek", "openrouter", "ollama", "ollama-cloud", "lmstudio", "minimax", "zai"];
       for (const p of apiProviders) {
         await invoke("secrets_delete", { key: `ai-api-key:${p}` }).catch(() => {});
       }

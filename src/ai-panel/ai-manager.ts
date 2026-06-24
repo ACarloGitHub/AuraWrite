@@ -21,9 +21,17 @@ const API_KEY_PROVIDERS = [
   "anthropic",
   "deepseek",
   "openrouter",
+  "ollama",
+  "ollama-cloud",
+  "lmstudio",
   "minimax",
   "zai",
 ] as const;
+
+export function getEffectiveProviderName(aiProvider: string, aiOllamaMode: string): string {
+  if (aiProvider === "ollama" && aiOllamaMode === "cloud") return "ollama-cloud";
+  return aiProvider;
+}
 
 let cachedApiKeys: Record<string, string> = {};
 
@@ -39,7 +47,30 @@ export async function preloadApiKey(): Promise<void> {
       console.error(`[secrets] failed to load key for ${p}:`, e);
     }
   }
+  await migrateOllamaCloudKey();
   await migrateLegacyApiKey();
+}
+
+async function migrateOllamaCloudKey(): Promise<void> {
+  const stored = localStorage.getItem(PREFERENCES_KEY);
+  if (!stored) return;
+  try {
+    const parsed = JSON.parse(stored);
+    const ollamaMode = parsed.aiOllamaMode || "local";
+    if (ollamaMode !== "cloud") return;
+    if (cachedApiKeys["ollama-cloud"]) return;
+    const ollamaKey = cachedApiKeys["ollama"];
+    if (!ollamaKey) return;
+    try {
+      await invoke("secrets_set", { key: "ai-api-key:ollama-cloud", value: ollamaKey });
+      cachedApiKeys["ollama-cloud"] = ollamaKey;
+      console.log("[secrets] migrated ollama key to ollama-cloud");
+    } catch {
+      // migration failed, keep key in ollama namespace
+    }
+  } catch {
+    // ignore parse errors
+  }
 }
 
 async function migrateLegacyApiKey(): Promise<void> {
