@@ -19,11 +19,10 @@ import {
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
 import { applyAuraEdit } from "./edit-executor";
-import { parseToolCalls, executeTool, type ToolResult, type ToolPreferences } from "./tools";
+import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
-import { getContextWindow } from "./context-window";
 import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
 import { shouldCompact, compactConversation, getCompactionSystemContext } from "./compaction";
 
@@ -1099,12 +1098,6 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         }
 
         const hasPlannerTools = toolResults.some((r) => r.tool && r.tool.startsWith("plan_"));
-        const hasAgenticTools = toolResults.some((r) =>
-          r.tool && !r.tool.startsWith("plan_") &&
-          !r.tool.startsWith("search_") && !r.tool.startsWith("get_") &&
-          !r.tool.startsWith("list_") && !r.tool.startsWith("semantic_") &&
-          r.tool !== "entities_in_document" && r.tool !== "chat_search"
-        );
         if (indicator) {
           removeToolCallIndicator(indicator);
         }
@@ -1348,6 +1341,23 @@ export function clearMessages(): void {
   if (historyEl) {
     historyEl.innerHTML = "";
   }
+}
+
+export function sendProgrammaticMessage(text: string): void {
+  const aiPanel = document.getElementById("ai-panel");
+  if (aiPanel?.classList.contains("hidden")) {
+    aiPanel.classList.remove("hidden");
+    isPanelOpen = true;
+    if (!documentChunksComputed && editorViewRef) {
+      computeDocumentChunks();
+      documentChunksComputed = true;
+    }
+    updateContextDisplay();
+    updateChunkSelector();
+  }
+  const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
+  if (aiInput) aiInput.value = "";
+  sendMessage(text);
 }
 
 export function getCurrentSelection(): SelectionRange | null {

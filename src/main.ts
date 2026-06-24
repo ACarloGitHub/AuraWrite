@@ -271,17 +271,19 @@ async function savePreferences(prefs: Preferences): Promise<void> {
     if (prefs.aiApiKey.trim()) {
       try {
         await invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey });
+        console.log(`[secrets] saved key for ${prefs.aiProvider} (${prefs.aiApiKey.length} chars)`);
       } catch (e) {
         console.error("[secrets] failed to save API key:", e);
       }
     } else {
       try {
         await invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` });
+        console.log(`[secrets] deleted key for ${prefs.aiProvider}`);
       } catch (e) {
         console.error("[secrets] failed to delete API key:", e);
+      }
     }
   }
-}
   applyPreferences(prefs);
 }
 

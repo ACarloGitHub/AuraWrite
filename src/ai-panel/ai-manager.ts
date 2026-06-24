@@ -32,14 +32,16 @@ export async function preloadApiKey(): Promise<void> {
   for (const p of API_KEY_PROVIDERS) {
     try {
       const k = await invoke<string | null>("secrets_get", { key: `ai-api-key:${p}` });
-      if (k) cachedApiKeys[p] = k;
-    } catch {
-      /* skip */
+      if (k) {
+        cachedApiKeys[p] = k;
+        console.log(`[secrets] loaded key for ${p} (${k.length} chars)`);
+      } else {
+        console.log(`[secrets] no key for ${p}`);
+      }
+    } catch (e) {
+      console.error(`[secrets] failed to load key for ${p}:`, e);
     }
   }
-  // Migrate legacy aiApiKey from localStorage to per-provider keychain entry.
-  // If a provider has no key in the keychain but the legacy aiApiKey exists and
-  // the stored provider matches, migrate it before stripping.
   await migrateLegacyApiKey();
   stripApiKeyFromLocalStorage();
 }

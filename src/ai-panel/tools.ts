@@ -212,6 +212,44 @@ export const AVAILABLE_TOOLS = [
     }
   },
   {
+    name: "read_project",
+    description: "Read all documents in a project. Returns the full text content of every document, organized by section. Use this when the user asks to read the entire project or wants a comprehensive understanding of all content.",
+    parameters: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          description: "The project ID"
+        },
+        max_length: {
+          type: "number",
+          description: "Maximum characters per document (0 = no limit, default 8000). Documents exceeding this are truncated with a note.",
+          default: 8000
+        }
+      },
+      required: ["project_id"]
+    }
+  },
+  {
+    name: "read_section",
+    description: "Read all documents in a specific section. Returns the full text content of every document in that section. Use this when the user wants to read a specific section or chapter.",
+    parameters: {
+      type: "object",
+      properties: {
+        section_id: {
+          type: "string",
+          description: "The section ID"
+        },
+        max_length: {
+          type: "number",
+          description: "Maximum characters per document (0 = no limit, default 8000). Documents exceeding this are truncated with a note.",
+          default: 8000
+        }
+      },
+      required: ["section_id"]
+    }
+  },
+  {
     name: "plan_create",
     description: "Create a new plan with tasks as markdown checkboxes. Tasks use '- [ ]' for open and '- [x]' for completed. Questions for the user use '- [ ] Question (for user): ...'",
     parameters: {
@@ -1086,6 +1124,102 @@ async function entitiesInDocument(
   }
 }
 
+// Tool: read_project — read all documents in a project
+async function readProject(
+  projectId: string,
+  maxLength: number = 8000
+): Promise<{
+  project_id: string;
+  sections: Array<{
+    section_id: string;
+    section_name: string;
+    documents: Array<{
+      document_id: string;
+      title: string;
+      text: string;
+      word_count: number;
+      truncated: boolean;
+    }>;
+  }>;
+}> {
+  const sections: Section[] = await invoke("db_get_sections", { projectId });
+
+  const result = await Promise.all(sections.map(async (section) => {
+    const docs: Document[] = await invoke("db_get_documents", { sectionId: section.id });
+
+    const documents = docs.map((doc) => {
+      let text: string;
+      let truncated = false;
+      try {
+        const content = JSON.parse(doc.content_json);
+        text = extractTextFromContent(content);
+      } catch {
+        text = doc.content_json || "";
+      }
+      if (maxLength > 0 && text.length > maxLength) {
+        text = text.substring(0, maxLength) + `\n[... truncated, ${doc.word_count} total words]`;
+        truncated = true;
+      }
+      return {
+        document_id: doc.id,
+        title: doc.title,
+        text,
+        word_count: doc.word_count,
+        truncated,
+      };
+    });
+
+    return {
+      section_id: section.id,
+      section_name: section.name,
+      documents,
+    };
+  }));
+
+  return { project_id: projectId, sections: result };
+}
+
+// Tool: read_section — read all documents in a section
+async function readSection(
+  sectionId: string,
+  maxLength: number = 8000
+): Promise<{
+  section_id: string;
+  documents: Array<{
+    document_id: string;
+    title: string;
+    text: string;
+    word_count: number;
+    truncated: boolean;
+  }>;
+}> {
+  const docs: Document[] = await invoke("db_get_documents", { sectionId });
+
+  const documents = docs.map((doc) => {
+    let text: string;
+    let truncated = false;
+    try {
+      const content = JSON.parse(doc.content_json);
+      text = extractTextFromContent(content);
+    } catch {
+      text = doc.content_json || "";
+    }
+    if (maxLength > 0 && text.length > maxLength) {
+      text = text.substring(0, maxLength) + `\n[... truncated, ${doc.word_count} total words]`;
+      truncated = true;
+    }
+    return {
+      document_id: doc.id,
+      title: doc.title,
+      text,
+      word_count: doc.word_count,
+      truncated,
+    };
+  });
+
+  return { section_id: sectionId, documents };
+}
+
 // Tool: chat_search — search past chat messages via semantic similarity
 async function chatSearch(
   query: string,
@@ -1302,6 +1436,20 @@ export async function executeTool(
         result = await entitiesInDocument(
           args.document_id as string,
           (args.project_id as string) || ""
+        );
+        break;
+
+      case "read_project":
+        result = await readProject(
+          args.project_id as string,
+          (args.max_length as number) || 8000
+        );
+        break;
+
+      case "read_section":
+        result = await readSection(
+          args.section_id as string,
+          (args.max_length as number) || 8000
         );
         break;
 
@@ -1677,6 +1825,12 @@ Example 4 — User asks "Which characters appear in chapter 1?":
 
 Example 5 — User asks "Search the document for the word 'dragon'":
 <tool name="search_documents">{"project_id": "${projectId || "PROJECT_ID"}", "query": "dragon"}</tool>
+
+Example 5b — User asks "Read the entire project" or "Read all documents":
+<tool name="read_project">{"project_id": "${projectId || "PROJECT_ID"}"}</tool>
+
+Example 5c — User asks "Read chapter/section X":
+<tool name="read_section">{"section_id": "SECTION_ID"}</tool>
 
 ${plannerEnabled ? `
 Example 6 — User asks "Create a plan for rewriting chapter 3":

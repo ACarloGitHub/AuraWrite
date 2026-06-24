@@ -785,6 +785,19 @@ pub fn create_document(conn: &Connection, document: &Document) -> SqliteResult<(
     Ok(())
 }
 
+pub fn get_all_documents_by_project(
+    conn: &Connection,
+    project_id: &str,
+) -> SqliteResult<Vec<Document>> {
+    let sections = get_sections_by_project(conn, project_id)?;
+    let mut all_docs = Vec::new();
+    for section in &sections {
+        let docs = get_documents_by_section(conn, &section.id)?;
+        all_docs.extend(docs);
+    }
+    Ok(all_docs)
+}
+
 pub fn get_documents_by_section(
     conn: &Connection,
     section_id: &str,

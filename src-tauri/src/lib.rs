@@ -427,6 +427,12 @@ fn db_get_documents(state: State<AppState>, section_id: String) -> Result<Vec<Do
 }
 
 #[tauri::command]
+fn db_get_all_documents_by_project(state: State<AppState>, project_id: String) -> Result<Vec<Document>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    get_all_documents_by_project(&*conn, &project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn db_get_document(state: State<AppState>, id: String) -> Result<Option<Document>, String> {
     let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     get_document_by_id(&*conn, &id).map_err(|e| e.to_string())
@@ -1162,6 +1168,7 @@ pub fn run() {
             // Document commands
             db_create_document,
             db_get_documents,
+            db_get_all_documents_by_project,
             db_get_document,
             db_update_document,
             db_delete_document,

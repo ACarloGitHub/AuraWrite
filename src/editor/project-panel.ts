@@ -28,6 +28,7 @@ import {
   extractEntitiesFromSection,
   extractEntitiesFromProject,
 } from "../ai-panel/entity-extraction";
+import { sendProgrammaticMessage } from "../ai-panel/chat";
 import Sortable from "sortablejs";
 import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
 import { listTemplates, getTemplate, createProjectFromTemplate } from "../templates/apply";
@@ -103,6 +104,12 @@ export function initProjectPanel(
 
   const btnSaveDb = document.getElementById("btn-save-db");
   btnSaveDb?.addEventListener("click", handleSaveToDatabase);
+
+  const btnReadProject = document.getElementById("btn-read-project");
+  btnReadProject?.addEventListener("click", () => {
+    if (!currentProject) return;
+    sendProgrammaticMessage(`Read all documents in the project "${currentProject.name}". Use the read_project tool.`);
+  });
 
   const btnAiSettings = document.getElementById("btn-ai-settings");
   btnAiSettings?.addEventListener("click", () => {
