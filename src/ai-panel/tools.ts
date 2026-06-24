@@ -235,8 +235,8 @@ export const AVAILABLE_TOOLS = [
         },
         max_length: {
           type: "number",
-          description: "Maximum characters per document (0 = no limit, default 8000). Documents exceeding this are truncated with a note.",
-          default: 8000
+          description: "Maximum characters per document (0 = no limit, default 0). Documents exceeding this are truncated with a note.",
+          default: 0
         }
       },
       required: ["project_id"]
@@ -254,8 +254,8 @@ export const AVAILABLE_TOOLS = [
         },
         max_length: {
           type: "number",
-          description: "Maximum characters per document (0 = no limit, default 8000). Documents exceeding this are truncated with a note.",
-          default: 8000
+          description: "Maximum characters per document (0 = no limit, default 0). Documents exceeding this are truncated with a note.",
+          default: 0
         }
       },
       required: ["section_id"]
@@ -1139,7 +1139,7 @@ async function entitiesInDocument(
 // Tool: read_project — read all documents in a project
 async function readProject(
   projectId: string,
-  maxLength: number = 8000
+  maxLength: number = 0
 ): Promise<{
   project_id: string;
   sections: Array<{
@@ -1194,7 +1194,7 @@ async function readProject(
 // Tool: read_section — read all documents in a section
 async function readSection(
   sectionId: string,
-  maxLength: number = 8000
+  maxLength: number = 0
 ): Promise<{
   section_id: string;
   documents: Array<{
@@ -1454,14 +1454,14 @@ export async function executeTool(
       case "read_project":
         result = await readProject(
           args.project_id as string,
-          (args.max_length as number) || 8000
+          (args.max_length as number) || 0
         );
         break;
 
       case "read_section":
         result = await readSection(
           args.section_id as string,
-          (args.max_length as number) || 8000
+          (args.max_length as number) || 0
         );
         break;
 

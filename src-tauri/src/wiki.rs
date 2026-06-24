@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::workspace::workspace_path;
 
 const MEMORY_DIR: &str = "memory";
-const MAX_WIKI_READ_CHARS: usize = 4000;
+
 const MAX_WIKI_SNIPPET: usize = 300;
 
 fn memory_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -185,18 +185,10 @@ pub fn wiki_read(app: AppHandle, name: String) -> Result<String, String> {
     let total_lines = body.lines().count();
     let fm_note = if frontmatter.is_some() { " (has frontmatter)" } else { "" };
 
-    if body.len() > MAX_WIKI_READ_CHARS {
-        let preview = truncate_str(body, MAX_WIKI_READ_CHARS);
-        Ok(format!(
-            "[INSTRUCTION: Summarize the key information from this wiki page. Do NOT repeat the full content verbatim — describe what the page covers and its main points.] Wiki page '{}' ({} chars, {} lines{}) — showing first {} chars:\n\n{}\n\n[... Content truncated. Use wiki_search to find specific information.]",
-            sanitize_name(&name), total_chars, total_lines, fm_note, MAX_WIKI_READ_CHARS, preview
-        ))
-    } else {
-        Ok(format!(
-            "[INSTRUCTION: Summarize the key information from this wiki page. Do NOT repeat the full content verbatim — describe what the page covers and its main points.] Wiki page '{}' ({} chars, {} lines{}):\n\n{}",
-            sanitize_name(&name), total_chars, total_lines, fm_note, body
-        ))
-    }
+    Ok(format!(
+        "[INSTRUCTION: You have the full content of this wiki page. Use it as needed.] Wiki page '{}' ({} chars, {} lines{}):\n\n{}",
+        sanitize_name(&name), total_chars, total_lines, fm_note, body
+    ))
 }
 
 #[tauri::command]

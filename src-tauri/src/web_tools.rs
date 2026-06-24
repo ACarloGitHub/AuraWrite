@@ -12,7 +12,7 @@ use std::sync::LazyLock;
 use crate::secrets;
 
 const MAX_FETCH_BYTES: usize = 200 * 1024;
-const MAX_FETCH_DISPLAY: usize = 5 * 1024;
+const MAX_FETCH_DISPLAY: usize = 50 * 1024;
 const FETCH_TIMEOUT_SECS: u64 = 30;
 const MAX_SNIPPET_LEN: usize = 300;
 

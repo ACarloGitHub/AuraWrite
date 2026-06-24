@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::workspace::workspace_path;
 use crate::permissions::PermissionState;
 
-const MAX_FILE_READ_CHARS: usize = 10_000;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FileEntry {
@@ -95,18 +95,10 @@ pub fn file_read(
     let total_chars = content.len();
     let total_lines = content.lines().count();
 
-    if content.len() > MAX_FILE_READ_CHARS {
-        let preview = truncate_str(&content, MAX_FILE_READ_CHARS);
-        Ok(format!(
-            "[INSTRUCTION: Summarize what this file contains. Do NOT repeat the full content verbatim — describe the structure and key points.] File '{}' ({} chars, {} lines) — showing first {} chars:\n\n{}\n\n[... File truncated. Total: {} chars.]",
-            resolved.display(), total_chars, total_lines, MAX_FILE_READ_CHARS, preview, total_chars
-        ))
-    } else {
-        Ok(format!(
-            "[INSTRUCTION: Summarize the key information from this file. Do NOT repeat the full content verbatim.] File '{}' ({} chars, {} lines):\n\n{}",
-            resolved.display(), total_chars, total_lines, content
-        ))
-    }
+    Ok(format!(
+        "[INSTRUCTION: You have the full content of this file. Use it as needed.] File '{}' ({} chars, {} lines):\n\n{}",
+        resolved.display(), total_chars, total_lines, content
+    ))
 }
 
 #[tauri::command]
