@@ -12,7 +12,6 @@ use std::sync::LazyLock;
 use crate::secrets;
 
 const MAX_FETCH_BYTES: usize = 200 * 1024;
-const MAX_FETCH_DISPLAY: usize = 50 * 1024;
 const FETCH_TIMEOUT_SECS: u64 = 30;
 const MAX_SNIPPET_LEN: usize = 300;
 
@@ -313,19 +312,13 @@ pub async fn web_fetch(url: String, format: Option<String>) -> Result<String, St
         _ => html_to_markdown(&content),
     };
 
-    let display_content = if processed.len() > MAX_FETCH_DISPLAY {
-        format!(
-            "{}\n\n[... Content truncated. Total: {} characters. Use specific queries to get relevant sections.]",
-            &processed[..MAX_FETCH_DISPLAY],
-            processed.len()
-        )
+    let truncation_note = if was_truncated {
+        format!("\n\n[... Content truncated at {} bytes. Total response was {} bytes.]", MAX_FETCH_BYTES, body.len())
     } else {
-        processed
+        String::new()
     };
 
-    let instruction = "[INSTRUCTION: Summarize the key information from this page for the user. Do NOT repeat the full content verbatim. Pick the most relevant points and present them concisely.]";
-
-    Ok(format!("{}\n\nFetched from: {}\n\n{}", instruction, url, display_content))
+    Ok(format!("[INSTRUCTION: You have the full content of this page. Use it as needed.]\nFetched from: {}\n\n{}{}", url, processed, truncation_note))
 }
 
 #[tauri::command]
