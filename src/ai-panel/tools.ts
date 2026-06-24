@@ -389,6 +389,35 @@ export const AVAILABLE_TOOLS = [
       required: ["query"]
     }
   },
+  {
+    name: "chat_list_sessions",
+    description: "List recent chat sessions. Returns session ID, message count, first and last message timestamps. Use this to browse conversation history or find a specific session before reading its messages with chat_get_session_messages.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "Maximum number of sessions to return (default: 20)",
+          default: 20
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "chat_get_session_messages",
+    description: "Get all messages from a specific chat session. Returns the full conversation including user and assistant messages in chronological order. Use chat_list_sessions first to find the session ID.",
+    parameters: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: "The session ID to retrieve messages for"
+        }
+      },
+      required: ["session_id"]
+    }
+  },
   // ====== Web tools (native MCP) ======
   {
     name: "web_search",
@@ -1275,7 +1304,7 @@ async function chatSearch(
     return results;
   } catch (error) {
     console.error("Chat search failed:", error);
-    return [];
+    return [{ message_id: "error", session_id: "", role: "system", message_timestamp: Date.now(), content_text: `Chat search failed: ${error instanceof Error ? error.message : String(error)}. This usually means the embedding model is not running. Try starting the local AI server or using a different search method.`, project_id: null, distance: 999 }];
   }
 }
 
@@ -1514,6 +1543,18 @@ export async function executeTool(
           (args.project_id as string) || undefined,
           (args.limit as number) || 10
         );
+        break;
+
+      case "chat_list_sessions":
+        result = await invoke<Array<{session_id: string; message_count: number; last_timestamp: number; first_timestamp: number}>>("chat_list_recent_sessions", {
+          limit: (args.limit as number) || 20,
+        });
+        break;
+
+      case "chat_get_session_messages":
+        result = await invoke<Array<{id: string; session_id: string; role: string; content: string; project_id: string | null; timestamp: number}>>("chat_get_messages_by_session", {
+          sessionId: args.session_id as string,
+        });
         break;
 
       // ====== Web tools (native MCP) ======
@@ -1872,6 +1913,13 @@ Example 9 — User asks "What did we decide about the magic system earlier?":
 Example 10 — User asks "What names did we discuss for the protagonist?":
 <tool name="chat_search">{"query": "protagonist names discussed", "project_id": "${projectId || "PROJECT_ID"}"}</tool>
  ` : ""}
+Example 10b — User asks "How many chat sessions have we had?" or "List our past conversations":
+<tool name="chat_list_sessions">{}</tool>
+
+Example 10c — User asks "What did we talk about in the previous session?":
+<tool name="chat_list_sessions">{"limit": 5}</tool>
+Then, with the session_id from the result:
+<tool name="chat_get_session_messages">{"session_id": "SESSION_ID_FROM_LIST"}</tool>
 ${webSearchEnabled ? `Example 11 — User asks "Search the web for writing tips for fantasy":
 <tool name="web_search">{"query": "writing tips for fantasy novels", "limit": 5}</tool>
 
