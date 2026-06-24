@@ -7,14 +7,26 @@ export interface RetryOptions {
   signal?: AbortSignal;
 }
 
+export interface FetchWithTimeoutOptions extends RequestInit {
+  connectTimeout?: number;
+  requestTimeout?: number;
+  maxRedirections?: number;
+  proxy?: unknown;
+  danger?: unknown;
+}
+
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 1000;
 const DEFAULT_MAX_DELAY_MS = 8000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
 
 export function isTransientError(error: unknown): boolean {
   if (!error) return false;
   if (error instanceof Error) {
     if (error.name === "AbortError") return false;
+    if (error.message && error.message.includes("Request timed out")) return false;
+    if (error.message && error.message.includes("timed out after")) return false;
     const message = error.message || "";
     if (/HTTP\s+5\d\d/.test(message)) return true;
     if (/network|fetch|timeout|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i.test(message)) {
@@ -73,6 +85,62 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
     }
   }
   throw lastError;
+}
+
+export async function fetchWithTimeout(
+  url: string,
+  options: FetchWithTimeoutOptions = {},
+): Promise<Response> {
+  const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
+  const connectTimeout = options.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS;
+  const requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS;
+
+  const controller = new AbortController();
+  const outerSignal = options.signal;
+
+  if (outerSignal) {
+    if (outerSignal.aborted) {
+      controller.abort();
+    }
+    outerSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  const { connectTimeout: _ct, requestTimeout: _rt, maxRedirections, proxy, danger, signal: _s, ...fetchOptions } = options as FetchWithTimeoutOptions & { signal?: AbortSignal };
+
+  const tauriOptions: Record<string, unknown> = {
+    ...fetchOptions,
+    signal: controller.signal,
+    connectTimeout,
+  };
+  if (maxRedirections !== undefined) tauriOptions.maxRedirections = maxRedirections;
+  if (proxy !== undefined) tauriOptions.proxy = proxy;
+  if (danger !== undefined) tauriOptions.danger = danger;
+
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, requestTimeout);
+
+  try {
+    const response = await Promise.race([
+      tauriFetch(url, tauriOptions),
+      new Promise<never>((_, reject) => {
+        const onAbort = () => {
+          reject(timedOut
+            ? new Error(`Request timed out after ${requestTimeout / 1000}s`)
+            : new DOMException("Aborted", "AbortError"));
+        };
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+      }),
+    ]);
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+    if (outerSignal) {
+      outerSignal.removeEventListener("abort", () => controller.abort());
+    }
+  }
 }
 
 export function isValidHttpUrl(value: string): boolean {

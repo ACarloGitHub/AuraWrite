@@ -1,7 +1,6 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ContentPart, Attachment } from "./providers";
 import { buildContentParts } from "./providers";
-import { withRetry, isValidHttpUrl } from "./fetch-retry";
+import { withRetry, isValidHttpUrl, fetchWithTimeout } from "./fetch-retry";
 
 function extractOpenAIStyleReasoning(data: unknown): string | undefined {
   const message = (data as { choices?: Array<{ message?: { reasoning?: string; reasoning_content?: string } }> })?.choices?.[0]?.message;
@@ -160,7 +159,7 @@ export class OpenAIProvider implements AIProvider {
 
     try {
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+        () => fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -264,7 +263,7 @@ export class AnthropicProvider implements AIProvider {
       const userMessages = this.buildUserMessages(prompt, context);
 
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/messages`, {
+        () => fetchWithTimeout(`${this.baseUrl}/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -469,7 +468,7 @@ export class DeepSeekProvider implements AIProvider {
 
     try {
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+        () => fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -541,7 +540,7 @@ export class OpenRouterProvider implements AIProvider {
 
     try {
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+        () => fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -625,7 +624,7 @@ export class LMStudioProvider implements AIProvider {
       };
 
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+        () => fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -722,7 +721,7 @@ export class MiniMaxProvider implements AIProvider {
       };
 
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+        () => fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -815,7 +814,7 @@ export class ZAIProvider implements AIProvider {
       };
 
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/chat/completions`, {
+        () => fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

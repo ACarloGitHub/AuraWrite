@@ -1,6 +1,5 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse } from "./providers";
-import { withRetry, isValidHttpUrl } from "./fetch-retry";
+import { withRetry, isValidHttpUrl, fetchWithTimeout } from "./fetch-retry";
 
 function extractOllamaUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
   const d = data as { prompt_eval_count?: number; eval_count?: number };
@@ -112,7 +111,7 @@ export class OllamaProvider implements AIProvider {
       }
 
       const response = await withRetry(
-        () => tauriFetch(`${this.baseUrl}/api/generate`, {
+        () => fetchWithTimeout(`${this.baseUrl}/api/generate`, {
           method: "POST",
           headers,
           body: JSON.stringify(body),

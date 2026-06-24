@@ -1,7 +1,7 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type { AIProvider, AIContext, AIResponse, ContentPart } from "./providers";
 import { buildContentParts } from "./providers";
 import { invoke } from "@tauri-apps/api/core";
+import { fetchWithTimeout } from "./fetch-retry";
 
 const DEFAULT_PORT = 11435;
 const DEFAULT_HOST = "127.0.0.1";
@@ -205,7 +205,7 @@ export class LocalLlamacppProvider implements AIProvider {
     const url = `${this.getBaseUrl()}/health`;
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const resp = await tauriFetch(url, { method: "GET" });
+        const resp = await fetchWithTimeout(url, { method: "GET" });
         if (resp.ok) return;
       } catch {
         // Connection refused — server process not up yet
@@ -232,7 +232,7 @@ export class LocalLlamacppProvider implements AIProvider {
     const modelAlias = this.extractModelName();
 
     try {
-      const response = await tauriFetch(`${this.getBaseUrl()}/v1/chat/completions`, {
+      const response = await fetchWithTimeout(`${this.getBaseUrl()}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

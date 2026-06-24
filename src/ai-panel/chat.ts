@@ -1005,7 +1005,7 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
     };
   }
 
-  const placeholder = appendMessage("assistant", "Thinking...");
+  const placeholder = appendMessage("assistant", "Connecting...");
 
   let persistedAssistantContent: string | null = null;
   let hadError = false;
@@ -1014,6 +1014,8 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
     clearStoppedFlag();
     setProcessing(true);
     updateStopButton();
+
+    if (placeholder) placeholder.textContent = "Thinking...";
 
     let selectedImageAttachment: Attachment | undefined;
     if (currentSelection?.selectedImageSrc) {
@@ -1105,6 +1107,17 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         const indicator = showToolCallIndicator();
         if (indicator) {
           updateToolCallIndicator(indicator, toolNames, iteration + 1);
+        }
+        if (placeholder) {
+          const hasWebTool = toolNames.some((n) => n.startsWith("web_"));
+          const hasDbTool = toolNames.some((n) => n.startsWith("search_") || n.startsWith("get_") || n.startsWith("list_") || n === "semantic_search");
+          const hasPlanTool = toolNames.some((n) => n.startsWith("plan_"));
+          const hasFileTool = toolNames.some((n) => n.startsWith("file_"));
+          if (hasWebTool) placeholder.textContent = "Searching the web...";
+          else if (hasDbTool) placeholder.textContent = "Reading project data...";
+          else if (hasPlanTool) placeholder.textContent = "Updating plan...";
+          else if (hasFileTool) placeholder.textContent = "Reading files...";
+          else placeholder.textContent = "Using tools...";
         }
 
         const enrichedToolCalls = toolCalls.map((call) => {
@@ -1216,6 +1229,8 @@ Based on these results, provide your final response to the user's question. ${ha
           followUpTimedOut = true;
           stopAI();
         }, AI_REQUEST_TIMEOUT_MS);
+
+        if (placeholder) placeholder.textContent = "Generating response...";
 
         let followUpResponse: import("./providers").AIResponse;
         try {
