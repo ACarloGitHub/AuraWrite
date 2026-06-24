@@ -1,3 +1,7 @@
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+
+export { tauriFetch };
+
 export interface RetryOptions {
   maxAttempts?: number;
   baseDelayMs?: number;
@@ -91,21 +95,35 @@ export async function fetchWithTimeout(
   url: string,
   options: FetchWithTimeoutOptions = {},
 ): Promise<Response> {
-  const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
   const connectTimeout = options.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS;
   const requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
   const controller = new AbortController();
   const outerSignal = options.signal;
 
+  let timedOut = false;
+
+  const onLinkAbort = () => {
+    controller.abort();
+  };
+
   if (outerSignal) {
     if (outerSignal.aborted) {
       controller.abort();
+    } else {
+      outerSignal.addEventListener("abort", onLinkAbort, { once: true });
     }
-    outerSignal.addEventListener("abort", () => controller.abort(), { once: true });
   }
 
-  const { connectTimeout: _ct, requestTimeout: _rt, maxRedirections, proxy, danger, signal: _s, ...fetchOptions } = options as FetchWithTimeoutOptions & { signal?: AbortSignal };
+  const {
+    connectTimeout: _ct,
+    requestTimeout: _rt,
+    maxRedirections,
+    proxy,
+    danger,
+    signal: _s,
+    ...fetchOptions
+  } = options as FetchWithTimeoutOptions & { signal?: AbortSignal };
 
   const tauriOptions: Record<string, unknown> = {
     ...fetchOptions,
@@ -116,7 +134,6 @@ export async function fetchWithTimeout(
   if (proxy !== undefined) tauriOptions.proxy = proxy;
   if (danger !== undefined) tauriOptions.danger = danger;
 
-  let timedOut = false;
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort();
@@ -127,18 +144,23 @@ export async function fetchWithTimeout(
       tauriFetch(url, tauriOptions),
       new Promise<never>((_, reject) => {
         const onAbort = () => {
-          reject(timedOut
-            ? new Error(`Request timed out after ${requestTimeout / 1000}s`)
-            : new DOMException("Aborted", "AbortError"));
+          reject(
+            timedOut
+              ? new Error(`Request timed out after ${requestTimeout / 1000}s`)
+              : new DOMException("Aborted", "AbortError"),
+          );
         };
         controller.signal.addEventListener("abort", onAbort, { once: true });
+        if (controller.signal.aborted) {
+          onAbort();
+        }
       }),
     ]);
     return response;
   } finally {
     clearTimeout(timeoutId);
     if (outerSignal) {
-      outerSignal.removeEventListener("abort", () => controller.abort());
+      outerSignal.removeEventListener("abort", onLinkAbort);
     }
   }
 }

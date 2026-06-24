@@ -267,19 +267,23 @@ async function savePreferences(prefs: Preferences): Promise<void> {
   const prefsToStore = { ...prefs, aiApiKey: "" };
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefsToStore));
   if (prefs.aiApiKey !== undefined) {
-    setCachedApiKey(prefs.aiProvider, prefs.aiApiKey);
     if (prefs.aiApiKey.trim()) {
+      setCachedApiKey(prefs.aiProvider, prefs.aiApiKey);
       try {
         await invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey });
       } catch (e) {
         console.error("[secrets] failed to save API key:", e);
       }
     } else {
-      try {
-        await invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` });
-      } catch (e) {
-        console.error("[secrets] failed to delete API key:", e);
+      const existing = getCachedApiKey(prefs.aiProvider);
+      if (existing && existing.trim()) {
+        try {
+          await invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` });
+        } catch (e) {
+          console.error("[secrets] failed to delete API key:", e);
+        }
       }
+      setCachedApiKey(prefs.aiProvider, "");
     }
   }
   applyPreferences(prefs);
@@ -707,15 +711,8 @@ function updateApiKeyGroupVisibility(): void {
       modelInput.readOnly = false;
       const currentValue = modelInput.value.trim();
       const isKnownDefault = Object.values(defaultModels).includes(currentValue);
-      // Reset model field to new provider's default when switching providers.
-      // If the current value is empty, a known default from another provider,
-      // or a local llama.cpp path (starts with % or / or contains \\), reset it.
       const isLocalPath = currentValue.includes("\\") || currentValue.startsWith("/") || currentValue.startsWith("%");
-      if (currentValue === "" || isKnownDefault || isLocalPath || !currentValue) {
-        modelInput.value = newDefault;
-      } else {
-        // Keep custom model name but clear it if it's not compatible with the new provider.
-        // Safe heuristic: reset if provider changed (the caller already checked this).
+      if (currentValue === "" || isKnownDefault || isLocalPath) {
         modelInput.value = newDefault;
       }
       const select = document.getElementById("pref-ai-model-select") as HTMLSelectElement | null;
@@ -1549,11 +1546,31 @@ document.addEventListener("DOMContentLoaded", async () => {
       await oldProvider.shutdownServer();
     }
     updateApiKeyGroupVisibility();
-    // Aggiorna il campo API key con la key del nuovo provider (se presente nel keychain),
-    // e aggiorna lo stato del keychain nella tab Security.
     const apiKeyField = document.getElementById("pref-ai-api-key") as HTMLInputElement | null;
     if (apiKeyField) {
       apiKeyField.value = getCachedApiKey(newProviderName) ?? "";
+    }
+    const modelInput = document.getElementById("pref-ai-model") as HTMLInputElement | null;
+    if (modelInput) {
+      const defaultModels: Record<string, string> = {
+        ollama: "kimi-k2.5:cloud",
+        "ollama-cloud": "gpt-oss:120b-cloud",
+        openai: "gpt-4o",
+        anthropic: "claude-sonnet-4-20250514",
+        deepseek: "deepseek-chat",
+        openrouter: "openai/gpt-4o",
+        lmstudio: "loaded-model",
+        minimax: "MiniMax-M3",
+        zai: "glm-5.1",
+        "local-llamacpp": "",
+      };
+      const effectiveProvider = newProviderName === "ollama" &&
+        (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement)?.value === "cloud"
+        ? "ollama-cloud" : newProviderName;
+      const newDefault = defaultModels[effectiveProvider] || "";
+      if (newDefault) {
+        modelInput.value = newDefault;
+      }
     }
     void updateSecretsStatus();
     refreshModelList();
