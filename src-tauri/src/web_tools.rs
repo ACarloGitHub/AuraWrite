@@ -90,10 +90,7 @@ pub async fn web_search(query: String, limit: Option<i32>) -> Result<String, Str
 }
 
 async fn get_brave_api_key() -> Option<String> {
-    match secrets::secrets_get("brave_api_key".to_string()) {
-        Ok(Some(key)) => Some(key),
-        _ => None,
-    }
+    secrets::get_secret_direct("brave_api_key")
 }
 
 async fn search_ddg(

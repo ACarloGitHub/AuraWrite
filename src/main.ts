@@ -233,7 +233,7 @@ function getPreferences(): Preferences {
   return defaultPreferences;
 }
 
-async function updateKeychainStatus(): Promise<void> {
+async function updateSecretsStatus(): Promise<void> {
   const statusEl = document.getElementById("security-keychain-status");
   if (!statusEl) return;
   const prefs = getPreferences();
@@ -241,14 +241,14 @@ async function updateKeychainStatus(): Promise<void> {
   try {
     const key = await invoke<string | null>("secrets_get", { key: `ai-api-key:${provider}` });
     if (key) {
-      statusEl.textContent = `API key for ${provider} stored securely in the OS keychain.`;
+      statusEl.textContent = `API key for ${provider} stored securely (encrypted).`;
       statusEl.style.color = "";
     } else {
-      statusEl.textContent = `OS keychain available. No API key stored for ${provider} (set one in AI Provider tab).`;
+      statusEl.textContent = `No API key stored for ${provider} (set one in AI Provider tab).`;
       statusEl.style.color = "";
     }
   } catch {
-    statusEl.textContent = "Keychain not available on this system. API key is stored in browser storage (less secure).";
+    statusEl.textContent = "Encrypted storage not available. Please re-enter your API keys.";
     statusEl.style.color = "var(--color-danger, #e53e3e)";
   }
 }
@@ -271,14 +271,12 @@ async function savePreferences(prefs: Preferences): Promise<void> {
     if (prefs.aiApiKey.trim()) {
       try {
         await invoke("secrets_set", { key: `ai-api-key:${prefs.aiProvider}`, value: prefs.aiApiKey });
-        console.log(`[secrets] saved key for ${prefs.aiProvider} (${prefs.aiApiKey.length} chars)`);
       } catch (e) {
         console.error("[secrets] failed to save API key:", e);
       }
     } else {
       try {
         await invoke("secrets_delete", { key: `ai-api-key:${prefs.aiProvider}` });
-        console.log(`[secrets] deleted key for ${prefs.aiProvider}`);
       } catch (e) {
         console.error("[secrets] failed to delete API key:", e);
       }
@@ -1561,7 +1559,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (apiKeyField) {
       apiKeyField.value = getCachedApiKey(newProviderName) ?? "";
     }
-    void updateKeychainStatus();
+    void updateSecretsStatus();
     refreshModelList();
     savePreferencesFromModal();
   });
@@ -1688,8 +1686,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   btnZoomIn?.addEventListener("click", () => setZoom(10));
   btnZoomOut?.addEventListener("click", () => setZoom(-10));
 
-  updateKeychainStatus();
-  document.getElementById("pref-security-test-keychain")?.addEventListener("click", updateKeychainStatus);
+  updateSecretsStatus();
 
   updateAgentWorkspaceInfo();
   document.getElementById("pref-agent-workspace-open")?.addEventListener("click", async () => {

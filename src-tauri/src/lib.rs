@@ -1128,6 +1128,10 @@ pub fn run() {
         store: Mutex::new(PermissionsStore::empty()),
     };
 
+    let secrets_state = SecretsState {
+        store: Mutex::new(secrets::load_secrets()),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -1136,6 +1140,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .manage(permission_state)
+        .manage(secrets_state)
         .invoke_handler(tauri::generate_handler![
             // File commands
             save_document,

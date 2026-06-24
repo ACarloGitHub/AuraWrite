@@ -34,16 +34,12 @@ export async function preloadApiKey(): Promise<void> {
       const k = await invoke<string | null>("secrets_get", { key: `ai-api-key:${p}` });
       if (k) {
         cachedApiKeys[p] = k;
-        console.log(`[secrets] loaded key for ${p} (${k.length} chars)`);
-      } else {
-        console.log(`[secrets] no key for ${p}`);
       }
     } catch (e) {
       console.error(`[secrets] failed to load key for ${p}:`, e);
     }
   }
   await migrateLegacyApiKey();
-  stripApiKeyFromLocalStorage();
 }
 
 async function migrateLegacyApiKey(): Promise<void> {
@@ -59,10 +55,13 @@ async function migrateLegacyApiKey(): Promise<void> {
           await invoke("secrets_set", { key: `ai-api-key:${provider}`, value: legacyKey });
           cachedApiKeys[provider] = legacyKey;
         } catch {
-          // Keychain not available, key will stay in localStorage
-          // and be stripped below (user must re-enter it)
+          // Encryption storage failed — keep legacy key in localStorage
         }
       }
+    }
+    if (parsed.aiApiKey) {
+      parsed.aiApiKey = "";
+      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(parsed));
     }
   } catch {
     // ignore parse errors
@@ -78,20 +77,6 @@ export function setCachedApiKey(provider: string, key: string): void {
   if (!provider) return;
   if (key) cachedApiKeys[provider] = key;
   else delete cachedApiKeys[provider];
-}
-
-function stripApiKeyFromLocalStorage(): void {
-  const stored = localStorage.getItem(PREFERENCES_KEY);
-  if (!stored) return;
-  try {
-    const parsed = JSON.parse(stored);
-    if (parsed.aiApiKey) {
-      parsed.aiApiKey = "";
-      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(parsed));
-    }
-  } catch {
-    // ignore parse errors
-  }
 }
 
 type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
