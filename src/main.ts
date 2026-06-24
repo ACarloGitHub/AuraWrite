@@ -1428,17 +1428,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const findInput = document.getElementById("find-input") as HTMLInputElement | null;
   const replaceInput = document.getElementById("replace-input") as HTMLInputElement | null;
 
-  function openFindBar(replaceVisible = false): void {
+  function openFindBar(): void {
     findBar?.classList.remove("hidden");
-    if (!replaceVisible) {
-      document.querySelector(".find-bar__replace")?.classList.add("hidden");
-      document.getElementById("replace-one")?.classList.add("hidden");
-      document.getElementById("replace-all")?.classList.add("hidden");
-    } else {
-      document.querySelector(".find-bar__replace")?.classList.remove("hidden");
-      document.getElementById("replace-one")?.classList.remove("hidden");
-      document.getElementById("replace-all")?.classList.remove("hidden");
-    }
     findInput?.focus();
     findInput?.select();
   }
@@ -1449,10 +1440,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const btnFind = document.getElementById("btn-find");
-  btnFind?.addEventListener("click", () => openFindBar(false));
-
-  const btnFindReplace = document.getElementById("btn-find-replace");
-  btnFindReplace?.addEventListener("click", () => openFindBar(true));
+  btnFind?.addEventListener("click", () => openFindBar());
 
   document.getElementById("find-close")?.addEventListener("click", closeFindBar);
 
@@ -1817,11 +1805,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "f") {
       e.preventDefault();
-      openFindBar(false);
+      openFindBar();
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "h") {
       e.preventDefault();
-      openFindBar(true);
+      openFindBar();
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "=") {
       e.preventDefault();
