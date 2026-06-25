@@ -1528,15 +1528,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateCustomColorsVisibility();
   });
 
-  document.getElementById("pref-ai-provider")?.addEventListener("change", async () => {
-    const oldProvider = getCurrentProvider();
+  document.getElementById("pref-ai-provider")?.addEventListener("change", () => {
     const newProviderName = (document.getElementById("pref-ai-provider") as HTMLSelectElement)?.value;
-    if (oldProvider && oldProvider instanceof LocalLlamacppProvider && newProviderName !== "local-llamacpp") {
-      await oldProvider.shutdownServer();
-    }
-    updateApiKeyGroupVisibility();
     const newOllamaMode = (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement)?.value || "local";
     const effectiveProvider = getEffectiveProviderName(newProviderName, newOllamaMode);
+
+    // STEP 1: Update UI fields SYNCHRONOUSLY before any async operation.
+    // A generic 'change' listener also watches some of these fields; if this
+    // listener suspended on an await before refreshing them, that generic
+    // listener would read stale values (the previous provider's API key) and
+    // persist them under the NEW provider's namespace.
+    updateApiKeyGroupVisibility();
     const apiKeyField = document.getElementById("pref-ai-api-key") as HTMLInputElement | null;
     if (apiKeyField) {
       apiKeyField.value = getCachedApiKey(effectiveProvider) ?? "";
@@ -1555,9 +1557,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         zai: "glm-5.1",
         "local-llamacpp": "",
       };
-      const effectiveProvider = newProviderName === "ollama" &&
-        (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement)?.value === "cloud"
-        ? "ollama-cloud" : newProviderName;
       const newDefault = defaultModels[effectiveProvider] || "";
       if (newDefault) {
         modelInput.value = newDefault;
@@ -1568,18 +1567,27 @@ document.addEventListener("DOMContentLoaded", async () => {
         baseUrlField.value = newBaseUrl;
       }
     }
+
+    // STEP 2: Save preferences SYNCHRONOUSLY so the refreshed fields above are
+    // persisted before any async work can observe stale state.
+    savePreferencesFromModal();
+
+    // STEP 3: Async operations, fire-and-forget so they never suspend this
+    // listener before the synchronous save above has completed.
+    const oldProvider = getCurrentProvider();
+    if (oldProvider && oldProvider instanceof LocalLlamacppProvider && newProviderName !== "local-llamacpp") {
+      void oldProvider.shutdownServer();
+    }
     void updateSecretsStatus();
     refreshModelList();
-    savePreferencesFromModal();
   });
-  document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", async () => {
-    const oldProvider = getCurrentProvider();
-    if (oldProvider && oldProvider instanceof LocalLlamacppProvider) {
-      await oldProvider.shutdownServer();
-    }
+  document.getElementById("pref-ai-ollama-mode")?.addEventListener("change", () => {
     const provider = (document.getElementById("pref-ai-provider") as HTMLSelectElement)?.value || "ollama";
     const ollamaMode = (document.getElementById("pref-ai-ollama-mode") as HTMLSelectElement)?.value || "local";
     const effectiveProvider = (provider === "ollama" && ollamaMode === "cloud") ? "ollama-cloud" : provider;
+
+    // STEP 1: Update UI synchronously (same anti-race ordering as the provider
+    // listener above).
     const baseUrlField = document.getElementById("pref-ai-base-url") as HTMLInputElement | null;
     if (baseUrlField) {
       baseUrlField.value = PROVIDER_BASE_URLS[effectiveProvider] || "";
@@ -1589,8 +1597,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       apiKeyField.value = getCachedApiKey(effectiveProvider) ?? "";
     }
     updateApiKeyGroupVisibility();
-    refreshModelList();
+
+    // STEP 2: Save synchronously.
     savePreferencesFromModal();
+
+    // STEP 3: Async fire-and-forget.
+    const oldProvider = getCurrentProvider();
+    if (oldProvider && oldProvider instanceof LocalLlamacppProvider) {
+      void oldProvider.shutdownServer();
+    }
+    refreshModelList();
   });
   document.getElementById("pref-ai-base-url")?.addEventListener("change", () => {
     refreshModelList();
@@ -1694,7 +1710,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-provider, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
     )
     .forEach((el) => {
       el.addEventListener("change", savePreferencesFromModal);
@@ -1728,15 +1744,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("pref-agent-add-folder")?.addEventListener("click", async () => {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    let selected: string | null = null;
     try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false });
-      if (selected && typeof selected === "string") {
-        await invoke("permissions_grant", { path: selected, scope: "always", tool: "*" });
-        await loadPermissionsList();
-      }
-    } catch {
-      // user cancelled
+      const result = await open({ directory: true, multiple: false });
+      if (typeof result === "string") selected = result;
+    } catch (e) {
+      console.error("[agent] folder picker failed:", e);
+      return;
+    }
+    if (!selected) return; // user cancelled the dialog
+    try {
+      await invoke("permissions_grant", { path: selected, scope: "always", tool: "*" });
+      await loadPermissionsList();
+    } catch (e) {
+      console.error("[agent] add folder permission failed:", e);
+      alert("Failed to add folder: " + (e as Error).message);
     }
   });
 
