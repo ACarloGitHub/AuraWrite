@@ -22,10 +22,15 @@ export async function requestPermission(
   tool: string,
   path: string
 ): Promise<boolean> {
-  const allowed = await invoke<boolean>("permissions_check", {
-    path,
-    tool,
-  });
+  // If the backend check itself throws (e.g. corrupted permission file), we must
+  // NOT propagate the error silently — otherwise the banner never shows and the
+  // tool just fails. Treat a thrown check as "not authorized" and still ask the user.
+  let allowed = false;
+  try {
+    allowed = await invoke<boolean>("permissions_check", { path, tool });
+  } catch (e) {
+    console.error("[permissions] check failed, will ask user:", e);
+  }
   if (allowed) return true;
 
   const result = await showPermissionBanner(tool, path);

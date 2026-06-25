@@ -69,10 +69,31 @@ impl PermissionsStore {
         if file.exists() {
             let content = fs::read_to_string(&file)
                 .map_err(|e| format!("read permissions: {}", e))?;
-            let mut store: PermissionsStore = serde_json::from_str(&content)
-                .map_err(|e| format!("parse permissions: {}", e))?;
+            // Accept two on-disk formats:
+            //  - current:  {"always": [ ... ]}  (struct serialized via save())
+            //  - legacy:   [ ... ]               (bare array, produced by a previous bug
+            //                                     where save() wrote only self.always)
+            let mut store: PermissionsStore = match serde_json::from_str::<PermissionsStore>(&content)
+            {
+                Ok(s) => s,
+                Err(_) => {
+                    let always_vec: Vec<PermissionEntry> = serde_json::from_str(&content)
+                        .map_err(|e| format!("parse permissions: {}", e))?;
+                    PermissionsStore {
+                        always: always_vec,
+                        session: Vec::new(),
+                        loaded: false,
+                    }
+                }
+            };
             store.session = Vec::new();
             store.loaded = true;
+            // Re-save immediately in the canonical struct format if we migrated
+            // from the legacy array, so the file is self-healing.
+            let migrated = serde_json::from_str::<PermissionsStore>(&content).is_err();
+            if migrated {
+                let _ = store.save(app);
+            }
             Ok(store)
         } else {
             Ok(Self::empty())
@@ -89,11 +110,36 @@ impl PermissionsStore {
             fs::create_dir_all(&dir).map_err(|e| format!("create dir: {}", e))?;
         }
         let file = dir.join(PERMISSIONS_FILE);
-        let content = serde_json::to_string_pretty(&self.always)
+        // Serialize the whole struct. `session` and `loaded` are #[serde(skip)],
+        // so the on-disk shape is {"always": [ ... ]}, which load() can parse back.
+        let content = serde_json::to_string_pretty(self)
             .map_err(|e| format!("serialize permissions: {}", e))?;
         fs::write(&file, content).map_err(|e| format!("write permissions: {}", e))?;
         Ok(())
     }
+}
+
+/// Case-insensitive prefix match for two filesystem paths.
+///
+/// `Path::starts_with` compares OS path *components* but is case-sensitive even on
+/// Windows, so an authorized folder saved as `C:\Users\Carlo\...` would not match a
+/// request expressed as `c:\users\carlo\...`. We normalize both sides to a lowercase
+/// string with forward slashes and compare on a path boundary, which is robust across
+/// drive-letter casing and mixed separators.
+pub(crate) fn path_allowed(requested: &Path, allowed: &Path) -> bool {
+    let norm = |p: &Path| {
+        p.to_string_lossy()
+            .to_ascii_lowercase()
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_string()
+    };
+    let r = norm(requested);
+    let a = norm(allowed);
+    if r.is_empty() || a.is_empty() {
+        return false;
+    }
+    r == a || r.starts_with(&format!("{}/", a))
 }
 
 pub struct PermissionState {
@@ -124,7 +170,7 @@ pub fn permissions_check(
     let ws_path = workspace_path(&app)?;
     let requested = Path::new(&path);
 
-    if requested.starts_with(&ws_path) {
+    if path_allowed(requested, &ws_path) {
         return Ok(true);
     }
 
@@ -132,14 +178,14 @@ pub fn permissions_check(
 
     for entry in &store.always {
         let allowed = Path::new(&entry.path);
-        if requested.starts_with(allowed) {
+        if path_allowed(requested, allowed) {
             return Ok(true);
         }
     }
 
     for entry in &store.session {
         let allowed = Path::new(&entry.path);
-        if requested.starts_with(allowed) {
+        if path_allowed(requested, allowed) {
             return Ok(true);
         }
     }

@@ -13,7 +13,7 @@ use tauri::AppHandle;
 use serde::{Deserialize, Serialize};
 
 use crate::workspace::workspace_path;
-use crate::permissions::PermissionState;
+use crate::permissions::{PermissionState, path_allowed};
 
 
 
@@ -37,7 +37,7 @@ fn check_path_allowed(
     app: &AppHandle,
     perm_state: &tauri::State<'_, PermissionState>,
 ) -> Result<bool, String> {
-    if path.starts_with(ws_path) {
+    if path_allowed(path, ws_path) {
         return Ok(true);
     }
 
@@ -46,7 +46,7 @@ fn check_path_allowed(
 
     for entry in store.all_entries() {
         let allowed = Path::new(&entry.path);
-        if path.starts_with(allowed) {
+        if path_allowed(path, allowed) {
             return Ok(true);
         }
     }
