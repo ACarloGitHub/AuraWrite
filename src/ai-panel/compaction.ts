@@ -13,7 +13,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { sendToAI } from "./ai-manager";
-import { getSessionUsage } from "./chat-session-usage";
+import { getSessionUsage, getCompactionCount, MAX_COMPACTIONS_PER_SESSION } from "./chat-session-usage";
 import { getContextWindow } from "./context-window";
 import { estimateTokensFromText } from "./token-counter";
 import { getAISettings } from "./ai-manager";
@@ -62,6 +62,12 @@ RULES:
 - If a previous summary is provided, UPDATE it incrementally — do not start from zero.`;
 
 export function shouldCompact(): boolean {
+  // Hard cap: never compact more than MAX_COMPACTIONS_PER_SESSION times in a
+  // single session. Past that the conversation continues at full context; the
+  // user can clear the chat to reset.
+  if (getCompactionCount() >= MAX_COMPACTIONS_PER_SESSION) {
+    return false;
+  }
   const settings = getAISettings();
   const windowInfo = getContextWindow(settings.aiProvider, settings.aiModel);
   const usage = getSessionUsage();
@@ -69,6 +75,14 @@ export function shouldCompact(): boolean {
   if (windowInfo.context <= 0 || usage.totalTokens <= 0) return false;
 
   const ratio = usage.totalTokens / windowInfo.context;
+  // Diagnostic log: makes it possible to tell (from DevTools) whether the
+  // threshold is being approached and why compaction may or may not fire.
+  console.debug(
+    `[compaction] provider=${settings.aiProvider} model=${settings.aiModel} ` +
+      `ctx=${windowInfo.context} used=${usage.totalTokens} ratio=${ratio.toFixed(2)} ` +
+      `threshold=${COMPACTION_THRESHOLD} compaction#${getCompactionCount()}/${MAX_COMPACTIONS_PER_SESSION} ` +
+      `-> ${ratio >= COMPACTION_THRESHOLD}`,
+  );
   return ratio >= COMPACTION_THRESHOLD;
 }
 

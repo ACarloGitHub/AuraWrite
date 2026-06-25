@@ -1,6 +1,6 @@
 import { fetchWithTimeout } from "./fetch-retry";
 
-export type ProviderName = "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
+export type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
 
 export interface ContextWindowEntry {
   context: number;
@@ -75,6 +75,13 @@ const KNOWN_CONTEXT_WINDOWS: Array<{ match: (provider: ProviderName, model: stri
   { match: (p, m) => p === "openrouter" && m.toLowerCase().includes("gemini"), context: 1_048_576 },
   // OpenRouter DeepSeek
   { match: (p, m) => p === "openrouter" && m.toLowerCase().includes("deepseek"), context: 163_840 },
+  // Ollama Cloud — hosted models. Without these entries ollama-cloud fell through
+  // to the catch-all 128K below, which made the 65% compaction threshold almost
+  // unreachable in practice. Values are conservative (better to compact early than
+  // to overflow). Kimi K2.x exposes a 256K window; the rest of the hosted catalog
+  // is capped at 128K.
+  { match: (p, m) => p === "ollama-cloud" && m.toLowerCase().includes("kimi"), context: 262_144 },
+  { match: (p, _m) => p === "ollama-cloud", context: 131_072 },
   // Fallback
   { match: (_p, _m) => true, context: 128_000 },
 ];

@@ -24,7 +24,8 @@ import { currentProject, currentSection, currentDocument } from "../editor/proje
 import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
 import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
-import { shouldCompact, compactConversation, getCompactionSystemContext } from "./compaction";
+import { shouldCompact, compactConversation, getCompactionSystemContext, clearCompactionSummary } from "./compaction";
+import { resetSessionUsage, incrementCompactionCount, resetCompactionCount } from "./chat-session-usage";
 
 const MAX_TOOL_ITERATIONS = 10;
 
@@ -953,6 +954,72 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
     historyEl.scrollTop = historyEl.scrollHeight;
   }
 
+  // COMPACTION: if the session is near the 65% threshold, compact BEFORE
+  // building the context. This is important — previously compaction ran in the
+  // finally block (after the AI had already answered), so the snapshot in
+  // context.messageHistory was built from the pre-compaction messages and the
+  // freed space only took effect on the NEXT turn. Running it here means this
+  // very turn answers on the compacted history. Opening messages (greetings
+  // etc.) are NOT pinned: only the summary + the most recent tail are kept.
+  if (shouldCompact() && !wasStoppedByUser()) {
+    try {
+      const allMessages = getMessages();
+      const compactionPromise = compactConversation(
+        allMessages.filter((m) => m.role === "user" || m.role === "assistant"),
+      );
+
+      // Guard against a hanging summarization call (sendToAI under the hood).
+      const compactionResult = await Promise.race([
+        compactionPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 60_000)),
+      ]);
+
+      if (compactionResult && compactionResult.compacted && compactionResult.summary) {
+        // Keep the tail (most recent messages) and prepend a system summary.
+        const tailStart = Math.max(0, allMessages.length - 6);
+        const tail = allMessages.slice(tailStart);
+        const historyEl2 = document.querySelector(".ai-panel__history");
+        if (historyEl2) {
+          const existingMessages = historyEl2.querySelectorAll(".ai-message");
+          existingMessages.forEach((el) => el.remove());
+          const notice = document.createElement("div");
+          notice.className = "ai-message ai-message--system";
+          notice.textContent = `[Previous context summarized — ${compactionResult.messagesRemoved} messages compacted]`;
+          historyEl2.appendChild(notice);
+          for (const msg of tail) {
+            if (msg.role === "user" || msg.role === "assistant") {
+              const msgEl = document.createElement("div");
+              msgEl.className = `ai-message ai-message--${msg.role}`;
+              msgEl.textContent = msg.content;
+              historyEl2.appendChild(msgEl);
+            }
+          }
+          historyEl2.scrollTop = historyEl2.scrollHeight;
+        }
+        // Reset in-memory messages to: [system summary] + tail
+        messages.length = 0;
+        messages.push({
+          role: "system",
+          content: `[Context summary]\n\n${compactionResult.summary}`,
+          timestamp: Date.now(),
+        });
+        for (const msg of tail) {
+          if (msg.role === "user" || msg.role === "assistant") {
+            messages.push(msg);
+          }
+        }
+        // Critical: reset the usage tracker so the ratio drops below threshold
+        // (otherwise every subsequent turn would re-trigger compaction), and
+        // advance the per-session counter toward MAX_COMPACTIONS_PER_SESSION.
+        resetSessionUsage();
+        incrementCompactionCount();
+        updateContextFooter();
+      }
+    } catch (err) {
+      console.warn("[compaction] Compaction failed, continuing with full history:", err);
+    }
+  }
+
   const chunkText = getSelectedChunkText();
   const documentText = getDocumentText();
   const prefs = getPreferences();
@@ -1331,73 +1398,9 @@ Based on these results, provide your final response to the user's question. ${ha
       );
     }
 
-    // Phase 3: check if context exceeds the compaction threshold.
-    // If so, compact the conversation: summarize old messages and replace
-    // them in the in-memory history with the summary, keeping the tail.
-    // The original messages stay in SQLite/RAG for future search.
-    if (!hadError && shouldCompact() && !wasStoppedByUser()) {
-      try {
-        const allMessages = getMessages();
-        const compactionPromise = compactConversation(
-          allMessages.filter((m) => m.role === "user" || m.role === "assistant"),
-        );
-
-        // Add a timeout to compaction to avoid blocking indefinitely.
-        // Compaction calls sendToAI which could hang. We give it 60 seconds.
-        const compactionResult = await Promise.race([
-          compactionPromise,
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 60_000)),
-        ]);
-
-        if (compactionResult && compactionResult.compacted && compactionResult.summary) {
-          // Remove head messages from the in-memory array and DOM.
-          // Keep the tail (most recent messages) and add a system message
-          // with the summary at the top.
-          const tailStart = Math.max(0, allMessages.length - 6);
-          const tail = allMessages.slice(tailStart);
-          const historyEl = document.querySelector(".ai-panel__history");
-          if (historyEl) {
-            const existingMessages = historyEl.querySelectorAll(".ai-message");
-            existingMessages.forEach((el) => el.remove());
-            // Compaction notice
-            const notice = document.createElement("div");
-            notice.className = "ai-message ai-message--system";
-            notice.textContent = `[Previous context summarized — ${compactionResult.messagesRemoved} messages compacted]`;
-            historyEl.appendChild(notice);
-            // Re-add tail messages to DOM
-            for (const msg of tail) {
-              if (msg.role === "user" || msg.role === "assistant") {
-                const msgEl = document.createElement("div");
-                msgEl.className = `ai-message ai-message--${msg.role}`;
-                msgEl.textContent = msg.content;
-                if (msg.attachments && msg.attachments.length > 0) {
-                  const textNode = document.createElement("span");
-                  textNode.textContent = msg.content;
-                  msgEl.textContent = "";
-                  msgEl.appendChild(textNode);
-                }
-                historyEl.appendChild(msgEl);
-              }
-            }
-            historyEl.scrollTop = historyEl.scrollHeight;
-          }
-          // Reset in-memory messages to: [system summary] + tail
-          messages.length = 0;
-          messages.push({
-            role: "system",
-            content: `[Context summary]\n\n${compactionResult.summary}`,
-            timestamp: Date.now(),
-          });
-          for (const msg of tail) {
-            if (msg.role === "user" || msg.role === "assistant") {
-              messages.push(msg);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("[compaction] Compaction failed, continuing with full history:", err);
-      }
-    }
+    // Compaction now runs BEFORE context construction at the top of sendMessage,
+    // so the snapshot sent to the AI already reflects the compacted state and
+    // this turn itself benefits from the freed space. Nothing to do here.
   }
 
   if (historyEl) {
@@ -1467,6 +1470,12 @@ export function getMessages(): Message[] {
 
 export function clearMessages(): void {
   messages = [];
+  // Reset all compaction-related state so a "clear chat" starts truly fresh:
+  // the token usage tracker, the per-session compaction counter, and any
+  // cached summary that would otherwise be re-injected into the new session.
+  resetSessionUsage();
+  resetCompactionCount();
+  clearCompactionSummary();
   const historyEl = document.querySelector(".ai-panel__history");
   if (historyEl) {
     historyEl.innerHTML = "";
