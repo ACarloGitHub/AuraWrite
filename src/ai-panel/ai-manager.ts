@@ -216,7 +216,10 @@ export function handlePreferencesChanged(): void {
 
 async function resolveAndCacheContextWindow(provider: string, model: string): Promise<void> {
   if (!model) return;
-  if (provider === "local-llamacpp" || provider === "ollama" || provider === "lmstudio") return;
+  // local-llamacpp uses the configured ctx-size from preferences; ollama is
+  // purely local with no reliable context endpoint. lmstudio IS resolved here
+  // (native REST API /api/v1/models) so the active server setting is cached.
+  if (provider === "local-llamacpp" || provider === "ollama") return;
   const cached = getCachedContextWindow(provider, model);
   if (cached !== null) return;
   const settings = loadAIFromPreferences();

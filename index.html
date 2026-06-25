@@ -620,6 +620,11 @@
                 <span class="preference-hint">Override the default API endpoint</span>
                 <input type="text" id="pref-ai-base-url" placeholder="http://localhost:11434" aria-label="Base URL" />
               </div>
+              <div class="preference-group hidden" id="lmstudio-ctx-group">
+                <label for="pref-ai-lmstudio-ctx">Context size (tokens)</label>
+                <span class="preference-hint">Override LM Studio's context window. Leave empty to auto-detect from the running server.</span>
+                <input type="number" id="pref-ai-lmstudio-ctx" placeholder="auto" min="0" step="1024" aria-label="LM Studio context size override" />
+              </div>
             </div>
             <!-- TAB: AI Behavior -->
             <div class="pref-tab-content" data-tab="ai-behavior">

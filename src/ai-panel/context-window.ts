@@ -100,6 +100,16 @@ export function getContextWindow(provider: string, model: string): ContextWindow
     return { context: DEFAULT_LOCAL_CONTEXT, source: "configured" };
   }
 
+  if (p === "lmstudio") {
+    // Manual override takes precedence (Preferences > AI Provider > Context size
+    // when LM Studio is selected). When unset, fall through to the API cache /
+    // native REST resolution so the live server setting is used automatically.
+    const override = parseInt(localStorage.getItem("aurawrite-lmstudio-ctx-size") || "", 10);
+    if (!isNaN(override) && override > 0) {
+      return { context: override, source: "configured" };
+    }
+  }
+
   const cached = getCachedContextWindow(provider, model);
   if (cached) {
     return { context: cached, source: "api" };
@@ -196,6 +206,41 @@ export async function resolveContextWindowFromAPI(provider: string, model: strin
       const body = await resp.json();
       if (typeof body?.max_input_tokens === "number" && body.max_input_tokens > 0) {
         return body.max_input_tokens;
+      }
+    } else if (provider === "lmstudio") {
+      // LM Studio exposes the ACTIVE server context setting (the one the user
+      // configures in the server GUI) only via its NATIVE REST API at
+      // /api/v1/models — NOT the OpenAI-compatible /v1/models (which only
+      // returns ids). We read loaded_instances[].config.context_length (the live
+      // setting) and fall back to the model's native max_context_length when the
+      // model is not loaded yet.
+      let origin: string;
+      try {
+        origin = new URL(cleanBase).origin;
+      } catch {
+        return null;
+      }
+      const resp = await fetchWithTimeout(`${origin}/api/v1/models`);
+      if (!resp.ok) return null;
+      const body = await resp.json();
+      const models: Array<{
+        key?: string;
+        max_context_length?: number;
+        loaded_instances?: Array<{ config?: { context_length?: number } }>;
+      }> = body?.data?.models ?? body?.models ?? [];
+      if (!Array.isArray(models) || models.length === 0) return null;
+      const lowerModel = model.toLowerCase();
+      const isPlaceholder = !model || model === "loaded-model";
+      const found = isPlaceholder
+        ? models.find((m) => Array.isArray(m?.loaded_instances) && m.loaded_instances!.length > 0) || models[0]
+        : models.find((m) => typeof m?.key === "string" && m.key!.toLowerCase().includes(lowerModel))
+          || models.find((m) => Array.isArray(m?.loaded_instances) && m.loaded_instances!.length > 0)
+          || models[0];
+      if (!found) return null;
+      const active = found?.loaded_instances?.[0]?.config?.context_length;
+      if (typeof active === "number" && active > 0) return active;
+      if (typeof found?.max_context_length === "number" && found.max_context_length > 0) {
+        return found.max_context_length;
       }
     }
   } catch {

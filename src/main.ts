@@ -438,6 +438,10 @@ function openPreferencesModal(): void {
       baseUrlInput.value = defaultUrl;
     }
   }
+  const lmstudioCtxInput = document.getElementById("pref-ai-lmstudio-ctx") as HTMLInputElement | null;
+  if (lmstudioCtxInput) {
+    lmstudioCtxInput.value = localStorage.getItem("aurawrite-lmstudio-ctx-size") || "";
+  }
   (
     document.getElementById("pref-ai-interface-language") as HTMLSelectElement
   ).value = prefs.aiInterfaceLanguage;
@@ -660,6 +664,14 @@ function updateApiKeyGroupVisibility(): void {
       baseUrlGroup.classList.add("hidden");
     } else {
       baseUrlGroup.classList.remove("hidden");
+    }
+  }
+  const lmstudioCtxGroup = document.getElementById("lmstudio-ctx-group");
+  if (lmstudioCtxGroup) {
+    if (provider === "lmstudio") {
+      lmstudioCtxGroup.classList.remove("hidden");
+    } else {
+      lmstudioCtxGroup.classList.add("hidden");
     }
   }
   if (apiKeyHint) {
@@ -1610,6 +1622,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("pref-ai-base-url")?.addEventListener("change", () => {
     refreshModelList();
+  });
+  document.getElementById("pref-ai-lmstudio-ctx")?.addEventListener("input", () => {
+    const el = document.getElementById("pref-ai-lmstudio-ctx") as HTMLInputElement | null;
+    if (!el) return;
+    const val = el.value.trim();
+    if (val && parseInt(val, 10) > 0) {
+      localStorage.setItem("aurawrite-lmstudio-ctx-size", val);
+    } else {
+      localStorage.removeItem("aurawrite-lmstudio-ctx-size");
+    }
   });
   document.getElementById("pref-ai-api-key")?.addEventListener("change", () => {
     refreshModelList();
