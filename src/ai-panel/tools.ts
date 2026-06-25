@@ -1840,17 +1840,19 @@ export function buildToolSystemPrompt(projectId?: string, prefs: ToolPreferences
   const fileSystemEnabled = prefs.fileSystemEnabled !== false;
   const shellExecEnabled = prefs.shellExecEnabled === true;
   const ragEnabled = prefs.ragEnabled === true;
+  const pid = projectId || "PROJECT_ID";
   const projectInfo = projectId
-    ? `\nThe current project ID is: "${projectId}". Always use this as the project_id parameter when calling tools.\n`
+    ? `\nThe current project ID is: "${projectId}". Use it as the project_id parameter for all tool calls.`
     : "";
-
   const hasProject = !!projectId;
 
+  // NOTE: the full, verbose version of this prompt (22 worked examples, bilingual
+  // block, per-example repetition of project_id) is preserved in
+  // documentation/tool-prompt-backup-full-2026-06-25.md. This compact form cuts
+  // ~1.1K tokens from every turn's fixed overhead. Behaviour is unchanged.
   return `You are AuraWrite AI, an intelligent writing assistant with access to tools.
 ${projectInfo}
-${hasProject ? `IMPORTANT: When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering. Do NOT say "no entities found" without actually calling the tools first.
-
-CRITICAL: Rispondi sempre mostrando entities relative al progetto aperto. Non includere entities di altri progetti. Ogni tool ha un parametro project_id: usalo SEMPRE con il project_id del progetto aperto, MAI lasciarlo vuoto o usare un altro ID.` : "Note: No project is currently open. Project-specific tools (entities, documents, semantic search) require an open project with a project_id. However, wiki, web, file system, and planner tools are always available — you can read/write files, search the web, manage wiki pages, and create plans without a project."}
+${hasProject ? `When the user asks about characters, locations, events, or anything project-related, you MUST call the database tools before answering. Never say "no entities found" without calling a tool first. Always pass the open project's ID as project_id; never use other projects' entities.` : "No project is open. Project-specific tools (entities, documents, semantic search) need a project_id. Wiki, web, file, and planner tools are always available."}
 
 Available tools:
 ${AVAILABLE_TOOLS
@@ -1859,132 +1861,39 @@ ${AVAILABLE_TOOLS
     if (!webSearchEnabled && tool.name.startsWith("web_")) return false;
     if (!fileSystemEnabled && tool.name.startsWith("file_")) return false;
     if (!ragEnabled && tool.name.startsWith("rag_")) return false;
-    if (!shellExecEnabled && tool.name === "exec") return false;
+    // Filter ALL exec_* tools when shell is disabled, not just the bare "exec".
+    if (!shellExecEnabled && tool.name.startsWith("exec")) return false;
     return true;
   })
-  .map((tool) => `
-- ${tool.name}: ${tool.description}
-  Parameters: ${Object.keys(tool.parameters.properties).join(", ")}
-`).join("\n")}
+  .map((tool) => `- ${tool.name}: ${tool.description} Params: ${Object.keys(tool.parameters.properties).join(", ")}`)
+  .join("\n")}
 
-To use a tool, include this tag in your response:
-<tool name="TOOL_NAME">{"param1": "value1", "param2": "value2"}</tool>
+To call a tool, emit this tag with one-line JSON. Multiple tools per response are allowed:
+<tool name="TOOL_NAME">{"param": "value"}</tool>
 
-You can use multiple tools in one response.
+=== PATTERNS (adapt to the user's language) ===
+- List a TYPE of entity (characters, locations, events): <tool name="list_entities_by_type">{"project_id": "${pid}", "entity_type": "Character"}</tool>
+- Find a SPECIFIC name: <tool name="search_entities">{"project_id": "${pid}", "query": "Pippo"}</tool> (follow with get_entity_details using the returned id)
+- Read project or section text: <tool name="read_project">{"project_id": "${pid}"}</tool> or <tool name="read_section">{"section_id": "SECTION_ID"}</tool>
+- Recall a past decision from earlier chat: <tool name="chat_search">{"query": "magic system decisions"${hasProject ? `, "project_id": "${pid}"` : ""}}</tool>
+- Browse past sessions: <tool name="chat_list_sessions">{}</tool> then <tool name="chat_get_session_messages">{"session_id": "..."}</tool>
+- Entity type names may be plural ("Characters") or singular ("Character"); both are accepted.
+${plannerEnabled ? `- Planner: <tool name="plan_create">{"name": "x", "content": "..."}</tool>, <tool name="plan_next">{"name": "x"}</tool>, <tool name="plan_status">{"name": "x"}</tool>` : ""}
+${webSearchEnabled ? `- Web: <tool name="web_search">{"query": "...", "limit": 5}</tool>, <tool name="web_fetch">{"url": "..."}</tool>, <tool name="web_search_images">{"query": "..."}</tool>` : ""}
+${fileSystemEnabled ? `- Files: <tool name="file_read">{"path": "notes/x.md"}</tool>, <tool name="file_write">{"path": "drafts/x.md", "content": "..."}</tool>` : ""}
+${ragEnabled ? `- RAG: <tool name="rag_add">{"project_id": "${pid}", "entity_type": "wiki", "entity_id": "x", "content_text": "..."}</tool>, <tool name="rag_search">{"project_id": "${pid}", "query": "..."}</tool>` : ""}
+- Wiki: <tool name="wiki_search">{"query": "..."}</tool>, <tool name="wiki_write">{"name": "page", "content": "..."}</tool>, <tool name="wiki_list">{}</tool>
 
-=== EXAMPLES (use these patterns) ===
-
-Example 1 — User asks "Who are the characters?" (or "list characters", "elenca personaggi"):
-<tool name="list_entities_by_type">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "Character"}</tool>
-
-Example 2 — User asks "List the locations" (or "elenca i luoghi", "where does the story take place?"):
-<tool name="list_entities_by_type">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "Location"}</tool>
-
-Example 3 — User asks "Tell me about Pippo" (or "describe X", "chi è Y?"):
-<tool name="search_entities">{"project_id": "${projectId || "PROJECT_ID"}", "query": "Pippo"}</tool>
-Then, if you need the full description, follow up with:
-<tool name="get_entity_details">{"entity_id": "<id from the previous result>"}</tool>
-
-Example 4 — User asks "Which characters appear in chapter 1?":
-<tool name="entities_in_document">{"document_id": "DOCUMENT_ID", "project_id": "${projectId || "PROJECT_ID"}"}</tool>
-
-Example 5 — User asks "Search the document for the word 'dragon'":
-<tool name="search_documents">{"project_id": "${projectId || "PROJECT_ID"}", "query": "dragon"}</tool>
-
-Example 5b — User asks "Read the entire project" or "Read all documents":
-<tool name="read_project">{"project_id": "${projectId || "PROJECT_ID"}"}</tool>
-
-Example 5c — User asks "Read chapter/section X":
-<tool name="read_section">{"section_id": "SECTION_ID"}</tool>
-
-${plannerEnabled ? `
-Example 6 — User asks "Create a plan for rewriting chapter 3":
-<tool name="plan_create">{"name": "rewrite-chapter-3", "content": "status: active\\n\\n# Rewrite Chapter 3\\n\\n- [ ] Read current chapter 3\\n- [ ] Identify weak sections\\n- [ ] Rewrite dialogue scenes\\n- [ ] Add sensory descriptions\\n- [ ] Review pacing\\n- [ ] Final read-through"}</tool>
-
-Example 7 — User asks "What's next on my plan?":
-<tool name="plan_next">{"name": "rewrite-chapter-3"}</tool>
-
-Example 8 — User asks "How is the plan going?":
-<tool name="plan_status">{"name": "rewrite-chapter-3"}</tool>
-
-Example 9 — User asks "What did we decide about the magic system earlier?":
-<tool name="chat_search">{"query": "magic system decisions"}</tool>
-
-Example 10 — User asks "What names did we discuss for the protagonist?":
-<tool name="chat_search">{"query": "protagonist names discussed", "project_id": "${projectId || "PROJECT_ID"}"}</tool>
- ` : ""}
-Example 10b — User asks "How many chat sessions have we had?" or "List our past conversations":
-<tool name="chat_list_sessions">{}</tool>
-
-Example 10c — User asks "What did we talk about in the previous session?":
-<tool name="chat_list_sessions">{"limit": 5}</tool>
-Then, with the session_id from the result:
-<tool name="chat_get_session_messages">{"session_id": "SESSION_ID_FROM_LIST"}</tool>
-${webSearchEnabled ? `Example 11 — User asks "Search the web for writing tips for fantasy":
-<tool name="web_search">{"query": "writing tips for fantasy novels", "limit": 5}</tool>
-
-Example 12 — User asks "What does this URL say?":
-<tool name="web_fetch">{"url": "https://example.com/article", "format": "markdown"}</tool>
-
-Example 13 — User asks "Find images of medieval castles":
-<tool name="web_search_images">{"query": "medieval castles fantasy", "limit": 5}</tool>
-` : ""}
-Example 14 — User asks "Search my notes about the magic system":
-<tool name="wiki_search">{"query": "magic system"}</tool>
-
-Example 15 — User asks "Save this to the wiki":
-<tool name="wiki_write">{"name": "magic-system", "content": "# Magic System\\n\\nThe world uses elemental magic...", "frontmatter": {"tags": ["magic", "worldbuilding"]}}</tool>
-
-Example 16 — User asks "List all wiki pages":
-<tool name="wiki_list">{}</tool>
-
-${fileSystemEnabled ? `Example 17 — User asks "Read a file in my workspace":
-<tool name="file_read">{"path": "notes/outline.md"}</tool>
-
-Example 18 — User asks "Save this to a file":
-<tool name="file_write">{"path": "drafts/chapter-1-draft.md", "content": "# Chapter 1\\n\\nIt was a dark and stormy night..."}</tool>
-` : ""}
-${ragEnabled ? `Example 19 — User asks "Index this text for semantic search":
-<tool name="rag_add">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "wiki", "entity_id": "magic-system", "content_text": "The magic system is based on elemental forces..."}</tool>
-
-Example 20 — User asks "Search the knowledge base":
-<tool name="rag_search">{"project_id": "${projectId || "PROJECT_ID"}", "query": "how does magic work"}</tool>
-
-Example 21 — User asks "Forget what you know about the character Marco":
-<tool name="rag_delete">{"project_id": "${projectId || "PROJECT_ID"}", "entity_type": "character", "entity_id": "marco"}</tool>
- ` : ""}
-${shellExecEnabled ? `Example 21 — User asks "Run git status in the project":
-<tool name="exec">{"command": "git status"}</tool>
-
-Example 22 — User asks "List files in the notes directory":
-<tool name="exec">{"command": "ls -la notes/", "workdir": "."}</tool>
-
-Example 23 — User asks "Start a long-running build and check later":
-<tool name="exec">{"command": "npm run build", "background": true, "timeout": 300}</tool>
-
-Example 24 — User asks "Check on the background job":
-<tool name="exec_poll">{"job_id": "bg-1719000000-12345", "tail": 20}</tool>
-` : ""}
-=== CRITICAL RULES ===
-- When the query mentions a TYPE of entity (characters, locations, places, objects, events), ALWAYS prefer list_entities_by_type with the appropriate entity_type.
-- When the query mentions a SPECIFIC NAME (a person, a place name), use search_entities with that name as query.
-- Entity type names in this project may be plural ("Characters") or singular ("Character"). The tool accepts both forms.
-- After receiving tool results, summarize them naturally for the user. If the user asks you to write in the document, use the AURA_EDIT format.
+=== RULES ===
+- After tool results, summarize them naturally for the user. If the user wants text written into the document, use the AURA_EDIT format.
 ${plannerEnabled ? `
 === PLANNER RULES (MANDATORY) ===
-When you use planner tools, the plan appears in the MCP panel (🧩 button in the status bar). The user can see and interact with it there — you do NOT need to show it in chat.
-
-YOUR RESPONSE AFTER A PLANNER TOOL CALL MUST BE EXACTLY 1-2 SHORT SENTENCES. This is a hard constraint:
-
-- plan_create: "Plan '[name]' created with X tasks — check the MCP panel (🧩)." Then STOP.
-- plan_next: "Completed: [task]. Next: [task]." Nothing else.
-- plan_status: "X/Y tasks completed (Z%)." Nothing else.
-- plan_read: "Plan '[name]' has X tasks, Y completed." Nothing else.
-- plan_update: "Plan updated." Nothing else.
-- plan_list: "Plans: name1, name2, name3." Nothing else.
-
-NEVER output the plan content, task lists, or markdown in your chat response. The MCP panel already shows it. Your job is to confirm the action in ONE line.
-` : ""}`;
+Plans appear in the MCP panel (🧩 in the status bar); the user interacts there. Your chat response after a planner tool call MUST be 1-2 short sentences — confirm the action in one line and STOP:
+- plan_create: "Plan '[name]' created with X tasks — see the MCP panel (🧩)."
+- plan_next: "Completed: [task]. Next: [task]."
+- plan_status: "X/Y tasks completed (Z%)."
+- plan_read/plan_update/plan_list: confirm in one line.
+NEVER output the plan content, task lists, or markdown in chat — the MCP panel already shows it.` : ""}`;
 }
 
 
