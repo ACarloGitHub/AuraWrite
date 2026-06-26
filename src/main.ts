@@ -956,7 +956,7 @@ function savePreferencesFromModal(): void {
 
 function setupResizablePanels(): void {
   const STORAGE_KEY = "aurawrite-preferences";
-  const DEFAULTS = { ai: 360, projects: 280, suggestions: 320, mcp: 320 } as const;
+  const DEFAULTS = { ai: 360, projects: 320, suggestions: 320, mcp: 320 } as const;
   const MIN = { ai: 200, projects: 180, suggestions: 200, mcp: 200 } as const;
   const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6, mcp: 0.6 } as const;
   const STORAGE_KEYS = {

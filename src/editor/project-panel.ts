@@ -1330,18 +1330,30 @@ function applyIndexStatus(btn: HTMLButtonElement, status: IndexStatus): void {
   btn.title = tooltips[status.status] || "Index entities";
 }
 
-async function handleNewSection(projectId: string): Promise<void> {
+async function handleNewSection(projectId: string, parentId?: string): Promise<void> {
+  // Limite di profondita': una sezione gia' al livello massimo non puo' avere
+  // figli (coerente con il drag & drop multibranch, vedi computeDepth).
+  if (parentId && computeDepth(parentId) >= MAX_DEPTH) {
+    showNotification(
+      `Cannot nest deeper: maximum depth is ${MAX_DEPTH} levels.`,
+      "error",
+    );
+    return;
+  }
+
   const name = prompt("Section name:");
   if (!name) return;
 
   try {
-    const existingSections = await getSections(projectId);
-    const orderIndex = existingSections.length;
+    // order_index tra i fratelli dello stesso genitore (non su tutto il progetto)
+    const orderIndex = sections.filter(
+      (s) => (s.parent_id ?? null) === (parentId ?? null),
+    ).length;
 
     const section: Section = {
       id: `${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
       project_id: projectId,
-      parent_id: null as any, // null for top-level sections
+      parent_id: (parentId ?? null) as any, // null per sezioni top-level
       name,
       order_index: orderIndex,
       created_at: Date.now(),
@@ -1350,12 +1362,13 @@ async function handleNewSection(projectId: string): Promise<void> {
 
     await createSection(section);
     sections.push(section);
-    // Nuova sezione nasce espansa: l'utente l'ha appena creata, vuole vederla.
+    // La nuova sezione nasce aperta; se e' annidata espande anche il genitore
+    // cosi' il figlio e' subito visibile.
     expandedSections.add(section.id);
-    currentSection = section;
+    if (parentId) expandedSections.add(parentId);
     renderProjectsList();
 
-    console.log("Created section:", section.name);
+    console.log("Created section:", section.name, parentId ? `(child of ${parentId})` : "(top-level)");
   } catch (error) {
     console.error("Failed to create section:", error);
     showError("Could not create section");
@@ -1423,9 +1436,30 @@ async function selectDocument(doc: Document): Promise<void> {
   if (titleEl && currentProject && currentSection) {
     titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${currentDocument!.title}`;
   }
+  // Aggiorna subito la cornice di selezione (documento + sezione che lo
+  // contiene) senza ricostruire tutta la lista: preserva scroll e istanze
+  // SortableJS. (Bug del ritardo evidenziato da Carlo, 2026-06-26.)
+  refreshActiveHighlight(currentDocument!.id, currentSection?.id ?? null);
   setTimeout(() => {
     (window as any).__aurawrite_loading = false;
   }, 100);
+}
+
+/**
+ * Aggiorna le classi "active" (cornice blu) su documenti e sezioni in modo
+ * mirato, senza un renderProjectsList() completo. Usato da selectDocument()
+ * per far seguire la cornice al click senza lag.
+ */
+function refreshActiveHighlight(docId: string, sectionId: string | null): void {
+  document.querySelectorAll(".document-item.active").forEach((el) => el.classList.remove("active"));
+  const docEl = document.querySelector(`.document-item[data-id="${docId}"]`);
+  if (docEl) docEl.classList.add("active");
+
+  document.querySelectorAll(".section-item.active").forEach((el) => el.classList.remove("active"));
+  if (sectionId) {
+    const secEl = document.querySelector(`.section-item[data-id="${sectionId}"]`);
+    if (secEl) secEl.classList.add("active");
+  }
 }
 
 // ============================================================================
@@ -1751,16 +1785,67 @@ function createSectionElement(section: Section): HTMLElement {
   const actionsEl = document.createElement("div");
   actionsEl.className = "item-actions";
 
-  // Pulsante + Document (sempre visibile)
-  const addDocBtn = document.createElement("button");
-  addDocBtn.className = "item-action-btn";
-  addDocBtn.textContent = "+ Doc";
-  addDocBtn.title = "Add document";
-  addDocBtn.addEventListener("click", (e) => {
+  // Pulsante "+" a tendina: crea sottosezione o documento
+  const addDropdown = document.createElement("div");
+  addDropdown.className = "section-add-dropdown";
+
+  const addToggle = document.createElement("button");
+  addToggle.type = "button";
+  addToggle.className = "item-action-btn";
+  addToggle.textContent = "+";
+  addToggle.title = "Aggiungi sezione o documento";
+  addDropdown.appendChild(addToggle);
+
+  const addMenu = document.createElement("div");
+  addMenu.className = "section-add-menu";
+  addMenu.setAttribute("role", "menu");
+
+  const addSecItem = document.createElement("button");
+  addSecItem.type = "button";
+  addSecItem.className = "section-add-menu__item";
+  addSecItem.textContent = "Sec";
+  addSecItem.title = "Aggiungi sottosezione";
+  addSecItem.addEventListener("click", (e) => {
     e.stopPropagation();
+    closeAddMenus();
+    if (currentProject) handleNewSection(currentProject.id, section.id);
+  });
+  addMenu.appendChild(addSecItem);
+
+  const addDocItem = document.createElement("button");
+  addDocItem.type = "button";
+  addDocItem.className = "section-add-menu__item";
+  addDocItem.textContent = "Doc";
+  addDocItem.title = "Aggiungi documento";
+  addDocItem.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeAddMenus();
     handleNewDocument(section.id);
   });
-  actionsEl.appendChild(addDocBtn);
+  addMenu.appendChild(addDocItem);
+
+  addDropdown.appendChild(addMenu);
+
+  addToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const willOpen = !addMenu.classList.contains("open");
+    closeAddMenus();
+    if (willOpen) addMenu.classList.add("open");
+  });
+
+  actionsEl.appendChild(addDropdown);
+
+  // Pulsante "AI": invia i documenti di questa sezione alla chat AI
+  const readSectionBtn = document.createElement("button");
+  readSectionBtn.type = "button";
+  readSectionBtn.className = "item-action-btn";
+  readSectionBtn.textContent = "AI";
+  readSectionBtn.title = "Invia sezione alla chat AI";
+  readSectionBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    sendProgrammaticMessage(`Read all documents in the section "${section.name}". Use the read_section tool with section_id "${section.id}".`);
+  });
+  actionsEl.appendChild(readSectionBtn);
 
   const indexBtn = document.createElement("button");
   indexBtn.className = "item-action-btn index-btn";
@@ -2209,6 +2294,20 @@ document.addEventListener("mousemove", (e) => {
   }
 });
 
+// --- Menu a tendina "+" delle sezioni: chiusura globale ---
+function closeAddMenus(): void {
+  document
+    .querySelectorAll<HTMLElement>(".section-add-menu.open")
+    .forEach((m) => m.classList.remove("open"));
+}
+document.addEventListener("click", (e) => {
+  const target = e.target as HTMLElement;
+  if (!target.closest(".section-add-dropdown")) closeAddMenus();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeAddMenus();
+});
+
 function initSortable(): void {
   const projectEl = document.querySelector(".project-item.active") as HTMLElement;
   if (!projectEl) return;
@@ -2430,21 +2529,13 @@ function selectProject(project: Project): void {
 }
 
 function toggleAndSelectSection(section: Section): void {
-  currentSection = section;
-  // Toggle espansione: se la sezione era espansa, collassa; altrimenti espandi.
-  // Unico entry point per modificare lo stato di una sezione (chiamato sia dal
-  // click sull'header che dal toggle ▼/▶). Niente timer, niente loadDocuments
-  // parziale: la lista `documents` contiene già tutti i documenti del progetto
-  // grazie a `loadSections`.
+  // La "selezione" (cornice blu) di una sezione deriva esclusivamente dal
+  // documento aperto al suo interno: aprire/chiudere una sezione NON la
+  // seleziona. Qui si fa solo il toggle di espansione. (Carlo, 2026-06-26.)
   if (expandedSections.has(section.id)) {
     expandedSections.delete(section.id);
   } else {
     expandedSections.add(section.id);
-  }
-
-  const titleEl = document.getElementById("document-title");
-  if (titleEl && currentProject) {
-    titleEl.textContent = `${currentProject.name} / ${section.name}`;
   }
 
   renderProjectsList();

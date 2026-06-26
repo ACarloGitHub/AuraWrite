@@ -430,7 +430,10 @@
           <div class="panel-resize-handle panel-resize-handle--ai" data-resize="ai" title="Drag to resize, double-click to reset"></div>
           <div class="ai-panel__header">
             <h3>AI Assistant</h3>
-            <button id="ai-close" class="ai-panel__toggle">−</button>
+            <div class="ai-panel__header-actions">
+              <button id="ai-new-chat" class="ai-panel__toggle" title="New chat — close the current session and start a fresh one">+</button>
+              <button id="ai-close" class="ai-panel__toggle">−</button>
+            </div>
           </div>
           <div class="ai-panel__context" id="ai-context"></div>
           <div id="ai-permission-banner" class="ai-panel__permission-banner" style="display:none;">

@@ -23,7 +23,7 @@ import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
 import { updateContextFooter } from "./context-footer";
-import { saveChatMessage, getCurrentSessionId } from "./chat-storage";
+import { saveChatMessage, getCurrentSessionId, resetSessionId } from "./chat-storage";
 import { shouldCompact, compactConversation, getCompactionSystemContext, clearCompactionSummary } from "./compaction";
 import { resetSessionUsage, incrementCompactionCount, resetCompactionCount } from "./chat-session-usage";
 
@@ -531,6 +531,7 @@ function setupPanelEvents(view: EditorView): void {
   const btnAI = document.getElementById("btn-ai");
   const aiPanel = document.getElementById("ai-panel");
   const aiClose = document.getElementById("ai-close");
+  const aiNewChat = document.getElementById("ai-new-chat");
   const aiSend = document.getElementById("ai-send");
   const aiStop = document.getElementById("ai-stop");
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
@@ -600,6 +601,16 @@ function setupPanelEvents(view: EditorView): void {
     currentSelection = null;
     updateContextDisplay();
     updateSynonymsButton();
+  });
+
+  // Nuova chat: chiude la sessione attiva e ne apre una vuota. La vecchia
+  // sessione resta salvata e ritrovabile dall'AI via chat_search. Disattivato
+  // durante una generazione in corso. (Carlo, 2026-06-26.)
+  aiNewChat?.addEventListener("click", () => {
+    if (isAIProcessing()) return;
+    clearMessages();
+    resetSessionId();
+    updateContextDisplay();
   });
 
   // Synonyms button — show popup above the selected word

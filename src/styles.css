@@ -28,7 +28,7 @@
   --toolbar-height: 48px;
   --statusbar-height: 28px;
   --ai-panel-width: 360px;
-  --project-panel-width: 280px;
+  --project-panel-width: 320px;
   --suggestions-panel-width: 320px;
   --mcp-panel-width: 320px;
 
@@ -557,6 +557,12 @@ body {
   font-size: 16px;
   font-weight: 600;
   color: var(--color-text);
+}
+
+.ai-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ai-panel__toggle {
@@ -2872,7 +2878,7 @@ kbd {
    ============================================================================ */
 
 .project-panel {
-  width: var(--project-panel-width, 280px);
+  width: var(--project-panel-width, 320px);
   background: var(--color-surface, #ffffff);
   border-right: 1px solid var(--color-border, #cccccc);
   display: flex;
@@ -3099,15 +3105,26 @@ kbd {
   overflow: visible;
 }
 
-.section-item .item-header:hover {
-  background: var(--color-background, #f5f5f5);
+.section-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header {
+  background: var(--color-background, #121212);
 }
 
-.section-item.active .item-header {
-  background: rgba(74, 144, 217, 0.12);
+.section-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header:hover {
+  background: var(--color-primary, #6c9bff);
 }
 
-.section-item.active .item-name {
+/* La sezione attiva (quella che contiene il documento aperto) mostra solo la
+   cornice blu, senza riempimento: l'area resta grigia come a riposo.
+   Sessione 2026-06-26 con Carlo.
+   Nota: uso ">" (figlio diretto) perche' la sezione contiene anche gli
+   .item-header dei documenti figli: senza ">" la cornice verrebbe applicata
+   anche a tutti i documenti della sezione. */
+.section-item.active > .item-header {
+  outline: 1px solid rgba(74, 144, 217, 0.55);
+  outline-offset: -1px;
+}
+
+.section-item.active > .item-header > .item-name {
   color: var(--color-primary, #4a90d9);
 }
 
@@ -3163,12 +3180,15 @@ kbd {
   cursor: pointer;
 }
 
-.document-item .item-header:hover {
-  background: var(--color-background, #f5f5f5);
+.document-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header {
+  background: var(--color-background, #121212);
+}
+
+.document-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header:hover {
+  background: var(--color-primary, #6c9bff);
 }
 
 .document-item.active .item-header {
-  background: rgba(74, 144, 217, 0.08);
   outline: 1px solid rgba(74, 144, 217, 0.55);
   outline-offset: -1px;
 }
@@ -3406,6 +3426,49 @@ kbd {
   background: var(--color-primary, #4a90d9);
   color: white;
   border-color: var(--color-primary, #4a90d9);
+}
+
+/* Menu a tendina "+" per creare sezione/documento dentro una sezione */
+.section-add-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.section-add-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 1000;
+  min-width: 92px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dddddd);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.section-add-menu.open {
+  display: flex;
+}
+
+.section-add-menu__item {
+  background: transparent;
+  border: none;
+  color: var(--color-text, #333);
+  text-align: left;
+  font-size: 10px;
+  padding: 5px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.section-add-menu__item:hover {
+  background: var(--color-primary, #4a90d9);
+  color: white;
 }
 
 .delete-btn {
