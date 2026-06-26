@@ -4,9 +4,12 @@ AuraWrite bundles three open-source fonts licensed under the **SIL Open Font Lic
 
 | File | Family | Weights | License | Source |
 |------|--------|---------|---------|--------|
-| `Lora-Variable.ttf` | Lora Serif | 100-900 (variable) | [OFL-1.1](https://github.com/google/fonts/blob/main/ofl/lora/OFL.txt) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/lora) |
+| `Lora-Variable.ttf` | Lora Serif (upright) | 100-900 (variable) | [OFL-1.1](https://github.com/google/fonts/blob/main/ofl/lora/OFL.txt) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/lora) |
+| `Lora-Italic-Variable.ttf` | Lora Serif (italic) | 100-900 (variable) | [OFL-1.1](https://github.com/google/fonts/blob/main/ofl/lora/OFL.txt) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/lora) |
 | `Inter-Variable.ttf` | Inter (Sans) | 100-900 (variable) | [OFL-1.1](https://github.com/google/fonts/blob/main/ofl/inter/OFL.txt) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/inter) |
 | `JetBrainsMono-Variable.ttf` | JetBrains Mono | 100-800 (variable) | [OFL-1.1](https://github.com/google/fonts/blob/main/ofl/jetbrainsmono/OFL.txt) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/jetbrainsmono) |
+
+The Lora upright and italic are shipped as two separate variable files because Google Fonts distributes Lora's italic as its own file (no shared `ital` axis). The italic `@font-face` in `src/styles.css` must point to `Lora-Italic-Variable.ttf`; pointing it at the upright file makes the editor render italics as upright (no synthesis, since a "matching" face is found).
 
 ## Why these fonts?
 

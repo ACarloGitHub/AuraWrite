@@ -239,6 +239,76 @@ function stopSuggestionsMode(): void {
   isCurrentlyProcessing = false;
 }
 
+const ABBREVIATIONS = new Set<string>([
+  // Italian titles / honorifics
+  "sig", "sig.ra", "sig.na", "sign", "sign.ra", "sign.na",
+  "dott", "dott.ssa", "dr", "dr.ssa", "prof", "prof.ssa",
+  "ing", "geom", "rag", "arch", "avv", "not", "per", "spett", "gent", "cav", "march",
+  // Ordinals / references
+  "n", "no", "nr", "num", "pag", "pp", "art", "artt", "c", "cc",
+  "vol", "cap", "fig", "tav", "par",
+  // Misc Italian
+  "ecc", "all", "f.lli", "flli", "p.i", "piva", "c.f", "cf",
+  "s.p.a", "spa", "s.r.l", "srl", "s.n.c", "snc", "p.f", "s.a.s",
+  // English
+  "mr", "mister", "mrs", "miss", "ms", "st", "ave", "jr", "sr",
+  "ph.d", "phd", "b.a", "m.a", "ba", "ma",
+  "etc", "e.g", "eg", "i.e", "ie", "vs", "approx", "inc", "co", "ltd",
+  "u.s", "u.k", "u.s.a", "d.c", "u.n",
+]);
+
+/** Extract the trailing token (letters, digits and dots) ending at endPos. */
+function tokenBefore(text: string, endPos: number): string {
+  let start = endPos;
+  while (start > 0 && /[\p{L}\p{N}.]/u.test(text[start - 1])) start--;
+  return text.slice(start, endPos);
+}
+
+/** Whether a token immediately preceding a period is an abbreviation. */
+function isAbbreviationToken(token: string): boolean {
+  if (!token) return false;
+  const lower = token.toLowerCase();
+  if (ABBREVIATIONS.has(lower)) return true;
+  // Strip trailing dots (handles ellipsis after an abbreviation: "Sig...").
+  const core = lower.replace(/\.+$/, "");
+  if (core && ABBREVIATIONS.has(core)) return true;
+  // Single uppercase letter (initials: "J.", "U.S.", "D.C.").
+  return /^[A-ZÀ-Ý]$/.test(token);
+}
+
+/**
+ * Split text into sentences, treating a period as a boundary ONLY when the
+ * preceding token is not a known abbreviation (Sig., Dott., Sig.ra, etc.).
+ * "!" and "?" are always boundaries; ":" too (kept from the original logic).
+ */
+function tokenizeSentences(
+  text: string,
+): { text: string; rawLength: number; index: number }[] {
+  const results: { text: string; rawLength: number; index: number }[] = [];
+  let sentenceStart = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch !== "." && ch !== "!" && ch !== "?" && ch !== ":") continue;
+    if (ch === ".") {
+      if (isAbbreviationToken(tokenBefore(text, i))) continue;
+    }
+    let end = i + 1;
+    while (end < text.length && /[.!?:]/.test(text[end])) end++;
+    while (end < text.length && /\s/.test(text[end])) end++;
+    const rawSentence = text.slice(sentenceStart, end);
+    const sentence = rawSentence.replace(/\s+/g, " ").trim();
+    if (sentence.length >= 10) {
+      results.push({
+        text: sentence,
+        rawLength: rawSentence.length,
+        index: sentenceStart,
+      });
+    }
+    sentenceStart = end;
+  }
+  return results;
+}
+
 function setupDotTrigger(view: EditorView): void {
   view.dom.addEventListener("keydown", (e: KeyboardEvent) => {
     if (![".", "!", "?", ":"].includes(e.key)) return;
@@ -247,21 +317,25 @@ function setupDotTrigger(view: EditorView): void {
     if (!suggestionsPanel || suggestionsPanel.classList.contains("hidden"))
       return;
 
+    // Do not trigger analysis when the period completes an abbreviation
+    // ("Sig.", "Sig.ra", "Dott.", etc.): it is not a sentence boundary.
+    if (e.key === ".") {
+      const { from } = view.state.selection;
+      const before = view.state.doc.textBetween(
+        Math.max(0, from - 12),
+        from,
+        "\n",
+        "\n",
+      );
+      if (isAbbreviationToken(tokenBefore(before, before.length))) return;
+    }
+
     setTimeout(() => {
       const doc = view.state.doc;
       const fullText = doc.textContent;
 
-      const sentenceRegex = /[^.!?:]+[.!?:]+\s*/g;
-      const sentences: { text: string; rawLength: number; index: number }[] = [];
-      let match;
-
-      while ((match = sentenceRegex.exec(fullText)) !== null) {
-        const rawSentence = match[0];
-        const sentence = rawSentence.replace(/\s+/g, " ").trim();
-        if (sentence.length >= 10) {
-          sentences.push({ text: sentence, rawLength: rawSentence.length, index: match.index });
-        }
-      }
+      const sentences = tokenizeSentences(fullText);
+      const excludedMark = view.state.schema.marks.suggestionExcluded;
 
       for (const { text: sentence, rawLength, index: sentenceIndex } of sentences) {
         const normalized = sentence.toLowerCase();
@@ -283,6 +357,13 @@ function setupDotTrigger(view: EditorView): void {
           log(
             `SLOT: Could not find position for "${sentence.slice(0, 30)}..."`,
           );
+          continue;
+        }
+
+        // Skip sentences whose text carries the invisible "excluded" mark
+        // (dismissed with "x"). Position-based, so it survives edits to that
+        // text (unlike exact-text matching).
+        if (excludedMark && doc.rangeHasMark(pmFrom, pmFrom + rawLength, excludedMark)) {
           continue;
         }
 
@@ -754,6 +835,19 @@ export function closeSuggestion(id: string): void {
   if (editorViewRef) {
     const currentPos = getSlotPositionFromDecoration(id);
     if (currentPos) {
+      // Stamp the invisible "excluded" mark on the dismissed sentence text so
+      // it is not re-analyzed, even after the user edits it. Position-based.
+      const markType = editorViewRef.state.schema.marks.suggestionExcluded;
+      if (markType) {
+        editorViewRef.dispatch(
+          editorViewRef.state.tr.addMark(
+            currentPos.from,
+            currentPos.to,
+            markType.create(),
+          ),
+        );
+      }
+
       const tr = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
         remove: [
           Decoration.inline(

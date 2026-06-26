@@ -468,6 +468,20 @@ nodes = nodes
     ...tableNodeSpecs,
   });
 
+const suggestionExcludedMark: MarkSpec = {
+  // Invisible mark applied to text whose suggestion has been dismissed ("x").
+  // It is position-based, so the exclusion survives edits to that text (unlike
+  // exact-text matching). It has no visual style and is ignored by every
+  // exporter (only known marks are read). inclusive:false prevents typing at
+  // the boundary from spreading the exclusion to adjacent new text.
+  inclusive: false,
+  excludes: "",
+  parseDOM: [{ tag: "span[data-suggestion-excluded]" }],
+  toDOM() {
+    return ["span", { "data-suggestion-excluded": "" }, 0];
+  },
+};
+
 const marks = basicSchema.spec.marks.append({
   underline: underlineMark,
   strikethrough: strikethroughMark,
@@ -477,6 +491,7 @@ const marks = basicSchema.spec.marks.append({
   fontFamily: fontFamilyMark,
   subscript: subscriptMark,
   superscript: superscriptMark,
+  suggestionExcluded: suggestionExcludedMark,
 });
 
 const editorSchema = new Schema({

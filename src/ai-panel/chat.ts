@@ -1393,6 +1393,14 @@ Based on these results, provide your final response to the user's question. ${ha
       hadError = true;
     }
   } finally {
+    // Move the assistant placeholder to the END of the chat history so the
+    // agent's final answer (or error/status) always appears BELOW any
+    // tool-result cards (web searches, DB reads, plan updates). The placeholder
+    // was created before the tool loop, so without this it stays above the
+    // cards and gets scrolled out of view as they stream in.
+    if (placeholder && historyEl && placeholder.parentElement === historyEl) {
+      historyEl.appendChild(placeholder);
+    }
     setProcessing(false);
     updateStopButton();
     updateContextFooter();
