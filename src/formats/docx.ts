@@ -22,7 +22,7 @@ import {
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
 } from "docx";
-import { calculatePageBreaks, PAGE_WIDTH_PX, PAGE_HEIGHT_PX, PAGE_HEADER_PX, PAGE_FOOTER_PX } from "../editor/pagination-cassie";
+import { PAGE_WIDTH_PX, PAGE_HEIGHT_PX, PAGE_HEADER_PX, PAGE_FOOTER_PX } from "../editor/pagination-cassie";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
@@ -962,22 +962,12 @@ export async function toDocx(doc: any): Promise<Document> {
     })
   );
 
-  const cassieBreaks = new Set<number>();
   const margins = getMargins();
-  try {
-    const { breaks } = calculatePageBreaks(doc, margins);
-    for (const bp of breaks) {
-      cassieBreaks.add(bp.pos);
-    }
-  } catch { /* page breaks may fail on some docs */ }
 
   const children: any[] = [];
-  let pos = 0;
   for (const node of contentToArray(doc.content)) {
-    const isFirstOnNewPage = cassieBreaks.has(pos);
-    const nodeChildren = nodeToChildren(node, imageCache, isFirstOnNewPage);
+    const nodeChildren = nodeToChildren(node, imageCache, false);
     children.push(...nodeChildren);
-    pos += node.nodeSize;
   }
 
   const pxToTwip = (px: number) => px * 15;
