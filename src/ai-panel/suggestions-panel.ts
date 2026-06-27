@@ -56,7 +56,12 @@ let suggestions: SentenceSuggestion[] = [];
 let slots: SentenceSlot[] = [];
 let editorViewRef: EditorView | null = null;
 let acceptedOriginals: Map<string, string> = new Map();
-let closedSentences: Set<string> = new Set();
+// Highest PM position (inclusive end) reached by any analysis. The analyzer
+// never goes back above this watermark: sentences at a position strictly
+// smaller than lastAnalyzedPos are never re-analyzed, even if the user edits
+// the surrounding text. Reset to 0 when the editor switches to a new
+// document (see clearSuggestions).
+let lastAnalyzedPos: number = 0;
 let isCurrentlyProcessing: boolean = false;
 
 const DEBUG_LOG_MAX = 100;
@@ -335,12 +340,15 @@ function setupDotTrigger(view: EditorView): void {
       const fullText = doc.textContent;
 
       const sentences = tokenizeSentences(fullText);
-      const excludedMark = view.state.schema.marks.suggestionExcluded;
+
+      // Clamp the watermark to the current document size so a switch to a
+      // smaller document (or a re-load that resets positions) does not
+      // suppress legitimate analysis.
+      const docSize = doc.content.size;
+      if (lastAnalyzedPos > docSize) lastAnalyzedPos = 0;
 
       for (const { text: sentence, rawLength, index: sentenceIndex } of sentences) {
         const normalized = sentence.toLowerCase();
-
-        if (closedSentences.has(normalized)) continue;
 
         const existingSlot = slots.find(
           (s) => s.text.toLowerCase() === normalized,
@@ -360,12 +368,12 @@ function setupDotTrigger(view: EditorView): void {
           continue;
         }
 
-        // Skip sentences whose text carries the invisible "excluded" mark
-        // (dismissed with "x"). Position-based, so it survives edits to that
-        // text (unlike exact-text matching).
-        if (excludedMark && doc.rangeHasMark(pmFrom, pmFrom + rawLength, excludedMark)) {
-          continue;
-        }
+        // Monotonic watermark: once a sentence has been analyzed (or reached
+        // by the loop), the analyzer never goes back above its start. The
+        // "x" close action is now folded into this mechanism: dismissing a
+        // suggestion just leaves the slot below the watermark, so it is
+        // never revisited.
+        if (pmFrom < lastAnalyzedPos) continue;
 
         const slot: SentenceSlot = {
           id: generateId(),
@@ -378,6 +386,11 @@ function setupDotTrigger(view: EditorView): void {
         createDecorationForSlot(slot, pmFrom, pmFrom + rawLength);
 
         slots.push(slot);
+        // Raise the watermark to the end of this sentence so that nothing
+        // earlier than it is ever considered again.
+        if (pmFrom + rawLength > lastAnalyzedPos) {
+          lastAnalyzedPos = pmFrom + rawLength;
+        }
         log(
           `SLOT: Created slot ${slot.id} at PM pos ${pmFrom}-${pmFrom + rawLength} for "${sentence.slice(0, 30)}..."`,
         );
@@ -821,33 +834,17 @@ export function closeSuggestion(id: string): void {
   log(`CLOSE: Closing slot ${id}`);
 
   const slot = slots.find((s) => s.id === id);
-  const suggestion = suggestions.find((s) => s.id === id);
-
   if (slot) {
-    closedSentences.add(slot.text.toLowerCase());
     slot.state = "closed";
-  }
-
-  if (suggestion) {
-    closedSentences.add(suggestion.original.toLowerCase());
   }
 
   if (editorViewRef) {
     const currentPos = getSlotPositionFromDecoration(id);
     if (currentPos) {
-      // Stamp the invisible "excluded" mark on the dismissed sentence text so
-      // it is not re-analyzed, even after the user edits it. Position-based.
-      const markType = editorViewRef.state.schema.marks.suggestionExcluded;
-      if (markType) {
-        editorViewRef.dispatch(
-          editorViewRef.state.tr.addMark(
-            currentPos.from,
-            currentPos.to,
-            markType.create(),
-          ),
-        );
-      }
-
+      // Dismissal just removes the suggestion box and its marker decoration.
+      // Re-analysis is prevented by the lastAnalyzedPos watermark, which is
+      // never moved backward: the slot stays below the watermark for the
+      // rest of the document's lifetime, so it cannot be revisited.
       const tr = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
         remove: [
           Decoration.inline(
@@ -1100,11 +1097,14 @@ export function clearSuggestions(): void {
   suggestions = [];
   slots = [];
   acceptedOriginals.clear();
-  closedSentences.clear();
+  // Reset the monotonic watermark so a fresh document starts analysis from
+  // the beginning. Without this, switching to a smaller document would keep
+  // lastAnalyzedPos at the previous document's size and skip everything.
+  lastAnalyzedPos = 0;
   isCurrentlyProcessing = false;
   renderSuggestions();
 }
 
 export function resetAnalysisState(): void {
-  closedSentences.clear();
+  lastAnalyzedPos = 0;
 }
