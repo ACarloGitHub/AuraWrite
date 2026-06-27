@@ -126,8 +126,11 @@ function setupDirtyTracking(): void {
           }
         }
       }
+
+      updateAlignMenuSelection();
     },
   });
+  updateAlignMenuSelection();
 }
 
 function updateWindowTitle(): void {
@@ -1236,6 +1239,42 @@ function setAlignment(align: "left" | "center" | "right" | "justify"): void {
   if (applied) {
     editorView.dispatch(tr);
     editorView.focus();
+  }
+}
+
+const VALID_ALIGN_VALUES = new Set(["left", "center", "right", "justify"]);
+
+function getCurrentAlign(): "left" | "center" | "right" | "justify" {
+  const { $from } = editorView.state.selection;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === "paragraph" || node.type.name === "heading") {
+      const align = node.attrs?.align;
+      if (typeof align === "string" && VALID_ALIGN_VALUES.has(align)) {
+        return align as "left" | "center" | "right" | "justify";
+      }
+      return "left";
+    }
+  }
+  return "left";
+}
+
+function updateAlignMenuSelection(): void {
+  const menu = document.getElementById("align-menu");
+  if (!menu) return;
+  const current = getCurrentAlign();
+  menu.querySelectorAll<HTMLButtonElement>("[data-align]").forEach((item) => {
+    if (item.getAttribute("data-align") === current) {
+      item.classList.add("selected");
+    } else {
+      item.classList.remove("selected");
+    }
+  });
+  const btn = document.getElementById("btn-align-menu");
+  const btnText = btn?.querySelector(".toolbar__btn-text");
+  if (btnText) {
+    const label = current.charAt(0).toUpperCase() + current.slice(1);
+    btnText.textContent = label === "Left" ? "Align" : `Align: ${label}`;
   }
 }
 

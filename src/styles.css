@@ -286,6 +286,23 @@ body {
   color: var(--color-text);
 }
 
+.dropdown-menu__check {
+  display: inline-block;
+  min-width: 14px;
+  font-size: 12px;
+  color: var(--color-primary);
+  opacity: 0;
+}
+
+.dropdown-menu__item.selected .dropdown-menu__check {
+  opacity: 1;
+}
+
+.dropdown-menu__item.selected {
+  background: var(--color-background);
+  font-weight: 600;
+}
+
 .dropdown-menu__label {
   flex: 1;
 }
