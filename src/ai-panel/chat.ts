@@ -1213,7 +1213,8 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         }
 
         const enrichedToolCalls = toolCalls.map((call) => {
-          if (call.name.startsWith("plan_")) {
+          // Planner and editor tools are not project-scoped; do not inject project_id.
+          if (call.name.startsWith("plan_") || call.name.startsWith("editor_")) {
             return call;
           }
           return {
@@ -1254,6 +1255,8 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
             fileSystemEnabled: prefs.fileSystemEnabled,
             shellExecEnabled: prefs.shellExecEnabled,
             ragEnabled: prefs.ragEnabled,
+            editorView: editorViewRef ?? undefined,
+            selection: currentSelection ?? undefined,
           });
           toolResults.push(result);
           if (wasStoppedByUser()) break;
