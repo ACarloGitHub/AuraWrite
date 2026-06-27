@@ -1998,6 +1998,16 @@ function createDocumentElement(doc: Document): HTMLElement {
   });
   actionsEl.appendChild(saveBtn);
 
+  const aiReadDocBtn = document.createElement("button");
+  aiReadDocBtn.className = "item-action-btn";
+  aiReadDocBtn.textContent = "AI";
+  aiReadDocBtn.title = "Send document to AI chat";
+  aiReadDocBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    sendProgrammaticMessage(`Read the document "${doc.title}". Use the get_document_content tool with document_id "${doc.id}".`);
+  });
+  actionsEl.appendChild(aiReadDocBtn);
+
   const indexBtn = document.createElement("button");
   indexBtn.className = "item-action-btn index-btn";
   indexBtn.textContent = "🗂";

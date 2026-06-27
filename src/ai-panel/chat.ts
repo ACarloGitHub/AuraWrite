@@ -537,6 +537,20 @@ function setupPanelEvents(view: EditorView): void {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const aiAttach = document.getElementById("ai-attach");
 
+  const aiIngest = document.getElementById("ai-ingest");
+  const syncIngestState = (): void => {
+    const t = editorViewRef ? editorViewRef.state.doc.textContent.trim() : "";
+    if (aiIngest) aiIngest.toggleAttribute("disabled", t === "");
+  };
+  aiIngest?.addEventListener("click", () => {
+    if (!editorViewRef) return;
+    const text = editorViewRef.state.doc.textContent.trim();
+    if (!text) return;
+    sendProgrammaticMessage(`Here is the content of the document currently in the editor, for your reference:\n\n"""\n${text}\n"""`);
+  });
+  syncIngestState();
+  window.addEventListener("aurawrite:content-changed", syncIngestState);
+
   btnAI?.addEventListener("click", () => {
     const wasHidden = aiPanel?.classList.contains("hidden");
     if (wasHidden) {
