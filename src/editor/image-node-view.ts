@@ -31,7 +31,6 @@ export class ImageNodeView implements NodeView {
     this.wrapper.setAttribute("data-align", (attrs.align as string) || "center");
     if (attrs.wrap) this.wrapper.setAttribute("data-wrap", "");
     this.applyTransform(attrs);
-    this.applyOffset(attrs);
 
     this.img = document.createElement("img");
     this.img.alt = (attrs.alt as string) || "";
@@ -95,15 +94,6 @@ export class ImageNodeView implements NodeView {
     }
   }
 
-  private applyOffset(attrs: Record<string, unknown>): void {
-    const offsetLeft = (attrs.offsetLeft as number) || 0;
-    const offsetTop = (attrs.offsetTop as number) || 0;
-    if (offsetLeft) this.wrapper.style.marginLeft = `${offsetLeft}px`;
-    else this.wrapper.style.removeProperty("margin-left");
-    if (offsetTop) this.wrapper.style.marginTop = `${offsetTop}px`;
-    else this.wrapper.style.removeProperty("margin-top");
-  }
-
   private applyCaption(attrs: Record<string, unknown>): void {
     const caption = (attrs.caption as string) || "";
     if (caption) {
@@ -165,7 +155,7 @@ export class ImageNodeView implements NodeView {
       if (target.classList.contains("image-resize-handle")) return;
       if (target.classList.contains("image-rotate-handle")) return;
       e.preventDefault();
-      this.onDragStart(e);
+      this.selectNodeInEditor();
     });
   }
 
@@ -295,51 +285,6 @@ export class ImageNodeView implements NodeView {
     document.addEventListener("mouseup", onUp);
   }
 
-  private onDragStart(e: MouseEvent): void {
-    const pos = this.getPos();
-    if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    const startOffsetLeft = (node.attrs.offsetLeft as number) || 0;
-    const startOffsetTop = (node.attrs.offsetTop as number) || 0;
-    const startX = e.clientX;
-    const startY = e.clientY;
-
-    this.selectNodeInEditor();
-
-    const computeOffset = (ev: MouseEvent): { offsetLeft: number; offsetTop: number } => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      return {
-        offsetLeft: Math.max(0, startOffsetLeft + dx),
-        offsetTop: Math.max(0, startOffsetTop + dy),
-      };
-    };
-
-    const onMove = (ev: MouseEvent) => {
-      const { offsetLeft, offsetTop } = computeOffset(ev);
-      this.wrapper.style.marginLeft = `${offsetLeft}px`;
-      this.wrapper.style.marginTop = `${offsetTop}px`;
-    };
-
-    const onUp = (ev: MouseEvent) => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      const { offsetLeft, offsetTop } = computeOffset(ev);
-      try {
-        const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
-          ...node.attrs,
-          offsetLeft,
-          offsetTop,
-        });
-        this.view.dispatch(tr);
-      } catch { /* safeSetNodeMarkup: ignore invalid content errors */ }
-    };
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
-
   private async replaceImage(): Promise<void> {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({
@@ -424,7 +369,6 @@ export class ImageNodeView implements NodeView {
       this.wrapper.removeAttribute("data-wrap");
     }
     this.applyTransform(attrs);
-    this.applyOffset(attrs);
     this.applyCaption(attrs);
     return true;
   }

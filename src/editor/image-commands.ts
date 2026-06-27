@@ -24,8 +24,6 @@ export function createImageNode(
     flipH: false,
     flipV: false,
     aspectLocked: true,
-    offsetLeft: 0,
-    offsetTop: 0,
     caption: "",
   };
   return imageType.create(attrs);
@@ -37,6 +35,7 @@ function insertImageBlock(view: EditorView, imageNode: PMNode): boolean {
   if (!paragraph) return false;
 
   let tr = view.state.tr;
+  let insertedPos: number;
 
   const inTextblock = $from.parent.isTextblock;
   const atEnd = inTextblock && $from.parentOffset === $from.parent.content.size;
@@ -44,25 +43,36 @@ function insertImageBlock(view: EditorView, imageNode: PMNode): boolean {
 
   if (inTextblock && !atEnd && !atStart) {
     tr = tr.split($from.pos, 1);
-    const afterSplit = $from.pos + 1;
-    tr = tr.insert(afterSplit, imageNode);
-    const sel = NodeSelection.create(tr.doc, afterSplit);
+    insertedPos = $from.pos + 1;
+    tr = tr.insert(insertedPos, imageNode);
+    const sel = NodeSelection.create(tr.doc, insertedPos);
     tr.setSelection(sel);
   } else if (inTextblock && atEnd) {
-    const insertPos = $from.after($from.depth);
-    tr = tr.insert(insertPos, imageNode);
-    const sel = NodeSelection.create(tr.doc, insertPos);
+    insertedPos = $from.after($from.depth);
+    tr = tr.insert(insertedPos, imageNode);
+    const sel = NodeSelection.create(tr.doc, insertedPos);
     tr.setSelection(sel);
   } else if (inTextblock && atStart) {
-    const insertPos = $from.before($from.depth);
-    tr = tr.insert(insertPos, imageNode);
-    const sel = NodeSelection.create(tr.doc, insertPos);
+    insertedPos = $from.before($from.depth);
+    tr = tr.insert(insertedPos, imageNode);
+    const sel = NodeSelection.create(tr.doc, insertedPos);
     tr.setSelection(sel);
   } else {
-    const insertPos = $from.pos;
-    tr = tr.insert(insertPos, imageNode);
-    const sel = NodeSelection.create(tr.doc, insertPos);
+    insertedPos = $from.pos;
+    tr = tr.insert(insertedPos, imageNode);
+    const sel = NodeSelection.create(tr.doc, insertedPos);
     tr.setSelection(sel);
+  }
+
+  // Ensure a paragraph follows the image so the cursor has a place to land
+  // below it. Without this, an image inserted as the last node of the
+  // document would leave the cursor stranded on the image with no way to
+  // continue writing. Behaviour matches Google Docs and Word: every image
+  // is hosted by a paragraph that follows it.
+  const imageEnd = insertedPos + imageNode.nodeSize;
+  const nodeAfter = tr.doc.nodeAt(imageEnd);
+  if (!nodeAfter || nodeAfter.type !== paragraph) {
+    tr = tr.insert(imageEnd, paragraph.create());
   }
 
   view.dispatch(tr);
@@ -113,8 +123,6 @@ export function insertImageFromSrc(
     flipH: false,
     flipV: false,
     aspectLocked: true,
-    offsetLeft: 0,
-    offsetTop: 0,
     caption: "",
   });
   return insertImageBlock(view, node);
@@ -223,16 +231,6 @@ export async function setImageSize(
   const info = await getSelectedImage(view);
   if (!info) return false;
   return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, width, height });
-}
-
-export async function setImageOffset(
-  view: EditorView,
-  offsetLeft: number,
-  offsetTop: number
-): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, offsetLeft, offsetTop });
 }
 
 export async function setImageWidth(

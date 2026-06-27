@@ -13,7 +13,7 @@ import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageOffset, setImageWidth, setImageHeight, setImageCaption, removeImage } from "./image-commands";
+import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, setImageCaption, removeImage } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -2097,8 +2097,6 @@ function setupImageToolbar(view: EditorView): void {
   const btnDelete = document.getElementById("img-delete");
   const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
   const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;
-  const inputOffsetLeft = document.getElementById("img-offset-left") as HTMLInputElement | null;
-  const inputOffsetTop = document.getElementById("img-offset-top") as HTMLInputElement | null;
   const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
   const inputCaption = document.getElementById("img-caption") as HTMLInputElement | null;
 
@@ -2158,20 +2156,6 @@ function setupImageToolbar(view: EditorView): void {
     if (isNaN(val) || val < 20) return;
     void setImageHeight(view, val);
   });
-  inputOffsetLeft?.addEventListener("change", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    const val = parseInt(inputOffsetLeft.value, 10) || 0;
-    const currentTop = (info.node.attrs.offsetTop as number) || 0;
-    void setImageOffset(view, val, currentTop);
-  });
-  inputOffsetTop?.addEventListener("change", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    const val = parseInt(inputOffsetTop.value, 10) || 0;
-    const currentLeft = (info.node.attrs.offsetLeft as number) || 0;
-    void setImageOffset(view, currentLeft, val);
-  });
   inputRotation?.addEventListener("change", () => {
     let val = parseInt(inputRotation.value, 10);
     if (isNaN(val)) return;
@@ -2218,8 +2202,6 @@ export function updateImageToolbar(view: EditorView): void {
 
     const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
     const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;
-    const inputOffsetLeft = document.getElementById("img-offset-left") as HTMLInputElement | null;
-    const inputOffsetTop = document.getElementById("img-offset-top") as HTMLInputElement | null;
   const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
   const inputCaption = document.getElementById("img-caption") as HTMLInputElement | null;
 
@@ -2230,12 +2212,6 @@ export function updateImageToolbar(view: EditorView): void {
     if (inputHeight) {
       const h = attrs.height as number | null;
       inputHeight.value = h ? String(h) : "";
-    }
-    if (inputOffsetLeft) {
-      inputOffsetLeft.value = (attrs.offsetLeft as number) ? String(attrs.offsetLeft) : "";
-    }
-    if (inputOffsetTop) {
-      inputOffsetTop.value = (attrs.offsetTop as number) ? String(attrs.offsetTop) : "";
     }
     if (inputRotation) {
       const r = (attrs.rotation as number) || 0;
