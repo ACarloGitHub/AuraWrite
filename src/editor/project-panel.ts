@@ -87,21 +87,6 @@ export function initProjectPanel(
     }
   });
 
-  const btnOpenProject = document.getElementById("btn-open-project");
-  btnOpenProject?.addEventListener("click", async () => {
-    const action = await handleCloseDocument();
-    if (action === 'proceed') {
-      // Nessuna modifica o utente ha gestito, apri lista progetti
-      currentProject = null;
-      currentSection = null;
-      currentDocument = null;
-      lastSavedContent = null;
-      clearEditor();
-      renderProjectsList();
-    }
-    // Se 'cancel', non fare nulla - rimani sul documento
-  });
-
   const btnSaveDb = document.getElementById("btn-save-db");
   btnSaveDb?.addEventListener("click", handleSaveToDatabase);
 
