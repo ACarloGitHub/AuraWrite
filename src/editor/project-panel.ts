@@ -1463,6 +1463,14 @@ function renderProjectsList(): void {
   if (btnAiSettings) {
     btnAiSettings.style.display = currentProject ? "inline-flex" : "none";
   }
+  const btnReadProject = document.getElementById("btn-read-project");
+  if (btnReadProject) {
+    btnReadProject.style.display = currentProject ? "inline-flex" : "none";
+  }
+  const btnSaveDb = document.getElementById("btn-save-db");
+  if (btnSaveDb) {
+    btnSaveDb.style.display = currentProject ? "inline-flex" : "none";
+  }
 
   container.innerHTML = "";
 
