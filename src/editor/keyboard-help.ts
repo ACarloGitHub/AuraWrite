@@ -18,18 +18,12 @@ export function initKeyboardHelp(): void {
     modal.classList.add("hidden");
   });
 
+  // Escape closes the modal. The "?" key no longer opens it: the dedicated
+  // toolbar button (btn-keyboard-help) is the only way to show the shortcut
+  // list, so typing a question mark while writing no longer triggers it.
   document.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.key === "Escape" && !modal.classList.contains("hidden")) {
       modal.classList.add("hidden");
-    }
-    if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      const active = document.activeElement;
-      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
-      if (modal.classList.contains("hidden")) {
-        modal.classList.remove("hidden");
-      } else {
-        modal.classList.add("hidden");
-      }
     }
   });
 }
