@@ -96,31 +96,43 @@ export function setFindQuery(query: string, view: EditorView): void {
   updateFindCount();
 }
 
-export function findNext(view: EditorView): void {
+export function goToFirstMatch(view: EditorView, focusEditor = true): void {
   if (findState.results.length === 0) return;
-  findState.activeIndex = (findState.activeIndex + 1) % findState.results.length;
-  selectActiveResult(view);
+  findState.activeIndex = 0;
+  selectActiveResult(view, focusEditor);
   triggerUpdate(view);
   updateFindCount();
 }
 
-export function findPrev(view: EditorView): void {
+export function findNext(view: EditorView, focusEditor = false): void {
+  if (findState.results.length === 0) return;
+  findState.activeIndex = (findState.activeIndex + 1) % findState.results.length;
+  selectActiveResult(view, focusEditor);
+  triggerUpdate(view);
+  updateFindCount();
+}
+
+export function findPrev(view: EditorView, focusEditor = false): void {
   if (findState.results.length === 0) return;
   findState.activeIndex =
     (findState.activeIndex - 1 + findState.results.length) %
     findState.results.length;
-  selectActiveResult(view);
+  selectActiveResult(view, focusEditor);
   triggerUpdate(view);
   updateFindCount();
 }
 
-function selectActiveResult(view: EditorView): void {
+function selectActiveResult(view: EditorView, focusEditor = false): void {
   const r = findState.results[findState.activeIndex];
   if (!r) return;
   view.dispatch(
-    view.state.tr.setSelection(TextSelection.create(view.state.doc, r.from, r.to)),
+    view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, r.from, r.to))
+      .scrollIntoView(),
   );
-  view.focus();
+  if (focusEditor) {
+    view.focus();
+  }
 }
 
 export function replaceOne(view: EditorView, replacement: string): void {
@@ -145,7 +157,7 @@ export function replaceOne(view: EditorView, replacement: string): void {
     }
     if (nextIndex === -1) nextIndex = 0;
     findState.activeIndex = nextIndex;
-    selectActiveResult(view);
+    selectActiveResult(view, true);
   }
   triggerUpdate(view);
   updateFindCount();
@@ -164,6 +176,7 @@ export function replaceAll(view: EditorView, replacement: string): void {
   findState.activeIndex = -1;
   triggerUpdate(view);
   updateFindCount();
+  view.focus();
 }
 
 export function clearFind(view: EditorView): void {

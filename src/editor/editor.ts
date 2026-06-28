@@ -511,6 +511,48 @@ export { wordCountPlugin };
 
 export type EditorViewType = EditorView;
 
+function scrollSelectionIntoView(view: EditorView): void {
+  const { head } = view.state.selection;
+  if (head < 0) return;
+
+  const rect = view.coordsAtPos(head, 1);
+
+  let scrollTarget: HTMLElement | null = view.dom;
+  while (scrollTarget && scrollTarget !== document.documentElement) {
+    const style = getComputedStyle(scrollTarget);
+    const overflowY = style.overflowY;
+    if (
+      overflowY === "auto" ||
+      overflowY === "scroll" ||
+      style.overflow === "auto" ||
+      style.overflow === "scroll"
+    ) {
+      break;
+    }
+    scrollTarget = scrollTarget.parentElement;
+  }
+  if (!scrollTarget) scrollTarget = view.dom;
+
+  const elRect = scrollTarget.getBoundingClientRect();
+
+  const margin = 80;
+  if (
+    rect.top >= elRect.top + margin &&
+    rect.bottom <= elRect.bottom - margin
+  ) {
+    return;
+  }
+
+  const targetCenter = elRect.top + elRect.height / 2;
+  const currentCenter = (rect.top + rect.bottom) / 2;
+  const delta = currentCenter - targetCenter;
+
+  scrollTarget.scrollBy({
+    top: delta,
+    behavior: "smooth",
+  });
+}
+
 export function createEditor(element: HTMLElement): EditorViewType {
   initPagedMode();
 
@@ -562,6 +604,10 @@ export function createEditor(element: HTMLElement): EditorViewType {
     },
     nodeViews: {
       image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
+    },
+    handleScrollToSelection(view) {
+      scrollSelectionIntoView(view);
+      return true;
     },
   });
 

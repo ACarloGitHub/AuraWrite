@@ -31,6 +31,7 @@ import {
   replaceOne,
   replaceAll,
   clearFind,
+  goToFirstMatch,
 } from "./editor/find-replace";
 import "./styles.css";
 
@@ -1449,11 +1450,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   findInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (e.shiftKey) {
-        findPrev(editorView);
-      } else {
-        findNext(editorView);
-      }
+      goToFirstMatch(editorView, true);
     }
     if (e.key === "Escape") {
       closeFindBar();
