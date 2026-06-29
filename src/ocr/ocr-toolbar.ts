@@ -38,12 +38,12 @@ function onProgress(progress: OcrProgress): void {
     progressCurrentPage = progress.currentPage;
   }
 
-  const progressBar = $("ocr-progress-bar");
+  const progressFill = $("ocr-progress-fill");
   const progressText = $("ocr-progress-text");
 
-  if (progressBar) {
+  if (progressFill) {
     const pct = Math.round(progress.progress * 100);
-    progressBar.style.width = `${pct}%`;
+    progressFill.style.width = `${pct}%`;
   }
 
   if (progressText) {
@@ -151,9 +151,9 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
     updateStartButton();
 
     const progressWrap = $("ocr-progress-wrap");
-    const progressBar = $("ocr-progress-bar");
+    const progressFill = $("ocr-progress-fill");
     if (progressWrap) progressWrap.classList.remove("hidden");
-    if (progressBar) progressBar.style.width = "0%";
+    if (progressFill) progressFill.style.width = "0%";
 
     const options = getOptions();
 
@@ -201,7 +201,7 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
       if (result.failedPages.length === 0) {
         const progressText = $("ocr-progress-text");
         if (progressText) progressText.textContent = "Done";
-        if (progressBar) progressBar.style.width = "100%";
+        if (progressFill) progressFill.style.width = "100%";
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";

@@ -601,9 +601,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
-  min-width: 120px;
-  max-width: 200px;
+  width: 200px;
+  flex-shrink: 0;
 }
 
 .ocr-bar__progress-wrap.hidden {
@@ -611,24 +610,20 @@ body {
 }
 
 .ocr-bar__progress-bar {
-  flex: 1;
-  height: 4px;
+  width: 120px;
+  height: 6px;
   background: var(--color-border);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
-  position: relative;
+  flex-shrink: 0;
 }
 
-.ocr-bar__progress-bar::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
+.ocr-bar__progress-fill {
   height: 100%;
   width: 0%;
   background: var(--color-primary);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  border-radius: 3px;
+  transition: width 0.2s ease;
 }
 
 .editor-container {
