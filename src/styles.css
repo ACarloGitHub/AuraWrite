@@ -417,6 +417,10 @@ body {
   display: inline;
 }
 
+.toolbar__btn--with-text .toolbar__btn-text {
+  display: inline;
+}
+
 .find-bar {
   display: flex;
   align-items: center;

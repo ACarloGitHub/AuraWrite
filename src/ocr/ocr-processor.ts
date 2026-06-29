@@ -1,6 +1,7 @@
 import { getOcrWorker, terminateOcrWorker, recognizeImage } from "./ocr-engine";
 import { OcrOptions, OcrResult, OcrPageResult, OcrProgress, OCR_DEFAULTS } from "./ocr-types";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
 
 let pdfjsModule: typeof import("pdfjs-dist") | null = null;
 
@@ -25,7 +26,8 @@ async function pdfToImages(
   onProgress?: (progress: OcrProgress) => void,
 ): Promise<{ canvas: HTMLCanvasElement; pageNumber: number }[]> {
   const pdfjs = await loadPdfJs();
-  const pdf = await pdfjs.getDocument(pdfPath).promise;
+  const fileData = await readFile(pdfPath);
+  const pdf = await pdfjs.getDocument({ data: fileData }).promise;
   const totalPages = pdf.numPages;
 
   const startPage = pageRange?.start ?? 1;
