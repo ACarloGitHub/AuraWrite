@@ -1,5 +1,5 @@
 import { runOcr, pickOcrFile, pickSavePath, resultToPlainText } from "./ocr-processor";
-import { OcrOptions, OcrQuality, OcrPageType, OcrProgress } from "./ocr-types";
+import { OcrOptions, OcrQuality, OcrPageType, OcrFileFormat, OcrProgress } from "./ocr-types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EditorViewLike = { state: any; dispatch: any; focus: () => void };
@@ -19,12 +19,19 @@ function updateStartButton(): void {
   }
 }
 
-function setPageRangeVisibility(): void {
-  const rangeLabel = $("ocr-range-label");
+function updatePageRangeHint(): void {
+  const rangeInput = $("ocr-page-range") as HTMLInputElement | null;
+  if (!rangeInput) return;
   const isPdf = currentFile?.toLowerCase().endsWith(".pdf") ?? false;
-  if (rangeLabel) {
-    rangeLabel.style.display = isPdf ? "flex" : "none";
-  }
+  rangeInput.placeholder = isPdf ? "All (e.g. 1-3, 1,3,5)" : "N/A (images only)";
+  rangeInput.disabled = !isPdf;
+}
+
+function updateSaveFormatVisibility(): void {
+  const formatSelect = $("ocr-save-format") as HTMLSelectElement | null;
+  const insertRadio = $("ocr-output-insert") as HTMLInputElement | null;
+  if (!formatSelect || !insertRadio) return;
+  formatSelect.style.display = insertRadio.checked ? "none" : "";
 }
 
 function onProgress(progress: OcrProgress): void {
@@ -76,21 +83,27 @@ function getOptions(): Partial<OcrOptions> {
   const quality = (($("ocr-quality") as HTMLSelectElement | null)?.value ?? "best") as OcrQuality;
   const pageType = (($("ocr-page-type") as HTMLSelectElement | null)?.value ?? "full") as OcrPageType;
   const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked ? "insert" : "save";
+  const saveFormat = (($("ocr-save-format") as HTMLSelectElement | null)?.value ?? "txt") as OcrFileFormat;
   const rangeStr = ($("ocr-page-range") as HTMLInputElement | null)?.value?.trim() ?? "";
 
   let pageRange: { start: number; end: number } | null = null;
   if (rangeStr && currentFile?.toLowerCase().endsWith(".pdf")) {
-    const parts = rangeStr.split("-");
-    if (parts.length === 2) {
-      const start = parseInt(parts[0], 10);
-      const end = parseInt(parts[1], 10);
+    const hyphenParts = rangeStr.split("-");
+    if (hyphenParts.length === 2) {
+      const start = parseInt(hyphenParts[0], 10);
+      const end = parseInt(hyphenParts[1], 10);
       if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
         pageRange = { start, end };
+      }
+    } else {
+      const single = parseInt(rangeStr, 10);
+      if (!isNaN(single) && single > 0) {
+        pageRange = { start: single, end: single };
       }
     }
   }
 
-  return { language, quality, pageType, outputMode, pageRange };
+  return { language, quality, pageType, outputMode, saveFormat, pageRange };
 }
 
 export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): void {
@@ -121,10 +134,14 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
         const parts = filePath.replace(/\\/g, "/").split("/");
         filename.textContent = parts[parts.length - 1];
       }
-      setPageRangeVisibility();
+      updatePageRangeHint();
       updateStartButton();
     }
   });
+
+  $("ocr-output-insert")?.addEventListener("change", updateSaveFormatVisibility);
+  $("ocr-output-save")?.addEventListener("change", updateSaveFormatVisibility);
+  updateSaveFormatVisibility();
 
   $("ocr-start")?.addEventListener("click", async () => {
     if (!currentFile || isRunning) return;
@@ -171,7 +188,8 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
         }
       } else {
         const defaultName = currentFile.replace(/\\/g, "/").split("/").pop()?.replace(/\.[^.]+$/, "") ?? "ocr_result";
-        const savePath = await pickSavePath(`${defaultName}_ocr.txt`);
+        const ext = options.saveFormat ?? "txt";
+        const savePath = await pickSavePath(`${defaultName}_ocr.${ext}`);
         if (savePath) {
           const { writeFile } = await import("@tauri-apps/plugin-fs");
           const text = resultToPlainText(result);

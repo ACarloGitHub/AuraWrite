@@ -4,7 +4,7 @@ export type OcrPageType = "full" | "single_block" | "single_column" | "single_li
 
 export type OcrOutputMode = "insert" | "save";
 
-export type OcrFileFormat = "txt" | "hocr" | "tsv" | "pdf" | "page" | "alto";
+export type OcrFileFormat = "txt" | "hocr" | "tsv" | "pdf";
 
 export interface OcrLanguage {
   code: string;
