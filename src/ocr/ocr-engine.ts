@@ -11,10 +11,6 @@ const PSM_MAP: Record<OcrPageType, PSM> = {
   single_line: PSM.SINGLE_LINE,
 };
 
-const TESSERACT_WORKER_PATH = "/tesseract/worker.min.js";
-const TESSERACT_CORE_PATH = "/tesseract";
-const TESSERACT_LANG_PATH = "/tessdata";
-
 export async function getOcrWorker(
   language: string,
   _quality: OcrQuality,
@@ -37,9 +33,7 @@ export async function getOcrWorker(
     });
 
     const worker = await Tesseract.createWorker(language, undefined, {
-      workerPath: TESSERACT_WORKER_PATH,
-      corePath: TESSERACT_CORE_PATH,
-      langPath: TESSERACT_LANG_PATH,
+      langPath: "/tessdata",
       gzip: true,
       logger: (m) => {
         if (onProgress && m.progress !== undefined) {
