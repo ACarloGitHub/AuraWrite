@@ -7,6 +7,10 @@ let pdfjsModule: typeof import("pdfjs-dist") | null = null;
 async function loadPdfJs(): Promise<typeof import("pdfjs-dist")> {
   if (!pdfjsModule) {
     pdfjsModule = await import("pdfjs-dist");
+    pdfjsModule.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url
+    ).toString();
   }
   return pdfjsModule;
 }

@@ -1,5 +1,5 @@
 import { runOcr, pickOcrFile, pickSavePath, resultToPlainText } from "./ocr-processor";
-import { OcrOptions, OcrQuality, OcrPageType, OcrFileFormat, OcrProgress } from "./ocr-types";
+import { OcrOptions, OcrQuality, OcrProgress } from "./ocr-types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EditorViewLike = { state: any; dispatch: any; focus: () => void };
@@ -25,13 +25,6 @@ function updatePageRangeHint(): void {
   const isPdf = currentFile?.toLowerCase().endsWith(".pdf") ?? false;
   rangeInput.placeholder = isPdf ? "All (e.g. 1-3, 1,3,5)" : "N/A (images only)";
   rangeInput.disabled = !isPdf;
-}
-
-function updateSaveFormatVisibility(): void {
-  const formatSelect = $("ocr-save-format") as HTMLSelectElement | null;
-  const insertRadio = $("ocr-output-insert") as HTMLInputElement | null;
-  if (!formatSelect || !insertRadio) return;
-  formatSelect.style.display = insertRadio.checked ? "none" : "";
 }
 
 function onProgress(progress: OcrProgress): void {
@@ -81,9 +74,7 @@ function showModal(title: string, message: string): void {
 function getOptions(): Partial<OcrOptions> {
   const language = ($("ocr-language") as HTMLSelectElement | null)?.value ?? "eng";
   const quality = (($("ocr-quality") as HTMLSelectElement | null)?.value ?? "best") as OcrQuality;
-  const pageType = (($("ocr-page-type") as HTMLSelectElement | null)?.value ?? "full") as OcrPageType;
   const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked ? "insert" : "save";
-  const saveFormat = (($("ocr-save-format") as HTMLSelectElement | null)?.value ?? "txt") as OcrFileFormat;
   const rangeStr = ($("ocr-page-range") as HTMLInputElement | null)?.value?.trim() ?? "";
 
   let pageRange: { start: number; end: number } | null = null;
@@ -103,7 +94,7 @@ function getOptions(): Partial<OcrOptions> {
     }
   }
 
-  return { language, quality, pageType, outputMode, saveFormat, pageRange };
+  return { language, quality, outputMode, pageRange };
 }
 
 export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): void {
@@ -138,10 +129,6 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
       updateStartButton();
     }
   });
-
-  $("ocr-output-insert")?.addEventListener("change", updateSaveFormatVisibility);
-  $("ocr-output-save")?.addEventListener("change", updateSaveFormatVisibility);
-  updateSaveFormatVisibility();
 
   $("ocr-start")?.addEventListener("click", async () => {
     if (!currentFile || isRunning) return;
