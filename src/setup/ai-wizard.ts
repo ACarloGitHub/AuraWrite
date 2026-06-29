@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "../ai-panel/model-catalog";
 import { setDownloadRetryHandler } from "../download-toast";
 
+interface ResourceInfo { present: boolean }
+interface ResourcesStatus { llamacpp: ResourceInfo }
+
 const WIZARD_KEY = "aurawrite-ai-wizard-dismissed";
 
 type WizardStep = "welcome" | "hardware" | "choose" | "download" | "done";
@@ -228,31 +231,36 @@ function renderStep(): void {
         nextBtn.style.display = "none";
         skipBtn.style.display = "none";
 
-        (async () => {
-          const statusEl = document.getElementById("wizard-download-status");
-          try {
-            let variant = hwData?.recommended_llamacpp_variant || "cpu";
-            try {
-              await invoke("resources_download_llamacpp_variant", { variant });
-              if (statusEl) statusEl.innerHTML = `<p>Step 1/2: llama.cpp ✓</p><p>Step 2/2: Downloading model...</p>`;
-            } catch (e) {
-              if (variant !== "cpu") {
-                variant = "cpu";
-                try {
-                  await invoke("resources_download_llamacpp_variant", { variant: "cpu" });
-                  if (statusEl) statusEl.innerHTML = `<p>Step 1/2: llama.cpp (CPU fallback) ✓</p><p>Step 2/2: Downloading model...</p>`;
-                } catch (e2) {
-                  if (statusEl) statusEl.innerHTML = `<p style="color:var(--error);">Failed to download llama.cpp: ${e2 instanceof Error ? e2.message : String(e2)}</p><p>You can try again from Preferences → Local Models.</p>`;
-                  nextBtn.style.display = "";
-                  nextBtn.textContent = "Close";
-                  nextBtn.disabled = false;
-                  nextBtn.onclick = () => hideAIWizard();
-                  return;
-                }
-              } else {
-                throw e;
-              }
-            }
+         (async () => {
+           const statusEl = document.getElementById("wizard-download-status");
+           try {
+             const llamacppStatus = await invoke<ResourcesStatus>("resources_get_status");
+             if (!llamacppStatus.llamacpp.present) {
+               let variant = hwData?.recommended_llamacpp_variant || "cpu";
+               try {
+                 await invoke("resources_download_llamacpp_variant", { variant });
+                 if (statusEl) statusEl.innerHTML = `<p>Step 1/2: llama.cpp ✓</p><p>Step 2/2: Downloading model...</p>`;
+               } catch (e) {
+                 if (variant !== "cpu") {
+                   variant = "cpu";
+                   try {
+                     await invoke("resources_download_llamacpp_variant", { variant: "cpu" });
+                     if (statusEl) statusEl.innerHTML = `<p>Step 1/2: llama.cpp (CPU fallback) ✓</p><p>Step 2/2: Downloading model...</p>`;
+                   } catch (e2) {
+                     if (statusEl) statusEl.innerHTML = `<p style="color:var(--error);">Failed to download llama.cpp: ${e2 instanceof Error ? e2.message : String(e2)}</p><p>You can try again from Preferences → Local Models.</p>`;
+                     nextBtn.style.display = "";
+                     nextBtn.textContent = "Close";
+                     nextBtn.disabled = false;
+                     nextBtn.onclick = () => hideAIWizard();
+                     return;
+                   }
+                 } else {
+                   throw e;
+                 }
+               }
+             } else {
+               if (statusEl) statusEl.innerHTML = `<p>Step 1/2: llama.cpp ✓ (already installed)</p><p>Step 2/2: Downloading model...</p>`;
+             }
 
             setDownloadRetryHandler(selectedModelId!, () => {
               currentStep = "download";

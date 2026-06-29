@@ -310,28 +310,59 @@ pub async fn ocr_ai_spawn_server(
             }
         }
 
-        // Kill only our own previous OCR AI server process if still alive
-        if let Some(ref existing) = *state {
-            if is_process_alive(existing.pid) {
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = silent_command("taskkill")
-                        .args(["/F", "/PID", &existing.pid.to_string()])
-                        .output();
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let _ = std::process::Command::new("kill")
-                        .args(["-9", &existing.pid.to_string()])
-                        .output();
-                }
-                std::thread::sleep(std::time::Duration::from_millis(500));
-            }
+        // Kill any orphaned llama-server processes before starting
+        #[cfg(target_os = "windows")]
+        {
+            let _ = silent_command("taskkill")
+                .args(["/F", "/IM", "llama-server.exe", "/T"])
+                .output();
         }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", "llama-server"])
+                .output();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
 
         let llama_dir = llamacpp_ai_dir(&dir);
         let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
             .map_err(|e| format!("llama-server binary not found: {}", e))?;
+
+        // Pre-start verification: if the installed variant is CUDA on Windows,
+        // verify that the CUDA runtime DLLs are present.
+        #[cfg(target_os = "windows")]
+        {
+            let meta_path = llama_dir.join("variant.txt");
+            if meta_path.exists() {
+                let installed_variant = std::fs::read_to_string(&meta_path)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                if installed_variant == "cuda" {
+                    let dll_path = llama_dir.join("cublas64_12.dll");
+                    let cudart_path = llama_dir.join("cudart64_12.dll");
+                    if !dll_path.exists() || !cudart_path.exists() {
+                        return Err(format!(
+                            "CUDA runtime DLLs missing (expected cublas64_12.dll and cudart64_12.dll in {}). \
+                             Reinstall the CUDA variant from Preferences > Local Models, or switch to Vulkan/CPU.",
+                            llama_dir.display()
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Read installed variant for variant-aware flags
+        let meta_path = llama_dir.join("variant.txt");
+        let installed_variant = if meta_path.exists() {
+            std::fs::read_to_string(&meta_path)
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        } else {
+            String::new()
+        };
 
         let actual_port = port.unwrap_or(OCR_AI_DEFAULT_PORT);
 
@@ -345,6 +376,14 @@ pub async fn ocr_ai_spawn_server(
         cmd.arg("--no-cache-prompt");
         cmd.arg("--batch-size").arg("512");
         cmd.arg("--ctx-size").arg("4096");
+
+        // Variant-aware flags (mirroring llamacpp_spawn_server logic)
+        if installed_variant == "vulkan" {
+            cmd.arg("-fit").arg("off");
+            if let Some(dev) = crate::resources::pick_best_vulkan_device(&llama_dir, &binary) {
+                cmd.arg("--device").arg(&dev);
+            }
+        }
 
         // Redirect logs
         let log_path = dir.join("ocr-ai-server.log");

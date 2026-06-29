@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { ocrAiDownloadModel, ocrAiCheckVram } from "./ocr-ai-engine";
 
+interface ResourceInfo { present: boolean }
+interface ResourcesStatus { llamacpp: ResourceInfo }
+
 const WIZARD_KEY = "aurawrite-ocr-ai-wizard-dismissed";
 
 type VramInfo = {
@@ -154,14 +157,14 @@ function renderOcrWizardStep(): void {
         const statusEl = document.getElementById("wizard-download-status");
 
         try {
-          const status = await invoke<{ present: boolean }>("resources_get_status");
-          if (!status.present) {
+          const status = await invoke<ResourcesStatus>("resources_get_status");
+          if (!status.llamacpp.present) {
             if (statusEl) statusEl.innerHTML = `<p>Step 1/2: Downloading llama.cpp runtime...</p>`;
             const hwInfo = await invoke<{ recommended_llamacpp_variant: string }>("resources_detect_hardware");
             await invoke("resources_download_llamacpp_variant", { variant: hwInfo.recommended_llamacpp_variant });
           }
 
-          const stepBase = status.present ? 1 : 2;
+          const stepBase = status.llamacpp.present ? 1 : 2;
           if (statusEl) statusEl.innerHTML = `<p>Step ${stepBase}/2: Downloading Q8_0 model + mmproj (~1.1 GB)...</p><p class="preference-hint">Progress appears at the bottom of the screen.</p>`;
           await ocrAiDownloadModel("q8_0");
 

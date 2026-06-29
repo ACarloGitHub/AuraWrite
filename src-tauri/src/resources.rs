@@ -759,6 +759,31 @@ pub async fn resources_download_llamacpp_variant(
 
     let dir = resources_dir(&app)?;
     let target_dir = llamacpp_ai_dir(&dir);
+
+    // Skip download if the same variant is already installed and the binary exists
+    let meta_path = target_dir.join("variant.txt");
+    if target_dir.exists() && meta_path.exists() {
+        let installed_variant = fs::read_to_string(&meta_path)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if installed_variant == effective_variant {
+            if let Ok(bin) = find_binary_in_dir(&target_dir, llamacpp_binary_name()) {
+                if bin.exists() {
+                    // Same variant and binary already present — nothing to do
+                    return Ok(ResourceInfo {
+                        present: true,
+                        path: bin.to_string_lossy().to_string(),
+                        size_bytes: file_size(&bin),
+                        version: LLAMACPP_PINNED_VERSION.to_string(),
+                        license: LLAMACPP_LICENSE.to_string(),
+                        download_url: llamacpp_url_for_variant(&variant),
+                    });
+                }
+            }
+        }
+    }
+
     let url = llamacpp_url_for_variant(&variant);
     let is_zip = is_zip_url(&url);
     let archive_path = if is_zip {
@@ -1748,7 +1773,7 @@ fn get_disk_space(path: &Path) -> (u64, u64) {
 /// Caches the result in `<llama_dir>/vulkan-device.txt` so we don't re-run on
 /// every spawn. Prefers NVIDIA discrete GPUs, then the device with the most
 /// free VRAM. Returns None if detection fails (llama.cpp will use its default).
-fn pick_best_vulkan_device(llama_dir: &Path, binary: &Path) -> Option<String> {
+pub fn pick_best_vulkan_device(llama_dir: &Path, binary: &Path) -> Option<String> {
     let cache_path = llama_dir.join("vulkan-device.txt");
     if let Ok(cached) = fs::read_to_string(&cache_path) {
         let cached = cached.trim().to_string();

@@ -164,8 +164,9 @@ export async function getOcrWorker(
   //    Pass the language as a string — Tesseract.js will fetch
   //    <langPath>/<lang>.traineddata.gz from there.
   const workerOptions: Partial<Tesseract.WorkerOptions> = {
-    corePath: "/tesseract",
+    corePath: "/tesseract/tesseract-core-simd.wasm.js",
     workerPath: "/tesseract/worker.min.js",
+    workerBlobURL: false,
     langPath,
     gzip: true,
     logger: (m: LoggerMessage) => {
