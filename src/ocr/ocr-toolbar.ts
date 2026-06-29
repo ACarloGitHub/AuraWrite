@@ -1,5 +1,5 @@
-import { runOcr, pickOcrFile, pickSavePath, resultToPlainText, saveResultToDisk } from "./ocr-processor";
-import { OcrOptions, OcrQuality, OcrFileFormat, OcrProgress } from "./ocr-types";
+import { runOcr, pickOcrFile, pickSavePath, resultToPlainText, saveResultToDisk, getFormatFromPath } from "./ocr-processor";
+import { OcrOptions, OcrQuality, OcrProgress } from "./ocr-types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EditorViewLike = { state: any; dispatch: any; focus: () => void };
@@ -7,6 +7,9 @@ type EditorViewLike = { state: any; dispatch: any; focus: () => void };
 let ocrBar: HTMLElement | null = null;
 let currentFile: string | null = null;
 let isRunning = false;
+
+let progressCurrentPage = 0;
+let progressTotalPages = 0;
 
 function $(id: string): HTMLElement | null {
   return document.getElementById(id);
@@ -27,14 +30,14 @@ function updatePageRangeHint(): void {
   rangeInput.disabled = !isPdf;
 }
 
-function updateSaveFormatVisibility(): void {
-  const formatSelect = $("ocr-save-format") as HTMLSelectElement | null;
-  const insertRadio = $("ocr-output-insert") as HTMLInputElement | null;
-  if (!formatSelect || !insertRadio) return;
-  formatSelect.style.display = insertRadio.checked ? "none" : "";
-}
-
 function onProgress(progress: OcrProgress): void {
+  if (progress.totalPages > 0) {
+    progressTotalPages = progress.totalPages;
+  }
+  if (progress.currentPage > 0) {
+    progressCurrentPage = progress.currentPage;
+  }
+
   const progressBar = $("ocr-progress-bar");
   const progressText = $("ocr-progress-text");
 
@@ -44,8 +47,8 @@ function onProgress(progress: OcrProgress): void {
   }
 
   if (progressText) {
-    if (progress.totalPages > 0) {
-      progressText.textContent = `Page ${progress.currentPage}/${progress.totalPages} — ${progress.status}`;
+    if (progressTotalPages > 0 && progressCurrentPage > 0) {
+      progressText.textContent = `${progressCurrentPage}/${progressTotalPages} — ${progress.status}`;
     } else {
       progressText.textContent = progress.status;
     }
@@ -85,7 +88,6 @@ function getOptions(): Partial<OcrOptions> {
   const language = ($("ocr-language") as HTMLSelectElement | null)?.value ?? "eng";
   const quality = (($("ocr-quality") as HTMLSelectElement | null)?.value ?? "best") as OcrQuality;
   const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked ? "insert" : "save";
-  const saveFormat = (($("ocr-save-format") as HTMLSelectElement | null)?.value ?? "txt") as OcrFileFormat;
   const rangeStr = ($("ocr-page-range") as HTMLInputElement | null)?.value?.trim() ?? "";
 
   let pageRange: { start: number; end: number } | null = null;
@@ -105,7 +107,7 @@ function getOptions(): Partial<OcrOptions> {
     }
   }
 
-  return { language, quality, outputMode, saveFormat, pageRange };
+  return { language, quality, outputMode, pageRange };
 }
 
 export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): void {
@@ -141,13 +143,11 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
     }
   });
 
-  $("ocr-output-insert")?.addEventListener("change", updateSaveFormatVisibility);
-  $("ocr-output-save")?.addEventListener("change", updateSaveFormatVisibility);
-  updateSaveFormatVisibility();
-
   $("ocr-start")?.addEventListener("click", async () => {
     if (!currentFile || isRunning) return;
     isRunning = true;
+    progressCurrentPage = 0;
+    progressTotalPages = 0;
     updateStartButton();
 
     const progressWrap = $("ocr-progress-wrap");
@@ -190,11 +190,11 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
         }
       } else {
         const defaultName = currentFile.replace(/\\/g, "/").split("/").pop()?.replace(/\.[^.]+$/, "") ?? "ocr_result";
-        const format = options.saveFormat ?? "txt";
-        const savePath = await pickSavePath(`${defaultName}_ocr.${format}`);
+        const savePath = await pickSavePath(`${defaultName}_ocr`);
         if (savePath) {
+          const format = getFormatFromPath(savePath);
           await saveResultToDisk(result, savePath, format);
-          showModal("OCR Complete", `Text saved to:\n${savePath}`);
+          showModal("OCR Complete", `File saved to:\n${savePath}`);
         }
       }
 

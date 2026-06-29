@@ -11,12 +11,11 @@ const PSM_MAP: Record<OcrPageType, PSM> = {
   single_line: PSM.SINGLE_LINE,
 };
 
-export type OcrProgressCallback = (
-  status: string,
-  pageProgress: number,
-) => void;
-
-let activeLoggerCallback: OcrProgressCallback | null = null;
+let activeOnProgress: ((p: OcrProgress) => void) | null = null;
+let loggerCurrentPage = 0;
+let loggerTotalPages = 0;
+let loggerBaseProgress = 0;
+let loggerPageSpan = 0;
 
 export async function getOcrWorker(
   language: string,
@@ -39,23 +38,20 @@ export async function getOcrWorker(
       totalPages: 0,
     });
 
-    activeLoggerCallback = (status: string, pageProgress: number) => {
-      if (!onProgress) return;
-      onProgress({
-        status,
-        progress: pageProgress,
-        currentPage: 0,
-        totalPages: 0,
-      });
-    };
+    activeOnProgress = onProgress ?? null;
 
     const worker = await Tesseract.createWorker(language, undefined, {
       langPath: "/tessdata",
       gzip: true,
       logger: (m: LoggerMessage) => {
-        if (activeLoggerCallback && m.progress !== undefined) {
-          activeLoggerCallback(m.status || "Processing...", m.progress);
-        }
+        if (!activeOnProgress || m.progress === undefined) return;
+        const cumulative = loggerBaseProgress + m.progress * loggerPageSpan;
+        activeOnProgress({
+          status: m.status || "Processing...",
+          progress: cumulative,
+          currentPage: loggerCurrentPage,
+          totalPages: loggerTotalPages,
+        });
       },
     });
 
@@ -64,6 +60,13 @@ export async function getOcrWorker(
   }
 
   return activeWorker;
+}
+
+export function setProgressContext(page: number, total: number, base: number, span: number): void {
+  loggerCurrentPage = page;
+  loggerTotalPages = total;
+  loggerBaseProgress = base;
+  loggerPageSpan = span;
 }
 
 export async function recognizeImage(
@@ -101,7 +104,11 @@ export async function terminateOcrWorker(): Promise<void> {
     await activeWorker.terminate();
     activeWorker = null;
     workerLanguage = null;
-    activeLoggerCallback = null;
+    activeOnProgress = null;
+    loggerCurrentPage = 0;
+    loggerTotalPages = 0;
+    loggerBaseProgress = 0;
+    loggerPageSpan = 0;
   }
 }
 
