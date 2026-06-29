@@ -626,6 +626,11 @@ body {
   transition: width 0.2s ease;
 }
 
+#ocr-close {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .editor-container {
   display: flex;
   flex: 1;
