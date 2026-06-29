@@ -1,5 +1,5 @@
-import { runOcr, pickOcrFile, pickSavePath, resultToPlainText } from "./ocr-processor";
-import { OcrOptions, OcrQuality, OcrProgress } from "./ocr-types";
+import { runOcr, pickOcrFile, pickSavePath, resultToPlainText, saveResultToDisk } from "./ocr-processor";
+import { OcrOptions, OcrQuality, OcrFileFormat, OcrProgress } from "./ocr-types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EditorViewLike = { state: any; dispatch: any; focus: () => void };
@@ -27,15 +27,25 @@ function updatePageRangeHint(): void {
   rangeInput.disabled = !isPdf;
 }
 
+function updateSaveFormatVisibility(): void {
+  const formatSelect = $("ocr-save-format") as HTMLSelectElement | null;
+  const insertRadio = $("ocr-output-insert") as HTMLInputElement | null;
+  if (!formatSelect || !insertRadio) return;
+  formatSelect.style.display = insertRadio.checked ? "none" : "";
+}
+
 function onProgress(progress: OcrProgress): void {
   const progressBar = $("ocr-progress-bar");
   const progressText = $("ocr-progress-text");
+
   if (progressBar) {
-    progressBar.style.width = `${Math.round(progress.progress * 100)}%`;
+    const pct = Math.round(progress.progress * 100);
+    progressBar.style.width = `${pct}%`;
   }
+
   if (progressText) {
-    if (progress.currentPage > 0) {
-      progressText.textContent = `${progress.status} (page ${progress.currentPage})`;
+    if (progress.totalPages > 0) {
+      progressText.textContent = `Page ${progress.currentPage}/${progress.totalPages} — ${progress.status}`;
     } else {
       progressText.textContent = progress.status;
     }
@@ -75,6 +85,7 @@ function getOptions(): Partial<OcrOptions> {
   const language = ($("ocr-language") as HTMLSelectElement | null)?.value ?? "eng";
   const quality = (($("ocr-quality") as HTMLSelectElement | null)?.value ?? "best") as OcrQuality;
   const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked ? "insert" : "save";
+  const saveFormat = (($("ocr-save-format") as HTMLSelectElement | null)?.value ?? "txt") as OcrFileFormat;
   const rangeStr = ($("ocr-page-range") as HTMLInputElement | null)?.value?.trim() ?? "";
 
   let pageRange: { start: number; end: number } | null = null;
@@ -94,7 +105,7 @@ function getOptions(): Partial<OcrOptions> {
     }
   }
 
-  return { language, quality, outputMode, pageRange };
+  return { language, quality, outputMode, saveFormat, pageRange };
 }
 
 export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): void {
@@ -129,6 +140,10 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
       updateStartButton();
     }
   });
+
+  $("ocr-output-insert")?.addEventListener("change", updateSaveFormatVisibility);
+  $("ocr-output-save")?.addEventListener("change", updateSaveFormatVisibility);
+  updateSaveFormatVisibility();
 
   $("ocr-start")?.addEventListener("click", async () => {
     if (!currentFile || isRunning) return;
@@ -175,13 +190,10 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
         }
       } else {
         const defaultName = currentFile.replace(/\\/g, "/").split("/").pop()?.replace(/\.[^.]+$/, "") ?? "ocr_result";
-        const ext = options.saveFormat ?? "txt";
-        const savePath = await pickSavePath(`${defaultName}_ocr.${ext}`);
+        const format = options.saveFormat ?? "txt";
+        const savePath = await pickSavePath(`${defaultName}_ocr.${format}`);
         if (savePath) {
-          const { writeFile } = await import("@tauri-apps/plugin-fs");
-          const text = resultToPlainText(result);
-          const encoder = new TextEncoder();
-          await writeFile(savePath, encoder.encode(text));
+          await saveResultToDisk(result, savePath, format);
           showModal("OCR Complete", `Text saved to:\n${savePath}`);
         }
       }

@@ -320,6 +320,12 @@
         <div class="ocr-bar__separator"></div>
         <label class="ocr-bar__field"><input type="radio" name="ocr-output" id="ocr-output-insert" value="insert" checked /> Insert in editor</label>
         <label class="ocr-bar__field"><input type="radio" name="ocr-output" id="ocr-output-save" value="save" /> Save to disk</label>
+        <select id="ocr-save-format" class="ocr-bar__select" style="display:none">
+          <option value="txt">Plain Text</option>
+          <option value="hocr">HOCR</option>
+          <option value="tsv">TSV</option>
+          <option value="pdf">Searchable PDF</option>
+        </select>
         <div class="ocr-bar__separator"></div>
         <button id="ocr-start" class="ocr-bar__btn ocr-bar__btn--primary" title="Start OCR" disabled>▶ Start</button>
         <div id="ocr-progress-wrap" class="ocr-bar__progress-wrap hidden">

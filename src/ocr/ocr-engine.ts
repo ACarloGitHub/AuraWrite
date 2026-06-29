@@ -1,4 +1,4 @@
-import Tesseract, { Worker, PSM } from "tesseract.js";
+import Tesseract, { Worker, PSM, LoggerMessage } from "tesseract.js";
 import { OcrQuality, OcrPageType, OcrProgress } from "./ocr-types";
 
 let activeWorker: Worker | null = null;
@@ -10,6 +10,13 @@ const PSM_MAP: Record<OcrPageType, PSM> = {
   single_column: PSM.SINGLE_COLUMN,
   single_line: PSM.SINGLE_LINE,
 };
+
+export type OcrProgressCallback = (
+  status: string,
+  pageProgress: number,
+) => void;
+
+let activeLoggerCallback: OcrProgressCallback | null = null;
 
 export async function getOcrWorker(
   language: string,
@@ -32,17 +39,22 @@ export async function getOcrWorker(
       totalPages: 0,
     });
 
+    activeLoggerCallback = (status: string, pageProgress: number) => {
+      if (!onProgress) return;
+      onProgress({
+        status,
+        progress: pageProgress,
+        currentPage: 0,
+        totalPages: 0,
+      });
+    };
+
     const worker = await Tesseract.createWorker(language, undefined, {
       langPath: "/tessdata",
       gzip: true,
-      logger: (m) => {
-        if (onProgress && m.progress !== undefined) {
-          onProgress({
-            status: m.status || "Processing...",
-            progress: m.progress,
-            currentPage: 0,
-            totalPages: 0,
-          });
+      logger: (m: LoggerMessage) => {
+        if (activeLoggerCallback && m.progress !== undefined) {
+          activeLoggerCallback(m.status || "Processing...", m.progress);
         }
       },
     });
@@ -58,16 +70,29 @@ export async function recognizeImage(
   worker: Worker,
   imageSource: string | HTMLImageElement | HTMLCanvasElement | File,
   pageType: OcrPageType,
-): Promise<{ text: string; confidence: number }> {
+  outputFormats: { hocr?: boolean; tsv?: boolean; pdf?: boolean },
+): Promise<{ text: string; confidence: number; hocr: string | null; tsv: string | null; pdf: number[] | null }> {
   await worker.setParameters({
     tessedit_pageseg_mode: PSM_MAP[pageType],
   });
 
-  const result = await worker.recognize(imageSource);
+  const result = await worker.recognize(
+    imageSource,
+    {},
+    {
+      text: true,
+      hocr: outputFormats.hocr ?? false,
+      tsv: outputFormats.tsv ?? false,
+      pdf: outputFormats.pdf ?? false,
+    },
+  );
 
   return {
     text: result.data.text,
     confidence: result.data.confidence,
+    hocr: result.data.hocr ?? null,
+    tsv: result.data.tsv ?? null,
+    pdf: result.data.pdf ?? null,
   };
 }
 
@@ -76,6 +101,7 @@ export async function terminateOcrWorker(): Promise<void> {
     await activeWorker.terminate();
     activeWorker = null;
     workerLanguage = null;
+    activeLoggerCallback = null;
   }
 }
 

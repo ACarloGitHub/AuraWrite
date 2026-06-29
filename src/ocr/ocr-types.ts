@@ -38,12 +38,19 @@ export interface OcrPageResult {
   error?: string;
 }
 
+export interface OcrRawOutput {
+  hocr: string | null;
+  tsv: string | null;
+  pdf: number[] | null;
+}
+
 export interface OcrResult {
   pages: OcrPageResult[];
   language: string;
   quality: OcrQuality;
   totalPages: number;
   failedPages: number[];
+  rawOutputs: OcrRawOutput[];
 }
 
 export const OCR_DEFAULTS: OcrOptions = {
