@@ -3,6 +3,7 @@ import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupMCPPanel } from "./ai-panel/mcp-panel";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
+import { initOcrToolbar } from "./ocr/ocr-toolbar";
 import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey, getEffectiveProviderName } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
@@ -1411,6 +1412,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupMCPPanel();
   setupSuggestionsPanel(editorView);
   setupToolbar(editorView);
+  initOcrToolbar(() => editorView);
 
   const initialPrefs = loadAIFromPreferences();
   setContextFooterModel(initialPrefs.aiProvider, initialPrefs.aiModel);

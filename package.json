@@ -59,6 +59,8 @@
     "prosemirror-transform": "^1.12.0",
     "prosemirror-utils": "^1.2.2",
     "prosemirror-view": "^1.39.2",
-    "sortablejs": "^1.15.7"
+    "sortablejs": "^1.15.7",
+    "tesseract.js": "^7",
+    "pdfjs-dist": "^4"
   }
 }

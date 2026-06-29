@@ -50,6 +50,9 @@
           <button id="btn-find" class="toolbar__btn" title="Find & Replace (Ctrl+F / Ctrl+H)">
             <span class="toolbar__btn-icon">🔍</span>
           </button>
+          <button id="btn-ocr" class="toolbar__btn" title="OCR (Optical Character Recognition)">
+            <span class="toolbar__btn-icon">📄</span>
+          </button>
         </div>
 
         <!-- STYLE GROUP -->
@@ -299,6 +302,36 @@
         <label class="image-toolbar__field image-toolbar__field--caption" title="Image caption">Cap <input id="img-caption" type="text" value="" placeholder="caption" /></label>
         <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
+      </div>
+      <div id="ocr-bar" class="ocr-bar hidden">
+        <button id="ocr-load" class="ocr-bar__btn" title="Load file for OCR">📂 Load</button>
+        <span id="ocr-filename" class="ocr-bar__label">No file selected</span>
+        <div class="ocr-bar__separator"></div>
+        <label class="ocr-bar__field">Lang <select id="ocr-language" class="ocr-bar__select">
+          <option value="eng">English</option>
+          <option value="ita">Italiano</option>
+        </select></label>
+        <label class="ocr-bar__field">Quality <select id="ocr-quality" class="ocr-bar__select">
+          <option value="best">Quality</option>
+          <option value="fast">Fast</option>
+        </select></label>
+        <label class="ocr-bar__field">Mode <select id="ocr-page-type" class="ocr-bar__select">
+          <option value="full">Full page</option>
+          <option value="single_block">Single block</option>
+          <option value="single_column">Single column</option>
+          <option value="single_line">Single line</option>
+        </select></label>
+        <label id="ocr-range-label" class="ocr-bar__field" style="display:none">Pages <input id="ocr-page-range" type="text" class="ocr-bar__input" placeholder="e.g. 1-3,5" /></label>
+        <div class="ocr-bar__separator"></div>
+        <label class="ocr-bar__field"><input type="radio" name="ocr-output" id="ocr-output-insert" value="insert" checked /> Insert in editor</label>
+        <label class="ocr-bar__field"><input type="radio" name="ocr-output" id="ocr-output-save" value="save" /> Save to disk</label>
+        <div class="ocr-bar__separator"></div>
+        <button id="ocr-start" class="ocr-bar__btn ocr-bar__btn--primary" title="Start OCR" disabled>▶ Start</button>
+        <div id="ocr-progress-wrap" class="ocr-bar__progress-wrap hidden">
+          <div id="ocr-progress-bar" class="ocr-bar__progress-bar"></div>
+          <span id="ocr-progress-text" class="ocr-bar__label">Ready</span>
+        </div>
+        <button id="ocr-close" class="ocr-bar__btn" title="Close (Escape)">✕</button>
       </div>
       <main class="editor-container">
         <aside id="project-panel" class="project-panel hidden">
