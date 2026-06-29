@@ -21,6 +21,7 @@ import { listen as tauriListen } from "@tauri-apps/api/event";
 import { updateDownloadProgress, setDownloadRetryHandler } from "./download-toast";
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "./ai-panel/model-catalog";
 import { shouldShowWizard, showAIWizard } from "./setup/ai-wizard";
+import { shouldShowOcrAiWizard, showOcrAiWizard } from "./ocr/ocr-ai-wizard";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import {
   populateUserFontsInToolbar,
@@ -1364,6 +1365,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   // AI wizard first launch — only show after embeddings wizard is done
   if (shouldShowWizard() && localStorage.getItem(EMBED_ONBOARDING_KEY)) {
     showAIWizard();
+  }
+
+  // OCR AI wizard — show after AI wizard is dismissed (same session or next launch)
+  if (shouldShowOcrAiWizard()) {
+    if (!shouldShowWizard()) {
+      // AI wizard already dismissed — show OCR AI wizard now
+      showOcrAiWizard();
+    }
+    // If AI wizard is still pending, the OCR AI wizard will show on next app launch
+    // after the AI wizard is dismissed, or we can show it when AI wizard closes.
+    // We listen for the AI wizard modal closing to show OCR AI wizard immediately.
+    const aiWizardModal = document.getElementById("ai-wizard-modal");
+    if (aiWizardModal) {
+      const observer = new MutationObserver(() => {
+        if (aiWizardModal.classList.contains("hidden") && shouldShowOcrAiWizard()) {
+          observer.disconnect();
+          setTimeout(() => showOcrAiWizard(), 500);
+        }
+      });
+      observer.observe(aiWizardModal, { attributes: true, attributeFilter: ["class"] });
+    }
   }
 
   // Initialize project panel

@@ -302,7 +302,8 @@ function inlineToMarkdown(
 }
 
 export function fromMarkdown(markdown: string): any {
-  const lines = markdown.split("\n");
+  const preprocessed = preprocessOcrAiOutput(markdown);
+  const lines = preprocessed.split("\n");
   const content: any[] = [];
   let i = 0;
   let pendingPageBreak = false;
@@ -359,6 +360,20 @@ export function fromMarkdown(markdown: string): any {
       });
       pendingPageBreak = false;
       i++;
+      continue;
+    }
+
+    if (line.startsWith("|") && line.includes("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].startsWith("|") && lines[i].includes("|")) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const tableNode = parseMarkdownTable(tableLines, pendingPageBreak);
+      if (tableNode) {
+        content.push(tableNode);
+      }
+      pendingPageBreak = false;
       continue;
     }
 
@@ -436,6 +451,166 @@ export function fromMarkdown(markdown: string): any {
     type: "doc",
     content: content.length > 0 ? content : [{ type: "paragraph" }],
   };
+}
+
+function preprocessOcrAiOutput(text: string): string {
+  let result = text;
+
+  result = result.replace(/<div[^>]*>/gi, "");
+  result = result.replace(/<\/div>/gi, "\n");
+
+  result = result.replace(/<br\s*\/?>/gi, "\n");
+  result = result.replace(/<hr\s*\/?>/gi, "\n\n");
+
+  result = result.replace(/<center>/gi, "");
+  result = result.replace(/<\/center>/gi, "");
+
+  result = result.replace(/<i>(.*?)<\/i>/gi, "*$1*");
+  result = result.replace(/<b>(.*?)<\/b>/gi, "**$1**");
+  result = result.replace(/<strong>(.*?)<\/strong>/gi, "**$1**");
+  result = result.replace(/<em>(.*?)<\/em>/gi, "*$1*");
+  result = result.replace(/<u>(.*?)<\/u>/gi, "$1");
+
+  result = result.replace(/<sup>(.*?)<\/sup>/gi, "$1");
+  result = result.replace(/<sub>(.*?)<\/sub>/gi, "$1");
+
+  result = result.replace(/\$([^$]+)\$/g, "`$1`");
+
+  result = result.replace(/<span[^>]*>/gi, "");
+  result = result.replace(/<\/span>/gi, "");
+
+  result = result.replace(/<p[^>]*>/gi, "");
+  result = result.replace(/<\/p>/gi, "\n");
+
+  result = convertHtmlTablesToMarkdown(result);
+
+  result = result.replace(/<[^>]+>/g, "");
+
+  result = result.replace(/^[-*_]{3,}$/gm, "");
+
+  result = result.replace(/\n{3,}/g, "\n\n");
+
+  return result;
+}
+
+function convertHtmlTablesToMarkdown(html: string): string {
+  const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+  return html.replace(tableRegex, (_match, tableContent: string) => {
+    const rows: string[][] = [];
+
+    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let trMatch: RegExpExecArray | null;
+    while ((trMatch = trRegex.exec(tableContent)) !== null) {
+      const cells: string[] = [];
+      const cellRegex = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
+      let cellMatch: RegExpExecArray | null;
+      while ((cellMatch = cellRegex.exec(trMatch[1])) !== null) {
+        let cellText = cellMatch[1]
+          .replace(/<br\s*\/?>/gi, " ")
+          .replace(/<[^>]+>/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (cellText.includes("|")) {
+          cellText = cellText.replace(/\|/g, "\\|");
+        }
+        cells.push(cellText);
+      }
+      if (cells.length > 0) {
+        rows.push(cells);
+      }
+    }
+
+    if (rows.length === 0) return "";
+
+    const maxCols = Math.max(...rows.map((r) => r.length));
+    for (const row of rows) {
+      while (row.length < maxCols) {
+        row.push("");
+      }
+    }
+
+    const colWidths: number[] = [];
+    for (let c = 0; c < maxCols; c++) {
+      colWidths.push(
+        Math.max(3, ...rows.map((r) => r[c].length)),
+      );
+    }
+
+    let md = "";
+    const headerRow = rows[0];
+    md += "| " + headerRow.map((c, i) => c.padEnd(colWidths[i])).join(" | ") + " |\n";
+    md += "| " + colWidths.map((w) => "-".repeat(w)).join(" | ") + " |\n";
+
+    for (let r = 1; r < rows.length; r++) {
+      md +=
+        "| " +
+        rows[r].map((c, i) => c.padEnd(colWidths[i])).join(" | ") +
+        " |\n";
+    }
+
+    return md;
+  });
+}
+
+function parseMarkdownTable(lines: string[], pageBreak: boolean): any | null {
+  if (lines.length < 2) return null;
+
+  const headerCells = parseTableRow(lines[0]);
+  if (headerCells.length === 0) return null;
+
+  const isSeparator = (s: string) => /^[\s|:-]+$/.test(s) && s.includes("-");
+  let dataStart = 1;
+  if (lines.length > 1 && isSeparator(lines[1])) {
+    dataStart = 2;
+  }
+
+  const rows: any[] = [];
+  for (let c = 0; c < headerCells.length; c++) {
+    rows.push({
+      type: "table_cell",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: headerCells[c], marks: [{ type: "strong" }] }],
+        },
+      ],
+    });
+  }
+
+  const dataRows: any[] = [];
+  for (let r = dataStart; r < lines.length; r++) {
+    const cells = parseTableRow(lines[r]);
+    const rowCells: any[] = [];
+    for (let c = 0; c < headerCells.length; c++) {
+      const text = cells[c] || "";
+      rowCells.push({
+        type: "table_cell",
+        content: [
+          {
+            type: "paragraph",
+            content: text ? [{ type: "text", text }] : [],
+          },
+        ],
+      });
+    }
+    dataRows.push({ type: "table_row", content: rowCells });
+  }
+
+  return {
+    type: "table",
+    attrs: { pageBreakBefore: pageBreak },
+    content: [
+      { type: "table_row", content: rows },
+      ...dataRows,
+    ],
+  };
+}
+
+function parseTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.substring(1);
+  if (trimmed.endsWith("|")) trimmed = trimmed.substring(0, trimmed.length - 1);
+  return trimmed.split("|").map((c) => c.trim());
 }
 
 function parseInlineMarkdown(text: string): any[] {

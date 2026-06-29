@@ -307,10 +307,20 @@
         <button id="ocr-load" class="ocr-bar__btn" title="Load file for OCR">📂 Load</button>
         <span id="ocr-filename" class="ocr-bar__label">No file selected</span>
         <div class="ocr-bar__separator"></div>
-        <label class="ocr-bar__field">Lang <select id="ocr-language" class="ocr-bar__select">
+        <label class="ocr-bar__field">Engine <select id="ocr-engine" class="ocr-bar__select">
+          <option value="tesseract">Tesseract</option>
+          <option value="ai">AI (LightOnOCR)</option>
+        </select></label>
+        <div id="ocr-ai-quant-wrap" class="ocr-bar__field hidden">
+          <label class="ocr-bar__field">Model <select id="ocr-ai-quant" class="ocr-bar__select">
+            <option value="q8_0">LightOnOCR Q8_0</option>
+          </select></label>
+        </div>
+        <div class="ocr-bar__separator"></div>
+        <label id="ocr-lang-wrap" class="ocr-bar__field">Lang <select id="ocr-language" class="ocr-bar__select">
           <!-- populated dynamically by ocr-toolbar.ts -->
         </select></label>
-        <label class="ocr-bar__field">Quality <select id="ocr-quality" class="ocr-bar__select">
+        <label id="ocr-quality-wrap" class="ocr-bar__field">Quality <select id="ocr-quality" class="ocr-bar__select">
           <option value="best">Best</option>
           <option value="medium">Medium</option>
           <option value="fast">Fast</option>
@@ -1205,7 +1215,20 @@
             <!-- TAB: OCR -->
             <div class="pref-tab-content" data-tab="ocr">
               <div class="preference-group">
-                <h3>OCR Languages</h3>
+                <h3>OCR AI Model (LightOnOCR)</h3>
+                <p class="preference-hint">
+                  LightOnOCR 2 1B is an AI vision model that reads text from images/PDFs
+                  with high accuracy. It supports English, Italian, French, German, Spanish,
+                  Portuguese, Dutch, Swedish, Danish, Chinese, and Japanese. For Russian,
+                  Arabic, and Hindi, Tesseract is used as fallback.
+                </p>
+                <p id="ocr-ai-vram-info" class="preference-hint"></p>
+                <div id="ocr-ai-model-list" class="preference-group">
+                  <p class="preference-hint">Loading AI model list...</p>
+                </div>
+              </div>
+              <div class="preference-group">
+                <h3>Tesseract Languages</h3>
                 <p class="preference-hint">
                   Manage Tesseract OCR language data. English and Italian are pre-bundled
                   with AuraWrite. Additional languages can be downloaded on demand.
@@ -1423,6 +1446,23 @@
           <button id="ai-wizard-back" class="pref-btn" style="display:none;">Back</button>
           <button id="ai-wizard-skip" class="pref-btn" style="display:none;">Skip for now</button>
           <button id="ai-wizard-next" class="pref-btn pref-btn-primary">Get Started</button>
+        </div>
+      </div>
+    </div>
+    <div id="ocr-ai-wizard-modal" class="modal hidden">
+      <div class="modal-overlay"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="ocr-ai-wizard-title">Set Up OCR AI</h2>
+          <button id="ocr-ai-wizard-close" class="modal-close">×</button>
+        </div>
+        <div class="modal-body" id="ocr-ai-wizard-body" style="padding: var(--spacing-md);">
+          <!-- Step content injected by JS -->
+        </div>
+        <div class="modal-footer" style="padding: var(--spacing-md); display: flex; justify-content: flex-end; gap: 8px;">
+          <button id="ocr-ai-wizard-back" class="pref-btn" style="display:none;">Back</button>
+          <button id="ocr-ai-wizard-skip" class="pref-btn" style="display:none;">Skip for now</button>
+          <button id="ocr-ai-wizard-next" class="pref-btn pref-btn-primary">Get Started</button>
         </div>
       </div>
     </div>

@@ -7,8 +7,12 @@ import {
   getFormatFromPath,
 } from "./ocr-processor";
 import { terminateOcrWorker } from "./ocr-engine";
+import { runOcrAi, ocrAiListModels, ocrAiDownloadModel, isOcrAiLanguageSupported, cancelOcrAi, OCR_AI_SUPPORTED_LANGUAGES, TESSERACT_FALLBACK_LANGUAGES } from "./ocr-ai-engine";
+import { fromMarkdown } from "../formats/markdown";
 import { OcrOptions, OcrQuality, OcrProgress, OcrFileFormat } from "./ocr-types";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { fromMarkdownToDocx, Packer } from "../formats/docx";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EditorViewLike = { state: any; dispatch: any; focus: () => void };
@@ -27,6 +31,7 @@ let ocrBar: HTMLElement | null = null;
 let currentFile: string | null = null;
 let isRunning = false;
 let ocrCancelled = false;
+let currentEngine: "tesseract" | "ai" = "tesseract";
 
 let progressCurrentPage = 0;
 let progressTotalPages = 0;
@@ -45,6 +50,43 @@ function updateStartButton(): void {
   if (stopBtn) {
     stopBtn.disabled = !isRunning;
     stopBtn.style.display = isRunning ? "" : "none";
+  }
+}
+
+function updateEngineUI(): void {
+  const quantWrap = $("ocr-ai-quant-wrap");
+  const langWrap = $("ocr-lang-wrap");
+  const qualityWrap = $("ocr-quality-wrap");
+
+  if (currentEngine === "ai") {
+    quantWrap?.classList.add("hidden");
+    qualityWrap?.classList.add("hidden");
+    if (langWrap) {
+      const select = langWrap.querySelector("select") as HTMLSelectElement | null;
+      if (select) {
+        select.innerHTML = "";
+        for (const lang of OCR_AI_SUPPORTED_LANGUAGES) {
+          const opt = document.createElement("option");
+          opt.value = lang.code;
+          opt.textContent = lang.name;
+          select.appendChild(opt);
+        }
+        const fallbackGroup = document.createElement("optgroup");
+        fallbackGroup.label = "Fallback to Tesseract";
+        for (const lang of TESSERACT_FALLBACK_LANGUAGES) {
+          const opt = document.createElement("option");
+          opt.value = lang.code;
+          opt.textContent = `${lang.name} (Tesseract)`;
+          fallbackGroup.appendChild(opt);
+        }
+        select.appendChild(fallbackGroup);
+        select.value = "eng";
+      }
+    }
+  } else {
+    quantWrap?.classList.add("hidden");
+    qualityWrap?.classList.remove("hidden");
+    void refreshLanguageDropdown();
   }
 }
 
@@ -114,6 +156,8 @@ function showModal(title: string, message: string): void {
 }
 
 async function refreshLanguageDropdown(): Promise<void> {
+  if (currentEngine !== "tesseract") return;
+
   const select = $("ocr-language") as HTMLSelectElement | null;
   if (!select) return;
 
@@ -136,7 +180,6 @@ async function refreshLanguageDropdown(): Promise<void> {
     select.appendChild(opt);
   }
 
-  // Restore previous selection if still available.
   if (current && Array.from(select.options).some((o) => o.value === current)) {
     select.value = current;
   } else {
@@ -173,12 +216,145 @@ function getOptions(): Partial<OcrOptions> {
   return { language, quality, outputMode, pageRange };
 }
 
+async function pickOcrAiSavePath(defaultName: string): Promise<string | null> {
+  const selected = await save({
+    defaultPath: defaultName,
+    filters: [
+      { name: "Word Document", extensions: ["docx"] },
+      { name: "Markdown", extensions: ["md"] },
+      { name: "Plain Text", extensions: ["txt"] },
+    ],
+  });
+  if (!selected || typeof selected !== "string") return null;
+  return selected;
+}
+
+async function runOcrAiAndInsert(
+  filePath: string,
+  quantization: string,
+  onProgress: (p: OcrProgress) => void,
+): Promise<void> {
+  const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked
+    ? "insert"
+    : "save";
+
+  const pageRangeStr = ($("ocr-page-range") as HTMLInputElement | null)?.value?.trim() ?? "";
+  let pageRange: { start: number; end: number } | null = null;
+  if (pageRangeStr && filePath.toLowerCase().endsWith(".pdf")) {
+    const hyphenParts = pageRangeStr.split("-");
+    if (hyphenParts.length === 2) {
+      const start = parseInt(hyphenParts[0], 10);
+      const end = parseInt(hyphenParts[1], 10);
+      if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
+        pageRange = { start, end };
+      }
+    } else {
+      const single = parseInt(pageRangeStr, 10);
+      if (!isNaN(single) && single > 0) {
+        pageRange = { start: single, end: single };
+      }
+    }
+  }
+
+  const result = await runOcrAi(filePath, quantization, onProgress, pageRange);
+
+  if (result.failedPages.length > 0 && result.pages.some((p) => !p.error)) {
+    const failedList = result.failedPages.join(", ");
+    showModal(
+      "OCR AI Completed with Errors",
+      `OCR AI finished, but ${result.failedPages.length} page(s) failed: ${failedList}.\n\nSuccessful pages have been processed.`,
+    );
+  } else if (result.failedPages.length === result.pages.length) {
+    showModal("OCR AI Failed", "All pages failed. Check that the OCR AI model is working correctly.");
+    return;
+  }
+
+  const fullText = result.pages
+    .filter((p) => !p.error)
+    .map((p) => p.text)
+    .join("\n\n");
+
+  if (!fullText.trim()) {
+    showModal("OCR AI Result", "No text was recognized from the document.");
+    return;
+  }
+
+  if (outputMode === "insert") {
+    const editorView = (window as any)._auraWriteEditorView as EditorViewLike | null;
+    if (editorView) {
+      const doc = fromMarkdown(fullText);
+      const schema = editorView.state.schema;
+      const nodes: any[] = [];
+
+      for (const node of doc.content || []) {
+        const pmNode = schema.nodeFromJSON(node);
+        if (pmNode) {
+          nodes.push(pmNode);
+        }
+      }
+
+      if (nodes.length > 0) {
+        const tr = editorView.state.tr.insert(
+          editorView.state.selection.from,
+          nodes,
+        );
+        editorView.dispatch(tr);
+        editorView.focus();
+      }
+    } else {
+      showModal(
+        "OCR AI Result",
+        'No document is open in the editor. Use "Save to disk" instead.',
+      );
+    }
+  } else {
+    const defaultName =
+      filePath
+        .replace(/\\/g, "/")
+        .split("/")
+        .pop()
+        ?.replace(/\.[^.]+$/, "") ?? "ocr_result";
+    const savePath = await pickOcrAiSavePath(`${defaultName}_ocr_ai`);
+    if (!savePath) return;
+
+    const ext = savePath.split(".").pop()?.toLowerCase() ?? "txt";
+
+    if (ext === "docx") {
+      const docxDoc = fromMarkdownToDocx(fullText);
+      const base64 = await Packer.toBase64String(docxDoc);
+      await invoke("save_binary_file", { path: savePath, base64Content: base64 });
+    } else if (ext === "md") {
+      await invoke("save_document", { path: savePath, content: fullText });
+    } else {
+      const plainText = result.pages
+        .filter((p) => !p.error)
+        .map((p) => p.text.replace(/[#*_`>\[\]()]/g, "").trim())
+        .join("\n\n");
+      await invoke("save_document", { path: savePath, content: plainText });
+    }
+    showModal("OCR AI Complete", `File saved to:\n${savePath}`);
+  }
+}
+
 export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): void {
   const bar = $("ocr-bar");
   if (!bar) return;
   ocrBar = bar;
 
+  (window as any)._auraWriteEditorView = editorViewGetter();
+
   void refreshLanguageDropdown();
+
+  const engineSelect = $("ocr-engine") as HTMLSelectElement | null;
+  if (engineSelect) {
+    engineSelect.addEventListener("change", () => {
+      currentEngine = engineSelect.value as "tesseract" | "ai";
+      updateEngineUI();
+    });
+  }
+
+  // Initialize UI state based on default engine
+  updateEngineUI();
 
   const btnOcr = $("btn-ocr");
   btnOcr?.addEventListener("click", () => {
@@ -198,7 +374,11 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
   $("ocr-stop")?.addEventListener("click", async () => {
     if (!isRunning) return;
     ocrCancelled = true;
-    await terminateOcrWorker();
+    if (currentEngine === "ai") {
+      cancelOcrAi();
+    } else {
+      await terminateOcrWorker();
+    }
   });
 
   $("ocr-load")?.addEventListener("click", async () => {
@@ -227,64 +407,85 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
     if (progressWrap) progressWrap.classList.remove("hidden");
     if (progressFill) progressFill.style.width = "0%";
 
-    const options = getOptions();
-
     try {
-      const result = await runOcr(currentFile, options, onProgress);
+      if (currentEngine === "ai") {
+        const quantization = ($("ocr-ai-quant") as HTMLSelectElement | null)?.value ?? "q8_0";
+        const lang = ($("ocr-language") as HTMLSelectElement | null)?.value ?? "eng";
 
-      if (result.failedPages.length > 0) {
-        const failedList = result.failedPages.join(", ");
-        showModal(
-          "OCR Completed with Errors",
-          `OCR finished, but the following pages failed: ${failedList}.\n\nYou can retry the failed pages individually.`,
-        );
-      }
-
-      const editorView = editorViewGetter();
-
-      if (options.outputMode === "insert") {
-        if (editorView) {
-          const text = resultToPlainText(result);
-          if (text) {
-            const schema = editorView.state.schema;
-            const lines = text.split("\n");
-            const nodes = lines.map((line: string) =>
-              schema.nodes.paragraph.create(null, line ? schema.text(line) : null)
-            );
-            const tr = editorView.state.tr.insert(
-              editorView.state.selection.from,
-              nodes,
-            );
-            editorView.dispatch(tr);
-            editorView.focus();
-          } else {
-            showModal("OCR Result", "No text was recognized from the document.");
-          }
-        } else {
+        if (!isOcrAiLanguageSupported(lang)) {
           showModal(
-            "OCR Result",
-            'No document is open in the editor. Use "Save to disk" instead.',
+            "Language Not Supported by AI",
+            `The language "${lang}" is not supported by LightOnOCR AI. It will fall back to Tesseract.\n\nSupported languages: en, fr, de, es, it, pt, nl, sv, da, zh, ja`,
           );
+          const options = getOptions();
+          const result = await runOcr(currentFile, options, onProgress);
+          // ...handle Tesseract fallback result same as below
+          return;
         }
-      } else {
-        const defaultName =
-          currentFile
-            .replace(/\\/g, "/")
-            .split("/")
-            .pop()
-            ?.replace(/\.[^.]+$/, "") ?? "ocr_result";
-        const savePath = await pickSavePath(`${defaultName}_ocr`);
-        if (savePath) {
-          const format: OcrFileFormat = getFormatFromPath(savePath);
-          await saveResultToDisk(result, savePath, format);
-          showModal("OCR Complete", `File saved to:\n${savePath}`);
-        }
-      }
 
-      if (result.failedPages.length === 0) {
+        await runOcrAiAndInsert(currentFile, quantization, onProgress);
+
         const progressText = $("ocr-progress-text");
         if (progressText) progressText.textContent = "Done";
         if (progressFill) progressFill.style.width = "100%";
+      } else {
+        const options = getOptions();
+        const result = await runOcr(currentFile, options, onProgress);
+
+        if (result.failedPages.length > 0) {
+          const failedList = result.failedPages.join(", ");
+          showModal(
+            "OCR Completed with Errors",
+            `OCR finished, but the following pages failed: ${failedList}.\n\nYou can retry the failed pages individually.`,
+          );
+        }
+
+        const editorView = editorViewGetter();
+
+        if (options.outputMode === "insert") {
+          if (editorView) {
+            const text = resultToPlainText(result);
+            if (text) {
+              const schema = editorView.state.schema;
+              const lines = text.split("\n");
+              const nodes = lines.map((line: string) =>
+                schema.nodes.paragraph.create(null, line ? schema.text(line) : null)
+              );
+              const tr = editorView.state.tr.insert(
+                editorView.state.selection.from,
+                nodes,
+              );
+              editorView.dispatch(tr);
+              editorView.focus();
+            } else {
+              showModal("OCR Result", "No text was recognized from the document.");
+            }
+          } else {
+            showModal(
+              "OCR Result",
+              'No document is open in the editor. Use "Save to disk" instead.',
+            );
+          }
+        } else {
+          const defaultName =
+            currentFile
+              .replace(/\\/g, "/")
+              .split("/")
+              .pop()
+              ?.replace(/\.[^.]+$/, "") ?? "ocr_result";
+          const savePath = await pickSavePath(`${defaultName}_ocr`);
+          if (savePath) {
+            const format: OcrFileFormat = getFormatFromPath(savePath);
+            await saveResultToDisk(result, savePath, format);
+            showModal("OCR Complete", `File saved to:\n${savePath}`);
+          }
+        }
+
+        if (result.failedPages.length === 0) {
+          const progressText = $("ocr-progress-text");
+          if (progressText) progressText.textContent = "Done";
+          if (progressFill) progressFill.style.width = "100%";
+        }
       }
     } catch (err) {
       if (ocrCancelled) {
@@ -301,11 +502,14 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
       isRunning = false;
       ocrCancelled = false;
       updateStartButton();
+      const progressWrap = $("ocr-progress-wrap");
       setTimeout(() => {
         if (progressWrap) progressWrap.classList.add("hidden");
       }, 2000);
     }
   });
+
+  updateEngineUI();
 }
 
 export function hideOcrBar(): void {

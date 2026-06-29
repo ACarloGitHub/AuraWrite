@@ -22,13 +22,13 @@ export const pageBreakPlugin = new Plugin({
 
                 const label = document.createElement("span");
                 label.className = "page-break-label";
-                label.textContent = "⏎ Nuova Pagina";
+                label.textContent = "⏎ Page Break";
                 wrapper.appendChild(label);
 
                 const removeBtn = document.createElement("button");
                 removeBtn.className = "page-break-remove";
                 removeBtn.textContent = "×";
-                removeBtn.title = "Rimuovi page break";
+                removeBtn.title = "Remove page break";
                 removeBtn.addEventListener("click", (e) => {
                   e.preventDefault();
                   e.stopPropagation();

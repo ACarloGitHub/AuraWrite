@@ -1535,3 +1535,192 @@ function getHeadingLevel(level: number): (typeof HeadingLevel)[keyof typeof Head
 }
 
 export { Packer };
+
+export function fromMarkdownToDocx(markdown: string): Document {
+  const lines = markdown.split("\n");
+  const children: (Paragraph | Table)[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.startsWith("#")) {
+      const match = line.match(/^(#{1,6})\s+(.*)/);
+      if (match) {
+        const level = match[1].length;
+        const text = match[2];
+        children.push(new Paragraph({
+          heading: getHeadingLevel(level),
+          children: [new TextRun({ text })],
+        }));
+        i++;
+        continue;
+      }
+    }
+
+    if (line.startsWith(">")) {
+      const quoteLines = [line.substring(1).trim()];
+      i++;
+      while (i < lines.length && lines[i].startsWith(">")) {
+        quoteLines.push(lines[i].substring(1).trim());
+        i++;
+      }
+      children.push(new Paragraph({
+        style: "IntenseQuote",
+        children: [new TextRun({ text: quoteLines.join(" ") })],
+      }));
+      continue;
+    }
+
+    if (line.startsWith("```")) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++;
+      children.push(new Paragraph({
+        children: [new TextRun({ text: codeLines.join("\n"), font: "Courier New", size: 20 })],
+        shading: { fill: "F5F5F5" },
+        indent: { left: 360 },
+        spacing: { before: 80, after: 80, line: 240 },
+      }));
+      continue;
+    }
+
+    if (line.startsWith("|") && line.includes("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].startsWith("|") && lines[i].includes("|")) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const parsed = parseMdTableToDocxRows(tableLines);
+      if (parsed) {
+        children.push(parsed);
+      }
+      continue;
+    }
+
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      const items: string[] = [];
+      while (i < lines.length && (lines[i].startsWith("- ") || lines[i].startsWith("* "))) {
+        items.push(lines[i].substring(2).trim());
+        i++;
+      }
+      for (const item of items) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: `\u2022 ${item}` })],
+          indent: { left: 360 },
+        }));
+      }
+      continue;
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s/, "").trim());
+        i++;
+      }
+      for (let j = 0; j < items.length; j++) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: `${j + 1}. ${items[j]}` })],
+          indent: { left: 360 },
+        }));
+      }
+      continue;
+    }
+
+    if (line === "---" || line === "***") {
+      i++;
+      continue;
+    }
+
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+
+    const runs = parseInlineMarkdownToRuns(line);
+    children.push(new Paragraph({ children: runs, spacing: { after: 200 } }));
+    i++;
+  }
+
+  if (children.length === 0) {
+    children.push(new Paragraph({ children: [new TextRun("")] }));
+  }
+
+  const margins = getMargins();
+  const pxToTwip = (px: number) => px * 15;
+
+  return new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: { width: pxToTwip(PAGE_WIDTH_PX), height: pxToTwip(PAGE_HEIGHT_PX) },
+          margin: {
+            top: pxToTwip(margins.top),
+            bottom: pxToTwip(margins.bottom),
+            left: pxToTwip(margins.left),
+            right: pxToTwip(margins.right),
+            header: pxToTwip(PAGE_HEADER_PX),
+            footer: pxToTwip(PAGE_FOOTER_PX),
+          },
+        },
+      },
+      children,
+    }],
+  });
+}
+
+function parseInlineMarkdownToRuns(text: string): (TextRun | ExternalHyperlink)[] {
+  const runs: (TextRun | ExternalHyperlink)[] = [];
+  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[(.+?)\]\((.+?)\)|[^*\[`]+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match[2]) {
+      runs.push(new TextRun({ text: match[2], bold: true, italics: true }));
+    } else if (match[3]) {
+      runs.push(new TextRun({ text: match[3], bold: true }));
+    } else if (match[4]) {
+      runs.push(new TextRun({ text: match[4], italics: true }));
+    } else if (match[5]) {
+      runs.push(new TextRun({ text: match[5], font: "Courier New" }));
+    } else if (match[6] && match[7]) {
+      runs.push(new ExternalHyperlink({
+        link: match[7],
+        children: [new TextRun({ text: match[6] })],
+      }));
+    } else if (match[0]) {
+      runs.push(new TextRun({ text: match[0] }));
+    }
+  }
+
+  if (runs.length === 0) {
+    runs.push(new TextRun({ text }));
+  }
+
+  return runs;
+}
+
+function parseMdTableToDocxRows(tableLines: string[]): Table | null {
+  if (tableLines.length < 2) return null;
+
+  const dataLines = tableLines.filter((line, idx) => idx !== 1);
+  if (dataLines.length === 0) return null;
+
+  const rows: TableRow[] = [];
+  for (const line of dataLines) {
+    const cells = line.split("|").map(c => c.trim()).filter(c => c.length > 0);
+    rows.push(new TableRow({
+      children: cells.map(cell => new TableCell({
+        children: [new Paragraph({ children: [new TextRun({ text: cell })] })],
+        width: { size: Math.floor(9000 / Math.max(cells.length, 1)), type: WidthType.DXA },
+      })),
+    }));
+  }
+
+  return new Table({ rows, width: { size: 9000, type: WidthType.DXA } });
+}

@@ -26,6 +26,7 @@ mod rag_tools;
 mod exec_tools;
 mod data_privacy;
 mod ocr;
+mod ocr_ai;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -44,6 +45,7 @@ use rag_tools::*;
 use exec_tools::*;
 use data_privacy::*;
 use ocr::*;
+use ocr_ai::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -1389,6 +1391,15 @@ pub fn run() {
             ocr_prepare_model,
             ocr_get_tessdata_dir,
             ocr_save_bundled_medium,
+            // OCR AI (LightOnOCR)
+            ocr_ai_list_models,
+            ocr_ai_download_model,
+            ocr_ai_remove_model,
+            ocr_ai_check_vram,
+            ocr_ai_spawn_server,
+            ocr_ai_stop_server,
+            ocr_ai_server_status,
+            ocr_ai_read_log,
             // Data & Privacy
             data_stats,
             chat_stats,

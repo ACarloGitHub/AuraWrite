@@ -30,7 +30,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// so any Command::new() for console programs (tasklist, taskkill, where, etc.)
 /// would flash a terminal window. This helper adds CREATE_NO_WINDOW on Windows
 /// to suppress that.
-fn silent_command(program: &str) -> Command {
+pub fn silent_command(program: &str) -> Command {
     let cmd = Command::new(program);
     #[cfg(target_os = "windows")]
     let cmd = {
@@ -49,7 +49,7 @@ const NOMIC_LICENSE: &str = "Apache-2.0";
 const LLAMACPP_LICENSE: &str = "MIT";
 const NOMIC_SHA256_EXPECTED: &str = "6E7A7E594A26985523C18383ABA4AAD39FE6E14F08FFC6AB5B554E1CCDC3CFF";
 
-fn resources_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn resources_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
         .path()
         .app_data_dir()
@@ -89,7 +89,7 @@ fn llamacpp_embeddings_dir(resources: &Path) -> PathBuf {
     resources.join("llama.cpp-embeddings")
 }
 
-fn llamacpp_ai_dir(resources: &Path) -> PathBuf {
+pub fn llamacpp_ai_dir(resources: &Path) -> PathBuf {
     resources.join("llama.cpp")
 }
 
@@ -139,7 +139,7 @@ fn is_zip_url(url: &str) -> bool {
     url.to_lowercase().ends_with(".zip")
 }
 
-fn llamacpp_binary_name() -> &'static str {
+pub fn llamacpp_binary_name() -> &'static str {
     if cfg!(target_os = "windows") {
         "llama-server.exe"
     } else {
@@ -278,7 +278,7 @@ pub fn resources_nomic_sha256(app: AppHandle) -> Result<String, String> {
     sha256_string(&model_path).ok_or_else(|| "failed to hash model".to_string())
 }
 
-async fn download_to_file_async(
+pub async fn download_to_file_async(
     app: &tauri::AppHandle,
     id: &str,
     name: &str,
@@ -663,7 +663,7 @@ fn extract_tar_gz(tar_gz_path: &Path, dest_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn find_binary_in_dir(root: &Path, name: &str) -> Result<std::path::PathBuf, String> {
+pub fn find_binary_in_dir(root: &Path, name: &str) -> Result<std::path::PathBuf, String> {
     if !root.exists() {
         return Err(format!("Root directory does not exist: {}", root.display()));
     }
@@ -1454,7 +1454,7 @@ fn detect_nvidia_gpu() -> Vec<GpuInfo> {
     gpus
 }
 
-fn detect_gpu_windows() -> Vec<GpuInfo> {
+pub fn detect_gpu_windows() -> Vec<GpuInfo> {
     let mut gpus = detect_nvidia_gpu();
     if !gpus.is_empty() {
         return gpus;
@@ -1509,7 +1509,7 @@ fn detect_gpu_windows() -> Vec<GpuInfo> {
     gpus
 }
 
-fn detect_gpu_macos() -> Vec<GpuInfo> {
+pub fn detect_gpu_macos() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
     if let Ok(output) = silent_command("system_profiler")
         .args(["SPDisplaysDataType", "-json"])
@@ -1560,7 +1560,7 @@ fn detect_gpu_macos() -> Vec<GpuInfo> {
     gpus
 }
 
-fn detect_gpu_linux() -> Vec<GpuInfo> {
+pub fn detect_gpu_linux() -> Vec<GpuInfo> {
     let mut gpus = detect_nvidia_gpu();
     if !gpus.is_empty() {
         return gpus;
@@ -1626,7 +1626,7 @@ fn parse_vram_string(s: &str) -> u64 {
     }
 }
 
-fn recommended_variant(gpus: &[GpuInfo]) -> String {
+pub fn recommended_variant(gpus: &[GpuInfo]) -> String {
     if cfg!(target_os = "macos") {
         return "metal".to_string();
     }
@@ -1847,10 +1847,10 @@ fn extract_mib(line: &str) -> u64 {
 static LLAMA_SERVER: OnceLock<Mutex<Option<LlamaServerState>>> = OnceLock::new();
 static LLAMA_EMBEDDINGS_SERVER: OnceLock<Mutex<Option<LlamaServerState>>> = OnceLock::new();
 
-struct LlamaServerState {
-    pid: u32,
-    port: u16,
-    model_path: String,
+pub struct LlamaServerState {
+    pub pid: u32,
+    pub port: u16,
+    pub model_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2267,7 +2267,7 @@ pub async fn llamacpp_embeddings_server_status() -> Result<LlamaServerStatus, St
     .await.map_err(|e| format!("join error: {}", e))?
 }
 
-fn is_process_alive(pid: u32) -> bool {
+pub fn is_process_alive(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
         let result = silent_command("tasklist")
