@@ -3,7 +3,6 @@ import { OcrQuality, OcrPageType, OcrProgress } from "./ocr-types";
 
 let activeWorker: Worker | null = null;
 let workerLanguage: string | null = null;
-let workerQuality: OcrQuality | null = null;
 
 const PSM_MAP: Record<OcrPageType, PSM> = {
   full: PSM.AUTO,
@@ -12,21 +11,21 @@ const PSM_MAP: Record<OcrPageType, PSM> = {
   single_line: PSM.SINGLE_LINE,
 };
 
+const TESSERACT_WORKER_PATH = "/tesseract/worker.min.js";
+const TESSERACT_CORE_PATH = "/tesseract";
+const TESSERACT_LANG_PATH = "/tessdata";
+
 export async function getOcrWorker(
   language: string,
-  quality: OcrQuality,
+  _quality: OcrQuality,
   onProgress?: (progress: OcrProgress) => void,
 ): Promise<Worker> {
-  const needsNewWorker =
-    !activeWorker ||
-    workerLanguage !== language ||
-    workerQuality !== quality;
+  const needsNewWorker = !activeWorker || workerLanguage !== language;
 
   if (activeWorker && needsNewWorker) {
     await activeWorker.terminate();
     activeWorker = null;
     workerLanguage = null;
-    workerQuality = null;
   }
 
   if (!activeWorker) {
@@ -38,6 +37,10 @@ export async function getOcrWorker(
     });
 
     const worker = await Tesseract.createWorker(language, undefined, {
+      workerPath: TESSERACT_WORKER_PATH,
+      corePath: TESSERACT_CORE_PATH,
+      langPath: TESSERACT_LANG_PATH,
+      gzip: true,
       logger: (m) => {
         if (onProgress && m.progress !== undefined) {
           onProgress({
@@ -52,7 +55,6 @@ export async function getOcrWorker(
 
     activeWorker = worker;
     workerLanguage = language;
-    workerQuality = quality;
   }
 
   return activeWorker;
@@ -80,7 +82,6 @@ export async function terminateOcrWorker(): Promise<void> {
     await activeWorker.terminate();
     activeWorker = null;
     workerLanguage = null;
-    workerQuality = null;
   }
 }
 

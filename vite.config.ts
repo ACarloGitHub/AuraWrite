@@ -25,4 +25,7 @@ export default defineConfig(async () => ({
       "@": resolve(__dirname, "src"),
     },
   },
+  optimizeDeps: {
+    exclude: ["tesseract.js-core"],
+  },
 }));
