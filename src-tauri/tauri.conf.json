@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' asset: http://asset.localhost ipc: http://ipc.localhost https://cdn.jsdelivr.net https://github.com; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:",
       "assetProtocol": {
         "enable": true,
         "scope": [

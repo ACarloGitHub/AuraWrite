@@ -25,6 +25,7 @@ mod fs_tools;
 mod rag_tools;
 mod exec_tools;
 mod data_privacy;
+mod ocr;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -42,6 +43,7 @@ use fs_tools::*;
 use rag_tools::*;
 use exec_tools::*;
 use data_privacy::*;
+use ocr::*;
 
 // State containing the database connection
 pub struct AppState {
@@ -1379,6 +1381,14 @@ pub fn run() {
             exec_kill,
             exec_list,
             exec_clean,
+            // OCR language management
+            ocr_list_languages,
+            ocr_is_installed,
+            ocr_download_language,
+            ocr_remove_language,
+            ocr_prepare_model,
+            ocr_get_tessdata_dir,
+            ocr_save_bundled_medium,
             // Data & Privacy
             data_stats,
             chat_stats,

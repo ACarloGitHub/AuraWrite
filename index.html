@@ -308,11 +308,11 @@
         <span id="ocr-filename" class="ocr-bar__label">No file selected</span>
         <div class="ocr-bar__separator"></div>
         <label class="ocr-bar__field">Lang <select id="ocr-language" class="ocr-bar__select">
-          <option value="eng">English</option>
-          <option value="ita">Italiano</option>
+          <!-- populated dynamically by ocr-toolbar.ts -->
         </select></label>
         <label class="ocr-bar__field">Quality <select id="ocr-quality" class="ocr-bar__select">
           <option value="best">Best</option>
+          <option value="medium">Medium</option>
           <option value="fast">Fast</option>
         </select></label>
         <div class="ocr-bar__separator"></div>
@@ -322,6 +322,7 @@
         <label class="ocr-bar__field"><input type="radio" name="ocr-output" id="ocr-output-save" value="save" /> Save to disk</label>
         <div class="ocr-bar__separator"></div>
         <button id="ocr-start" class="ocr-bar__btn ocr-bar__btn--primary" title="Start OCR" disabled>▶ Start</button>
+        <button id="ocr-stop" class="ocr-bar__btn ocr-bar__btn--danger" title="Stop OCR" disabled style="display:none;">■ Stop</button>
         <div id="ocr-progress-wrap" class="ocr-bar__progress-wrap hidden">
           <div id="ocr-progress-bar" class="ocr-bar__progress-bar"><div id="ocr-progress-fill" class="ocr-bar__progress-fill"></div></div>
           <span id="ocr-progress-text" class="ocr-bar__label">Ready</span>
@@ -544,6 +545,7 @@
             <button class="pref-tab" data-tab="fonts">Fonts</button>
             <button class="pref-tab" data-tab="agent">Agent</button>
             <button class="pref-tab" data-tab="security">Security & Privacy</button>
+            <button class="pref-tab" data-tab="ocr">OCR</button>
             <button class="pref-tab" data-tab="maintenance">Maintenance</button>
           </div>
           <div class="modal-body">
@@ -1197,6 +1199,20 @@
                 <span class="preference-hint">Delete all files inside the workspace (plans, drafts, notes, attachments). The workspace folder itself is kept.</span>
                 <div class="folder-row">
                   <button id="pref-agent-reset-workspace" class="btn-small" style="color: var(--color-danger, #e53e3e);">Reset workspace</button>
+                </div>
+              </div>
+            </div>
+            <!-- TAB: OCR -->
+            <div class="pref-tab-content" data-tab="ocr">
+              <div class="preference-group">
+                <h3>OCR Languages</h3>
+                <p class="preference-hint">
+                  Manage Tesseract OCR language data. English and Italian are pre-bundled
+                  with AuraWrite. Additional languages can be downloaded on demand.
+                  Downloaded languages are stored in your app data folder and work offline.
+                </p>
+                <div id="ocr-lang-list" class="preference-group">
+                  <p class="preference-hint">Loading language list...</p>
                 </div>
               </div>
             </div>

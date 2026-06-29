@@ -1,12 +1,32 @@
-import { runOcr, pickOcrFile, pickSavePath, resultToPlainText, saveResultToDisk, getFormatFromPath } from "./ocr-processor";
-import { OcrOptions, OcrQuality, OcrProgress } from "./ocr-types";
+import {
+  runOcr,
+  pickOcrFile,
+  pickSavePath,
+  resultToPlainText,
+  saveResultToDisk,
+  getFormatFromPath,
+} from "./ocr-processor";
+import { terminateOcrWorker } from "./ocr-engine";
+import { OcrOptions, OcrQuality, OcrProgress, OcrFileFormat } from "./ocr-types";
+import { invoke } from "@tauri-apps/api/core";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EditorViewLike = { state: any; dispatch: any; focus: () => void };
 
+interface OcrLanguageInfo {
+  code: string;
+  name: string;
+  installed: boolean;
+  size_bytes: number;
+  has_best: boolean;
+  has_medium: boolean;
+  has_fast: boolean;
+}
+
 let ocrBar: HTMLElement | null = null;
 let currentFile: string | null = null;
 let isRunning = false;
+let ocrCancelled = false;
 
 let progressCurrentPage = 0;
 let progressTotalPages = 0;
@@ -17,8 +37,14 @@ function $(id: string): HTMLElement | null {
 
 function updateStartButton(): void {
   const startBtn = $("ocr-start") as HTMLButtonElement | null;
+  const stopBtn = $("ocr-stop") as HTMLButtonElement | null;
   if (startBtn) {
     startBtn.disabled = !currentFile || isRunning;
+    startBtn.style.display = isRunning ? "none" : "";
+  }
+  if (stopBtn) {
+    stopBtn.disabled = !isRunning;
+    stopBtn.style.display = isRunning ? "" : "none";
   }
 }
 
@@ -59,7 +85,10 @@ function showModal(title: string, message: string): void {
   const overlay = document.createElement("div");
   overlay.className = "modal";
   const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const safeMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+  const safeMessage = message
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
   overlay.innerHTML = `
     <div class="modal-overlay"></div>
     <div class="modal-content" style="min-width:400px;min-height:auto;max-width:500px;">
@@ -84,10 +113,44 @@ function showModal(title: string, message: string): void {
   (overlay.querySelector("#ocr-modal-ok") as HTMLElement)?.focus();
 }
 
+async function refreshLanguageDropdown(): Promise<void> {
+  const select = $("ocr-language") as HTMLSelectElement | null;
+  if (!select) return;
+
+  const current = select.value;
+  select.innerHTML = "";
+
+  let langs: OcrLanguageInfo[] = [];
+  try {
+    langs = await invoke<OcrLanguageInfo[]>("ocr_list_languages");
+  } catch {
+    return;
+  }
+
+  for (const lang of langs) {
+    const opt = document.createElement("option");
+    opt.value = lang.code;
+    opt.textContent = lang.installed
+      ? lang.name
+      : `${lang.name} (will download on start)`;
+    select.appendChild(opt);
+  }
+
+  // Restore previous selection if still available.
+  if (current && Array.from(select.options).some((o) => o.value === current)) {
+    select.value = current;
+  } else {
+    select.value = "eng";
+  }
+}
+
 function getOptions(): Partial<OcrOptions> {
   const language = ($("ocr-language") as HTMLSelectElement | null)?.value ?? "eng";
-  const quality = (($("ocr-quality") as HTMLSelectElement | null)?.value ?? "best") as OcrQuality;
-  const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked ? "insert" : "save";
+  const quality =
+    (($("ocr-quality") as HTMLSelectElement | null)?.value ?? "best") as OcrQuality;
+  const outputMode = ($("ocr-output-insert") as HTMLInputElement | null)?.checked
+    ? "insert"
+    : "save";
   const rangeStr = ($("ocr-page-range") as HTMLInputElement | null)?.value?.trim() ?? "";
 
   let pageRange: { start: number; end: number } | null = null;
@@ -115,11 +178,14 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
   if (!bar) return;
   ocrBar = bar;
 
+  void refreshLanguageDropdown();
+
   const btnOcr = $("btn-ocr");
   btnOcr?.addEventListener("click", () => {
     if (!ocrBar) return;
     if (ocrBar.classList.contains("hidden")) {
       ocrBar.classList.remove("hidden");
+      void refreshLanguageDropdown();
     } else {
       ocrBar.classList.add("hidden");
     }
@@ -127,6 +193,12 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
 
   $("ocr-close")?.addEventListener("click", () => {
     ocrBar?.classList.add("hidden");
+  });
+
+  $("ocr-stop")?.addEventListener("click", async () => {
+    if (!isRunning) return;
+    ocrCancelled = true;
+    await terminateOcrWorker();
   });
 
   $("ocr-load")?.addEventListener("click", async () => {
@@ -164,7 +236,7 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
         const failedList = result.failedPages.join(", ");
         showModal(
           "OCR Completed with Errors",
-          `OCR finished, but the following pages failed: ${failedList}.\n\nYou can retry the failed pages individually.`
+          `OCR finished, but the following pages failed: ${failedList}.\n\nYou can retry the failed pages individually.`,
         );
       }
 
@@ -179,20 +251,31 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
             const nodes = lines.map((line: string) =>
               schema.nodes.paragraph.create(null, line ? schema.text(line) : null)
             );
-            const tr = editorView.state.tr.insert(editorView.state.selection.from, nodes);
+            const tr = editorView.state.tr.insert(
+              editorView.state.selection.from,
+              nodes,
+            );
             editorView.dispatch(tr);
             editorView.focus();
           } else {
             showModal("OCR Result", "No text was recognized from the document.");
           }
         } else {
-          showModal("OCR Result", "No document is open in the editor. Use \"Save to disk\" instead.");
+          showModal(
+            "OCR Result",
+            'No document is open in the editor. Use "Save to disk" instead.',
+          );
         }
       } else {
-        const defaultName = currentFile.replace(/\\/g, "/").split("/").pop()?.replace(/\.[^.]+$/, "") ?? "ocr_result";
+        const defaultName =
+          currentFile
+            .replace(/\\/g, "/")
+            .split("/")
+            .pop()
+            ?.replace(/\.[^.]+$/, "") ?? "ocr_result";
         const savePath = await pickSavePath(`${defaultName}_ocr`);
         if (savePath) {
-          const format = getFormatFromPath(savePath);
+          const format: OcrFileFormat = getFormatFromPath(savePath);
           await saveResultToDisk(result, savePath, format);
           showModal("OCR Complete", `File saved to:\n${savePath}`);
         }
@@ -204,10 +287,19 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
         if (progressFill) progressFill.style.width = "100%";
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Unknown error";
-      showModal("OCR Error", `An error occurred during OCR:\n${errorMsg}`);
+      if (ocrCancelled) {
+        showModal("OCR Cancelled", "OCR processing was cancelled.");
+        ocrCancelled = false;
+      } else {
+        const errorMsg = err instanceof Error ? err.message : "Unknown error";
+        showModal(
+          "OCR Error",
+          `An error occurred during OCR:\n${errorMsg}`,
+        );
+      }
     } finally {
       isRunning = false;
+      ocrCancelled = false;
       updateStartButton();
       setTimeout(() => {
         if (progressWrap) progressWrap.classList.add("hidden");

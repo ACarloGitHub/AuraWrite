@@ -4,6 +4,7 @@ import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupMCPPanel } from "./ai-panel/mcp-panel";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
 import { initOcrToolbar } from "./ocr/ocr-toolbar";
+import { setupOcrPreferencesTab } from "./ocr/ocr-preferences";
 import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey, getEffectiveProviderName } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
@@ -1356,6 +1357,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Local models tab + llama.cpp params tab
   setupLocalModelsTab();
   setupLlamacppParamsTab();
+
+  // OCR preferences tab
+  setupOcrPreferencesTab();
 
   // AI wizard first launch — only show after embeddings wizard is done
   if (shouldShowWizard() && localStorage.getItem(EMBED_ONBOARDING_KEY)) {
