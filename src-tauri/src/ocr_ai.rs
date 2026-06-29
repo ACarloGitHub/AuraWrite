@@ -310,20 +310,24 @@ pub async fn ocr_ai_spawn_server(
             }
         }
 
-        // Kill any orphaned llama-server processes before starting
-        #[cfg(target_os = "windows")]
-        {
-            let _ = silent_command("taskkill")
-                .args(["/F", "/IM", "llama-server.exe", "/T"])
-                .output();
+        // Kill only our own previous OCR AI server process if still alive
+        if let Some(ref existing) = *state {
+            if is_process_alive(existing.pid) {
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = silent_command("taskkill")
+                        .args(["/F", "/PID", &existing.pid.to_string()])
+                        .output();
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &existing.pid.to_string()])
+                        .output();
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
         }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = Command::new("pkill")
-                .args(["-9", "-f", "llama-server"])
-                .output();
-        }
-        std::thread::sleep(std::time::Duration::from_millis(500));
 
         let llama_dir = llamacpp_ai_dir(&dir);
         let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())

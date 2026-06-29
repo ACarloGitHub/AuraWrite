@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { OcrProgress, OcrResult, OcrPageResult } from "./ocr-types";
 
 const OCR_AI_DEFAULT_PORT = 18089;
@@ -115,7 +116,7 @@ async function waitForServer(
 
     attempts++;
     try {
-      const resp = await fetch(`http://127.0.0.1:${port}/health`, {
+      const resp = await tauriFetch(`http://127.0.0.1:${port}/health`, {
         signal: AbortSignal.timeout(3000),
       });
       if (resp.ok) {
@@ -186,7 +187,7 @@ async function sendImageForOcr(
   }
 
   try {
-    const resp = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+    const resp = await tauriFetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
