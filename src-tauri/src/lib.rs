@@ -1281,6 +1281,8 @@ pub fn run() {
             resources_download_llamacpp_variant,
             resources_llamacpp_variant,
             resources_llamacpp_embeddings_variant,
+            resources_download_llamacpp_ocr_variant,
+            resources_ocr_llamacpp_variant,
             resources_download_nomic,
             resources_remove_all,
             resources_clear_all_user_data,
@@ -1400,6 +1402,8 @@ pub fn run() {
             ocr_ai_stop_server,
             ocr_ai_server_status,
             ocr_ai_read_log,
+            ocr_ai_download_resources,
+            ocr_ai_remove_resources,
             // Data & Privacy
             data_stats,
             chat_stats,

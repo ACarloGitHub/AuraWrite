@@ -102,6 +102,27 @@ export async function ocrAiReadLog(): Promise<string> {
   return invoke<string>("ocr_ai_read_log");
 }
 
+type ResourceInfo = {
+  present: boolean;
+  path: string;
+  size_bytes: number;
+  version: string;
+  license: string;
+  download_url: string;
+};
+
+export async function ocrAiDownloadResources(): Promise<ResourceInfo> {
+  return invoke<ResourceInfo>("ocr_ai_download_resources");
+}
+
+export async function ocrAiRemoveResources(): Promise<void> {
+  return invoke("ocr_ai_remove_resources");
+}
+
+export async function ocrAiLlamacppVariant(): Promise<string> {
+  return invoke<string>("resources_ocr_llamacpp_variant");
+}
+
 async function waitForServer(
   port: number,
   onProgress?: (progress: OcrProgress) => void,
@@ -276,6 +297,13 @@ export async function runOcrAi(
     currentPage: 0,
     totalPages: 0,
   });
+
+  const runtimeVariant = await ocrAiLlamacppVariant();
+  if (!runtimeVariant) {
+    throw new Error(
+      "OCR AI runtime not installed. Please download it from Preferences → OCR or the setup wizard.",
+    );
+  }
 
   const modelReady = await ocrAiEnsureModel(quantization, onProgress);
   if (cancelled) throw new Error("OCR AI cancelled");

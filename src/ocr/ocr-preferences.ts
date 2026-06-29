@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ocrAiListModels, ocrAiDownloadModel, ocrAiRemoveModel, ocrAiCheckVram, ocrAiSpawnServer, ocrAiStopServer } from "./ocr-ai-engine";
+import { ocrAiListModels, ocrAiDownloadModel, ocrAiRemoveModel, ocrAiCheckVram, ocrAiSpawnServer, ocrAiStopServer, ocrAiDownloadResources, ocrAiRemoveResources, ocrAiLlamacppVariant } from "./ocr-ai-engine";
 
 interface OcrLanguageInfo {
   code: string;
@@ -134,6 +134,41 @@ export async function setupOcrPreferencesTab(): Promise<void> {
 
   const aiContainer = document.getElementById("ocr-ai-model-list");
   const vramInfo = document.getElementById("ocr-ai-vram-info");
+
+  refreshOcrRuntimeStatus();
+
+  const runtimeDownloadBtn = document.getElementById("ocr-ai-runtime-download") as HTMLButtonElement | null;
+  const runtimeRemoveBtn = document.getElementById("ocr-ai-runtime-remove") as HTMLButtonElement | null;
+
+  if (runtimeDownloadBtn && !runtimeDownloadBtn.dataset.listenerAdded) {
+    runtimeDownloadBtn.dataset.listenerAdded = "1";
+    runtimeDownloadBtn.addEventListener("click", async () => {
+      runtimeDownloadBtn.disabled = true;
+      runtimeDownloadBtn.textContent = "Downloading...";
+      try {
+        await ocrAiDownloadResources();
+      } catch (e) {
+        alert("Failed to download OCR AI runtime: " + (e instanceof Error ? e.message : String(e)));
+      } finally {
+        runtimeDownloadBtn.disabled = false;
+        runtimeDownloadBtn.textContent = "Download Runtime";
+      }
+      await refreshOcrRuntimeStatus();
+    });
+  }
+
+  if (runtimeRemoveBtn && !runtimeRemoveBtn.dataset.listenerAdded) {
+    runtimeRemoveBtn.dataset.listenerAdded = "1";
+    runtimeRemoveBtn.addEventListener("click", async () => {
+      if (!window.confirm("Remove OCR AI runtime? This removes llama.cpp for OCR AI. You can re-download it later.")) return;
+      try {
+        await ocrAiRemoveResources();
+      } catch (e) {
+        alert("Failed to remove OCR AI runtime: " + (e instanceof Error ? e.message : String(e)));
+      }
+      await refreshOcrRuntimeStatus();
+    });
+  }
 
   let langs: OcrLanguageInfo[] = [];
   try {
@@ -311,5 +346,33 @@ async function refreshOcrAiModels(): Promise<void> {
     renderOcrAiModels(container, models);
   } catch {
     // ignore
+  }
+}
+
+async function refreshOcrRuntimeStatus(): Promise<void> {
+  const statusEl = document.getElementById("ocr-ai-runtime-status");
+  const downloadBtn = document.getElementById("ocr-ai-runtime-download") as HTMLButtonElement | null;
+  const removeBtn = document.getElementById("ocr-ai-runtime-remove") as HTMLButtonElement | null;
+  if (!statusEl) return;
+
+  try {
+    const variant = await ocrAiLlamacppVariant();
+    if (variant) {
+      const label = variant === "cuda" ? "CUDA (NVIDIA)" : variant === "vulkan" ? "Vulkan" : variant === "metal" ? "Metal (Apple)" : variant;
+      statusEl.textContent = `OCR AI runtime installed: ${label}`;
+      statusEl.style.color = "#4caf50";
+      if (downloadBtn) downloadBtn.style.display = "none";
+      if (removeBtn) removeBtn.style.display = "";
+    } else {
+      statusEl.textContent = "OCR AI runtime not installed. Download it to enable AI-powered OCR.";
+      statusEl.style.color = "";
+      if (downloadBtn) downloadBtn.style.display = "";
+      if (removeBtn) removeBtn.style.display = "none";
+    }
+  } catch {
+    statusEl.textContent = "OCR AI runtime not installed.";
+    statusEl.style.color = "";
+    if (downloadBtn) downloadBtn.style.display = "";
+    if (removeBtn) removeBtn.style.display = "none";
   }
 }

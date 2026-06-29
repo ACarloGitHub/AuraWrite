@@ -93,6 +93,10 @@ pub fn llamacpp_ai_dir(resources: &Path) -> PathBuf {
     resources.join("llama.cpp")
 }
 
+pub fn llamacpp_ocr_dir(resources: &Path) -> PathBuf {
+    resources.join("llama.cpp-ocr")
+}
+
 fn llamacpp_url_for_variant(variant: &str) -> String {
     let platform = platform_string();
     let arch = arch_string();
@@ -886,6 +890,134 @@ pub fn resources_llamacpp_embeddings_variant(app: AppHandle) -> Result<String, S
         Ok(variant.trim().to_string())
     } else {
         Ok("cpu".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn resources_download_llamacpp_ocr_variant(
+    app: AppHandle,
+) -> Result<ResourceInfo, String> {
+    let gpus = if cfg!(target_os = "windows") {
+        detect_gpu_windows()
+    } else if cfg!(target_os = "macos") {
+        detect_gpu_macos()
+    } else {
+        detect_gpu_linux()
+    };
+    let variant = recommended_variant(&gpus);
+    if variant == "cpu" {
+        return Err("OCR AI requires a GPU. No compatible GPU detected.".to_string());
+    }
+    let effective_variant = if cfg!(target_os = "macos") {
+        "metal".to_string()
+    } else {
+        variant.clone()
+    };
+
+    let dir = resources_dir(&app)?;
+    let target_dir = llamacpp_ocr_dir(&dir);
+
+    let meta_path = target_dir.join("variant.txt");
+    if target_dir.exists() && meta_path.exists() {
+        let installed_variant = fs::read_to_string(&meta_path)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if installed_variant == effective_variant {
+            if let Ok(bin) = find_binary_in_dir(&target_dir, llamacpp_binary_name()) {
+                if bin.exists() {
+                    return Ok(ResourceInfo {
+                        present: true,
+                        path: bin.to_string_lossy().to_string(),
+                        size_bytes: file_size(&bin),
+                        version: LLAMACPP_PINNED_VERSION.to_string(),
+                        license: LLAMACPP_LICENSE.to_string(),
+                        download_url: llamacpp_url_for_variant(&variant),
+                    });
+                }
+            }
+        }
+    }
+
+    let url = llamacpp_url_for_variant(&variant);
+    let is_zip = is_zip_url(&url);
+    let archive_path = if is_zip {
+        dir.join("llama.cpp-ocr.zip")
+    } else {
+        dir.join("llama.cpp-ocr.tar.gz")
+    };
+
+    if target_dir.exists() {
+        let _ = fs::remove_dir_all(&target_dir);
+    }
+    let _ = fs::create_dir_all(&target_dir);
+
+    let display_name = if variant == "cuda" {
+        "llama.cpp OCR (CUDA)".to_string()
+    } else if variant == "vulkan" {
+        "llama.cpp OCR (Vulkan)".to_string()
+    } else {
+        format!("llama.cpp OCR ({})", variant)
+    };
+    let download_id = format!("llamacpp-ocr-{}", variant);
+    download_to_file_async(&app, &download_id, &display_name, &url, &archive_path)
+        .await
+        .map_err(|e| format!("download llama.cpp OCR {}: {}", variant, e))?;
+
+    if is_zip {
+        extract_zip(&archive_path, &target_dir)
+            .map_err(|e| format!("extract llama.cpp OCR {} zip: {}", variant, e))?;
+    } else {
+        extract_tar_gz(&archive_path, &target_dir)
+            .map_err(|e| format!("extract llama.cpp OCR {} tar.gz: {}", variant, e))?;
+    }
+    let _ = fs::remove_file(&archive_path);
+
+    if variant == "cuda" && cfg!(target_os = "windows") {
+        if let Some(cudart_url) = llamacpp_cudart_url() {
+            let cudart_archive = dir.join("llama.cpp-ocr-cuda-runtime.zip");
+            let cudart_id = "llamacpp-ocr-cudart".to_string();
+            download_to_file_async(&app, &cudart_id, "CUDA Runtime DLLs (OCR)", &cudart_url, &cudart_archive)
+                .await
+                .map_err(|e| format!("download CUDA runtime DLLs for OCR: {}", e))?;
+            extract_zip_into(&cudart_archive, &target_dir)
+                .map_err(|e| format!("extract CUDA runtime DLLs for OCR: {}", e))?;
+            let _ = fs::remove_file(&cudart_archive);
+        }
+    }
+
+    let bin = find_binary_in_dir(&target_dir, llamacpp_binary_name())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&bin).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&bin, perms).ok();
+    }
+
+    let meta_path = target_dir.join("variant.txt");
+    fs::write(&meta_path, effective_variant).map_err(|e| format!("write OCR variant: {}", e))?;
+
+    Ok(ResourceInfo {
+        present: true,
+        path: bin.to_string_lossy().to_string(),
+        size_bytes: file_size(&bin),
+        version: LLAMACPP_PINNED_VERSION.to_string(),
+        license: LLAMACPP_LICENSE.to_string(),
+        download_url: url,
+    })
+}
+
+#[tauri::command]
+pub fn resources_ocr_llamacpp_variant(app: AppHandle) -> Result<String, String> {
+    let dir = resources_dir(&app)?;
+    let ocr_dir = llamacpp_ocr_dir(&dir);
+    let meta_path = ocr_dir.join("variant.txt");
+    if meta_path.exists() {
+        let variant = fs::read_to_string(&meta_path).unwrap_or_else(|_| "cpu".to_string());
+        Ok(variant.trim().to_string())
+    } else {
+        Ok(String::new())
     }
 }
 

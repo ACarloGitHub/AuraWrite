@@ -13,7 +13,7 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 
-use crate::resources::{download_to_file_async, resources_dir};
+use crate::resources::{download_to_file_async, resources_dir, llamacpp_ocr_dir};
 
 const OCR_AI_MODEL_ID: &str = "lighton-ocr-2-1b";
 
@@ -278,7 +278,7 @@ pub async fn ocr_ai_spawn_server(
 ) -> Result<crate::resources::LlamaServerStatus, String> {
     use std::process::Command;
     use crate::resources::{
-        find_binary_in_dir, llamacpp_ai_dir, llamacpp_binary_name, is_process_alive,
+        find_binary_in_dir, llamacpp_ocr_dir, llamacpp_binary_name, is_process_alive,
     };
 
     tokio::task::spawn_blocking(move || {
@@ -318,7 +318,7 @@ pub async fn ocr_ai_spawn_server(
             }
         }
 
-        let llama_dir = llamacpp_ai_dir(&dir);
+        let llama_dir = llamacpp_ocr_dir(&dir);
         let binary = find_binary_in_dir(&llama_dir, llamacpp_binary_name())
             .map_err(|e| format!("llama-server binary not found: {}", e))?;
 
@@ -488,4 +488,19 @@ pub async fn ocr_ai_server_status() -> Result<crate::resources::LlamaServerStatu
             }),
         }
     }).await.map_err(|e| format!("join error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn ocr_ai_download_resources(app: AppHandle) -> Result<crate::resources::ResourceInfo, String> {
+    crate::resources::resources_download_llamacpp_ocr_variant(app).await
+}
+
+#[tauri::command]
+pub fn ocr_ai_remove_resources(app: AppHandle) -> Result<(), String> {
+    let dir = resources_dir(&app)?;
+    let ocr_dir = crate::resources::llamacpp_ocr_dir(&dir);
+    if ocr_dir.exists() {
+        fs::remove_dir_all(&ocr_dir).map_err(|e| format!("remove OCR AI runtime: {}", e))?;
+    }
+    Ok(())
 }

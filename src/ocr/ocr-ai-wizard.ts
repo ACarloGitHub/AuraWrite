@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ocrAiDownloadModel, ocrAiCheckVram } from "./ocr-ai-engine";
+import { ocrAiDownloadModel, ocrAiCheckVram, ocrAiDownloadResources } from "./ocr-ai-engine";
 
 const WIZARD_KEY = "aurawrite-ocr-ai-wizard-dismissed";
 
@@ -154,15 +154,28 @@ function renderOcrWizardStep(): void {
         const statusEl = document.getElementById("wizard-download-status");
 
         try {
-          const status = await invoke<{ present: boolean }>("resources_get_status");
-          if (!status.present) {
-            if (statusEl) statusEl.innerHTML = `<p>Step 1/2: Downloading llama.cpp runtime...</p>`;
-            const hwInfo = await invoke<{ recommended_llamacpp_variant: string }>("resources_detect_hardware");
-            await invoke("resources_download_llamacpp_variant", { variant: hwInfo.recommended_llamacpp_variant });
+          if (statusEl) statusEl.innerHTML = `<p>Step 1/2: Downloading OCR AI runtime (GPU only)...</p>`;
+          try {
+            await ocrAiDownloadResources();
+            if (statusEl) statusEl.innerHTML = `<p>Step 1/2: OCR AI runtime ✓</p><p>Step 2/2: Downloading Q8_0 model + mmproj (~1.1 GB)...</p><p class="preference-hint">Progress appears at the bottom of the screen.</p>`;
+          } catch (resErr) {
+            const resMsg = resErr instanceof Error ? resErr.message : String(resErr);
+            if (resMsg.includes("requires a GPU") || resMsg.includes("No compatible GPU")) {
+              if (statusEl) statusEl.innerHTML = `<p style="color:var(--error);">${resMsg}</p><p class="preference-hint">OCR AI requires an NVIDIA, AMD, or Apple GPU.</p>`;
+              nextBtn.style.display = "";
+              nextBtn.textContent = "Close";
+              nextBtn.disabled = false;
+              if (skipBtn) skipBtn.style.display = "none";
+              nextBtn.onclick = () => {
+                localStorage.setItem(WIZARD_KEY, "1");
+                hideOcrAiWizard();
+              };
+              return;
+            }
+            throw resErr;
           }
 
-          const stepBase = status.present ? 1 : 2;
-          if (statusEl) statusEl.innerHTML = `<p>Step ${stepBase}/2: Downloading Q8_0 model + mmproj (~1.1 GB)...</p><p class="preference-hint">Progress appears at the bottom of the screen.</p>`;
+          if (statusEl) statusEl.innerHTML = `<p>Step 2/2: Downloading Q8_0 model + mmproj (~1.1 GB)...</p><p class="preference-hint">Progress appears at the bottom of the screen.</p>`;
           await ocrAiDownloadModel("q8_0");
 
           if (statusEl) statusEl.innerHTML = `<p style="color:#4caf50;">Download complete!</p>`;
