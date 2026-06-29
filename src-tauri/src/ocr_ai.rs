@@ -36,7 +36,6 @@ const QUANTS: &[QuantSpec] = &[
 ];
 
 const OCR_AI_DEFAULT_PORT: u16 = 18089;
-const VRAM_SAFETY_MARGIN_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OcrAiModelInfo {
@@ -185,20 +184,30 @@ pub fn ocr_ai_remove_model(app: AppHandle, quantization: String) -> Result<(), S
 pub fn ocr_ai_check_vram(app: AppHandle) -> Result<OcrAiStatus, String> {
     let hw_info = detect_hardware_sync(&app)?;
 
-    let nvidia_vram: u64 = hw_info.gpus
+    // Use free VRAM (not total) to account for models already loaded
+    let nvidia_vram_free: u64 = hw_info.gpus
+        .iter()
+        .filter(|g| g.vendor == "NVIDIA")
+        .map(|g| g.vram_free_bytes)
+        .max()
+        .unwrap_or(0);
+
+    // Total VRAM is still reported for display purposes
+    let nvidia_vram_total: u64 = hw_info.gpus
         .iter()
         .filter(|g| g.vendor == "NVIDIA")
         .map(|g| g.vram_bytes)
         .max()
         .unwrap_or(0);
 
-    let vram_sufficient = nvidia_vram > 0 && (nvidia_vram > VRAM_SAFETY_MARGIN_BYTES + 1_100_000_000);
+    // OCR AI needs ~1.1 GB for the model + 1.5 GB safety margin
+    let vram_sufficient = nvidia_vram_free > 0 && (nvidia_vram_free > 1_500_000_000 + 1_100_000_000);
 
     Ok(OcrAiStatus {
         server_running: false,
         port: None,
         model_loaded: None,
-        vram_available_bytes: if nvidia_vram > 0 { Some(nvidia_vram) } else { None },
+        vram_available_bytes: if nvidia_vram_total > 0 { Some(nvidia_vram_free) } else { None },
         vram_sufficient,
     })
 }
@@ -270,7 +279,6 @@ pub async fn ocr_ai_spawn_server(
     use std::process::Command;
     use crate::resources::{
         find_binary_in_dir, llamacpp_ai_dir, llamacpp_binary_name, is_process_alive,
-        silent_command,
     };
 
     tokio::task::spawn_blocking(move || {
@@ -307,25 +315,6 @@ pub async fn ocr_ai_spawn_server(
                     port: Some(existing.port),
                     model_path: Some(existing.model_path.clone()),
                 });
-            }
-        }
-
-        // Kill only our own previous OCR AI server process if still alive
-        if let Some(ref existing) = *state {
-            if is_process_alive(existing.pid) {
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = silent_command("taskkill")
-                        .args(["/F", "/PID", &existing.pid.to_string()])
-                        .output();
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let _ = std::process::Command::new("kill")
-                        .args(["-9", &existing.pid.to_string()])
-                        .output();
-                }
-                std::thread::sleep(std::time::Duration::from_millis(500));
             }
         }
 
@@ -376,6 +365,7 @@ pub async fn ocr_ai_spawn_server(
         cmd.arg("--port").arg(actual_port.to_string());
         cmd.arg("--host").arg("127.0.0.1");
         cmd.arg("--n-gpu-layers").arg("auto");
+        cmd.arg("--flash-attn").arg("auto");
         cmd.arg("--parallel").arg("1");
         cmd.arg("--no-cache-prompt");
         cmd.arg("--batch-size").arg("512");

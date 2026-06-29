@@ -296,7 +296,7 @@ export async function runOcrAi(
   if (vramStatus.vram_available_bytes !== null && !vramStatus.vram_sufficient) {
     const vramGb = (vramStatus.vram_available_bytes / 1024 / 1024 / 1024).toFixed(1);
     throw new Error(
-      `Insufficient VRAM for OCR AI. Available: ${vramGb} GB. Need at least 3.1 GB free.`,
+      `Insufficient free VRAM for OCR AI. Available: ${vramGb} GB. Need at least 2.6 GB free.`,
     );
   }
 

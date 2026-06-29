@@ -14,7 +14,7 @@ interface HardwareData {
   arch: string;
   ram_total_bytes: number;
   ram_available_bytes: number;
-  gpus: Array<{ vendor: string; model: string; vram_bytes: number; backend: string }>;
+  gpus: Array<{ vendor: string; model: string; vram_bytes: number; vram_free_bytes: number; backend: string }>;
   recommended_llamacpp_variant: string;
   disk_free_bytes: number;
   disk_total_bytes: number;

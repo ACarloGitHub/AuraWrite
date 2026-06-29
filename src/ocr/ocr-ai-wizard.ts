@@ -101,13 +101,13 @@ function renderOcrWizardStep(): void {
           const vramGb = (vramInfo.vram_available_bytes / 1024 / 1024 / 1024).toFixed(1);
           body.innerHTML = `
             <div style="margin-bottom:12px;">
-              <strong>GPU VRAM:</strong> ${vramGb} GB<br>
+              <strong>GPU VRAM available:</strong> ${vramGb} GB<br>
               <strong>Status:</strong> ${vramInfo.vram_sufficient
                 ? '<span style="color:#4caf50;">Sufficient for OCR AI</span>'
                 : '<span style="color:#ff9800;">May be insufficient — OCR AI will use CPU (slower)</span>'}
             </div>
             <p class="preference-hint">
-              LightOnOCR requires ~1.1 GB VRAM + 2 GB safety margin. Without sufficient VRAM, it will fall back to CPU mode which is slower.
+              LightOnOCR requires ~1.1 GB free VRAM + 1.5 GB safety margin. If another AI model is using the GPU, free VRAM will be lower.
             </p>
           `;
         } else {

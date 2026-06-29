@@ -1430,6 +1430,7 @@ pub struct GpuInfo {
     pub vendor: String,
     pub model: String,
     pub vram_bytes: u64,
+    pub vram_free_bytes: u64,
     pub backend: String, // "cuda", "vulkan", "metal", "none"
 }
 
@@ -1449,7 +1450,7 @@ fn detect_nvidia_gpu() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
     let output = match silent_command("nvidia-smi")
         .args([
-            "--query-gpu=name,memory.total",
+            "--query-gpu=name,memory.total,memory.free",
             "--format=csv,noheader,nounits",
         ])
         .output()
@@ -1465,13 +1466,15 @@ fn detect_nvidia_gpu() -> Vec<GpuInfo> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() >= 2 {
+        if parts.len() >= 3 {
             let model = parts[0].trim().to_string();
             let vram_mb: u64 = parts[1].trim().parse().unwrap_or(0);
+            let vram_free_mb: u64 = parts[2].trim().parse().unwrap_or(0);
             gpus.push(GpuInfo {
                 vendor: "NVIDIA".to_string(),
                 model,
                 vram_bytes: vram_mb * 1024 * 1024,
+                vram_free_bytes: vram_free_mb * 1024 * 1024,
                 backend: "cuda".to_string(),
             });
         }
@@ -1524,6 +1527,7 @@ pub fn detect_gpu_windows() -> Vec<GpuInfo> {
                         vendor,
                         model: name,
                         vram_bytes: vram,
+                        vram_free_bytes: 0,
                         backend: backend.to_string(),
                     });
                 }
@@ -1563,6 +1567,7 @@ pub fn detect_gpu_macos() -> Vec<GpuInfo> {
                                     vendor: "Apple".to_string(),
                                     model,
                                     vram_bytes,
+                                    vram_free_bytes: 0,
                                     backend: "metal".to_string(),
                                 });
                             }
@@ -1578,6 +1583,7 @@ pub fn detect_gpu_macos() -> Vec<GpuInfo> {
             vendor: "Apple".to_string(),
             model: "Apple Silicon".to_string(),
             vram_bytes: 0,
+            vram_free_bytes: 0,
             backend: "metal".to_string(),
         });
     }
@@ -1624,6 +1630,7 @@ pub fn detect_gpu_linux() -> Vec<GpuInfo> {
                         vendor,
                         model: name,
                         vram_bytes: 0,
+                        vram_free_bytes: 0,
                         backend: backend.to_string(),
                     });
                 }
