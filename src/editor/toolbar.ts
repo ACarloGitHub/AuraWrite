@@ -401,6 +401,10 @@ async function handleOpen(): Promise<void> {
     case "txt":
       await openTXT(path);
       break;
+    case "html":
+    case "htm":
+      await openHTML(path);
+      break;
     default:
       alert(`Unsupported file format: .${ext || "unknown"}`);
   }
@@ -488,6 +492,28 @@ async function openTXT(path: string): Promise<void> {
   syncDocumentPaginationState(editorView);
 
   markSaved(JSON.stringify(json), path, "txt");
+}
+
+async function openHTML(path: string): Promise<void> {
+  try {
+    const content = await loadFile(path);
+
+    const { parseHTML, syncDocumentPaginationState } = await import("./editor");
+
+    const newDoc = parseHTML(content);
+    const newState = EditorState.create({
+      schema: editorView.state.schema,
+      doc: newDoc,
+      plugins: editorView.state.plugins,
+    });
+    editorView.updateState(newState);
+    syncDocumentPaginationState(editorView);
+
+    markSaved(JSON.stringify(newState.doc.toJSON()), path, "html");
+  } catch (e) {
+    console.error("HTML import failed:", e);
+    alert("Failed to import HTML.");
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
