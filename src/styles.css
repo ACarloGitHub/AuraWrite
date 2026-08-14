@@ -35,6 +35,7 @@
   --project-panel-width: 320px;
   --suggestions-panel-width: 320px;
   --mcp-panel-width: 320px;
+  --ebooks-panel-width: 320px;
 
   --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.15);
   --selection-highlight: rgba(255, 255, 0, 0.4);
@@ -3197,6 +3198,10 @@ kbd {
   right: -3px;
 }
 
+.panel-resize-handle--ebooks {
+  right: -3px;
+}
+
 .panel-resize-handle--ai {
   left: -3px;
 }
@@ -3217,6 +3222,140 @@ kbd {
 
 .project-panel.hidden {
   display: none;
+}
+
+/* Ebooks panel */
+.ebook-panel {
+  width: var(--ebooks-panel-width, 320px);
+  background: var(--color-surface, #ffffff);
+  border-right: 1px solid var(--color-border, #cccccc);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.ebook-panel.hidden {
+  display: none;
+}
+
+.ebook-panel__header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #cccccc);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-toolbar, #ffffff);
+}
+
+.ebook-panel__header-left {
+  display: flex;
+  align-items: center;
+}
+
+.ebook-panel__header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text, #222222);
+  letter-spacing: -0.5px;
+}
+
+.ebook-panel__header-right {
+  display: flex;
+  gap: 6px;
+}
+
+.ebook-panel__btn-sm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--color-border, #cccccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-buttons, #222222);
+  transition: background 0.15s, border-color 0.15s, color 0.3s;
+}
+
+.ebook-panel__btn-sm:hover {
+  background: var(--color-background, #f0f0f0);
+  border-color: var(--color-primary, #4a90d9);
+}
+
+.ebook-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.ebook-panel__empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted, #666666);
+}
+
+.ebook-panel__list-header {
+  padding: 4px 0 8px;
+}
+
+.ebook-panel__list-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-muted, #666666);
+}
+
+.ebook-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--color-border, #cccccc);
+  border-radius: 4px;
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ebook-item:hover {
+  border-color: var(--color-primary, #4a90d9);
+}
+
+.ebook-item__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ebook-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.ebook-tree__row {
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--color-text, #222222);
+  cursor: default;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ebook-tree__row--openable {
+  cursor: pointer;
+}
+
+.ebook-tree__row--openable:hover {
+  background: var(--color-primary, #4a90d9);
+  color: #ffffff;
 }
 
 /* Header con Projects prominente */
@@ -4976,6 +5115,11 @@ kbd {
 .project-item.active .item-color-btn,
 .section-item.active .item-color-btn,
 .document-item.active .item-color-btn {
+  opacity: 1;
+}
+
+.ebook-item .item-color-btn,
+.ebook-item:hover .item-color-btn {
   opacity: 1;
 }
 

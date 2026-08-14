@@ -234,6 +234,9 @@ function setupTopLevelButtons(): void {
         case "open":
           handleOpen();
           break;
+        case "import-epub":
+          void importEbookFromMenu();
+          break;
         case "export":
           handleExport();
           break;
@@ -410,7 +413,7 @@ async function handleOpen(): Promise<void> {
   }
 }
 
-async function openJSON(path: string): Promise<void> {
+export async function openJSON(path: string): Promise<void> {
   const content = await loadFile(path);
   const json = JSON.parse(content);
   const migrated = migrateImageNodesInJson(json);
@@ -431,7 +434,7 @@ async function openJSON(path: string): Promise<void> {
   markSaved(content, path, "json");
 }
 
-async function openMarkdown(path: string): Promise<void> {
+export async function openMarkdown(path: string): Promise<void> {
   const content = await loadFile(path);
   const json = fromMarkdown(content);
 
@@ -451,7 +454,7 @@ async function openMarkdown(path: string): Promise<void> {
   markSaved(JSON.stringify(json), path, "md");
 }
 
-async function openDOCX(path: string): Promise<void> {
+export async function openDOCX(path: string): Promise<void> {
   try {
     const arrayBuffer = await loadBinaryFile(path);
     const html = await fromDocx(arrayBuffer);
@@ -474,7 +477,7 @@ async function openDOCX(path: string): Promise<void> {
   }
 }
 
-async function openTXT(path: string): Promise<void> {
+export async function openTXT(path: string): Promise<void> {
   const content = await loadFile(path);
   const json = fromPlainText(content);
 
@@ -494,9 +497,10 @@ async function openTXT(path: string): Promise<void> {
   markSaved(JSON.stringify(json), path, "txt");
 }
 
-async function openHTML(path: string): Promise<void> {
+export async function openHTML(path: string, preprocess?: (html: string) => string): Promise<void> {
   try {
-    const content = await loadFile(path);
+    const raw = await loadFile(path);
+    const content = preprocess ? preprocess(raw) : raw;
 
     const { parseHTML, syncDocumentPaginationState } = await import("./editor");
 
@@ -514,6 +518,41 @@ async function openHTML(path: string): Promise<void> {
     console.error("HTML import failed:", e);
     alert("Failed to import HTML.");
   }
+}
+
+async function importEbookFromMenu(): Promise<void> {
+  const { openEbookPanelAndImport } = await import("../ebook/panel");
+  await openEbookPanelAndImport();
+}
+
+/**
+ * If the currently open file lives inside `baseDir` (normalized path prefix),
+ * clear the editor and reset the document state (used when an ebook working
+ * folder is deleted). Returns whether a file was closed.
+ */
+export async function closeCurrentFileIfInside(baseDir: string): Promise<boolean> {
+  if (!documentState.path) return false;
+  const normalize = (p: string): string => p.replace(/\\/g, "/");
+  const path = normalize(documentState.path);
+  const base = normalize(baseDir);
+  if (!path.startsWith(base)) return false;
+
+  const newState = EditorState.create({
+    schema: editorView.state.schema,
+    plugins: editorView.state.plugins,
+  });
+  editorView.updateState(newState);
+
+  const { syncDocumentPaginationState } = await import("./editor");
+  syncDocumentPaginationState(editorView);
+
+  documentState.path = null;
+  documentState.format = null;
+  documentState.isDirty = false;
+  documentState.lastSavedContent = JSON.stringify(newState.doc.toJSON());
+  updateWindowTitle();
+  updateDocumentTitleBar();
+  return true;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

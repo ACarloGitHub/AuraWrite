@@ -13,6 +13,7 @@ mod updates;
 mod fonts;
 mod resources;
 mod vault_export;
+mod ebook;
 mod secrets;
 mod workspace;
 mod permissions;
@@ -32,6 +33,7 @@ use updates::*;
 use fonts::*;
 use resources::*;
 use vault_export::*;
+use ebook::{ebook_work_dir, ebook_work_delete, ebook_work_list, ebook_list_all};
 use secrets::*;
 use workspace::*;
 use permissions::*;
@@ -1318,6 +1320,11 @@ pub fn run() {
             vault_write_file,
             vault_write_file_bytes,
             vault_copy_file,
+            // Ebooks (F2 — working folders)
+            ebook_work_dir,
+            ebook_work_list,
+            ebook_work_delete,
+            ebook_list_all,
             // Secrets (keychain)
             secrets_set,
             secrets_get,

@@ -11,6 +11,7 @@ import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
 import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
+import { initEbookPanel } from "./ebook/panel";
 import { initErrorBoundaries, showErrorToast } from "./error-boundary";
 import { checkForUpdatesOnStartup } from "./updates";
 import { listModelsForProvider, getCachedModels, setCachedModels, type ModelInfo } from "./ai-panel/model-listing";
@@ -960,24 +961,26 @@ function savePreferencesFromModal(): void {
 
 function setupResizablePanels(): void {
   const STORAGE_KEY = "aurawrite-preferences";
-  const DEFAULTS = { ai: 360, projects: 320, suggestions: 320, mcp: 320 } as const;
-  const MIN = { ai: 200, projects: 180, suggestions: 200, mcp: 200 } as const;
-  const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6, mcp: 0.6 } as const;
+  const DEFAULTS = { ai: 360, projects: 320, suggestions: 320, mcp: 320, ebooks: 320 } as const;
+  const MIN = { ai: 200, projects: 180, suggestions: 200, mcp: 200, ebooks: 200 } as const;
+  const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6, mcp: 0.6, ebooks: 0.6 } as const;
   const STORAGE_KEYS = {
     ai: "aiChatPanelWidth",
     projects: "projectPanelWidth",
     suggestions: "suggestionsPanelWidth",
     mcp: "mcpPanelWidth",
+    ebooks: "ebooksPanelWidth",
   } as const;
   const CSS_VARS = {
     ai: "--ai-panel-width",
     projects: "--project-panel-width",
     suggestions: "--suggestions-panel-width",
     mcp: "--mcp-panel-width",
+    ebooks: "--ebooks-panel-width",
   } as const;
   const LEFT_EDGED: ReadonlyArray<PanelKey> = ["ai", "mcp"];
 
-  type PanelKey = "ai" | "projects" | "suggestions" | "mcp";
+  type PanelKey = "ai" | "projects" | "suggestions" | "mcp" | "ebooks";
   type Widths = Record<PanelKey, number>;
 
   function loadWidths(): Widths {
@@ -1439,6 +1442,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupSuggestionsPanel(editorView);
   setupToolbar(editorView);
   initOcrToolbar(() => editorView);
+  initEbookPanel();
 
   const initialPrefs = loadAIFromPreferences();
   setContextFooterModel(initialPrefs.aiProvider, initialPrefs.aiModel);

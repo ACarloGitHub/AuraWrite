@@ -21,7 +21,7 @@ const ALPHA_MAP: Record<string, number> = {
 };
 
 export interface ColorPickerOptions {
-  itemType: "project" | "section" | "document";
+  itemType: "project" | "section" | "document" | "ebook";
   itemId: string;
   currentName: string;
   currentBg?: string | null;
@@ -44,7 +44,7 @@ export function openColorPicker(options: ColorPickerOptions): void {
   overlay.className = "color-picker-overlay active";
 
   const alpha = ALPHA_MAP[itemType] || 0.12;
-  const labelMap: Record<string, string> = { project: "Project", section: "Section", document: "Document" };
+  const labelMap: Record<string, string> = { project: "Project", section: "Section", document: "Document", ebook: "Ebook" };
 
   overlay.innerHTML = `
     <div class="color-picker-modal">

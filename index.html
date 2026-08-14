@@ -27,6 +27,7 @@
             <button class="dropdown-item" data-action="save">💾 Save (Ctrl+S)</button>
             <button class="dropdown-item" data-action="save-as">📄 Save As...</button>
             <button class="dropdown-item" data-action="open">📂 Open...</button>
+            <button class="dropdown-item" data-action="import-epub">📚 Import EPUB...</button>
             <button class="dropdown-item" data-action="export">📤 Export...</button>
             <div class="dropdown-divider"></div>
             <div class="dropdown-section">Project</div>
@@ -369,6 +370,20 @@
           <div class="suggestions-panel__content"></div>
           <div id="suggestions-debug-log" class="suggestions-debug-log" style="display: none;"></div>
         </aside>
+        <aside id="ebook-panel" class="ebook-panel hidden">
+          <div class="panel-resize-handle panel-resize-handle--ebooks" data-resize="ebooks" title="Drag to resize, double-click to reset"></div>
+          <div class="ebook-panel__header">
+            <div class="ebook-panel__header-left">
+              <h3>Ebooks</h3>
+            </div>
+            <div class="ebook-panel__header-right">
+              <button id="btn-ebook-back" class="ebook-panel__btn-sm" title="Back to ebook list" style="display:none;">←</button>
+              <button id="btn-ebook-export" class="ebook-panel__btn-sm" title="Export EPUB" style="display:none;">⬇</button>
+              <button id="btn-ebook-import" class="ebook-panel__btn-sm" title="Import EPUB">+</button>
+            </div>
+          </div>
+          <div id="ebook-content" class="ebook-panel__content"></div>
+        </aside>
           <div id="editor"></div>
         <div id="paginated-container" style="display: none"></div>
         <aside id="mcp-panel" class="mcp-panel hidden">
@@ -517,6 +532,9 @@
           </button>
           <button id="btn-suggestions" class="footer-btn" title="Suggestions (Proactive)">
             💡 Suggestions
+          </button>
+          <button id="btn-ebooks" class="footer-btn" title="Ebooks Panel">
+            📚 Ebooks
           </button>
           <button id="btn-mcp" class="footer-btn" title="MCP Panel">
             🧩 MCP
