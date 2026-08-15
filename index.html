@@ -28,6 +28,7 @@
             <button class="dropdown-item" data-action="save-as">📄 Save As...</button>
             <button class="dropdown-item" data-action="open">📂 Open...</button>
             <button class="dropdown-item" data-action="import-epub">📚 Import EPUB...</button>
+            <button class="dropdown-item" data-action="export-epub">📚 Export EPUB...</button>
             <button class="dropdown-item" data-action="export">📤 Export...</button>
             <div class="dropdown-divider"></div>
             <div class="dropdown-section">Project</div>
@@ -57,7 +58,7 @@
         </div>
 
         <!-- STYLE GROUP -->
-        <div class="toolbar-group">
+        <div class="toolbar-group toolbar-group--code-disabled">
           <select id="sel-font-family" class="toolbar__select" title="Font Family" aria-label="Font Family">
             <option value="">Default</option>
             <optgroup label="Bundled">
@@ -93,7 +94,7 @@
         </div>
 
         <!-- FORMAT GROUP -->
-        <div class="toolbar-group">
+        <div class="toolbar-group toolbar-group--code-disabled">
           <button id="btn-bold" class="toolbar__btn" title="Bold (Ctrl+B)">
             <span class="toolbar__btn-icon"><strong>B</strong></span>
           </button>
@@ -166,7 +167,7 @@
         </div>
 
         <!-- ALIGNMENT GROUP -->
-        <div class="toolbar-group toolbar-dropdown" id="align-dropdown">
+        <div class="toolbar-group toolbar-dropdown toolbar-group--code-disabled" id="align-dropdown">
           <button id="btn-align-menu" class="toolbar__btn" title="Text Alignment">
             <span class="toolbar__btn-icon">≡</span>
             <span class="toolbar__btn-text">Align</span>
@@ -194,7 +195,7 @@
         </div>
 
         <!-- LINE HEIGHT GROUP -->
-        <div class="toolbar-group">
+        <div class="toolbar-group toolbar-group--code-disabled">
           <select id="sel-line-height" class="toolbar__select" title="Line Height" aria-label="Line Height">
             <option value="1.0">1.0</option>
             <option value="1.15">1.15</option>
@@ -204,7 +205,7 @@
         </div>
 
         <!-- PAGE GROUP -->
-        <div class="toolbar-group">
+        <div class="toolbar-group toolbar-group--code-disabled">
           <button id="btn-page-break" class="toolbar__btn" title="Page Break">
             <span class="toolbar__btn-icon">⏎</span>
             <span class="toolbar__btn-text">Break</span>
@@ -224,7 +225,7 @@
         </div>
 
         <!-- MARGINS GROUP (dropdown with 4 fields) -->
-        <div class="toolbar-group margins-dropdown" id="width-group">
+        <div class="toolbar-group margins-dropdown toolbar-group--code-disabled" id="width-group">
           <button id="btn-margins" class="toolbar__btn" title="Page margins">
             <span class="toolbar__btn-icon">↔</span>
             <span class="toolbar__btn-text">Margins</span>
@@ -255,7 +256,7 @@
         </div>
 
         <!-- OVERFLOW GROUP (items that don't fit) -->
-        <div class="toolbar-group toolbar-dropdown" id="overflow-dropdown">
+        <div class="toolbar-group toolbar-dropdown toolbar-group--code-disabled" id="overflow-dropdown">
           <button id="btn-overflow-menu" class="toolbar__btn" title="More Tools">
             <span class="toolbar__btn-icon">⋯</span>
           </button>
@@ -533,8 +534,8 @@
           <button id="btn-suggestions" class="footer-btn" title="Suggestions (Proactive)">
             💡 Suggestions
           </button>
-          <button id="btn-ebooks" class="footer-btn" title="Ebooks Panel">
-            📚 Ebooks
+          <button id="btn-ebooks" class="footer-btn" title="Ebooks Editor Panel">
+            📚 Ebooks Editor
           </button>
           <button id="btn-mcp" class="footer-btn" title="MCP Panel">
             🧩 MCP

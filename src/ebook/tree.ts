@@ -3,6 +3,7 @@
 // Utilities for working with the ebook working-folder tree returned by the
 // backend (`ebook_work_list`).
 
+import { CODEMIRROR_EXTENSIONS } from "../editor/codemirror-languages";
 import type { EbookEntry } from "./types";
 
 /** Collect every file (non-directory) entry in the tree, depth-first. */
@@ -38,18 +39,8 @@ export function fileExtension(relativePath: string): string {
   return idx === -1 ? "" : name.slice(idx + 1).toLowerCase();
 }
 
-/** Whether the file is openable in the AuraWrite editor. */
+/** Whether the file is openable in CodeMirror (code mode, F3). */
 export function isOpenableFile(entry: EbookEntry): boolean {
   if (entry.is_dir) return false;
-  const ext = fileExtension(entry.relative_path);
-  return (
-    ext === "html" ||
-    ext === "htm" ||
-    ext === "xhtml" ||
-    ext === "md" ||
-    ext === "markdown" ||
-    ext === "txt" ||
-    ext === "json" ||
-    ext === "docx"
-  );
+  return CODEMIRROR_EXTENSIONS.includes(fileExtension(entry.relative_path));
 }

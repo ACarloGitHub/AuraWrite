@@ -243,6 +243,9 @@ function setupTopLevelButtons(): void {
         case "export-project":
           handleExportProject();
           break;
+        case "export-epub":
+          void exportEbookFromMenu();
+          break;
         case "save-project":
           handleSaveProject();
           break;
@@ -265,6 +268,8 @@ function setupTopLevelButtons(): void {
 }
 
 async function handleNew(): Promise<void> {
+  const { closeCodeMirror } = await import("./codemirror-editor");
+  closeCodeMirror();
   if (documentState.isDirty) {
     const { confirm } = await import("@tauri-apps/plugin-dialog");
     const ok = await confirm(
@@ -299,6 +304,12 @@ async function handleNew(): Promise<void> {
 }
 
 async function handleSave(): Promise<void> {
+  const { isCodeMirrorActive, saveCodeFile } = await import("./codemirror-editor");
+  if (isCodeMirrorActive()) {
+    await saveCodeFile();
+    return;
+  }
+
   if (documentState.path && !documentState.isDirty) {
     return;
   }
@@ -311,6 +322,21 @@ async function handleSave(): Promise<void> {
 }
 
 async function handleSaveAs(): Promise<void> {
+  const { isCodeMirrorActive, getCodeContent, getCodeFilePath } = await import(
+    "./codemirror-editor"
+  );
+  if (isCodeMirrorActive()) {
+    const content = getCodeContent();
+    const currentPath = getCodeFilePath();
+    if (content === null) return;
+    const base = currentPath ? currentPath.split(/[\\/]/).pop() ?? "file" : "file";
+    const { CODEMIRROR_FILTERS } = await import("./codemirror-languages");
+    const path = await getFilePath({ save: true, filters: CODEMIRROR_FILTERS, defaultPath: base });
+    if (!path) return;
+    await saveFile(path, "txt", content);
+    return;
+  }
+
   const filters = [
     { name: "ProseMirror JSON", extensions: ["json"] },
     { name: "Markdown", extensions: ["md"] },
@@ -374,6 +400,8 @@ async function saveFile(
 }
 
 async function handleOpen(): Promise<void> {
+  const { closeCodeMirror } = await import("./codemirror-editor");
+  closeCodeMirror();
   const filters = [
     { name: "Tutti i files supportati", extensions: ["json", "md", "txt", "html", "htm", "docx"] },
     { name: "AuraWrite JSON", extensions: ["json"] },
@@ -523,6 +551,11 @@ export async function openHTML(path: string, preprocess?: (html: string) => stri
 async function importEbookFromMenu(): Promise<void> {
   const { openEbookPanelAndImport } = await import("../ebook/panel");
   await openEbookPanelAndImport();
+}
+
+async function exportEbookFromMenu(): Promise<void> {
+  const { exportEbookFromMenu: exportFromPanel } = await import("../ebook/panel");
+  await exportFromPanel();
 }
 
 /**

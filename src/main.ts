@@ -9,7 +9,7 @@ import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey,
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
-import { initProjectPanel, handleSaveToDatabase } from "./editor/project-panel";
+import { initProjectPanel } from "./editor/project-panel";
 import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initEbookPanel } from "./ebook/panel";
 import { initErrorBoundaries, showErrorToast } from "./error-boundary";
@@ -1395,6 +1395,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initProjectPanel({
     onDocumentSelect: (doc) => {
       console.log("Document selected:", doc.title);
+      void import("./editor/codemirror-editor").then((m) => m.closeCodeMirror());
       resetChatChunks();
       setLoading(true);
       try {
@@ -1899,7 +1900,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
-      handleSaveToDatabase();
+      // Ctrl+S always triggers File > Save (the current file), never the
+      // project save (which has its own "Save Project" button).
+      const saveBtn = document.querySelector(
+        '.dropdown-item[data-action="save"]'
+      ) as HTMLButtonElement | null;
+      saveBtn?.click();
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "f") {
       e.preventDefault();

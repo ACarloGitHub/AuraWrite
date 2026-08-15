@@ -7,14 +7,7 @@
 
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
-import {
-  openHTML,
-  openJSON,
-  openMarkdown,
-  openTXT,
-  openDOCX,
-  closeCurrentFileIfInside,
-} from "../editor/toolbar";
+import { closeCurrentFileIfInside } from "../editor/toolbar";
 import { createColorBtn, openColorPicker } from "../editor/color-picker";
 import {
   ebookListAll,
@@ -25,7 +18,8 @@ import {
   writeEbookMeta,
   importEpub,
   exportEpub,
-  rewriteRelativeImageSrcs,
+  readFileText,
+  writeFileText,
   sanitizeFolderName,
 } from "./epub-io";
 import { fileExtension, isOpenableFile } from "./tree";
@@ -39,6 +33,8 @@ interface EbookItem {
 let ebooks: EbookItem[] = [];
 let selectedFolder: string | null = null;
 let selectedTree: EbookEntry[] = [];
+let selectedWorkDir: string | null = null;
+let openEntryAbsPath: string | null = null;
 
 export function initEbookPanel(): void {
   const btnEbooks = document.getElementById("btn-ebooks");
@@ -52,6 +48,15 @@ export function initEbookPanel(): void {
     render();
   });
 
+  // Keep the active-file highlight in sync with the CodeMirror editor state.
+  document.addEventListener("aurawrite:codemirror-changed", () => {
+    void (async () => {
+      const { getCodeFilePath } = await import("../editor/codemirror-editor");
+      openEntryAbsPath = getCodeFilePath();
+      if (selectedFolder) render();
+    })();
+  });
+
   void loadEbooks();
 }
 
@@ -62,11 +67,56 @@ export async function openEbookPanelAndImport(): Promise<void> {
   await handleImport();
 }
 
+/** Export the currently selected ebook (used by the File menu). */
+export async function exportEbookFromMenu(): Promise<void> {
+  await handleExport();
+}
+
 function toggleEbookPanel(): void {
   const panel = document.getElementById("ebook-panel");
   if (!panel) return;
+  const opening = panel.classList.contains("hidden");
   panel.classList.toggle("hidden");
   document.getElementById("btn-ebooks")?.classList.toggle("active", !panel.classList.contains("hidden"));
+  if (opening) maybeShowEbookInfo();
+}
+
+const EBOOK_INFO_KEY = "aurawrite-ebook-editor-info-seen";
+
+function maybeShowEbookInfo(): void {
+  if (localStorage.getItem(EBOOK_INFO_KEY)) return;
+  showEbookInfoDialog();
+}
+
+/** First-time info dialog explaining how the Ebook Editor works. */
+function showEbookInfoDialog(): void {
+  const overlay = document.createElement("div");
+  overlay.className = "ebook-info-overlay";
+  overlay.innerHTML = `
+    <div class="ebook-info-dialog">
+      <h3>Ebook Editor</h3>
+      <p>This panel lets you open and edit the files of an EPUB ebook.</p>
+      <p>When you import an EPUB, its contents are decompressed into a working folder inside AuraWrite. You can edit the files there, in their original format. <strong>Save</strong> saves the current file to that folder. <strong>Export EPUB</strong> repacks the whole ebook into a new .epub file at a location you choose.</p>
+      <p>Your original .epub file is never touched.</p>
+      <label class="ebook-info-option">
+        <input type="checkbox" id="ebook-info-dont-show" />
+        Don't show again
+      </label>
+      <div class="ebook-info-buttons">
+        <button class="ebook-info-ok">OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector(".ebook-info-ok")?.addEventListener("click", () => {
+    const dontShow = (overlay.querySelector("#ebook-info-dont-show") as HTMLInputElement).checked;
+    if (dontShow) localStorage.setItem(EBOOK_INFO_KEY, "1");
+    overlay.remove();
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
 }
 
 async function loadEbooks(): Promise<void> {
@@ -178,6 +228,7 @@ function renderList(container: HTMLElement): void {
 async function selectEbook(folder: string): Promise<void> {
   selectedFolder = folder;
   selectedTree = await ebookWorkList(folder);
+  selectedWorkDir = await ebookWorkDir(folder);
   render();
 }
 
@@ -207,6 +258,16 @@ function renderEntry(entry: EbookEntry, parent: HTMLElement, depth: number): voi
     row.addEventListener("click", () => void openEntry(entry));
   }
 
+  // Highlight the row of the file currently open in CodeMirror.
+  const norm = (p: string) => p.replace(/\\/g, "/");
+  if (
+    selectedWorkDir &&
+    openEntryAbsPath &&
+    norm(openEntryAbsPath) === norm(`${selectedWorkDir}/${entry.relative_path}`)
+  ) {
+    row.classList.add("ebook-tree__row--active");
+  }
+
   parent.appendChild(row);
   if (entry.is_dir) {
     for (const child of entry.children) renderEntry(child, parent, depth + 1);
@@ -218,17 +279,14 @@ async function openEntry(entry: EbookEntry): Promise<void> {
   const workDir = await ebookWorkDir(selectedFolder);
   const absPath = `${workDir}/${entry.relative_path}`;
   const ext = fileExtension(entry.relative_path);
-  if (ext === "html" || ext === "htm" || ext === "xhtml") {
-    await openHTML(absPath, (html) => rewriteRelativeImageSrcs(html, workDir));
-  } else if (ext === "md" || ext === "markdown") {
-    await openMarkdown(absPath);
-  } else if (ext === "json") {
-    await openJSON(absPath);
-  } else if (ext === "docx") {
-    await openDOCX(absPath);
-  } else {
-    await openTXT(absPath);
-  }
+
+  const { openFileInCodeMirror } = await import("../editor/codemirror-editor");
+  const content = await readFileText(absPath);
+  openFileInCodeMirror(absPath, content, ext, async (path, newContent) => {
+    await writeFileText(path, newContent);
+  });
+  openEntryAbsPath = absPath;
+  render();
 }
 
 async function handleImport(): Promise<void> {
@@ -284,6 +342,16 @@ async function handleDelete(item: EbookItem): Promise<void> {
   if (!ok) return;
   try {
     const workDir = await ebookWorkDir(item.folder);
+    const { isCodeMirrorActive, getCodeFilePath, closeCodeMirror } = await import(
+      "../editor/codemirror-editor"
+    );
+    if (isCodeMirrorActive()) {
+      const norm = (p: string) => p.replace(/\\/g, "/");
+      const codePath = getCodeFilePath();
+      if (codePath && norm(codePath).startsWith(norm(workDir))) {
+        closeCodeMirror();
+      }
+    }
     await closeCurrentFileIfInside(workDir);
     await ebookWorkDelete(item.folder);
     if (selectedFolder === item.folder) {

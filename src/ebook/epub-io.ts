@@ -58,6 +58,16 @@ async function saveDocument(path: string, content: string): Promise<void> {
   await invoke("save_document", { path, content });
 }
 
+/** Read a text file from disk (used to open files in CodeMirror). */
+export async function readFileText(path: string): Promise<string> {
+  return await loadDocument(path);
+}
+
+/** Write a text file to disk (used to save CodeMirror files). */
+export async function writeFileText(path: string, content: string): Promise<void> {
+  await saveDocument(path, content);
+}
+
 async function saveBinaryFile(path: string, bytes: Uint8Array): Promise<void> {
   await invoke("save_binary_file", { path, base64Content: bytesToBase64(bytes) });
 }
