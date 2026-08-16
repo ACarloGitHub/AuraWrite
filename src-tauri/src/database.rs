@@ -313,6 +313,13 @@ fn get_schema() -> String {
         updated_at INTEGER NOT NULL
     );
 
+    -- Per-project ebook export configuration (does NOT modify the project itself)
+    CREATE TABLE IF NOT EXISTS project_export_config (
+        project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+        config TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+
     -- User-defined writing styles (global, available across all projects)
     CREATE TABLE IF NOT EXISTS user_styles (
         id TEXT PRIMARY KEY,
@@ -648,6 +655,42 @@ pub fn update_project(conn: &Connection, project: &Project) -> SqliteResult<()> 
 
 pub fn delete_project(conn: &Connection, id: &str) -> SqliteResult<()> {
     conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+// ============================================================================
+// EBOOK EXPORT CONFIG (per-project; does NOT modify the project itself)
+// ============================================================================
+
+pub fn get_export_config(conn: &Connection, project_id: &str) -> SqliteResult<Option<String>> {
+    let mut stmt = conn.prepare("SELECT config FROM project_export_config WHERE project_id = ?1")?;
+    let mut rows = stmt.query(params![project_id])?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(row.get(0)?))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn set_export_config(
+    conn: &Connection,
+    project_id: &str,
+    config: &str,
+    now: i64,
+) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO project_export_config (project_id, config, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(project_id) DO UPDATE SET config = excluded.config, updated_at = excluded.updated_at",
+        params![project_id, config, now],
+    )?;
+    Ok(())
+}
+
+pub fn delete_export_config(conn: &Connection, project_id: &str) -> SqliteResult<()> {
+    conn.execute(
+        "DELETE FROM project_export_config WHERE project_id = ?1",
+        params![project_id],
+    )?;
     Ok(())
 }
 

@@ -60,6 +60,11 @@ const SAVE_DEBOUNCE_MS = 12000; // 12 seconds of inactivity
 // INITIALIZATION
 // ============================================================================
 
+/** Current open project, if any. Exposed for the ebook export dialog. */
+export function getCurrentProject(): Project | null {
+  return currentProject;
+}
+
 export function initProjectPanel(
   callbacks: {
     onDocumentSelect?: (doc: Document) => void;

@@ -110,6 +110,33 @@ fn db_delete_project(state: State<AppState>, id: String) -> Result<(), String> {
 }
 
 // ============================================================================
+// EBOOK EXPORT CONFIG COMMANDS (per-project; does NOT modify the project)
+// ============================================================================
+
+#[tauri::command]
+fn export_config_get(state: State<AppState>, project_id: String) -> Result<Option<String>, String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    database::get_export_config(&*conn, &project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_config_set(
+    state: State<AppState>,
+    project_id: String,
+    config: String,
+) -> Result<(), String> {
+    let now = now_ms();
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    database::set_export_config(&*conn, &project_id, &config, now).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn export_config_delete(state: State<AppState>, project_id: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    database::delete_export_config(&*conn, &project_id).map_err(|e| e.to_string())
+}
+
+// ============================================================================
 // USER STYLES COMMANDS
 // ============================================================================
 
@@ -1216,6 +1243,10 @@ pub fn run() {
             db_get_project,
             db_update_project,
             db_delete_project,
+            // Ebook export config commands
+            export_config_get,
+            export_config_set,
+            export_config_delete,
             // User styles commands
             db_list_user_styles,
             db_create_user_style,

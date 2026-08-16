@@ -246,6 +246,9 @@ function setupTopLevelButtons(): void {
         case "export-epub":
           void exportEbookFromMenu();
           break;
+        case "export-ebook":
+          void exportProjectEbookFromMenu();
+          break;
         case "save-project":
           handleSaveProject();
           break;
@@ -556,6 +559,17 @@ async function importEbookFromMenu(): Promise<void> {
 async function exportEbookFromMenu(): Promise<void> {
   const { exportEbookFromMenu: exportFromPanel } = await import("../ebook/panel");
   await exportFromPanel();
+}
+
+async function exportProjectEbookFromMenu(): Promise<void> {
+  const { getCurrentProject } = await import("./project-panel");
+  const project = getCurrentProject();
+  if (!project) {
+    alert("No project selected. Open a project from the Projects panel first.");
+    return;
+  }
+  const { openExportEbookDialog } = await import("./export-ebook-dialog");
+  await openExportEbookDialog(project.id);
 }
 
 /**
