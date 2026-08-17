@@ -58,6 +58,13 @@ export function initEbookPanel(): void {
 
   document.getElementById("btn-ebook-import")?.addEventListener("click", () => void handleImport());
   document.getElementById("btn-ebook-export")?.addEventListener("click", () => void handleExport());
+  document.getElementById("btn-ebook-audiobook")?.addEventListener("click", () => {
+    const folder = selectedFolder;
+    if (!folder) return;
+    void import("../formats/audiobook-generator").then((m) =>
+      m.exportToAudiobookGenerator({ folder })
+    );
+  });
   document.getElementById("btn-reader-import")?.addEventListener("click", () => void handleReaderImport());
   document.getElementById("btn-ebook-back")?.addEventListener("click", handleBack);
   document.getElementById("ebook-tab-editor")?.addEventListener("click", () => setActiveTab("editor"));
@@ -87,6 +94,11 @@ export function initEbookPanel(): void {
 function setActiveTab(tab: EbookTab): void {
   activeTab = tab;
   render();
+}
+
+/** Folder of the ebook currently selected in the Editor tab, if any. */
+export function getSelectedEbookFolder(): string | null {
+  return selectedFolder;
 }
 
 function handleBack(): void {
@@ -177,6 +189,7 @@ function render(): void {
   const btnExport = document.getElementById("btn-ebook-export") as HTMLButtonElement | null;
   const btnImport = document.getElementById("btn-ebook-import") as HTMLButtonElement | null;
   const btnReaderImport = document.getElementById("btn-reader-import") as HTMLButtonElement | null;
+  const btnAudiobook = document.getElementById("btn-ebook-audiobook") as HTMLButtonElement | null;
   const tabEditor = document.getElementById("ebook-tab-editor");
   const tabReader = document.getElementById("ebook-tab-reader");
   if (tabEditor) tabEditor.classList.toggle("ebook-tab--active", activeTab === "editor");
@@ -189,6 +202,7 @@ function render(): void {
     if (btnReaderImport) btnReaderImport.style.display = "inline-flex";
     if (btnExport) btnExport.style.display = "none";
     if (btnBack) btnBack.style.display = "none";
+    if (btnAudiobook) btnAudiobook.style.display = "none";
     renderReaderList(container);
     return;
   }
@@ -197,6 +211,7 @@ function render(): void {
   if (btnReaderImport) btnReaderImport.style.display = "none";
   if (btnExport) btnExport.style.display = selectedFolder ? "inline-flex" : "none";
   if (btnBack) btnBack.style.display = selectedFolder ? "inline-flex" : "none";
+  if (btnAudiobook) btnAudiobook.style.display = selectedFolder ? "inline-flex" : "none";
   if (!selectedFolder) renderList(container);
   else renderTree(container);
 }

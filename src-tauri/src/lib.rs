@@ -28,6 +28,7 @@ mod exec_tools;
 mod data_privacy;
 mod ocr;
 mod ocr_ai;
+mod audiobook_gen;
 use database::*;
 use updates::*;
 use fonts::*;
@@ -37,6 +38,7 @@ use ebook::{
     ebook_work_dir, ebook_work_delete, ebook_work_list, ebook_list_all, ebook_reader_dir,
     ebook_reader_delete, reader_books_load, reader_books_save, reader_state_load, reader_state_save,
 };
+use audiobook_gen::{audiobook_generator_export, audiobook_generator_status};
 use secrets::*;
 use workspace::*;
 use permissions::*;
@@ -1367,6 +1369,9 @@ pub fn run() {
             // Ebooks Reader — reading state (position + bookmarks)
             reader_state_load,
             reader_state_save,
+            // Audiobook Generator integration (R2)
+            audiobook_generator_status,
+            audiobook_generator_export,
             // Secrets (keychain)
             secrets_set,
             secrets_get,

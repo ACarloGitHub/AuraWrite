@@ -98,6 +98,14 @@ export function closeReaderViewer(): void {
   document.dispatchEvent(new Event("aurawrite:reader-state-changed"));
 }
 
+/** Export the book being read to Audiobook Generator (its original file). */
+async function exportReaderToAudiobook(): Promise<void> {
+  const book = currentBook;
+  if (!book) return;
+  const { exportToAudiobookGenerator } = await import("../formats/audiobook-generator");
+  await exportToAudiobookGenerator({ ebookPath: book.path });
+}
+
 function buildViewer(): void {
   const node = el();
   node.classList.remove("hidden");
@@ -144,6 +152,7 @@ function buildViewer(): void {
         <button id="reader-bookmarks-btn" class="ebook-panel__btn-sm" title="Show this book's bookmarks">📑 Bookmarks</button>
         <div id="reader-bookmarks-menu" class="reader-menu hidden"></div>
       </div>
+      <button id="reader-audiobook" class="ebook-panel__btn-sm" title="Export to Audiobook Generator">🎧</button>
       <button id="reader-fullscreen" class="ebook-panel__btn-sm" title="Fullscreen">⛶</button>
       <button id="reader-close" class="ebook-panel__btn-sm" title="Close reader">✕</button>
     </div>
@@ -212,6 +221,7 @@ function buildViewer(): void {
   node.querySelector("#reader-bookmarks-btn")?.addEventListener("click", () => {
     toggleMenu("reader-bookmarks-menu", renderBookmarksMenu);
   });
+  node.querySelector("#reader-audiobook")?.addEventListener("click", () => void exportReaderToAudiobook());
   node.querySelector("#reader-fullscreen")?.addEventListener("click", toggleFullscreen);
   node.querySelector("#reader-close")?.addEventListener("click", closeReaderViewer);
 

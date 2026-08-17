@@ -249,6 +249,9 @@ function setupTopLevelButtons(): void {
         case "export-ebook":
           void exportProjectEbookFromMenu();
           break;
+        case "export-audiobook":
+          void exportToAudiobookGeneratorFromMenu();
+          break;
         case "save-project":
           handleSaveProject();
           break;
@@ -570,6 +573,11 @@ async function exportProjectEbookFromMenu(): Promise<void> {
   }
   const { openExportEbookDialog } = await import("./export-ebook-dialog");
   await openExportEbookDialog(project.id);
+}
+
+async function exportToAudiobookGeneratorFromMenu(): Promise<void> {
+  const { exportToAudiobookGenerator } = await import("../formats/audiobook-generator");
+  await exportToAudiobookGenerator();
 }
 
 /**
