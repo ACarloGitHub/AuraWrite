@@ -49,14 +49,14 @@ fn candidate_app_paths() -> Vec<PathBuf> {
             out.push(
                 Path::new(&local)
                     .join("Audiobook Generator")
-                    .join("Audiobook Generator.exe"),
+                    .join("audiobook-generator.exe"),
             );
         }
         if let Some(prog) = std::env::var_os("ProgramFiles") {
             out.push(
                 Path::new(&prog)
                     .join("Audiobook Generator")
-                    .join("Audiobook Generator.exe"),
+                    .join("audiobook-generator.exe"),
             );
         }
     }
