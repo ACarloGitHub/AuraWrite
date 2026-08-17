@@ -184,7 +184,7 @@ export async function resolveContextWindowFromAPI(provider: string, model: strin
       if (!resp.ok) return null;
       const body = await resp.json();
       if (body?.data && Array.isArray(body.data)) {
-        const found = body.data.find((m: any) => m.id && m.id.toLowerCase() === model.toLowerCase());
+        const found = body.data.find((m: { id?: string; context_length?: number }) => m.id && m.id.toLowerCase() === model.toLowerCase());
         if (found && typeof found.context_length === "number" && found.context_length > 0) {
           return found.context_length;
         }

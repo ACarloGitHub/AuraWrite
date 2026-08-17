@@ -187,6 +187,7 @@ describe("editor_edit executor", () => {
   it("insert_at_cursor inserts at the caret", async () => {
     const view = makeView("Hello world.");
     // place caret in the middle (after "Hello", pos 6)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tr = view.state.tr.setSelection((view.state.selection.constructor as any).create(view.state.doc, 6));
     view.dispatch(tr);
     const r = await executeTool({ name: "editor_edit", arguments: { action: "insert_at_cursor", content: "[X]" } }, { editorView: view });
@@ -243,6 +244,7 @@ describe("editor_edit executor", () => {
   it("replace_selection replaces the live selection range", async () => {
     const view = makeView("Hello world.");
     // select "world"
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const TextSelection = view.state.selection.constructor as any;
     const doc = view.state.doc;
     const from = 1 + "Hello ".length; // pos of 'w'

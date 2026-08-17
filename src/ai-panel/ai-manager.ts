@@ -224,7 +224,7 @@ async function resolveAndCacheContextWindow(provider: string, model: string): Pr
   if (cached !== null) return;
   const settings = loadAIFromPreferences();
   const apiKey = getCachedApiKey(provider) || "";
-  const baseUrl = getProviderBaseUrl(provider as any, settings.aiBaseUrl);
+  const baseUrl = getProviderBaseUrl(provider, settings.aiBaseUrl);
   try {
     const ctx = await resolveContextWindowFromAPI(provider, model, apiKey, baseUrl);
     if (ctx !== null && ctx > 0) {

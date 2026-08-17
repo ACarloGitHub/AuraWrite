@@ -1676,7 +1676,7 @@ export function fromMarkdownToDocx(markdown: string): Document {
 
 function parseInlineMarkdownToRuns(text: string): (TextRun | ExternalHyperlink)[] {
   const runs: (TextRun | ExternalHyperlink)[] = [];
-  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[(.+?)\]\((.+?)\)|[^*\[`]+)/g;
+  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[(.+?)\]\((.+?)\)|[^*[`]+)/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {

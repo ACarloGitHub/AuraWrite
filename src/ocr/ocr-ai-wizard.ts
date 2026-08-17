@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { ocrAiDownloadModel, ocrAiCheckVram, ocrAiDownloadResources } from "./ocr-ai-engine";
 
 const WIZARD_KEY = "aurawrite-ocr-ai-wizard-dismissed";
@@ -41,13 +40,6 @@ function hideOcrAiWizard(): void {
 
 let currentStep: "welcome" | "hardware" | "download" | "done" = "welcome";
 let vramInfo: VramInfo | null = null;
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
 
 function renderOcrWizardStep(): void {
   const title = document.getElementById("ocr-ai-wizard-title");

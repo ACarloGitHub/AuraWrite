@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ocrAiListModels, ocrAiDownloadModel, ocrAiRemoveModel, ocrAiCheckVram, ocrAiSpawnServer, ocrAiStopServer, ocrAiDownloadResources, ocrAiRemoveResources, ocrAiLlamacppVariant } from "./ocr-ai-engine";
+import { ocrAiListModels, ocrAiDownloadModel, ocrAiRemoveModel, ocrAiCheckVram, ocrAiDownloadResources, ocrAiRemoveResources, ocrAiLlamacppVariant } from "./ocr-ai-engine";
 
 interface OcrLanguageInfo {
   code: string;

@@ -7,15 +7,16 @@ import {
   getFormatFromPath,
 } from "./ocr-processor";
 import { terminateOcrWorker } from "./ocr-engine";
-import { runOcrAi, ocrAiListModels, ocrAiDownloadModel, isOcrAiLanguageSupported, cancelOcrAi, OCR_AI_SUPPORTED_LANGUAGES, TESSERACT_FALLBACK_LANGUAGES } from "./ocr-ai-engine";
+import { runOcrAi, isOcrAiLanguageSupported, cancelOcrAi, OCR_AI_SUPPORTED_LANGUAGES, TESSERACT_FALLBACK_LANGUAGES } from "./ocr-ai-engine";
 import { fromMarkdown } from "../formats/markdown";
 import { OcrOptions, OcrQuality, OcrProgress, OcrFileFormat } from "./ocr-types";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { fromMarkdownToDocx, Packer } from "../formats/docx";
+import type { EditorView } from "prosemirror-view";
+import type { Node } from "prosemirror-model";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EditorViewLike = { state: any; dispatch: any; focus: () => void };
+type EditorViewLike = EditorView;
 
 interface OcrLanguageInfo {
   code: string;
@@ -280,11 +281,11 @@ async function runOcrAiAndInsert(
   }
 
   if (outputMode === "insert") {
-    const editorView = (window as any)._auraWriteEditorView as EditorViewLike | null;
+    const editorView = (window as unknown as { _auraWriteEditorView?: EditorViewLike | null })._auraWriteEditorView ?? null;
     if (editorView) {
       const doc = fromMarkdown(fullText);
       const schema = editorView.state.schema;
-      const nodes: any[] = [];
+      const nodes: Node[] = [];
 
       for (const node of doc.content || []) {
         const pmNode = schema.nodeFromJSON(node);
@@ -328,7 +329,7 @@ async function runOcrAiAndInsert(
     } else {
       const plainText = result.pages
         .filter((p) => !p.error)
-        .map((p) => p.text.replace(/[#*_`>\[\]()]/g, "").trim())
+        .map((p) => p.text.replace(/[#*_`>()]/g, "").replace(/\[/g, "").replace(/]/g, "").trim())
         .join("\n\n");
       await invoke("save_document", { path: savePath, content: plainText });
     }
@@ -341,7 +342,7 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
   if (!bar) return;
   ocrBar = bar;
 
-  (window as any)._auraWriteEditorView = editorViewGetter();
+  (window as unknown as { _auraWriteEditorView?: EditorViewLike | null })._auraWriteEditorView = editorViewGetter();
 
   void refreshLanguageDropdown();
 
@@ -418,7 +419,7 @@ export function initOcrToolbar(editorViewGetter: () => EditorViewLike | null): v
             `The language "${lang}" is not supported by LightOnOCR AI. It will fall back to Tesseract.\n\nSupported languages: en, fr, de, es, it, pt, nl, sv, da, zh, ja`,
           );
           const options = getOptions();
-          const result = await runOcr(currentFile, options, onProgress);
+          await runOcr(currentFile, options, onProgress);
           // ...handle Tesseract fallback result same as below
           return;
         }

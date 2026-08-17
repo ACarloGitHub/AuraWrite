@@ -11,7 +11,7 @@ export interface RetryOptions {
   signal?: AbortSignal;
 }
 
-export interface FetchWithTimeoutOptions extends RequestInit {
+export interface FetchWithTimeoutOptions extends globalThis.RequestInit {
   connectTimeout?: number;
   requestTimeout?: number;
   maxRedirections?: number;

@@ -13,7 +13,7 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 
-use crate::resources::{download_to_file_async, resources_dir, llamacpp_ocr_dir};
+use crate::resources::{download_to_file_async, resources_dir};
 
 const OCR_AI_MODEL_ID: &str = "lighton-ocr-2-1b";
 

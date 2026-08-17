@@ -35,8 +35,6 @@ type LlamaServerStatus = {
   model_path: string | null;
 };
 
-let serverPort: number | null = null;
-
 let cancelController: AbortController | null = null;
 let cancelled = false;
 
@@ -83,14 +81,10 @@ export async function ocrAiSpawnServer(
     quantization,
     port: port ?? OCR_AI_DEFAULT_PORT,
   });
-  if (result.running && result.port) {
-    serverPort = result.port;
-  }
   return result;
 }
 
 export async function ocrAiStopServer(): Promise<LlamaServerStatus> {
-  serverPort = null;
   return invoke<LlamaServerStatus>("ocr_ai_stop_server");
 }
 
