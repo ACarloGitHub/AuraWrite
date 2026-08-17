@@ -24,6 +24,17 @@ import {
 } from "./epub-io";
 import { fileExtension, isOpenableFile } from "./tree";
 import type { EbookEntry, EbookMeta } from "./types";
+import {
+  loadBinaryFile,
+  pathStatus,
+  readerBooksLoad,
+  readerBooksSave,
+  readerWorkDelete,
+  readerStateLoad,
+  extractReaderEpub,
+} from "./reader-io";
+import type { ReaderBook, ReaderBookState } from "./reader-io";
+import { openReaderViewer, closeReaderViewer, isReaderViewerOpen } from "./reader-viewer";
 
 interface EbookItem {
   folder: string;
@@ -36,17 +47,21 @@ let selectedTree: EbookEntry[] = [];
 let selectedWorkDir: string | null = null;
 let openEntryAbsPath: string | null = null;
 
+type EbookTab = "editor" | "reader";
+let activeTab: EbookTab = "editor";
+let readerBooks: ReaderBook[] = [];
+let readerState: Record<string, ReaderBookState> = {};
+
 export function initEbookPanel(): void {
   const btnEbooks = document.getElementById("btn-ebooks");
   btnEbooks?.addEventListener("click", toggleEbookPanel);
 
   document.getElementById("btn-ebook-import")?.addEventListener("click", () => void handleImport());
   document.getElementById("btn-ebook-export")?.addEventListener("click", () => void handleExport());
-  document.getElementById("btn-ebook-back")?.addEventListener("click", () => {
-    selectedFolder = null;
-    selectedTree = [];
-    render();
-  });
+  document.getElementById("btn-reader-import")?.addEventListener("click", () => void handleReaderImport());
+  document.getElementById("btn-ebook-back")?.addEventListener("click", handleBack);
+  document.getElementById("ebook-tab-editor")?.addEventListener("click", () => setActiveTab("editor"));
+  document.getElementById("ebook-tab-reader")?.addEventListener("click", () => setActiveTab("reader"));
 
   // Keep the active-file highlight in sync with the CodeMirror editor state.
   document.addEventListener("aurawrite:codemirror-changed", () => {
@@ -57,7 +72,27 @@ export function initEbookPanel(): void {
     })();
   });
 
+  // Refresh the reading summaries when the reader state changes (viewer).
+  document.addEventListener("aurawrite:reader-state-changed", () => {
+    void (async () => {
+      readerState = await readerStateLoad();
+      render();
+    })();
+  });
+
   void loadEbooks();
+  void loadReaderBooks();
+}
+
+function setActiveTab(tab: EbookTab): void {
+  activeTab = tab;
+  render();
+}
+
+function handleBack(): void {
+  selectedFolder = null;
+  selectedTree = [];
+  render();
 }
 
 /** Show the Ebooks panel and start the EPUB import flow (used by the File menu). */
@@ -140,15 +175,197 @@ function render(): void {
   if (!container) return;
   const btnBack = document.getElementById("btn-ebook-back") as HTMLButtonElement | null;
   const btnExport = document.getElementById("btn-ebook-export") as HTMLButtonElement | null;
-  if (btnBack) btnBack.style.display = selectedFolder ? "inline-flex" : "none";
-  if (btnExport) btnExport.style.display = selectedFolder ? "inline-flex" : "none";
+  const btnImport = document.getElementById("btn-ebook-import") as HTMLButtonElement | null;
+  const btnReaderImport = document.getElementById("btn-reader-import") as HTMLButtonElement | null;
+  const tabEditor = document.getElementById("ebook-tab-editor");
+  const tabReader = document.getElementById("ebook-tab-reader");
+  if (tabEditor) tabEditor.classList.toggle("ebook-tab--active", activeTab === "editor");
+  if (tabReader) tabReader.classList.toggle("ebook-tab--active", activeTab === "reader");
 
   container.innerHTML = "";
-  if (!selectedFolder) {
-    renderList(container);
-  } else {
-    renderTree(container);
+
+  if (activeTab === "reader") {
+    if (btnImport) btnImport.style.display = "none";
+    if (btnReaderImport) btnReaderImport.style.display = "inline-flex";
+    if (btnExport) btnExport.style.display = "none";
+    if (btnBack) btnBack.style.display = "none";
+    renderReaderList(container);
+    return;
   }
+
+  if (btnImport) btnImport.style.display = "inline-flex";
+  if (btnReaderImport) btnReaderImport.style.display = "none";
+  if (btnExport) btnExport.style.display = selectedFolder ? "inline-flex" : "none";
+  if (btnBack) btnBack.style.display = selectedFolder ? "inline-flex" : "none";
+  if (!selectedFolder) renderList(container);
+  else renderTree(container);
+}
+
+async function loadReaderBooks(): Promise<void> {
+  try {
+    readerBooks = await readerBooksLoad();
+  } catch (e) {
+    console.error("[reader] failed to load books:", e);
+    readerBooks = [];
+  }
+  try {
+    readerState = await readerStateLoad();
+  } catch (e) {
+    console.error("[reader] failed to load reading state:", e);
+    readerState = {};
+  }
+  render();
+}
+
+function renderReaderList(container: HTMLElement): void {
+  container.innerHTML = "";
+  if (readerBooks.length === 0) {
+    container.innerHTML = `
+      <div class="ebook-panel__empty">
+        <p>No ebooks in Reader</p>
+        <p class="hint">Click "+" to add an ebook (the original file is not copied)</p>
+      </div>`;
+    return;
+  }
+  for (const book of readerBooks) {
+    const el = document.createElement("div");
+    el.className = "ebook-item";
+    el.style.background = book.color ?? "#252525";
+    el.style.color = book.textColor ?? "#ffffff";
+    el.addEventListener("click", () => void openBookInViewer(book));
+
+    const main = document.createElement("div");
+    main.className = "ebook-item__main";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "ebook-item__name";
+    nameEl.textContent = book.name;
+    nameEl.title = book.path;
+    nameEl.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      startInlineRename(nameEl, book.name, async (newName) => {
+        book.name = newName;
+        await readerBooksSave(readerBooks);
+        renderReaderList(container);
+      });
+    });
+    main.appendChild(nameEl);
+
+    const summaryEl = document.createElement("span");
+    summaryEl.className = "ebook-item__summary";
+    const st = readerState[book.id];
+    if (st && st.chapterIndex > 0) {
+      const pct = st.scrollRatio > 0 ? ` · ${Math.round(st.scrollRatio * 100)}%` : "";
+      summaryEl.textContent = `Chapter ${st.chapterIndex + 1}${pct}`;
+    } else if (st && st.scrollRatio > 0) {
+      summaryEl.textContent = `Chapter 1 · ${Math.round(st.scrollRatio * 100)}%`;
+    } else {
+      summaryEl.textContent = "Not started";
+    }
+    main.appendChild(summaryEl);
+
+    el.appendChild(main);
+
+    if (typeof book.path !== "string") {
+      summaryEl.textContent = "File not found";
+      summaryEl.classList.add("ebook-item__summary--missing");
+    } else {
+      void pathStatus(book.path)
+        .then((status) => {
+          if (status !== "file") {
+            summaryEl.textContent = "File not found";
+            summaryEl.classList.add("ebook-item__summary--missing");
+          }
+        })
+        .catch(() => {});
+    }
+
+    const colorBtn = createColorBtn();
+    colorBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openColorPicker({
+        itemType: "reader",
+        itemId: book.id,
+        currentName: book.name,
+        currentBg: book.color,
+        currentText: book.textColor,
+        onSave: async (newName, bg, text) => {
+          book.name = newName;
+          book.color = bg;
+          book.textColor = text;
+          await readerBooksSave(readerBooks);
+          renderReaderList(container);
+        },
+        onReset: async () => {
+          book.color = undefined;
+          book.textColor = undefined;
+          await readerBooksSave(readerBooks);
+          renderReaderList(container);
+        },
+      });
+    });
+    el.appendChild(colorBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "delete-btn";
+    delBtn.textContent = "×";
+    delBtn.title = "Remove from Reader";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void handleReaderDelete(book);
+    });
+    el.appendChild(delBtn);
+
+    container.appendChild(el);
+  }
+}
+
+/** Unpack the book (on the fly) and open it in the reader viewer. */
+async function openBookInViewer(book: ReaderBook): Promise<void> {
+  const status = await pathStatus(book.path);
+  if (status !== "file") {
+    alert("The ebook file is not found on disk.");
+    return;
+  }
+  try {
+    const data = await loadBinaryFile(book.path);
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+    await extractReaderEpub(buffer, book.id);
+    await openReaderViewer(book);
+  } catch (e) {
+    console.error("[reader] failed to open book:", e);
+    alert("Failed to open ebook.");
+  }
+}
+
+async function handleReaderImport(): Promise<void> {
+  const picked = await open({
+    multiple: false,
+    filters: [{ name: "EPUB", extensions: ["epub"] }],
+  });
+  if (!picked || typeof picked !== "string") return;
+  const base = (picked.split(/[\\/]/).pop() ?? "ebook").replace(/\.epub$/i, "");
+  const book: ReaderBook = { id: `r${Date.now().toString(36)}`, path: picked, name: base || "ebook" };
+  try {
+    readerBooks.push(book);
+    await readerBooksSave(readerBooks);
+  } catch (e) {
+    console.error("[reader] failed to save books:", e);
+  }
+  render();
+}
+
+async function handleReaderDelete(book: ReaderBook): Promise<void> {
+  const ok = await showConfirmDialog(
+    `Remove "${book.name}" from Reader?`,
+    "The original ebook file is not deleted."
+  );
+  if (!ok) return;
+  readerBooks = readerBooks.filter((b) => b.id !== book.id);
+  await readerBooksSave(readerBooks);
+  if (isReaderViewerOpen()) closeReaderViewer();
+  await readerWorkDelete(book.id).catch(() => {});
+  render();
 }
 
 function renderList(container: HTMLElement): void {

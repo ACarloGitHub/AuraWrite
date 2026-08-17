@@ -33,7 +33,10 @@ use updates::*;
 use fonts::*;
 use resources::*;
 use vault_export::*;
-use ebook::{ebook_work_dir, ebook_work_delete, ebook_work_list, ebook_list_all};
+use ebook::{
+    ebook_work_dir, ebook_work_delete, ebook_work_list, ebook_list_all, ebook_reader_dir,
+    ebook_reader_delete, reader_books_load, reader_books_save, reader_state_load, reader_state_save,
+};
 use secrets::*;
 use workspace::*;
 use permissions::*;
@@ -1356,6 +1359,14 @@ pub fn run() {
             ebook_work_list,
             ebook_work_delete,
             ebook_list_all,
+            // Ebooks Reader — books list + on-the-fly reading folders
+            ebook_reader_dir,
+            ebook_reader_delete,
+            reader_books_load,
+            reader_books_save,
+            // Ebooks Reader — reading state (position + bookmarks)
+            reader_state_load,
+            reader_state_save,
             // Secrets (keychain)
             secrets_set,
             secrets_get,

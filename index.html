@@ -375,18 +375,21 @@
         <aside id="ebook-panel" class="ebook-panel hidden">
           <div class="panel-resize-handle panel-resize-handle--ebooks" data-resize="ebooks" title="Drag to resize, double-click to reset"></div>
           <div class="ebook-panel__header">
-            <div class="ebook-panel__header-left">
-              <h3>Ebooks</h3>
+            <div class="ebook-tabs">
+              <button id="ebook-tab-editor" class="ebook-tab ebook-tab--active" data-ebook-tab="editor">Editor</button>
+              <button id="ebook-tab-reader" class="ebook-tab" data-ebook-tab="reader">Reader</button>
             </div>
             <div class="ebook-panel__header-right">
-              <button id="btn-ebook-back" class="ebook-panel__btn-sm" title="Back to ebook list" style="display:none;">←</button>
+              <button id="btn-ebook-back" class="ebook-panel__btn-sm" title="Back" style="display:none;">←</button>
               <button id="btn-ebook-export" class="ebook-panel__btn-sm" title="Export EPUB" style="display:none;">⬇</button>
               <button id="btn-ebook-import" class="ebook-panel__btn-sm" title="Import EPUB">+</button>
+              <button id="btn-reader-import" class="ebook-panel__btn-sm" title="Add ebook to Reader" style="display:none;">+</button>
             </div>
           </div>
           <div id="ebook-content" class="ebook-panel__content"></div>
         </aside>
           <div id="editor"></div>
+          <div id="reader-viewer" class="reader-viewer hidden"></div>
         <div id="paginated-container" style="display: none"></div>
         <aside id="mcp-panel" class="mcp-panel hidden">
           <div class="panel-resize-handle panel-resize-handle--mcp" data-resize="mcp" title="Drag to resize, double-click to reset"></div>
@@ -535,8 +538,8 @@
           <button id="btn-suggestions" class="footer-btn" title="Suggestions (Proactive)">
             💡 Suggestions
           </button>
-          <button id="btn-ebooks" class="footer-btn" title="Ebooks Editor Panel">
-            📚 Ebooks Editor
+          <button id="btn-ebooks" class="footer-btn" title="Ebooks Panel">
+            📚 Ebooks
           </button>
           <button id="btn-mcp" class="footer-btn" title="MCP Panel">
             🧩 MCP

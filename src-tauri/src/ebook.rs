@@ -154,3 +154,105 @@ pub fn ebook_work_delete(app: tauri::AppHandle, folder: String) -> Result<(), St
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Reader (scheda "Ebooks" → Reader)
+// ---------------------------------------------------------------------------
+//
+// The Reader does not copy the user's ebook: it only registers its path in
+// `<app_data>/reader-books.json`. For reading, the EPUB is unpacked on the fly
+// into `<app_data>/ebook-reader/<book-id>/` so chapters and images can be
+// shown without touching the original file.
+
+/// Filename of the persisted Reader books list (inside the app data dir).
+pub const READER_BOOKS_FILENAME: &str = "reader-books.json";
+
+/// Root of the per-book reading folders: `<app_data>/ebook-reader/`.
+fn reader_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?;
+    Ok(app_data.join("ebook-reader"))
+}
+
+/// Create (if needed) and return the reading folder
+/// `<app_data>/ebook-reader/<id>` for a Reader book.
+#[tauri::command]
+pub fn ebook_reader_dir(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let safe = sanitize_folder(&id);
+    if safe.is_empty() {
+        return Err("Invalid id".into());
+    }
+    let dir = reader_root(&app)?.join(safe);
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create reader folder: {}", e))?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
+/// Delete the reading folder `<app_data>/ebook-reader/<id>` (recursively).
+/// Succeeds silently if it does not exist.
+#[tauri::command]
+pub fn ebook_reader_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let safe = sanitize_folder(&id);
+    if safe.is_empty() {
+        return Err("Invalid id".into());
+    }
+    let dir = reader_root(&app)?.join(safe);
+    if dir.exists() {
+        fs::remove_dir_all(&dir).map_err(|e| format!("Failed to delete reader folder: {}", e))?;
+    }
+    Ok(())
+}
+
+/// Load the persisted Reader books list as JSON (`[]` when missing).
+#[tauri::command]
+pub fn reader_books_load(app: tauri::AppHandle) -> Result<String, String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?
+        .join(READER_BOOKS_FILENAME);
+    match fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(_) => Ok("[]".to_string()),
+    }
+}
+
+/// Persist the Reader books list as JSON (replaces the whole list).
+#[tauri::command]
+pub fn reader_books_save(app: tauri::AppHandle, books: String) -> Result<(), String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?
+        .join(READER_BOOKS_FILENAME);
+    fs::write(&path, books).map_err(|e| format!("Failed to save reader books: {}", e))
+}
+
+/// Filename of the persisted Reader reading state (position + bookmarks).
+pub const READER_STATE_FILENAME: &str = "reader-state.json";
+
+/// Load the persisted Reader reading state as JSON (`{}` when missing).
+#[tauri::command]
+pub fn reader_state_load(app: tauri::AppHandle) -> Result<String, String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?
+        .join(READER_STATE_FILENAME);
+    match fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(_) => Ok("{}".to_string()),
+    }
+}
+
+/// Persist the Reader reading state as JSON (replaces the whole map).
+#[tauri::command]
+pub fn reader_state_save(app: tauri::AppHandle, state: String) -> Result<(), String> {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir error: {}", e))?
+        .join(READER_STATE_FILENAME);
+    fs::write(&path, state).map_err(|e| format!("Failed to save reader state: {}", e))
+}

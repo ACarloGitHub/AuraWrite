@@ -18,10 +18,12 @@ const ALPHA_MAP: Record<string, number> = {
   project: 0.15,
   section: 0.12,
   document: 0.08,
+  ebook: 0.12,
+  reader: 0.12,
 };
 
 export interface ColorPickerOptions {
-  itemType: "project" | "section" | "document" | "ebook";
+  itemType: "project" | "section" | "document" | "ebook" | "reader";
   itemId: string;
   currentName: string;
   currentBg?: string | null;
@@ -44,7 +46,7 @@ export function openColorPicker(options: ColorPickerOptions): void {
   overlay.className = "color-picker-overlay active";
 
   const alpha = ALPHA_MAP[itemType] || 0.12;
-  const labelMap: Record<string, string> = { project: "Project", section: "Section", document: "Document", ebook: "Ebook" };
+  const labelMap: Record<string, string> = { project: "Project", section: "Section", document: "Document", ebook: "Ebook", reader: "Reader book" };
 
   overlay.innerHTML = `
     <div class="color-picker-modal">
