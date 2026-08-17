@@ -81,10 +81,11 @@ AuraWrite exists to channel that lightning. A spark of an idea, caught in the ri
 ### What you get
 
 - ⚡ **A serious editor** — ProseMirror underneath, with real A4 pagination, tables, images, links, undo/redo, find & replace
+- 📚 **An ebook reader** — import and edit EPUB books faithfully, or read them like a real book: true table of contents, cover, bookmarks and a remembered reading position
 - 🧠 **An AI that remembers** — proactive suggestions in the writing style you choose, plus a conversational assistant that can query your project's database, your characters, your documents
 - 🔒 **100% local, your data, your rules** — works offline, no telemetry, no cloud account
 - 🎨 **Themes per project** — Calvino-style for one manuscript, Hemingway-style for another, dark mode for late nights
-- 🗄️ **Your formats, your choice** — JSON, Markdown, HTML, DOCX. EPUB and Obsidian vault export coming soon.
+- 🗄️ **Your formats, your choice** — JSON, Markdown, HTML, DOCX, and EPUB: import, edit and read your books, and export any project as an ebook. Obsidian vault export coming soon.
 - ♾️ **Life-long** — MIT licensed, download once, keep it forever, no one to cancel
 
 AuraWrite is free and open source. It will stay that way — MIT guarantees it.
@@ -177,6 +178,17 @@ This is what makes the AI feel less like a stranger typing in your document and 
 
 ---
 
+## 📚 Ebooks
+
+AuraWrite works with **EPUB books** in the dedicated Ebooks panel, which has two tabs:
+
+- **Editor** — import an EPUB and edit its files faithfully. The book is unpacked into a private working folder and every file is preserved byte-for-byte; chapters open in a real source editor with syntax highlighting, so nothing is lost in translation.
+- **Reader** — add an EPUB and read it like a book: faithful rendering with the book's own styles, images and embedded fonts (obfuscated fonts are handled automatically), a true table of contents with clickable chapters, the cover shown on first open, a saved reading position, and bookmarks with a visual marker. While reading, the main formatting toolbar is disabled — reading controls (font, size, line height) live in the reader bar and apply to the whole book.
+
+You can also **export any project as an EPUB** from the File menu: pick what goes into the book, label sections as Front Matter / Part / Chapter / Scene / Back Matter, reorder them, choose a cover, and AuraWrite compiles the ebook for you.
+
+---
+
 ## 🤖 AI Configuration
 
 AuraWrite works with the AI provider of your choice. You can mix and match, switch at any time, and your settings stay on your machine.
@@ -232,7 +244,7 @@ Windows: %APPDATA%\aurawrite\
 macOS:   ~/Library/Application Support/aurawrite/
 ```
 
-Export anytime to JSON, Markdown, HTML, or DOCX. EPUB and Obsidian vault export are coming soon.
+Export anytime to JSON, Markdown, HTML, DOCX, or EPUB (any project can be exported as an ebook). Read and edit EPUB books in the dedicated Ebooks panel. Obsidian vault export is coming soon.
 
 ---
 
