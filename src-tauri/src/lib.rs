@@ -38,7 +38,9 @@ use ebook::{
     ebook_work_dir, ebook_work_delete, ebook_work_list, ebook_list_all, ebook_reader_dir,
     ebook_reader_delete, reader_books_load, reader_books_save, reader_state_load, reader_state_save,
 };
-use audiobook_gen::{audiobook_generator_export, audiobook_generator_status};
+use audiobook_gen::{
+    audiobook_generator_export, audiobook_generator_set_path, audiobook_generator_status,
+};
 use secrets::*;
 use workspace::*;
 use permissions::*;
@@ -1371,6 +1373,7 @@ pub fn run() {
             reader_state_save,
             // Audiobook Generator integration (R2)
             audiobook_generator_status,
+            audiobook_generator_set_path,
             audiobook_generator_export,
             // Secrets (keychain)
             secrets_set,

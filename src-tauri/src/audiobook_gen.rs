@@ -20,6 +20,9 @@ const PROPOSAL_FILENAME: &str = "aurawrite-proposal.json";
 const VISIT_CARD_FILENAME: &str = "aurawrite-visit-card.json";
 /// Unified ebook catalog published by AuraWrite (Editor + Reader).
 const CATALOG_FILENAME: &str = "aurawrite-ebooks.json";
+/// Manual override of the Audiobook Generator app path, chosen by the user
+/// (installations in non-standard locations). Stored in AuraWrite's data dir.
+const MANUAL_PATH_FILENAME: &str = "audiobook-generator-path.txt";
 
 #[derive(Serialize)]
 pub struct AudiobookGenInfo {
@@ -72,8 +75,23 @@ fn candidate_app_paths() -> Vec<PathBuf> {
     out
 }
 
-fn find_audiobook_generator() -> AudiobookGenInfo {
+/// Read the user-chosen app path override, if present and still valid.
+fn manual_app_path(app_data: &Path) -> Option<PathBuf> {
+    let raw = fs::read_to_string(app_data.join(MANUAL_PATH_FILENAME)).ok()?;
+    let p = PathBuf::from(raw.trim());
+    p.exists().then_some(p)
+}
+
+fn find_audiobook_generator(app_data: &Path) -> AudiobookGenInfo {
     let data_dir = audiobook_data_dir();
+    // The user-chosen path wins over the standard install locations.
+    if let Some(p) = manual_app_path(app_data) {
+        return AudiobookGenInfo {
+            found: true,
+            app_path: Some(p.to_string_lossy().to_string()),
+            data_dir: data_dir.to_string_lossy().to_string(),
+        };
+    }
     for p in candidate_app_paths() {
         if p.exists() {
             return AudiobookGenInfo {
@@ -107,10 +125,37 @@ fn open_app(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("app data dir error: {e}"))
+}
+
 /// Report whether Audiobook Generator is installed and where its data lives.
 #[tauri::command]
-pub fn audiobook_generator_status(_app: tauri::AppHandle) -> Result<AudiobookGenInfo, String> {
-    Ok(find_audiobook_generator())
+pub fn audiobook_generator_status(app: tauri::AppHandle) -> Result<AudiobookGenInfo, String> {
+    Ok(find_audiobook_generator(&app_data_dir(&app)?))
+}
+
+/// Store (or clear) a manual app path chosen by the user. Pass an empty
+/// string to remove the override.
+#[tauri::command]
+pub fn audiobook_generator_set_path(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<bool, String> {
+    let dir = app_data_dir(&app)?;
+    let target = dir.join(MANUAL_PATH_FILENAME);
+    let trimmed = path.trim().to_string();
+    if trimmed.is_empty() {
+        let _ = fs::remove_file(&target);
+        return Ok(false);
+    }
+    if !Path::new(&trimmed).exists() {
+        return Err(format!("The chosen file does not exist: {trimmed}"));
+    }
+    fs::write(&target, &trimmed).map_err(|e| format!("save manual app path: {e}"))?;
+    Ok(true)
 }
 
 /// Hand an ebook over to Audiobook Generator: write the proposal + visit card
@@ -121,7 +166,7 @@ pub fn audiobook_generator_export(
     app: tauri::AppHandle,
     ebook_path: String,
 ) -> Result<AudiobookExportResult, String> {
-    let info = find_audiobook_generator();
+    let info = find_audiobook_generator(&app_data_dir(&app)?);
     if !info.found {
         return Ok(AudiobookExportResult {
             found: false,

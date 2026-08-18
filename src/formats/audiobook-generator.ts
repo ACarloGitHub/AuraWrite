@@ -45,12 +45,12 @@ export async function exportToAudiobookGenerator(input?: AudiobookExportInput): 
 
   if (!result.found) {
     // Not installed: a single dialog with the download link (and the explanation).
-    showInfoDialog(true);
+    showInfoDialog(true, input);
     return;
   }
   if (firstTime) {
     // Installed, first use: one informative dialog only.
-    showInfoDialog(false);
+    showInfoDialog(false, input);
   }
 }
 
@@ -98,9 +98,11 @@ async function pickEbookFile(): Promise<string | null> {
 
 /**
  * Info dialog (English, Ebook Editor style) explaining the integration.
- * `withDownloadLink` adds the "not installed" download paragraph.
+ * `withDownloadLink` adds the "not installed" download paragraph and the
+ * "choose the app manually" button. `input` lets the user retry the export
+ * right after choosing a manual app path.
  */
-function showInfoDialog(withDownloadLink: boolean): void {
+function showInfoDialog(withDownloadLink: boolean, input?: AudiobookExportInput): void {
   const overlay = document.createElement("div");
   overlay.className = "ebook-info-overlay";
   overlay.innerHTML = `
@@ -111,14 +113,21 @@ function showInfoDialog(withDownloadLink: boolean): void {
       <p>Remember: Audiobook Generator works with <strong>local models</strong> that run on your GPU. If you have other AI models loaded in your GPU memory, make sure you have enough memory available before starting an export.</p>
       ${
         withDownloadLink
-          ? `<p><strong>Audiobook Generator does not seem to be installed on this computer.</strong> Download and install it from <a href="${DOWNLOAD_URL}" target="_blank" rel="noopener">${DOWNLOAD_URL}</a>, then click "Export to Audiobook Generator" again.</p>`
+          ? `<p><strong>Audiobook Generator does not seem to be installed on this computer.</strong> Download and install it from <a href="${DOWNLOAD_URL}" target="_blank" rel="noopener">${DOWNLOAD_URL}</a>, then click "Export to Audiobook Generator" again.</p>
+             <p>If you already installed it in a custom location, you can choose the app executable manually:</p>`
           : ""
       }
+      <p id="audiobook-gen-error" style="display:none;color:#e06c6c;"></p>
       <label class="ebook-info-option">
         <input type="checkbox" id="audiobook-gen-dont-show" />
         Don't show again
       </label>
       <div class="ebook-info-buttons">
+        ${
+          withDownloadLink
+            ? `<button class="ebook-info-ok" id="audiobook-gen-choose">Choose the app manually…</button>`
+            : ""
+        }
         <button class="ebook-info-ok">OK</button>
       </div>
     </div>
@@ -129,6 +138,21 @@ function showInfoDialog(withDownloadLink: boolean): void {
     const dontShow = (overlay.querySelector("#audiobook-gen-dont-show") as HTMLInputElement | null)?.checked;
     if (dontShow) localStorage.setItem(INFO_KEY, "1");
     overlay.remove();
+  });
+  overlay.querySelector("#audiobook-gen-choose")?.addEventListener("click", async () => {
+    const picked = await open({ multiple: false });
+    if (!picked || typeof picked !== "string") return;
+    try {
+      await invoke("audiobook_generator_set_path", { path: picked });
+      overlay.remove();
+      void exportToAudiobookGenerator(input);
+    } catch (e) {
+      const errorEl = overlay.querySelector("#audiobook-gen-error") as HTMLElement | null;
+      if (errorEl) {
+        errorEl.textContent = typeof e === "string" ? e : "Could not use the chosen file.";
+        errorEl.style.display = "block";
+      }
+    }
   });
   overlay.querySelector("a")?.addEventListener("click", (e) => {
     e.preventDefault();
