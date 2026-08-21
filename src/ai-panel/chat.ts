@@ -958,15 +958,22 @@ function showToolResultCard(
   historyEl.scrollTop = historyEl.scrollHeight;
 }
 
-async function sendMessage(text: string, attachments?: Attachment[]): Promise<void> {
+/**
+ * sendMessage decomposition (refactoring plan Phase 2, 2026-08-21).
+ * The original ~485-line function was split into focused helpers; the
+ * orchestrator below preserves the exact execution order and error paths:
+ *   displayUserTurn()             — user message + input/attachments reset
+ *   compactConversationIfNeeded() — pre-turn context compaction
+ *   buildChatContext()            — AIContext assembly (chunk/doc, prefs, history)
+ *   resolveContextAttachments()   — attachments incl. selected image
+ *   sendWithTimeoutGuard()        — sendToAI + 3-minute timeout guard
+ *   runToolCallingLoop()          — tool parse/execute/follow-up iterations
+ *   renderFinalAssistantContent() — AURA_EDIT application + final rendering
+ */
+function displayUserTurn(text: string, sentAttachments: Attachment[] | undefined): void {
   const aiInput = document.getElementById("ai-input") as HTMLTextAreaElement;
   const historyEl = document.querySelector(".ai-panel__history");
 
-  if (isAIProcessing()) {
-    return;
-  }
-
-  const sentAttachments = attachments && attachments.length > 0 ? attachments : undefined;
   appendMessage("user", text, sentAttachments);
   if (aiInput) aiInput.value = "";
 
@@ -978,7 +985,9 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
   if (historyEl) {
     historyEl.scrollTop = historyEl.scrollHeight;
   }
+}
 
+async function compactConversationIfNeeded(): Promise<void> {
   // COMPACTION: if the session is near the 65% threshold, compact BEFORE
   // building the context. This is important — previously compaction ran in the
   // finally block (after the AI had already answered), so the snapshot in
@@ -1044,10 +1053,11 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
       console.warn("[compaction] Compaction failed, continuing with full history:", err);
     }
   }
+}
 
+function buildChatContext(prefs: Preferences): { context: AIContext; hasDocumentContent: boolean } {
   const chunkText = getSelectedChunkText();
   const documentText = getDocumentText();
-  const prefs = getPreferences();
 
   // Se l'editor è vuoto, NON passiamo documentText: l'AI tenderebbe a
   // rispondere attingendo dalla history della chat, replicando la risposta
@@ -1097,6 +1107,297 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
     };
   }
 
+  return { context, hasDocumentContent };
+}
+
+async function resolveContextAttachments(sentAttachments: Attachment[] | undefined): Promise<Attachment[] | undefined> {
+  let selectedImageAttachment: Attachment | undefined;
+  if (currentSelection?.selectedImageSrc) {
+    try {
+      selectedImageAttachment = await resolveImageSrcToAttachment(currentSelection.selectedImageSrc);
+    } catch (e) {
+      console.warn("[chat] resolveImageSrcToAttachment failed:", e);
+    }
+  }
+
+  const allAttachments = [
+    ...(sentAttachments || []),
+    ...(selectedImageAttachment ? [selectedImageAttachment] : []),
+  ];
+  return allAttachments.length > 0 ? allAttachments : undefined;
+}
+
+async function sendWithTimeoutGuard(
+  prompt: string,
+  context: AIContext,
+): Promise<{ response: import("./providers").AIResponse; timedOut: boolean }> {
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    stopAI();
+  }, AI_REQUEST_TIMEOUT_MS);
+
+  let response: import("./providers").AIResponse;
+  try {
+    response = await sendToAI(prompt, context);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  return { response, timedOut };
+}
+
+interface ToolLoopOutcome {
+  /** Final AI content (each follow-up replaces it). May still contain tool tags when stopped mid-loop. */
+  aiContent: string;
+  /** True when an error/timeout/stop path already handled the UI: the caller must NOT apply AURA_EDIT. */
+  exitEarly: boolean;
+  hadError: boolean;
+  /** Partial content worth persisting (early-exit paths). */
+  contentToPersist: string | null;
+}
+
+async function runToolCallingLoop(
+  text: string,
+  context: AIContext,
+  placeholder: HTMLDivElement | null,
+  prefs: Preferences,
+  hasDocumentContent: boolean,
+  initialContent: string,
+): Promise<ToolLoopOutcome> {
+  let aiContent = initialContent;
+  let hadError = false;
+  let iteration = 0;
+
+  while (iteration < MAX_TOOL_ITERATIONS) {
+    if (wasStoppedByUser()) {
+      if (placeholder) {
+        placeholder.textContent = "Stopped by user.";
+        placeholder.classList.add("ai-message--error");
+      }
+      hadError = true;
+      break;
+    }
+
+    const toolCalls = parseToolCalls(aiContent);
+
+    if (toolCalls.length === 0) {
+      break;
+    }
+
+    const toolNames = toolCalls.map((tc) => tc.name);
+    const indicator = showToolCallIndicator();
+    if (indicator) {
+      updateToolCallIndicator(indicator, toolNames, iteration + 1);
+    }
+    if (placeholder) {
+      const hasWebTool = toolNames.some((n) => n.startsWith("web_"));
+      const hasDbTool = toolNames.some((n) => n.startsWith("search_") || n.startsWith("get_") || n.startsWith("list_") || n === "semantic_search");
+      const hasPlanTool = toolNames.some((n) => n.startsWith("plan_"));
+      const hasFileTool = toolNames.some((n) => n.startsWith("file_"));
+      if (hasWebTool) placeholder.textContent = "Searching the web...";
+      else if (hasDbTool) placeholder.textContent = "Reading project data...";
+      else if (hasPlanTool) placeholder.textContent = "Updating plan...";
+      else if (hasFileTool) placeholder.textContent = "Reading files...";
+      else placeholder.textContent = "Using tools...";
+    }
+
+    const enrichedToolCalls = toolCalls.map((call) => {
+      // Planner and editor tools are not project-scoped; do not inject project_id.
+      if (call.name.startsWith("plan_") || call.name.startsWith("editor_")) {
+        return call;
+      }
+      return {
+        ...call,
+        arguments: {
+          project_id: context.projectId,
+          ...call.arguments,
+        },
+      };
+    });
+
+    const toolResults: ToolResult[] = [];
+    for (const call of enrichedToolCalls) {
+      const args = call.arguments as Record<string, unknown>;
+      const isGlobalTool = call.name.startsWith("plan_");
+      if (!isGlobalTool && args.project_id !== undefined) {
+        if (
+          typeof args.project_id !== "string" ||
+          args.project_id.trim() === "" ||
+          (context.projectId && args.project_id !== context.projectId)
+        ) {
+          console.warn(
+            `[tools] refused call '${call.name}' with project_id=${JSON.stringify(args.project_id)} (expected ${context.projectId})`
+          );
+          toolResults.push({
+            tool: call.name,
+            result: "",
+            error:
+              "Tool call refused: project_id is missing, empty, or does not match the currently open project. " +
+              "This prevents leaking entities from other projects.",
+          });
+          continue;
+        }
+      }
+      const result = await executeTool(call, {
+        plannerEnabled: prefs.plannerEnabled,
+        webSearchEnabled: prefs.webSearchEnabled,
+        fileSystemEnabled: prefs.fileSystemEnabled,
+        shellExecEnabled: prefs.shellExecEnabled,
+        ragEnabled: prefs.ragEnabled,
+        editorView: editorViewRef ?? undefined,
+        selection: currentSelection ?? undefined,
+      });
+      toolResults.push(result);
+      if (wasStoppedByUser()) break;
+      if (result.tool && !result.error) {
+        showToolResultCard(result.tool, String(result.result));
+      }
+      if (result.tool && result.tool.startsWith("plan_") && !result.error) {
+        const planName = (call.arguments as Record<string, unknown>)?.name as string | undefined;
+        window.dispatchEvent(new CustomEvent("aurawrite:plan-changed", { detail: { planName } }));
+      }
+      if (result.tool && result.tool.startsWith("wiki_") && !result.error) {
+        window.dispatchEvent(new CustomEvent("aurawrite:wiki-changed", { detail: { tool: result.tool } }));
+      }
+      if (result.tool && result.tool.startsWith("web_") && !result.error) {
+        const query = (call.arguments as Record<string, unknown>)?.query as string || (call.arguments as Record<string, unknown>)?.url as string || "";
+        window.dispatchEvent(new CustomEvent("aurawrite:web-activity", { detail: { type: result.tool === "web_search" ? "search" : result.tool === "web_search_images" ? "images" : "fetch", query } }));
+      }
+    }
+
+    const hasPlannerTools = toolResults.some((r) => r.tool && r.tool.startsWith("plan_"));
+    if (indicator) {
+      removeToolCallIndicator(indicator);
+    }
+
+    let toolResultsText = "";
+    for (const result of toolResults) {
+      if (result.error) {
+        toolResultsText += `\n[Error with ${result.tool}: ${result.error}]\n`;
+      } else if (typeof result.result === "string" && result.result.startsWith("[INSTRUCTION:")) {
+        // Tool Result Injection pattern: pass the full result including instructions
+        toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
+      } else if (result.tool && result.tool.startsWith("plan_")) {
+        toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
+      } else {
+        toolResultsText += `\n[Result from ${result.tool}: ${JSON.stringify(result.result, null, 2)}]\n`;
+      }
+    }
+
+    const cleanResponse = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+
+    let followUpPrompt: string;
+    if (hasPlannerTools && toolResults.every((r) => r.tool && r.tool.startsWith("plan_"))) {
+      followUpPrompt = `The user asked: "${text}"
+
+You called planner tool(s): ${toolNames.join(", ")}
+
+The tool results are shown to the user in the MCP panel. Your text response must be exactly ONE brief sentence confirming what was done. Do NOT repeat any plan content, task lists, or status details. The user can see everything in the MCP panel.`;
+    } else {
+      followUpPrompt = `The user originally asked: "${text}"
+
+You called the following tool(s):
+${toolNames.map((n) => `- ${n}`).join("\n")}
+
+Here are the results:
+${toolResultsText}
+
+Based on these results, provide your final response to the user's question. ${hasDocumentContent ? "You may also reference the document text that was provided." : ""}`;
+    }
+
+    iteration++;
+
+    const followUpContext = { ...context };
+
+    if (placeholder) placeholder.textContent = "Generating response...";
+
+    const { response: followUpResponse, timedOut: followUpTimedOut } = await sendWithTimeoutGuard(followUpPrompt, followUpContext);
+
+    if (followUpTimedOut) {
+      if (placeholder) {
+        placeholder.textContent = `${cleanResponse}\n\n[Request timed out during tool follow-up. The AI provider did not respond in time.]`;
+        placeholder.classList.add("ai-message--error");
+      }
+      setProcessing(false);
+      updateStopButton();
+      return { aiContent, exitEarly: true, hadError: true, contentToPersist: cleanResponse || aiContent };
+    }
+
+    if (wasStoppedByUser()) {
+      if (placeholder) {
+        const stoppedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+        placeholder.textContent = stoppedContent || "Stopped by user.";
+        placeholder.classList.add("ai-message--error");
+      }
+      setProcessing(false);
+      updateStopButton();
+      return { aiContent, exitEarly: true, hadError: true, contentToPersist: cleanResponse || aiContent };
+    }
+
+    if (followUpResponse.error) {
+      if (placeholder) {
+        placeholder.textContent = `${cleanResponse}\n\n[Tool error: ${followUpResponse.error}]`;
+        placeholder.classList.add("ai-message--error");
+      }
+      setProcessing(false);
+      updateStopButton();
+      return { aiContent, exitEarly: true, hadError: true, contentToPersist: cleanResponse || aiContent };
+    }
+
+    aiContent = followUpResponse.content;
+  }
+
+  return { aiContent, exitEarly: false, hadError, contentToPersist: null };
+}
+
+function renderFinalAssistantContent(aiContent: string, placeholder: HTMLDivElement | null): string | null {
+  let persistedAssistantContent: string | null = null;
+  if (placeholder) {
+    if (aiContent) {
+      const editResult = applyAuraEdit(
+        aiContent,
+        editorViewRef!,
+        currentSelection,
+      );
+
+      if (editResult.operationsApplied > 0) {
+        placeholder.textContent = `✓ ${editResult.operationsApplied} edit(s) applied`;
+        if (editResult.operationsFailed > 0) {
+          placeholder.textContent += `, ${editResult.operationsFailed} failed`;
+        }
+        // For edit operations the full AI content (stripped of tool tags)
+        // is what the user cares about for future RAG, not the summary line.
+        const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+        persistedAssistantContent = cleanedContent || aiContent;
+      } else if (editResult.error) {
+        placeholder.textContent = aiContent;
+        const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+        persistedAssistantContent = cleanedContent || aiContent;
+      } else {
+        const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+        placeholder.textContent = cleanedContent || aiContent;
+        persistedAssistantContent = cleanedContent || aiContent;
+      }
+    }
+  }
+  return persistedAssistantContent;
+}
+
+async function sendMessage(text: string, attachments?: Attachment[]): Promise<void> {
+  const historyEl = document.querySelector(".ai-panel__history");
+
+  if (isAIProcessing()) {
+    return;
+  }
+
+  const sentAttachments = attachments && attachments.length > 0 ? attachments : undefined;
+  displayUserTurn(text, sentAttachments);
+
+  await compactConversationIfNeeded();
+
+  const prefs = getPreferences();
+  const { context, hasDocumentContent } = buildChatContext(prefs);
+
   const placeholder = appendMessage("assistant", "Connecting...");
 
   let persistedAssistantContent: string | null = null;
@@ -1109,37 +1410,12 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
 
     if (placeholder) placeholder.textContent = "Thinking...";
 
-    let selectedImageAttachment: Attachment | undefined;
-    if (currentSelection?.selectedImageSrc) {
-      try {
-        selectedImageAttachment = await resolveImageSrcToAttachment(currentSelection.selectedImageSrc);
-      } catch (e) {
-        console.warn("[chat] resolveImageSrcToAttachment failed:", e);
-      }
-    }
-
-    const allAttachments = [
-      ...(sentAttachments || []),
-      ...(selectedImageAttachment ? [selectedImageAttachment] : []),
-    ];
-    const contextAttachments = allAttachments.length > 0 ? allAttachments : undefined;
-
+    const contextAttachments = await resolveContextAttachments(sentAttachments);
     const contextWithImage: AIContext = contextAttachments
       ? { ...context, attachments: contextAttachments }
       : context;
 
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      stopAI();
-    }, AI_REQUEST_TIMEOUT_MS);
-
-    let response: import("./providers").AIResponse;
-    try {
-      response = await sendToAI(text, contextWithImage);
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    const { response, timedOut } = await sendWithTimeoutGuard(text, contextWithImage);
 
     if (timedOut) {
       if (placeholder) {
@@ -1174,234 +1450,18 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
       }
     }
 
-    let aiContent = response.content;
-
-    if (aiContent) {
-      let iteration = 0;
-
-      while (iteration < MAX_TOOL_ITERATIONS) {
-        if (wasStoppedByUser()) {
-          if (placeholder) {
-            placeholder.textContent = "Stopped by user.";
-            placeholder.classList.add("ai-message--error");
-          }
-          hadError = true;
-          break;
+    if (response.content) {
+      const outcome = await runToolCallingLoop(text, context, placeholder, prefs, hasDocumentContent, response.content);
+      hadError = hadError || outcome.hadError;
+      if (outcome.exitEarly) {
+        if (outcome.contentToPersist !== null) {
+          persistedAssistantContent = outcome.contentToPersist;
         }
-
-        const toolCalls = parseToolCalls(aiContent);
-
-        if (toolCalls.length === 0) {
-          break;
-        }
-
-        const toolNames = toolCalls.map((tc) => tc.name);
-        const indicator = showToolCallIndicator();
-        if (indicator) {
-          updateToolCallIndicator(indicator, toolNames, iteration + 1);
-        }
-        if (placeholder) {
-          const hasWebTool = toolNames.some((n) => n.startsWith("web_"));
-          const hasDbTool = toolNames.some((n) => n.startsWith("search_") || n.startsWith("get_") || n.startsWith("list_") || n === "semantic_search");
-          const hasPlanTool = toolNames.some((n) => n.startsWith("plan_"));
-          const hasFileTool = toolNames.some((n) => n.startsWith("file_"));
-          if (hasWebTool) placeholder.textContent = "Searching the web...";
-          else if (hasDbTool) placeholder.textContent = "Reading project data...";
-          else if (hasPlanTool) placeholder.textContent = "Updating plan...";
-          else if (hasFileTool) placeholder.textContent = "Reading files...";
-          else placeholder.textContent = "Using tools...";
-        }
-
-        const enrichedToolCalls = toolCalls.map((call) => {
-          // Planner and editor tools are not project-scoped; do not inject project_id.
-          if (call.name.startsWith("plan_") || call.name.startsWith("editor_")) {
-            return call;
-          }
-          return {
-            ...call,
-            arguments: {
-              project_id: context.projectId,
-              ...call.arguments,
-            },
-          };
-        });
-
-        const toolResults: ToolResult[] = [];
-        for (const call of enrichedToolCalls) {
-          const args = call.arguments as Record<string, unknown>;
-          const isGlobalTool = call.name.startsWith("plan_");
-          if (!isGlobalTool && args.project_id !== undefined) {
-            if (
-              typeof args.project_id !== "string" ||
-              args.project_id.trim() === "" ||
-              (context.projectId && args.project_id !== context.projectId)
-            ) {
-              console.warn(
-                `[tools] refused call '${call.name}' with project_id=${JSON.stringify(args.project_id)} (expected ${context.projectId})`
-              );
-              toolResults.push({
-                tool: call.name,
-                result: "",
-                error:
-                  "Tool call refused: project_id is missing, empty, or does not match the currently open project. " +
-                  "This prevents leaking entities from other projects.",
-              });
-              continue;
-            }
-          }
-          const result = await executeTool(call, {
-            plannerEnabled: prefs.plannerEnabled,
-            webSearchEnabled: prefs.webSearchEnabled,
-            fileSystemEnabled: prefs.fileSystemEnabled,
-            shellExecEnabled: prefs.shellExecEnabled,
-            ragEnabled: prefs.ragEnabled,
-            editorView: editorViewRef ?? undefined,
-            selection: currentSelection ?? undefined,
-          });
-          toolResults.push(result);
-          if (wasStoppedByUser()) break;
-          if (result.tool && !result.error) {
-            showToolResultCard(result.tool, String(result.result));
-          }
-          if (result.tool && result.tool.startsWith("plan_") && !result.error) {
-            const planName = (call.arguments as Record<string, unknown>)?.name as string | undefined;
-            window.dispatchEvent(new CustomEvent("aurawrite:plan-changed", { detail: { planName } }));
-          }
-          if (result.tool && result.tool.startsWith("wiki_") && !result.error) {
-            window.dispatchEvent(new CustomEvent("aurawrite:wiki-changed", { detail: { tool: result.tool } }));
-          }
-          if (result.tool && result.tool.startsWith("web_") && !result.error) {
-            const query = (call.arguments as Record<string, unknown>)?.query as string || (call.arguments as Record<string, unknown>)?.url as string || "";
-            window.dispatchEvent(new CustomEvent("aurawrite:web-activity", { detail: { type: result.tool === "web_search" ? "search" : result.tool === "web_search_images" ? "images" : "fetch", query } }));
-          }
-        }
-
-        const hasPlannerTools = toolResults.some((r) => r.tool && r.tool.startsWith("plan_"));
-        if (indicator) {
-          removeToolCallIndicator(indicator);
-        }
-
-        let toolResultsText = "";
-        for (const result of toolResults) {
-          if (result.error) {
-            toolResultsText += `\n[Error with ${result.tool}: ${result.error}]\n`;
-          } else if (typeof result.result === "string" && result.result.startsWith("[INSTRUCTION:")) {
-            // Tool Result Injection pattern: pass the full result including instructions
-            toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
-          } else if (result.tool && result.tool.startsWith("plan_")) {
-            toolResultsText += `\n[Result from ${result.tool}: ${result.result}]\n`;
-          } else {
-            toolResultsText += `\n[Result from ${result.tool}: ${JSON.stringify(result.result, null, 2)}]\n`;
-          }
-        }
-
-        const cleanResponse = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
-
-        let followUpPrompt: string;
-        if (hasPlannerTools && toolResults.every((r) => r.tool && r.tool.startsWith("plan_"))) {
-          followUpPrompt = `The user asked: "${text}"
-
-You called planner tool(s): ${toolNames.join(", ")}
-
-The tool results are shown to the user in the MCP panel. Your text response must be exactly ONE brief sentence confirming what was done. Do NOT repeat any plan content, task lists, or status details. The user can see everything in the MCP panel.`;
-        } else {
-          followUpPrompt = `The user originally asked: "${text}"
-
-You called the following tool(s):
-${toolNames.map((n) => `- ${n}`).join("\n")}
-
-Here are the results:
-${toolResultsText}
-
-Based on these results, provide your final response to the user's question. ${hasDocumentContent ? "You may also reference the document text that was provided." : ""}`;
-        }
-
-        iteration++;
-
-        const followUpContext = { ...context };
-        let followUpTimedOut = false;
-        const followUpTimeoutId = setTimeout(() => {
-          followUpTimedOut = true;
-          stopAI();
-        }, AI_REQUEST_TIMEOUT_MS);
-
-        if (placeholder) placeholder.textContent = "Generating response...";
-
-        let followUpResponse: import("./providers").AIResponse;
-        try {
-          followUpResponse = await sendToAI(followUpPrompt, followUpContext);
-        } finally {
-          clearTimeout(followUpTimeoutId);
-        }
-
-        if (followUpTimedOut) {
-          if (placeholder) {
-            placeholder.textContent = `${cleanResponse}\n\n[Request timed out during tool follow-up. The AI provider did not respond in time.]`;
-            placeholder.classList.add("ai-message--error");
-          }
-          persistedAssistantContent = cleanResponse || aiContent;
-          hadError = true;
-          setProcessing(false);
-          updateStopButton();
-          return;
-        }
-
-        if (wasStoppedByUser()) {
-          if (placeholder) {
-            const stoppedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
-            placeholder.textContent = stoppedContent || "Stopped by user.";
-            placeholder.classList.add("ai-message--error");
-          }
-          persistedAssistantContent = cleanResponse || aiContent;
-          hadError = true;
-          setProcessing(false);
-          updateStopButton();
-          return;
-        }
-
-        if (followUpResponse.error) {
-          if (placeholder) {
-            placeholder.textContent = `${cleanResponse}\n\n[Tool error: ${followUpResponse.error}]`;
-            placeholder.classList.add("ai-message--error");
-          }
-          hadError = true;
-          persistedAssistantContent = cleanResponse || aiContent;
-          setProcessing(false);
-          updateStopButton();
-          return;
-        }
-
-        aiContent = followUpResponse.content;
+        // Error/timeout/stop path: the loop already updated the UI; skip
+        // AURA_EDIT (the finally block still runs below).
+        return;
       }
-    }
-
-    if (placeholder) {
-      if (aiContent) {
-        const editResult = applyAuraEdit(
-          aiContent,
-          editorViewRef!,
-          currentSelection,
-        );
-
-        if (editResult.operationsApplied > 0) {
-          placeholder.textContent = `✓ ${editResult.operationsApplied} edit(s) applied`;
-          if (editResult.operationsFailed > 0) {
-            placeholder.textContent += `, ${editResult.operationsFailed} failed`;
-          }
-          // For edit operations the full AI content (stripped of tool tags)
-          // is what the user cares about for future RAG, not the summary line.
-          const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
-          persistedAssistantContent = cleanedContent || aiContent;
-        } else if (editResult.error) {
-          placeholder.textContent = aiContent;
-          const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
-          persistedAssistantContent = cleanedContent || aiContent;
-        } else {
-          const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
-          placeholder.textContent = cleanedContent || aiContent;
-          persistedAssistantContent = cleanedContent || aiContent;
-        }
-      }
+      persistedAssistantContent = renderFinalAssistantContent(outcome.aiContent, placeholder);
     }
   } catch (error) {
     if (placeholder) {
@@ -1443,6 +1503,8 @@ Based on these results, provide your final response to the user's question. ${ha
     historyEl.scrollTop = historyEl.scrollHeight;
   }
 }
+
+
 function appendMessage(
   role: "user" | "assistant" | "system" | "tool_result",
   content: string,
