@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "../ai-panel/model-catalog";
 import { setDownloadRetryHandler } from "../download-toast";
+import { formatBytes } from "../utils/format";
 
 const WIZARD_KEY = "aurawrite-ai-wizard-dismissed";
 
@@ -15,13 +16,6 @@ interface HardwareData {
   recommended_llamacpp_variant: string;
   disk_free_bytes: number;
   disk_total_bytes: number;
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 let currentStep: WizardStep = "welcome";

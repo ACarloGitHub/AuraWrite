@@ -23,6 +23,7 @@ import { updateDownloadProgress, setDownloadRetryHandler } from "./download-toas
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "./ai-panel/model-catalog";
 import { shouldShowWizard, showAIWizard } from "./setup/ai-wizard";
 import { shouldShowOcrAiWizard, showOcrAiWizard } from "./ocr/ocr-ai-wizard";
+import { formatBytes, hexToRgba } from "./utils/format";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import {
   populateUserFontsInToolbar,
@@ -218,15 +219,6 @@ const defaultPreferences: Preferences = {
   shellExecEnabled: false,
   ragEnabled: false,
 };
-
-function hexToRgba(hex: string, alpha: number): string {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(255, 255, 0, ${alpha})`;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 let currentZoom = 100;
 
@@ -1085,13 +1077,6 @@ function setupDownloadProgressListener(): void {
       });
     }
   }).catch((e) => console.warn("[download-toast] listen failed:", e));
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 async function refreshEmbeddingsStatus(): Promise<ResourcesStatus | null> {
