@@ -5,7 +5,7 @@ import { setupMCPPanel } from "./ai-panel/mcp-panel";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
 import { initOcrToolbar } from "./ocr/ocr-toolbar";
 import { setupOcrPreferencesTab } from "./ocr/ocr-preferences";
-import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, setCachedApiKey, getEffectiveProviderName } from "./ai-panel/ai-manager";
+import { loadAIFromPreferences, preloadApiKey, getCachedApiKey, getEffectiveProviderName } from "./ai-panel/ai-manager";
 import { setupSuggestionsPanel } from "./ai-panel/suggestions-panel";
 import { getCurrentProvider } from "./ai-panel/ai-manager";
 import { LocalLlamacppProvider } from "./ai-panel/local-llamacpp-provider";
@@ -26,6 +26,16 @@ import { shouldShowOcrAiWizard, showOcrAiWizard } from "./ocr/ocr-ai-wizard";
 import { formatBytes, hexToRgba } from "./utils/format";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import {
+  type Preferences,
+  type ThemeMode,
+  defaultSuggestionsPrompt,
+  defaultAIAssistantPrompt,
+  defaultEntityExtractionPrompt,
+  defaultToolCallingPrompt,
+  getPreferences,
+  persistPreferences,
+} from "./preferences/store";
+import {
   populateUserFontsInToolbar,
   setupFontsReloadListener,
 } from "./editor/fonts-ui";
@@ -41,7 +51,6 @@ import {
 import "./styles.css";
 
 const THEME_KEY = "aurawrite-theme";
-const PREFERENCES_KEY = "aurawrite-preferences";
 const ZOOM_KEY = "aurawrite-zoom";
 const EMBED_ONBOARDING_KEY = "aurawrite-embeddings-onboarding-dismissed";
 
@@ -64,171 +73,9 @@ interface ResourcesStatus {
   arch: string;
 }
 
-type ThemeMode = "light" | "dark" | "custom";
-
-interface Preferences {
-  theme: ThemeMode;
-  customBg: string;
-  customToolbar: string;
-  customPaper: string;
-  customTextEditor: string;
-  customTextButtons: string;
-  incrementalEnabled: boolean;
-  incrementalMax: number;
-  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
-  aiOllamaMode: "local" | "cloud";
-  aiModel: string;
-  aiApiKey: string;
-  aiBaseUrl: string;
-  aiSuggestionsInterval: number;
-  aiContextInterval: number;
-  aiInterfaceLanguage: string;
-  aiWritingLanguage: string;
-  aiAssistantName: string;
-  aiUserName: string;
-  suggestionsDebug: boolean;
-  suggestionsPrompt: string;
-  aiAssistantPrompt: string;
-  entityExtractionRole: string;
-  entityExtractionPrompt: string;
-  toolCallingPrompt: string;
-  deselectOnDocumentClick: boolean;
-  semanticSearchEnabled: boolean;
-  selectionHighlightColor: string;
-  updatesCheckEnabled: boolean;
-  fontsUseBundled: boolean;
-  fontEditor: string;
-  fontUi: string;
-  plannerEnabled: boolean;
-  webSearchEnabled: boolean;
-  fileSystemEnabled: boolean;
-  shellExecEnabled: boolean;
-  ragEnabled: boolean;
-}
-
-const defaultSuggestionsPrompt = `You are an AI writing assistant analyzing a document for improvements.
-
-First, read the initial sentences to understand the tone, style, and context.
-Then analyze each sentence individually.
-
-For each sentence that could be improved, provide:
-1. A title (first 5 words + "...")
-2. The suggested improvement (if needed)
-
-Focus on:
-- Clarity and readability
-- Sentence structure
-- Word choice
-- Grammar (if issues found)
-
-Respond in JSON format:
-{
-  "context_understood": "brief summary of tone/style",
-  "suggestions": [
-    {
-      "sentence_title": "First 5 words...",
-      "original": "full sentence",
-      "suggested": "improved version or null if no change needed",
-      "reason": "why this improves the text (if suggested)"
-    }
-  ]
-}`;
-
-const defaultAIAssistantPrompt = `You are an AI writing assistant helping with a document.
-
-The user can ask you questions about the document or request modifications.
-You have access to the full document context.
-
-When the user asks for text modifications:
-- Propose the change clearly
-- Explain why it improves the text
-
-When you suggest accepting a modification:
-- Say "Accept?" and wait for confirmation
-- After acceptance, the change will be applied
-
-You can read and analyze the document at any time.`;
-
-const defaultEntityExtractionPrompt = `You are an entity extraction assistant for a writing application.
-Read the text and extract all named entities (characters, locations, objects, events, etc.).
-For each entity, provide:
-- name: the entity name
-- type: the category (character, location, object, event, etc.)
-- description: a brief description based on the text context
-
-Respond in JSON format:
-{
-  "entities": [
-    {"name": "Entity Name", "type": "character", "description": "Brief description"}
-  ]
-}
-
-Rules:
-- Extract only entities explicitly mentioned or clearly implied
-- Use consistent type names
-- Keep descriptions concise (max 200 characters)
-- If an entity was already known, update its description with new information`;
-
-const defaultToolCallingPrompt = `You are AuraWrite AI, an intelligent writing assistant with access to a project database.
-When the user asks about characters, locations, events, or anything related to their project, you MUST use the available tools to query the database before answering.
-
-To use a tool, include this tag in your response:
-<tool name="TOOL_NAME">{"param1": "value1", "param2": "value2"}</tool>
-
-You can use multiple tools in one response.
-After receiving tool results, summarize them naturally for the user.`;
-
-const defaultEntityExtractionRole = "";
-
-const defaultPreferences: Preferences = {
-  theme: "light",
-  customBg: "#f0f0f0",
-  customToolbar: "#ffffff",
-  customPaper: "#ffffff",
-  customTextEditor: "#222222",
-  customTextButtons: "#222222",
-  incrementalEnabled: false,
-  incrementalMax: 10,
-  aiProvider: "ollama",
-  aiOllamaMode: "local",
-  aiModel: "kimi-k2.5:cloud",
-  aiApiKey: "",
-  aiBaseUrl: "",
-  aiSuggestionsInterval: 30,
-  aiContextInterval: 30,
-  aiInterfaceLanguage: "English",
-  aiWritingLanguage: "English",
-  aiAssistantName: "Aura",
-  aiUserName: "",
-  suggestionsDebug: false,
-  suggestionsPrompt: defaultSuggestionsPrompt,
-  aiAssistantPrompt: defaultAIAssistantPrompt,
-  entityExtractionRole: defaultEntityExtractionRole,
-  entityExtractionPrompt: defaultEntityExtractionPrompt,
-  toolCallingPrompt: defaultToolCallingPrompt,
-  deselectOnDocumentClick: true,
-  semanticSearchEnabled: true,
-  selectionHighlightColor: "#ffff00",
-  updatesCheckEnabled: true,
-  fontsUseBundled: true,
-  fontEditor: "Lora",
-  fontUi: "Inter",
-  plannerEnabled: true,
-  webSearchEnabled: true,
-  fileSystemEnabled: true,
-  shellExecEnabled: false,
-  ragEnabled: false,
-};
 
 let currentZoom = 100;
 
-function getPreferences(): Preferences {
-  const saved = localStorage.getItem(PREFERENCES_KEY);
-  if (saved) {
-    return { ...defaultPreferences, ...JSON.parse(saved) };
-  }
-  return defaultPreferences;
-}
 
 async function updateSecretsStatus(): Promise<void> {
   const statusEl = document.getElementById("security-keychain-status");
@@ -261,17 +108,7 @@ async function updateAgentWorkspaceInfo(): Promise<void> {
 }
 
 async function savePreferences(prefs: Preferences): Promise<void> {
-  const prefsToStore = { ...prefs, aiApiKey: "" };
-  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefsToStore));
-  const effectiveProvider = getEffectiveProviderName(prefs.aiProvider, prefs.aiOllamaMode);
-  if (prefs.aiApiKey !== undefined && prefs.aiApiKey.trim()) {
-    setCachedApiKey(effectiveProvider, prefs.aiApiKey);
-    try {
-      await invoke("secrets_set", { key: `ai-api-key:${effectiveProvider}`, value: prefs.aiApiKey });
-    } catch (e) {
-      console.error("[secrets] failed to save API key:", e);
-    }
-  }
+  await persistPreferences(prefs);
   applyPreferences(prefs);
 }
 
