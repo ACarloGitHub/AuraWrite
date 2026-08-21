@@ -49,13 +49,6 @@ export default [
     },
   },
   {
-    // Test files use `any` extensively for ProseMirror JSON traversal.
-    files: ["src/editor/walk-images.test.ts"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-    },
-  },
-  {
     // ProseMirror plugin internals — plugin/view/DecorationSet types are
     // intricate and using `any` here is the pragmatic choice.
     files: ["src/editor/suggestions-marker-plugin.ts"],
