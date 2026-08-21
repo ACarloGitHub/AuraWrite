@@ -1462,7 +1462,13 @@ async function sendMessage(text: string, attachments?: Attachment[]): Promise<vo
         return;
       }
       persistedAssistantContent = renderFinalAssistantContent(outcome.aiContent, placeholder);
-    }
+    
+    } else {
+      // Empty (but non-error) response: show an explicit message instead of
+      // leaving the Connecting/Thinking placeholder stuck forever.
+      if (placeholder) {
+        placeholder.textContent = "The AI returned an empty response. Try rephrasing the question.";
+      }}
   } catch (error) {
     if (placeholder) {
       placeholder.textContent = `Error: ${error instanceof Error ? error.message : "Unknown error"}`;
