@@ -3,7 +3,8 @@
  * Extracted from main.ts (2026-08-21, refactoring plan step 1.6).
  *
  * Shortcuts: Ctrl+N (new), Ctrl+S (save current file), Ctrl+F / Ctrl+H
- * (find & replace), Ctrl+= / Ctrl+- (zoom).
+ * (find & replace), Ctrl++ / Ctrl+- (zoom). Zoom-in accepts both the "+"
+ * key and "=" (for layouts where "=" is a dedicated key, e.g. numpad).
  */
 export interface AppShortcutsDeps {
   openFindBar: () => void;
@@ -38,7 +39,7 @@ export function setupAppShortcuts(deps: AppShortcutsDeps): void {
       e.preventDefault();
       deps.openFindBar();
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === "=") {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) {
       e.preventDefault();
       deps.zoomIn();
     }
