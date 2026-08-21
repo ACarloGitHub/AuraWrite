@@ -48,10 +48,27 @@ export function showAIWizard(): void {
   });
 }
 
+let onDismissedCallback: (() => void) | null = null;
+
+/**
+ * Explicit dismissal callback (refactoring plan step 1.7, 2026-08-21).
+ * Replaces the MutationObserver main.ts previously installed on the modal
+ * class attribute. Fired ONCE when the wizard transitions from visible to
+ * hidden, whatever the dismissal path (X, skip, overlay click, done).
+ */
+export function setAIWizardDismissedCallback(cb: (() => void) | null): void {
+  onDismissedCallback = cb;
+}
+
 export function hideAIWizard(): void {
   const modal = document.getElementById("ai-wizard-modal");
-  if (!modal) return;
+  if (!modal || modal.classList.contains("hidden")) return;
   modal.classList.add("hidden");
+  if (onDismissedCallback) {
+    const cb = onDismissedCallback;
+    onDismissedCallback = null; // fire once (the old observer disconnected itself)
+    cb();
+  }
 }
 
 function renderStep(): void {
