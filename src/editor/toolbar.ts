@@ -9,6 +9,7 @@ import { toMarkdown, toMarkdownWithRewrites, fromMarkdown } from "../formats/mar
 import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
+import { setLoading as setLoadingState, isLoading as isLoadingState } from "../loading-state";
 import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
@@ -112,7 +113,7 @@ function setupDirtyTracking(): void {
       editorView.updateState(newState);
 
       if (transaction.docChanged) {
-        const isLoading = (window as Window & { __aurawrite_loading?: boolean }).__aurawrite_loading === true;
+        const isLoading = isLoadingState();
         const newContent = JSON.stringify(newState.doc.toJSON());
         if (documentState.lastSavedContent !== newContent) {
           documentState.isDirty = true;
@@ -285,7 +286,7 @@ async function handleNew(): Promise<void> {
     if (!ok) return;
   }
 
-  (window as Window & { __aurawrite_loading?: boolean }).__aurawrite_loading = true;
+  setLoadingState(true);
 
   const newState = EditorState.create({
     schema: editorView.state.schema,
@@ -303,7 +304,7 @@ async function handleNew(): Promise<void> {
   updateWindowTitle();
   updateDocumentTitleBar();
 
-  (window as Window & { __aurawrite_loading?: boolean }).__aurawrite_loading = false;
+  setLoadingState(false);
 
   const { showToast } = await import("../error-boundary");
   showToast("New document created", "success", 2500);

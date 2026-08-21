@@ -47,15 +47,10 @@ import {
   populateUserFontsInToolbar,
   setupFontsReloadListener,
 } from "./editor/fonts-ui";
-import {
-  setFindQuery,
-  findNext,
-  findPrev,
-  replaceOne,
-  replaceAll,
-  clearFind,
-  goToFirstMatch,
-} from "./editor/find-replace";
+import { setLoading } from "./loading-state";
+import { setupResizablePanels } from "./editor/resizable-panels";
+import { openFindBar, setupFindReplaceUI } from "./editor/find-replace-ui";
+import { setupAppShortcuts } from "./editor/app-shortcuts";
 import "./styles.css";
 
 const THEME_KEY = "aurawrite-theme";
@@ -533,113 +528,6 @@ function savePreferencesFromModal(): void {
   window.dispatchEvent(new CustomEvent("aurawrite:preferences-changed"));
 }
 
-function setupResizablePanels(): void {
-  const STORAGE_KEY = "aurawrite-preferences";
-  const DEFAULTS = { ai: 360, projects: 320, suggestions: 320, mcp: 320, ebooks: 320 } as const;
-  const MIN = { ai: 200, projects: 180, suggestions: 200, mcp: 200, ebooks: 200 } as const;
-  const MAX_RATIO = { ai: 0.8, projects: 0.6, suggestions: 0.6, mcp: 0.6, ebooks: 0.6 } as const;
-  const STORAGE_KEYS = {
-    ai: "aiChatPanelWidth",
-    projects: "projectPanelWidth",
-    suggestions: "suggestionsPanelWidth",
-    mcp: "mcpPanelWidth",
-    ebooks: "ebooksPanelWidth",
-  } as const;
-  const CSS_VARS = {
-    ai: "--ai-panel-width",
-    projects: "--project-panel-width",
-    suggestions: "--suggestions-panel-width",
-    mcp: "--mcp-panel-width",
-    ebooks: "--ebooks-panel-width",
-  } as const;
-  const LEFT_EDGED: ReadonlyArray<PanelKey> = ["ai", "mcp"];
-
-  type PanelKey = "ai" | "projects" | "suggestions" | "mcp" | "ebooks";
-  type Widths = Record<PanelKey, number>;
-
-  function loadWidths(): Widths {
-    const out: Widths = { ...DEFAULTS };
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        for (const k of Object.keys(STORAGE_KEYS) as PanelKey[]) {
-          const v = parsed[STORAGE_KEYS[k]];
-          if (typeof v === "number") out[k] = v;
-        }
-      }
-    } catch { /* fall through */ }
-    return out;
-  }
-
-  function saveWidths(w: Widths): void {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      for (const k of Object.keys(STORAGE_KEYS) as PanelKey[]) {
-        parsed[STORAGE_KEYS[k]] = w[k];
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-    } catch (e) {
-      console.warn("[resize] failed to save panel widths:", e);
-    }
-  }
-
-  function applyWidths(): void {
-    const w = loadWidths();
-    const root = document.documentElement;
-    for (const k of Object.keys(STORAGE_KEYS) as PanelKey[]) {
-      const maxW = window.innerWidth * MAX_RATIO[k];
-      root.style.setProperty(CSS_VARS[k], Math.max(MIN[k], Math.min(w[k], maxW)) + "px");
-    }
-  }
-
-  applyWidths();
-  window.addEventListener("resize", applyWidths);
-
-  let widths = loadWidths();
-
-  document.querySelectorAll<HTMLElement>(".panel-resize-handle").forEach((handle) => {
-    const target = handle.dataset.resize as PanelKey | undefined;
-    if (!target || !(target in STORAGE_KEYS)) return;
-
-    handle.addEventListener("dblclick", (e) => {
-      e.preventDefault();
-      widths = { ...widths, [target]: DEFAULTS[target] };
-      applyWidths();
-      saveWidths(widths);
-    });
-
-    handle.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = widths[target];
-      const maxWidth = window.innerWidth * MAX_RATIO[target];
-      const minWidth = MIN[target];
-      handle.classList.add("panel-resize-handle--active");
-
-      const onMove = (ev: MouseEvent) => {
-        const growRight = !LEFT_EDGED.includes(target);
-        const dx = growRight ? ev.clientX - startX : startX - ev.clientX;
-        const next = Math.max(minWidth, Math.min(startWidth + dx, maxWidth));
-        widths = { ...widths, [target]: next };
-        document.documentElement.style.setProperty(CSS_VARS[target], next + "px");
-      };
-
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-        handle.classList.remove("panel-resize-handle--active");
-        saveWidths(widths);
-      };
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    });
-  });
-}
-
 let downloadListenerInstalled = false;
 function setupDownloadProgressListener(): void {
   if (downloadListenerInstalled) return;
@@ -737,11 +625,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const editorView = createEditor(editorElement);
   syncDocumentPaginationState(editorView);
 
-  // Esponi flag globale per toolbar.ts
-  (window as any).__aurawrite_loading = false;
-  function setLoading(val: boolean) {
-    (window as any).__aurawrite_loading = val;
-  }
+  // Loading flag (typed module, still mirrored on window for DevTools)
+  setLoading(false);
 
   function migrateImageNodesInJson(node: any): any {
     if (!node || typeof node !== "object") return node;
@@ -877,48 +762,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   initKeyboardHelp();
 
-  const findBar = document.getElementById("find-bar");
-  const findInput = document.getElementById("find-input") as HTMLInputElement | null;
-  const replaceInput = document.getElementById("replace-input") as HTMLInputElement | null;
-
-  function openFindBar(): void {
-    findBar?.classList.remove("hidden");
-    findInput?.focus();
-    findInput?.select();
-  }
-
-  function closeFindBar(): void {
-    findBar?.classList.add("hidden");
-    clearFind(editorView);
-  }
-
-  const btnFind = document.getElementById("btn-find");
-  btnFind?.addEventListener("click", () => openFindBar());
-
-  document.getElementById("find-close")?.addEventListener("click", closeFindBar);
-
-  findInput?.addEventListener("input", () => {
-    setFindQuery(findInput.value, editorView);
-  });
-
-  findInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      goToFirstMatch(editorView, true);
-    }
-    if (e.key === "Escape") {
-      closeFindBar();
-    }
-  });
-
-  document.getElementById("find-next")?.addEventListener("click", () => findNext(editorView));
-  document.getElementById("find-prev")?.addEventListener("click", () => findPrev(editorView));
-  document.getElementById("replace-one")?.addEventListener("click", () => {
-    if (replaceInput) replaceOne(editorView, replaceInput.value);
-  });
-  document.getElementById("replace-all")?.addEventListener("click", () => {
-    if (replaceInput) replaceAll(editorView, replaceInput.value);
-  });
+  setupFindReplaceUI(editorView);
 
   const btnTheme = document.getElementById("btn-theme");
   btnTheme?.addEventListener("click", toggleTheme);
@@ -1187,42 +1031,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "n") {
-      e.preventDefault();
-      const newBtn = document.querySelector(
-        '.dropdown-item[data-action="new"]'
-      ) as HTMLButtonElement | null;
-      newBtn?.click();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-      e.preventDefault();
-      // Ctrl+S always triggers File > Save (the current file), never the
-      // project save (which has its own "Save Project" button).
-      const saveBtn = document.querySelector(
-        '.dropdown-item[data-action="save"]'
-      ) as HTMLButtonElement | null;
-      saveBtn?.click();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-      e.preventDefault();
-      openFindBar();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "h") {
-      e.preventDefault();
-      openFindBar();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "=") {
-      e.preventDefault();
-      setZoom(10);
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "-") {
-      e.preventDefault();
-      setZoom(-10);
-    }
-  };
-  document.addEventListener("keydown", handleKeyDown);
+  setupAppShortcuts({ openFindBar, zoomIn: () => setZoom(10), zoomOut: () => setZoom(-10) });
 
   if (import.meta.env.DEV) {
     (window as any).auraTest = {

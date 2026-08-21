@@ -30,6 +30,7 @@ import {
 } from "../ai-panel/entity-extraction";
 import { sendProgrammaticMessage } from "../ai-panel/chat";
 import Sortable from "sortablejs";
+import { setLoading as setLoadingState } from "../loading-state";
 import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
 import { listTemplates, getTemplate, createProjectFromTemplate } from "../templates/apply";
 
@@ -1397,7 +1398,7 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 }
 
 async function selectDocument(doc: Document): Promise<void> {
-  (window as any).__aurawrite_loading = true;
+  setLoadingState(true);
   currentDocument = doc;
   // Sincronizza currentSection con la sezione del doc, così il title bar
   // e altre UI non restano con un currentSection stantio.
@@ -1431,7 +1432,7 @@ async function selectDocument(doc: Document): Promise<void> {
   // SortableJS. (Bug del ritardo evidenziato da Carlo, 2026-06-26.)
   refreshActiveHighlight(currentDocument!.id, currentSection?.id ?? null);
   setTimeout(() => {
-    (window as any).__aurawrite_loading = false;
+    setLoadingState(false);
   }, 100);
 }
 
