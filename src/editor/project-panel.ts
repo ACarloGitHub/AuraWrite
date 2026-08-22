@@ -33,15 +33,40 @@ import Sortable from "sortablejs";
 import { setLoading as setLoadingState } from "../loading-state";
 import { openColorPicker, applyItemColors, createColorBtn } from "./color-picker";
 import { listTemplates, getTemplate, createProjectFromTemplate } from "../templates/apply";
+import {
+  currentProject,
+  currentSection,
+  currentDocument,
+  expandedSections,
+  projects,
+  sections,
+  documents,
+  setCurrentProject,
+  setCurrentSection,
+  setCurrentDocument,
+  setProjects,
+  setSections,
+  setDocuments,
+  sectionById,
+  childSectionsOf,
+  computeDepth,
+  subtreeHeight,
+  isDescendantOf,
+} from "./project-state";
 
-// State
-let currentProject: Project | null = null;
-let currentSection: Section | null = null;
-let currentDocument: Document | null = null;
-let expandedSections: Set<string> = new Set();
-let projects: Project[] = [];
-let sections: Section[] = [];
-let documents: Document[] = [];
+// Live re-exports (ESM live bindings): external consumers keep seeing fresh
+// state. Never replace with copies (`const x = ...` would freeze the value).
+export {
+  currentProject,
+  currentSection,
+  currentDocument,
+  expandedSections,
+  projects,
+  sections,
+  documents,
+} from "./project-state";
+
+// Core-local state
 let lastSavedContent: string | null = null;
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -84,9 +109,9 @@ export function initProjectPanel(
   btnBackProjects?.addEventListener("click", async () => {
     const action = await handleCloseDocument();
     if (action === 'proceed') {
-      currentProject = null;
-      currentSection = null;
-      currentDocument = null;
+      setCurrentProject(null);
+      setCurrentSection(null);
+      setCurrentDocument(null);
       lastSavedContent = null;
       clearEditor();
       renderProjectsList();
@@ -293,7 +318,7 @@ async function saveCurrentDocument(content: string, createVersion: boolean = fal
     }
     
     await updateDocument(updatedDoc);
-    currentDocument = updatedDoc;
+    setCurrentDocument(updatedDoc);
     markContentSaved(content);
     console.log(createVersion ? "Document saved (with version)" : "Document auto-saved");
     
@@ -339,7 +364,7 @@ async function handleSaveToDatabase(): Promise<void> {
       try {
         await saveDocumentVersion(updatedDoc);
         await updateDocument(updatedDoc);
-        currentDocument = updatedDoc;
+        setCurrentDocument(updatedDoc);
         markContentSaved(content);
         savedCount++;
         // Index for semantic search
@@ -595,7 +620,7 @@ async function handleCloseDocument(): Promise<'proceed' | 'cancel'> {
 
 async function loadProjects(): Promise<void> {
   try {
-    projects = await getProjects();
+    setProjects(await getProjects());
     console.log("Projects from DB:", projects);
     console.log("Number of projects:", projects.length);
     renderProjectsList();
@@ -607,8 +632,8 @@ async function loadProjects(): Promise<void> {
 
 async function loadSections(projectId: string): Promise<void> {
   try {
-    sections = await getSections(projectId);
-    documents = [];
+    setSections(await getSections(projectId));
+    setDocuments([]);
     for (const section of sections) {
       const sectionDocs = await getDocuments(section.id);
       documents.push(...sectionDocs);
@@ -650,11 +675,11 @@ async function handleNewProject(): Promise<void> {
       });
     }
     projects.push(projectResult.project);
-    currentProject = projectResult.project;
-    currentSection = null;
-    currentDocument = null;
-    sections = projectResult.sections || [];
-    documents = [];
+    setCurrentProject(projectResult.project);
+    setCurrentSection(null);
+    setCurrentDocument(null);
+    setSections(projectResult.sections || []);
+    setDocuments([]);
     // Load documents for all sections created by the template
     for (const section of sections) {
       const sectionDocs = await getDocuments(section.id);
@@ -1017,7 +1042,7 @@ function showProjectAISettingsDialog(project: Project): Promise<void> {
             const idx = projects.findIndex((p) => p.id === project.id);
             if (idx >= 0) projects[idx] = updated;
             if (currentProject && currentProject.id === project.id) {
-              currentProject = updated;
+              setCurrentProject(updated);
             }
             showNotification("AI settings saved", "success");
             overlay.remove();
@@ -1044,7 +1069,7 @@ function showProjectAISettingsDialog(project: Project): Promise<void> {
             const idx = projects.findIndex((p) => p.id === project.id);
             if (idx >= 0) projects[idx] = updated;
             if (currentProject && currentProject.id === project.id) {
-              currentProject = updated;
+              setCurrentProject(updated);
             }
             showNotification("AI settings reset to template defaults", "success");
             overlay.remove();
@@ -1132,11 +1157,11 @@ async function handleDeleteProject(project: Project): Promise<void> {
 
   try {
     await deleteProject(project.id);
-    projects = projects.filter(p => p.id !== project.id);
+    setProjects(projects.filter(p => p.id !== project.id));
     if (currentProject?.id === project.id) {
-      currentProject = null;
-      currentSection = null;
-      currentDocument = null;
+      setCurrentProject(null);
+      setCurrentSection(null);
+      setCurrentDocument(null);
     }
     renderProjectsList();
     console.log("Deleted project:", project.name);
@@ -1156,11 +1181,11 @@ async function handleDeleteSection(section: Section): Promise<void> {
 
   try {
     await deleteSection(section.id);
-    sections = sections.filter(s => s.id !== section.id);
-    documents = documents.filter(d => d.section_id !== section.id);
+    setSections(sections.filter(s => s.id !== section.id));
+    setDocuments(documents.filter(d => d.section_id !== section.id));
     if (currentSection?.id === section.id) {
-      currentSection = null;
-      currentDocument = null;
+      setCurrentSection(null);
+      setCurrentDocument(null);
     }
     renderProjectsList();
     console.log("Deleted section:", section.name);
@@ -1180,9 +1205,9 @@ async function handleDeleteDocument(doc: Document): Promise<void> {
 
   try {
     await deleteDocument(doc.id);
-    documents = documents.filter(d => d.id !== doc.id);
+    setDocuments(documents.filter(d => d.id !== doc.id));
     if (currentDocument?.id === doc.id) {
-      currentDocument = null;
+      setCurrentDocument(null);
       clearEditor();
     }
     renderProjectsList();
@@ -1399,18 +1424,18 @@ async function handleNewDocument(sectionId: string): Promise<void> {
 
 async function selectDocument(doc: Document): Promise<void> {
   setLoadingState(true);
-  currentDocument = doc;
+  setCurrentDocument(doc);
   // Sincronizza currentSection con la sezione del doc, così il title bar
   // e altre UI non restano con un currentSection stantio.
   const docSection = sections.find((s) => s.id === doc.section_id) || null;
-  if (docSection) currentSection = docSection;
+  if (docSection) setCurrentSection(docSection);
   // Espone globalmente per debug
   (window as any).auraDocument = doc;
   // Read fresh document from DB to get latest content
   try {
     const freshDoc = await getDocument(doc.id);
     if (freshDoc) {
-      currentDocument = freshDoc;
+      setCurrentDocument(freshDoc);
       (window as any).auraDocument = freshDoc;
       lastSavedContent = freshDoc.content_json || null;
     } else {
@@ -2158,44 +2183,9 @@ function startInlineRename(
 const sectionInstances: Sortable[] = [];
 const docSortables: Map<string, Sortable> = new Map();
 
-// =============================================================================
-// MULTIBRANCH — helpers per drag & drop sezioni
-// =============================================================================
-
-function sectionById(id: string): Section | undefined {
-  return sections.find((s) => s.id === id);
-}
-
-function childSectionsOf(parentId: string | null): Section[] {
-  return sections
-    .filter((s) => (s.parent_id ?? null) === parentId)
-    .sort((a, b) => a.order_index - b.order_index);
-}
-
-function computeDepth(id: string): number {
-  let d = 1;
-  let n = sectionById(id);
-  while (n && n.parent_id) {
-    d++;
-    n = sectionById(n.parent_id);
-  }
-  return d;
-}
-
-function subtreeHeight(id: string): number {
-  const kids = childSectionsOf(id);
-  if (kids.length === 0) return 1;
-  return 1 + Math.max(...kids.map((k) => subtreeHeight(k.id)));
-}
-
-function isDescendantOf(ancestorId: string, candidateId: string): boolean {
-  let n = sectionById(candidateId);
-  while (n && n.parent_id) {
-    if (n.parent_id === ancestorId) return true;
-    n = sectionById(n.parent_id);
-  }
-  return false;
-}
+// MULTIBRANCH tree helpers (sectionById, childSectionsOf, computeDepth,
+// subtreeHeight, isDescendantOf) live in ./project-state since step 1 of the
+// refactoring plan.
 
 function clearDropIndicators(): void {
   document
@@ -2272,7 +2262,7 @@ async function persistMove(
     }
 
     // 4) Ricarica sezioni dal DB
-    sections = await getSections(currentProject.id);
+    setSections(await getSections(currentProject.id));
     return true;
   } catch (e) {
     console.error("[multibranch] persistMove failed:", e);
@@ -2497,11 +2487,11 @@ function initSortable(): void {
 
           // Ricarica documenti
           if (currentSection) {
-            documents = await getDocuments(currentSection.id);
+            setDocuments(await getDocuments(currentSection.id));
           }
         } else {
           // Rileggi documenti dalla stessa sezione
-          documents = await getDocuments(toSectionId);
+          setDocuments(await getDocuments(toSectionId));
         }
 
         renderProjectsList();
@@ -2513,9 +2503,9 @@ function initSortable(): void {
 }
 
 function selectProject(project: Project): void {
-  currentProject = project;
-  currentSection = null;
-  currentDocument = null;
+  setCurrentProject(project);
+  setCurrentSection(null);
+  setCurrentDocument(null);
   lastSavedContent = null; // Reset per nuovo progetto
   // Pulisce lo stato di espansione per evitare ID orfani di un progetto
   // precedente che colliderebbero con sezioni del nuovo progetto.
@@ -2567,13 +2557,11 @@ function triggerSaveStatusCheck(): void {
   updateSaveStatus();
 }
 
+// Shared state (currentProject, currentSection, currentDocument, projects,
+// sections, documents, expandedSections) is re-exported live from
+// ./project-state — see the export block at the top of this file.
+
 export {
-  currentProject,
-  currentSection,
-  currentDocument,
-  projects,
-  sections,
-  documents,
   triggerSaveStatusCheck,
   handleSaveToDatabase,
   handleIndexDocument,
