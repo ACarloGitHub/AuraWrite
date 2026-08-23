@@ -59,7 +59,14 @@ export default [
   {
     // Project panel exposes debug globals via (window as any).* assignments.
     // These are intentional debug hooks consumed by DevTools / test panels.
-    files: ["src/editor/project-panel.ts"],
+    // The same relaxation applies to the modules extracted from it during the
+    // 2026-08 refactoring (they carry the same legacy untyped helpers).
+    files: [
+      "src/editor/project-panel.ts",
+      "src/editor/project-state.ts",
+      "src/editor/project-dialogs.ts",
+      "src/editor/project-indexing.ts",
+    ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
     },

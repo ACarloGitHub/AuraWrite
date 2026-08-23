@@ -18,16 +18,10 @@ import {
   deleteDocument,
   saveDocumentVersion,
   getLatestVersion,
-  getEntityIndexStatus,
   updateDocumentsOrder,
 } from "../database/db";
 import { invoke } from "@tauri-apps/api/core";
-import type { Project, Section, Document, IndexStatus } from "../types/database";
-import {
-  extractEntitiesFromDocument,
-  extractEntitiesFromSection,
-  extractEntitiesFromProject,
-} from "../ai-panel/entity-extraction";
+import type { Project, Section, Document } from "../types/database";
 import { sendProgrammaticMessage } from "../ai-panel/chat";
 import Sortable from "sortablejs";
 import { setLoading as setLoadingState } from "../loading-state";
@@ -60,6 +54,15 @@ import {
   showProjectAISettingsDialog,
   showConfirmDialog,
 } from "./project-dialogs";
+import {
+  extractTextFromContent,
+  countWordsInContent,
+  indexDocumentForSearch,
+  handleIndexDocument,
+  handleIndexSection,
+  handleIndexProject,
+  updateIndexIndicators,
+} from "./project-indexing";
 
 // Live re-exports (ESM live bindings): external consumers keep seeing fresh
 // state. Never replace with copies (`const x = ...` would freeze the value).
@@ -340,72 +343,8 @@ async function handleSaveToDatabase(): Promise<void> {
   }
 }
 
-/**
- * Extract plain text from ProseMirror JSON content
- */
-function extractTextFromContent(contentJson: string): string {
-  try {
-    const doc = JSON.parse(contentJson);
-    if (!doc.content) return "";
-    return extractTextFromNode(doc);
-  } catch {
-    return contentJson; // Fallback to raw text if parsing fails
-  }
-}
-
-function extractTextFromNode(node: any): string {
-  if (typeof node === "string") return node;
-  if (!node) return "";
-  
-  if (node.text) return node.text;
-  
-  if (node.content && Array.isArray(node.content)) {
-    return node.content.map(extractTextFromNode).join(" ");
-  }
-  
-  return "";
-}
-
-function countWordsInContent(contentJson: string): number {
-  const text = extractTextFromContent(contentJson);
-  return text.trim() ? text.trim().split(/\s+/).length : 0;
-}
-
-/**
- * Index document content for semantic search
- * Silently fails if Ollama is not available
- */
-async function indexDocumentForSearch(
-  projectId: string,
-  documentId: string,
-  contentJson: string
-): Promise<void> {
-  const PREFERENCES_KEY = "aurawrite-preferences";
-  const saved = localStorage.getItem(PREFERENCES_KEY);
-  const prefs = saved ? JSON.parse(saved) : {};
-  const semanticEnabled = prefs.semanticSearchEnabled !== false;
-  console.log(`[SemanticSearch] enabled=${semanticEnabled}, saved pref=${prefs.semanticSearchEnabled}`);
-  if (!semanticEnabled) return;
-
-  try {
-    const text = extractTextFromContent(contentJson);
-    if (!text.trim()) return;
-
-    const baseUrl = prefs.aiBaseUrl || undefined;
-
-    await invoke("embedding_save_document", {
-      projectId,
-      documentId,
-      contentText: text,
-      chunkSize: 100,
-      chunkOverlap: 20,
-      baseUrl,
-    });
-    console.log(`Document ${documentId} indexed for search`);
-  } catch (err) {
-    console.error(`Document ${documentId} not indexed:`, err);
-  }
-}
+// Text extraction / word counting / semantic indexing moved to
+// ./project-indexing.ts (phase 3, step 3).
 
 async function handleSaveDocument(doc: Document): Promise<void> {
   if (currentDocument?.id === doc.id) {
@@ -700,133 +639,9 @@ async function handleDeleteDocument(doc: Document): Promise<void> {
   }
 }
 
-// ============================================================================
-// ENTITY INDEXING
-// ============================================================================
-
-let isIndexing = false;
-
-async function handleIndexDocument(doc: Document): Promise<void> {
-  if (!currentProject) return;
-  if (isIndexing) {
-    showNotification("Already indexing, please wait...", "error");
-    return;
-  }
-  isIndexing = true;
-
-  try {
-    showNotification("🗂 Indexing entities...", "indexing");
-    const result = await extractEntitiesFromDocument(
-      doc.id,
-      currentProject.id,
-      currentProject.type || "novel",
-      (msg) => showNotification(`🗂 ${msg}`, "indexing"),
-    );
-    if (result.skipped) {
-      const reasonMsg = {
-        empty: "document is empty",
-        no_text: "document has no text",
-        error: "extraction failed",
-      }[result.reason || "empty"];
-      showNotification(`⏭ ${doc.title}: ${reasonMsg}, nothing to index`, "info");
-    } else {
-      showNotification(`✓ ${doc.title}: ${result.created} created, ${result.updated} updated`, "success");
-    }
-  } catch (error) {
-    showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-  } finally {
-    isIndexing = false;
-    updateIndexIndicators();
-  }
-}
-
-async function handleIndexSection(section: Section): Promise<void> {
-  if (!currentProject) return;
-  if (isIndexing) {
-    showNotification("Already indexing, please wait...", "error");
-    return;
-  }
-  isIndexing = true;
-
-  try {
-    showNotification("🗂 Indexing section...", "indexing");
-    const result = await extractEntitiesFromSection(
-      section.id,
-      currentProject.id,
-      currentProject.type || "novel",
-      (msg) => showNotification(`🗂 ${msg}`, "indexing"),
-    );
-    showNotification(`✓ ${section.name}: ${result.created} created, ${result.updated} updated`, "success");
-  } catch (error) {
-    showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-  } finally {
-    isIndexing = false;
-    updateIndexIndicators();
-  }
-}
-
-async function handleIndexProject(project: Project): Promise<void> {
-  if (isIndexing) {
-    showNotification("Already indexing, please wait...", "error");
-    return;
-  }
-  isIndexing = true;
-
-  try {
-    showNotification("🗂 Indexing project...", "indexing");
-    const result = await extractEntitiesFromProject(
-      project.id,
-      project.type || "novel",
-      (msg) => showNotification(`🗂 ${msg}`, "indexing"),
-    );
-    showNotification(`✓ Project indexed: ${result.created} created, ${result.updated} updated`, "success");
-  } catch (error) {
-    showNotification(`✗ Indexing failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-  } finally {
-    isIndexing = false;
-    updateIndexIndicators();
-  }
-}
-
-async function updateIndexIndicators(): Promise<void> {
-  if (!currentProject) return;
-
-  try {
-    const projectStatus = await getEntityIndexStatus("project", currentProject.id);
-    const projectBtns = document.querySelectorAll<HTMLButtonElement>(".index-btn[data-target-type='project']");
-    projectBtns.forEach((btn) => {
-      btn.dataset.targetId = currentProject!.id;
-      applyIndexStatus(btn, projectStatus);
-    });
-
-    for (const section of sections) {
-      const sectionStatus = await getEntityIndexStatus("section", section.id);
-      const sectionBtns = document.querySelectorAll<HTMLButtonElement>(`.index-btn[data-target-type='section'][data-target-id='${section.id}']`);
-      sectionBtns.forEach((btn) => applyIndexStatus(btn, sectionStatus));
-
-      const sectionDocs = documents.filter((doc) => doc.section_id === section.id);
-      for (const doc of sectionDocs) {
-        const docStatus = await getEntityIndexStatus("document", doc.id);
-        const docBtns = document.querySelectorAll<HTMLButtonElement>(`.index-btn[data-target-type='document'][data-target-id='${doc.id}']`);
-        docBtns.forEach((btn) => applyIndexStatus(btn, docStatus));
-      }
-    }
-  } catch (error) {
-    console.error("[IndexStatus] Error:", error);
-  }
-}
-
-function applyIndexStatus(btn: HTMLButtonElement, status: IndexStatus): void {
-  btn.classList.remove("index-red", "index-yellow", "index-green");
-  btn.classList.add(`index-${status.status}`);
-
-  const tooltips: Record<string, string> = {
-    red: "Not indexed — click to extract entities",
-    yellow: "Outdated — document modified since last indexing",
-    green: `Indexed — ${status.entity_count} entities linked`,
-  };
-  btn.title = tooltips[status.status] || "Index entities";
-}
+// ENTITY INDEXING moved to ./project-indexing.ts (phase 3, step 3):
+// isIndexing flag, handleIndexDocument/Section/Project, updateIndexIndicators,
+// applyIndexStatus.
 
 async function handleNewSection(projectId: string, parentId?: string): Promise<void> {
   // Limite di profondita': una sezione gia' al livello massimo non puo' avere
@@ -2042,10 +1857,8 @@ function triggerSaveStatusCheck(): void {
 // Shared state (currentProject, currentSection, currentDocument, projects,
 // sections, documents, expandedSections) is re-exported live from
 // ./project-state — see the export block at the top of this file.
+// Indexing handlers moved to ./project-indexing.ts and are re-exported to
+// keep the public surface unchanged (toolbar.ts imports them from here).
 
-export {
-  triggerSaveStatusCheck,
-  handleSaveToDatabase,
-  handleIndexDocument,
-  handleIndexProject,
-};
+export { triggerSaveStatusCheck, handleSaveToDatabase };
+export { handleIndexDocument, handleIndexProject } from "./project-indexing";
