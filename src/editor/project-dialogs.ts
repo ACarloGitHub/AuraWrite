@@ -374,7 +374,7 @@ export function showProjectAISettingsDialog(project: Project): Promise<void> {
     const currentStyle = project.selected_style ?? tpl?.defaultStyleName ?? "";
 
     overlay.innerHTML = `
-      <div class="save-dialog" style="max-width: 700px;">
+      <div class="save-dialog ai-settings-dialog">
         <h3>AI Settings — ${escapeHtml(project.name)}</h3>
         <p style="color: var(--color-text-muted, #888); font-size: 12px; margin: 4px 0 16px;">
           Template: <strong>${escapeHtml(tpl ? `${tpl.icon} ${tpl.displayName}` : project.template_type)}</strong>.

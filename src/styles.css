@@ -4816,6 +4816,43 @@ kbd {
   cursor: not-allowed;
 }
 
+/* AI Settings dialog (project prompts & style) — reuses .save-dialog shell
+   but needs its own form layout: without these rules labels and inputs
+   render side-by-side and cramped. */
+.ai-settings-dialog {
+  max-width: 700px;
+}
+
+.ai-settings-dialog .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.ai-settings-dialog label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ai-settings-dialog textarea,
+.ai-settings-dialog select {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text);
+  background: var(--color-bg, #141414);
+  border: 1px solid var(--color-border, #3a3a3a);
+  border-radius: 4px;
+}
+
+.ai-settings-dialog textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
 .project-type-dialog input[type="text"],
 .project-type-dialog select {
   width: 100%;
