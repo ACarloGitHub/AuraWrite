@@ -40,8 +40,8 @@ import {
   handleDeleteProject,
   handleDeleteSection,
   handleDeleteDocument,
-  initSortable,
 } from "./project-panel";
+import { initSortable } from "./project-dnd";
 import type { Project, Section, Document } from "../types/database";
 
 /**
