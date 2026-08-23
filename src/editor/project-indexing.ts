@@ -87,7 +87,9 @@ export function indexDocumentForSearch(
   // Unchanged since the last fully-successful run → nothing to do.
   if (indexedTextCache.get(documentId) === text) return;
 
-  const baseUrl = prefs.aiBaseUrl || undefined;
+  // NOTE: deliberately NO prefs.aiBaseUrl here. That field belongs to the
+  // chat provider; historically it hijacked embedding calls too (401 against
+  // remote providers). The local service owns its dedicated port (11500).
 
   const job = async () => {
     // Backend chunks the text, calls the local llama.cpp service per chunk
@@ -100,7 +102,6 @@ export function indexDocumentForSearch(
         contentText: text,
         chunkSize: 100,
         chunkOverlap: 20,
-        baseUrl,
       }
     );
 
