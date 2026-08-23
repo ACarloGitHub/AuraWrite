@@ -66,7 +66,7 @@ export const AVAILABLE_TOOLS = [
     parameters: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["search", "get", "list_by_type", "in_document", "semantic", "embeddings"], description: "search: by name/description. get: one entity by id. list_by_type: all of a type. in_document: entities extracted from a document. semantic: semantic similarity. embeddings: raw indexed chunks of one entity." },
+        action: { type: "string", enum: ["search", "get", "list_by_type", "in_document"], description: "search: by name/description. get: one entity by id. list_by_type: all of a type. in_document: entities extracted from a document." },
         project_id: { type: "string", description: "The project ID" },
         query: { type: "string", description: "search / semantic: name, description, or natural-language query" },
         entity_type: { type: "string", description: "list_by_type / search filter: type name (e.g. 'Character'); singular or plural accepted" },
@@ -507,58 +507,8 @@ async function semanticSearch(
   }
 }
 
-async function semanticSearchEntities(
-  projectId: string,
-  query: string,
-  limit: number = 5
-): Promise<Array<{ entity_type: string; entity_id: string; content_text: string; distance: number }>> {
-  try {
-    const queryVector: number[] = await invoke("embedding_generate", {
-      text: query,
-      isQuery: true,
-    });
-
-    const results = await invoke("embedding_search_entities", {
-      projectId,
-      queryVector,
-      limit
-    });
-
-    return results as Array<{
-      entity_type: string;
-      entity_id: string;
-      content_text: string;
-      distance: number;
-    }>;
-  } catch (error) {
-    console.error("Semantic search entities failed:", error);
-    return [];
-  }
-}
-
-async function getEmbeddingsForEntity(
-  entityType: string,
-  entityId: string
-): Promise<Array<{ id: string; project_id: string; entity_type: string; entity_id: string; chunk_index: number | null; content_text: string; created_at: number }>> {
-  try {
-    const results = await invoke("embedding_get_for_entity", {
-      entityType,
-      entityId,
-    });
-    return results as Array<{
-      id: string;
-      project_id: string;
-      entity_type: string;
-      entity_id: string;
-      chunk_index: number | null;
-      content_text: string;
-      created_at: number;
-    }>;
-  } catch (error) {
-    console.error("Get embeddings for entity failed:", error);
-    return [];
-  }
-}
+// (semantic_search_entities and get_entity_embeddings removed 2026-08-23:
+// entities have no vectors, so these tools always returned empty.)
 
 // Tool: entities_in_document
 async function entitiesInDocument(
@@ -1032,10 +982,6 @@ export async function executeTool(
             result = await listEntitiesByType(projectId, (args.entity_type as string) || ""); tool = "list_entities_by_type"; break;
           case "in_document":
             result = await entitiesInDocument((args.document_id as string) || "", projectId); tool = "entities_in_document"; break;
-          case "semantic":
-            result = await semanticSearchEntities(projectId, (args.query as string) || "", (args.limit as number) || 5); tool = "semantic_search_entities"; break;
-          case "embeddings":
-            result = await getEmbeddingsForEntity((args.entity_id_type as string) || "entity", (args.entity_id as string) || ""); tool = "get_entity_embeddings"; break;
           default:
             return { tool: name, result: null, error: `Unknown entity_query action: "${action}"` };
         }
