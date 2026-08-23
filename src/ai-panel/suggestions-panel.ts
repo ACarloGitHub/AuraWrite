@@ -511,7 +511,11 @@ async function processNextSlot(): Promise<void> {
   );
 
   const prefs = getPreferences();
-  const promptText = prefs.suggestionsPrompt || DEFAULT_SUGGESTIONS_PROMPT;
+  // Per-project override (AI Settings) wins over the global preference.
+  const promptText =
+    currentProject?.suggestions_prompt_override ||
+    prefs.suggestionsPrompt ||
+    DEFAULT_SUGGESTIONS_PROMPT;
 
   let previousSuggestion = "";
   if (wasDiscarded && slot.suggestion) {
