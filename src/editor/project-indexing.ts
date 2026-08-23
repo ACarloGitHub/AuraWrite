@@ -60,32 +60,38 @@ function throttledSkipNotice(): void {
   );
 }
 
-/**
- * Index document content for semantic search using the built-in local
- * embeddings service (llama.cpp + nomic). If the service is not running,
- * a visible-but-throttled notice is shown and placeholders remain.
- */
-export async function indexDocumentForSearch(
+// --- Background semantic indexing ------------------------------------------
+// Embedding a document costs real CPU time (one llama.cpp call per chunk),
+// so indexing NEVER runs inline in the save path: it is fired in background,
+// single-flight (max one running + one queued job), and unchanged documents
+// are skipped via a small in-memory cache keyed by document id.
+
+const indexedTextCache = new Map<string, string>();
+let semanticJobRunning = false;
+let queuedSemanticJob: (() => void) | null = null;
+
+export function indexDocumentForSearch(
   projectId: string,
   documentId: string,
   contentJson: string
-): Promise<void> {
+): void {
   const PREFERENCES_KEY = "aurawrite-preferences";
   const saved = localStorage.getItem(PREFERENCES_KEY);
   const prefs = saved ? JSON.parse(saved) : {};
   const semanticEnabled = prefs.semanticSearchEnabled !== false;
-  console.log(`[SemanticSearch] enabled=${semanticEnabled}, saved pref=${prefs.semanticSearchEnabled}`);
   if (!semanticEnabled) return;
 
-  try {
-    const text = extractTextFromContent(contentJson);
-    if (!text.trim()) return;
+  const text = extractTextFromContent(contentJson);
+  if (!text.trim()) return;
 
-    const baseUrl = prefs.aiBaseUrl || undefined;
+  // Unchanged since the last fully-successful run → nothing to do.
+  if (indexedTextCache.get(documentId) === text) return;
 
-    // Backend fills REAL vectors now (phase "Nomic locale end-to-end", P2):
-    // it chunks, calls the local llama.cpp service per chunk and replaces the
-    // placeholders. skipped_reason explains partial/failed indexing.
+  const baseUrl = prefs.aiBaseUrl || undefined;
+
+  const job = async () => {
+    // Backend chunks the text, calls the local llama.cpp service per chunk
+    // and replaces placeholders. skipped_reason explains partial/failed runs.
     const res = await invoke<{ chunks_total: number; chunks_indexed: number; skipped_reason: string | null }>(
       "embedding_save_document",
       {
@@ -104,14 +110,36 @@ export async function indexDocumentForSearch(
       console.warn(
         `[SemanticSearch] partial index for ${documentId}: ${res.skipped_reason} (${res.chunks_indexed}/${res.chunks_total})`
       );
+      indexedTextCache.delete(documentId);
     } else {
       console.log(
         `Document ${documentId} semantically indexed (${res.chunks_indexed}/${res.chunks_total} chunks)`
       );
+      indexedTextCache.set(documentId, text);
     }
-  } catch (err) {
-    console.error(`Document ${documentId} not indexed:`, err);
+  };
+
+  const finish = () => {
+    semanticJobRunning = false;
+    const next = queuedSemanticJob;
+    queuedSemanticJob = null;
+    next?.();
+  };
+
+  if (semanticJobRunning) {
+    // Keep only the newest pending request (older intermediates are useless).
+    queuedSemanticJob = () => {
+      job().catch((err) =>
+        console.error(`Document ${documentId} not indexed:`, err)
+      );
+    };
+    return;
   }
+
+  semanticJobRunning = true;
+  job()
+    .catch((err) => console.error(`Document ${documentId} not indexed:`, err))
+    .finally(finish);
 }
 
 // Dynamic-import bridge to the panel's notification helper (avoids the static
