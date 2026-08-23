@@ -484,15 +484,9 @@ async function semanticSearch(
   limit: number = 5
 ): Promise<Array<{ entity_type: string; entity_id: string; content_text: string; distance: number }>> {
   try {
-    const PREFERENCES_KEY = "aurawrite-preferences";
-    const saved = localStorage.getItem(PREFERENCES_KEY);
-    const prefs = saved ? JSON.parse(saved) : {};
-    const baseUrl = prefs.aiBaseUrl || undefined;
-
     const queryVector: number[] = await invoke("embedding_generate", {
       text: query,
       isQuery: true,
-      baseUrl,
     });
 
     const results = await invoke("embedding_search_documents", {
@@ -519,15 +513,9 @@ async function semanticSearchEntities(
   limit: number = 5
 ): Promise<Array<{ entity_type: string; entity_id: string; content_text: string; distance: number }>> {
   try {
-    const PREFERENCES_KEY = "aurawrite-preferences";
-    const saved = localStorage.getItem(PREFERENCES_KEY);
-    const prefs = saved ? JSON.parse(saved) : {};
-    const baseUrl = prefs.aiBaseUrl || undefined;
-
     const queryVector: number[] = await invoke("embedding_generate", {
       text: query,
       isQuery: true,
-      baseUrl,
     });
 
     const results = await invoke("embedding_search_entities", {
@@ -721,15 +709,9 @@ async function chatSearch(
   limit: number = 10
 ): Promise<Array<{ message_id: string; session_id: string; role: string; message_timestamp: number; content_text: string; project_id: string | null; distance: number }>> {
   try {
-    const PREFERENCES_KEY = "aurawrite-preferences";
-    const saved = localStorage.getItem(PREFERENCES_KEY);
-    const prefs = saved ? JSON.parse(saved) : {};
-    const baseUrl = prefs.aiBaseUrl || undefined;
-
     const queryVector: number[] = await invoke("embedding_generate", {
       text: query,
       isQuery: true,
-      baseUrl,
     });
 
     // Get the current and recent session IDs for cross-session search
