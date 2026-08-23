@@ -114,9 +114,15 @@ pub async fn generate_embedding(
 ) -> Result<Vec<f32>, String> {
     let client = reqwest::Client::new();
 
+    // The built-in llama.cpp embeddings server speaks the OpenAI dialect
+    // (/v1/embeddings). Verified empirically on pinned build b9680 (P0 test,
+    // 2026-08-23): Ollama-style /api/* routes return 404.
     let url = match base_url {
-        Some(url) => format!("{}/api/embeddings", url.trim_end_matches('/')),
-        None => "http://localhost:11434/api/embeddings".to_string(),
+        Some(url) => format!("{}/v1/embeddings", url.trim_end_matches('/')),
+        None => format!(
+            "http://127.0.0.1:{}/v1/embeddings",
+            crate::resources::EMBEDDINGS_PORT_DEFAULT
+        ),
     };
 
     let prefixed_text = if is_query {
@@ -129,24 +135,24 @@ pub async fn generate_embedding(
         .post(&url)
         .json(&serde_json::json!({
             "model": "nomic-embed-text-v2-moe",
-            "prompt": prefixed_text
+            "input": prefixed_text
         }))
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to Ollama: {}", e))?;
+        .map_err(|e| format!("Failed to connect to local embedding service: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Ollama returned error: {}", response.status()));
+        return Err(format!("Embedding service returned error: {}", response.status()));
     }
 
     let json: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+        .map_err(|e| format!("Failed to parse embedding response: {}", e))?;
 
-    let embedding = json["embedding"]
+    let embedding = json["data"][0]["embedding"]
         .as_array()
-        .ok_or("Invalid embedding format from Ollama")?
+        .ok_or("Invalid embedding format from embedding service")?
         .iter()
         .map(|v| v.as_f64().unwrap_or(0.0) as f32)
         .collect::<Vec<f32>>();
@@ -162,41 +168,27 @@ pub async fn generate_embedding(
     Ok(embedding)
 }
 
-pub async fn check_ollama_available(base_url: Option<&str>) -> Result<bool, String> {
+/// Health probe for the local embeddings service: our dedicated port answers
+/// /health when the llama.cpp server is up. No model-name check needed — we
+/// decide which model to serve at spawn time.
+pub async fn check_embeddings_available(base_url: Option<&str>) -> Result<bool, String> {
     let client = reqwest::Client::new();
 
     let url = match base_url {
-        Some(url) => format!("{}/api/tags", url.trim_end_matches('/')),
-        None => "http://localhost:11434/api/tags".to_string(),
+        Some(url) => format!("{}/health", url.trim_end_matches('/')),
+        None => format!(
+            "http://127.0.0.1:{}/health",
+            crate::resources::EMBEDDINGS_PORT_DEFAULT
+        ),
     };
 
     match client
         .get(&url)
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(3))
         .send()
         .await
     {
-        Ok(response) => {
-            if response.status().is_success() {
-                let json: serde_json::Value = response
-                    .json()
-                    .await
-                    .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
-
-                let empty_vec = vec![];
-                let models = json["models"].as_array().unwrap_or(&empty_vec);
-                let has_nomic = models.iter().any(|m| {
-                    m["name"]
-                        .as_str()
-                        .map(|n| n.starts_with("nomic-embed-text-v2-moe"))
-                        .unwrap_or(false)
-                });
-
-                Ok(has_nomic)
-            } else {
-                Ok(false)
-            }
-        }
+        Ok(response) => Ok(response.status().is_success()),
         Err(_) => Ok(false),
     }
 }

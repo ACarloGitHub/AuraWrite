@@ -383,7 +383,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (import.meta.env.DEV) {
     (window as any).auraTest = {
-      checkOllama: () => invoke('embedding_check_ollama'),
+      checkOllama: () => invoke('embedding_check_service'),
       generateEmbedding: (text: string, isQuery = false) => 
         invoke('embedding_generate', { text, isQuery }),
       saveEmbedding: (projectId: string, documentId: string, contentText: string) =>

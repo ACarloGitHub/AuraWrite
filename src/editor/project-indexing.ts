@@ -48,9 +48,22 @@ export function countWordsInContent(contentJson: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
+// Auto-save runs every few seconds; a "service down" toast must not spam.
+let lastSkipNoticeAt = 0;
+function throttledSkipNotice(): void {
+  const now = Date.now();
+  if (now - lastSkipNoticeAt < 60_000) return;
+  lastSkipNoticeAt = now;
+  notify(
+    "Semantic indexing skipped — start the local embedding service in Preferences > Embeddings",
+    "info"
+  );
+}
+
 /**
- * Index document content for semantic search
- * Silently fails if Ollama is not available
+ * Index document content for semantic search using the built-in local
+ * embeddings service (llama.cpp + nomic). If the service is not running,
+ * a visible-but-throttled notice is shown and placeholders remain.
  */
 export async function indexDocumentForSearch(
   projectId: string,
@@ -70,15 +83,32 @@ export async function indexDocumentForSearch(
 
     const baseUrl = prefs.aiBaseUrl || undefined;
 
-    await invoke("embedding_save_document", {
-      projectId,
-      documentId,
-      contentText: text,
-      chunkSize: 100,
-      chunkOverlap: 20,
-      baseUrl,
-    });
-    console.log(`Document ${documentId} indexed for search`);
+    // Backend fills REAL vectors now (phase "Nomic locale end-to-end", P2):
+    // it chunks, calls the local llama.cpp service per chunk and replaces the
+    // placeholders. skipped_reason explains partial/failed indexing.
+    const res = await invoke<{ chunks_total: number; chunks_indexed: number; skipped_reason: string | null }>(
+      "embedding_save_document",
+      {
+        projectId,
+        documentId,
+        contentText: text,
+        chunkSize: 100,
+        chunkOverlap: 20,
+        baseUrl,
+      }
+    );
+
+    if (res.skipped_reason === "service_unavailable") {
+      throttledSkipNotice();
+    } else if (res.skipped_reason) {
+      console.warn(
+        `[SemanticSearch] partial index for ${documentId}: ${res.skipped_reason} (${res.chunks_indexed}/${res.chunks_total})`
+      );
+    } else {
+      console.log(
+        `Document ${documentId} semantically indexed (${res.chunks_indexed}/${res.chunks_total} chunks)`
+      );
+    }
   } catch (err) {
     console.error(`Document ${documentId} not indexed:`, err);
   }

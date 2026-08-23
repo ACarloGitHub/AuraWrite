@@ -821,64 +821,137 @@ fn base64_encode(data: &[u8]) -> String {
 // ============================================================================
 
 #[tauri::command]
-async fn embedding_check_ollama(base_url: Option<String>) -> Result<bool, String> {
-    embeddings::check_ollama_available(base_url.as_deref()).await.map_err(|e| e.to_string())
+async fn embedding_check_service(base_url: Option<String>) -> Result<bool, String> {
+    embeddings::check_embeddings_available(base_url.as_deref()).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn embedding_generate(text: String, is_query: Option<bool>, base_url: Option<String>) -> Result<Vec<f32>, String> {
     embeddings::generate_embedding(&text, is_query.unwrap_or(false), base_url.as_deref()).await.map_err(|e| e.to_string())
 }
+/// Outcome of indexing one document for semantic search. `skipped_reason`
+/// is set when real vectors could not be produced (e.g. local embedding
+/// service not running); placeholders remain and the next successful save
+/// replaces them.
+#[derive(Debug, Serialize, Clone)]
+pub struct IndexDocumentResult {
+    pub chunks_total: usize,
+    pub chunks_indexed: usize,
+    pub skipped_reason: Option<String>,
+}
 
 #[tauri::command]
-fn embedding_save_document(
-    state: State<AppState>,
+async fn embedding_save_document(
+    state: State<'_, AppState>,
     project_id: String,
     document_id: String,
     content_text: String,
     chunk_size: i32,
     chunk_overlap: i32,
-) -> Result<(), String> {
-    let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
-
-    // Delete existing embeddings for this document
-    if let Err(e) = embeddings::delete_embeddings_for_entity(&*conn, "document", &document_id) {
-        eprintln!("[Embeddings] delete_embeddings_for_entity failed: {}", e);
-        return Err(e.to_string());
-    }
-
-    // Chunk the content
-    let chunks = embeddings::chunk_text(&content_text, chunk_size as usize, chunk_overlap as usize);
+    base_url: Option<String>,
+) -> Result<IndexDocumentResult, String> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
 
-    println!("[Embeddings] Saving {} chunks for document {}", chunks.len(), document_id);
+    // Phase 1 — under lock: drop previous embeddings, insert placeholders,
+    // collect the chunk texts (the lock is released before any await).
+    let chunks_meta: Vec<(String, i32, String)> = {
+        let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
 
-    // Save placeholders - actual embeddings will be added via embedding_save_chunk
-    for (i, chunk) in chunks.iter().enumerate() {
-        let embedding_id = embeddings::generate_embedding_id("document", &document_id, Some(i as i32));
-        let embedding = embeddings::Embedding {
-            id: embedding_id,
-            project_id: project_id.clone(),
-            entity_type: "document".to_string(),
-            entity_id: document_id.clone(),
-            chunk_index: Some(i as i32),
-            content_text: chunk.clone(),
-            created_at: now,
-        };
-
-        // Save with zero vector initially
-        let zero_vector = vec![0.0f32; 768];
-        if let Err(e) = embeddings::save_embedding(&*conn, &embedding, &zero_vector) {
-            eprintln!("[Embeddings] save_embedding failed for chunk {}: {}", i, e);
+        if let Err(e) = embeddings::delete_embeddings_for_entity(&*conn, "document", &document_id) {
+            eprintln!("[Embeddings] delete_embeddings_for_entity failed: {}", e);
             return Err(e.to_string());
+        }
+
+        let chunks = embeddings::chunk_text(&content_text, chunk_size as usize, chunk_overlap as usize);
+        println!("[Embeddings] Saving {} chunks for document {}", chunks.len(), document_id);
+
+        let mut metas = Vec::with_capacity(chunks.len());
+        for (i, chunk) in chunks.iter().enumerate() {
+            let embedding_id = embeddings::generate_embedding_id("document", &document_id, Some(i as i32));
+            let embedding = embeddings::Embedding {
+                id: embedding_id.clone(),
+                project_id: project_id.clone(),
+                entity_type: "document".to_string(),
+                entity_id: document_id.clone(),
+                chunk_index: Some(i as i32),
+                content_text: chunk.clone(),
+                created_at: now,
+            };
+
+            // Placeholder row; replaced below once the real vector exists.
+            let zero_vector = vec![0.0f32; 768];
+            if let Err(e) = embeddings::save_embedding(&*conn, &embedding, &zero_vector) {
+                eprintln!("[Embeddings] save_embedding failed for chunk {}: {}", i, e);
+                return Err(e.to_string());
+            }
+            metas.push((embedding_id, i as i32, chunk.clone()));
+        }
+        metas
+    };
+
+    let mut result = IndexDocumentResult {
+        chunks_total: chunks_meta.len(),
+        chunks_indexed: 0,
+        skipped_reason: None,
+    };
+
+    // Phase 2 — no lock held: call the local embedding service per chunk.
+    // First failure aborts generation; placeholders stay in place.
+    let mut vectors: Vec<(String, i32, String, Vec<f32>)> = Vec::new();
+    for (id, idx, text) in &chunks_meta {
+        match embeddings::generate_embedding(text, false, base_url.as_deref()).await {
+            Ok(v) => vectors.push((id.clone(), *idx, text.clone(), v)),
+            Err(e) => {
+                let unavailable = e.contains("Failed to connect");
+                result.skipped_reason = Some(if unavailable {
+                    "service_unavailable".to_string()
+                } else {
+                    format!("error: {}", e)
+                });
+                eprintln!(
+                    "[Embeddings] generation failed for document {} chunk {}: {}",
+                    document_id, idx, e
+                );
+                break;
+            }
         }
     }
 
-    println!("[Embeddings] Saved {} chunks for document {}", chunks.len(), document_id);
-    Ok(())
+    // Phase 3 — under lock again: replace placeholders with real vectors.
+    if !vectors.is_empty() {
+        let conn = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+        for (id, idx, text, vector) in &vectors {
+            let embedding = embeddings::Embedding {
+                id: id.clone(),
+                project_id: project_id.clone(),
+                entity_type: "document".to_string(),
+                entity_id: document_id.clone(),
+                chunk_index: Some(*idx),
+                content_text: text.clone(),
+                created_at: now,
+            };
+            match embeddings::save_embedding(&*conn, &embedding, vector) {
+                Ok(()) => result.chunks_indexed += 1,
+                Err(e) => eprintln!(
+                    "[Embeddings] failed to persist vector for chunk {}: {}",
+                    idx, e
+                ),
+            }
+        }
+    }
+
+    println!(
+        "[Embeddings] document {}: {}/{} chunks embedded{}",
+        document_id,
+        result.chunks_indexed,
+        result.chunks_total,
+        result.skipped_reason.as_deref().map(|r| format!(" ({})", r)).unwrap_or_default()
+    );
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1298,7 +1371,7 @@ pub fn run() {
             // Maintenance (v0.4.2+)
             db_cleanup_orphan_links,
             // Embedding commands
-            embedding_check_ollama,
+            embedding_check_service,
             embedding_generate,
             embedding_save_document,
             embedding_save_chunk,

@@ -49,6 +49,12 @@ const NOMIC_LICENSE: &str = "Apache-2.0";
 const LLAMACPP_LICENSE: &str = "MIT";
 const NOMIC_SHA256_EXPECTED: &str = "6E7A7E594A26985523C18383ABA4AAD39FE6E14F08FFC6AB5B554E1CCDC3CFF";
 
+/// Dedicated port for the built-in embeddings server. Deliberately NOT
+/// Ollama's 11434 (chat llama.cpp uses 11435): a port of our own removes any
+/// coexistence conflict with an external Ollama install. The embeddings
+/// client (embeddings.rs) targets this port by default.
+pub const EMBEDDINGS_PORT_DEFAULT: u16 = 11500;
+
 pub fn resources_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
         .path()
@@ -2283,7 +2289,7 @@ pub async fn llamacpp_server_status() -> Result<LlamaServerStatus, String> {
 #[tauri::command]
 pub async fn llamacpp_spawn_embeddings_server(
     app: AppHandle,
-    model_path: String,
+    model_path: Option<String>,
     port: Option<u16>,
     threads: Option<u32>,
 ) -> Result<LlamaServerStatus, String> {
@@ -2302,34 +2308,49 @@ pub async fn llamacpp_spawn_embeddings_server(
             }
         }
 
-        // Kill any orphaned llama-server before starting the embeddings server
-        #[cfg(target_os = "windows")]
-        {
-            let _ = silent_command("taskkill")
-                .args(["/F", "/IM", "llama-server.exe", "/T"])
-                .output();
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = Command::new("pkill")
-                .args(["-9", "-f", "llama-server"])
-                .output();
-        }
-        std::thread::sleep(std::time::Duration::from_millis(500));
-
         let dir = resources_dir(&app)?;
         let emb_dir = llamacpp_embeddings_dir(&dir);
         let binary = find_binary_in_dir(&emb_dir, llamacpp_binary_name())
             .map_err(|e| format!("llama-server binary not found in embeddings dir: {}", e))?;
 
-        if !Path::new(&model_path).exists() {
-            return Err(format!("model file not found: {}", model_path));
+        let resolved_model_path = match model_path {
+            Some(p) => std::path::PathBuf::from(p),
+            None => dir.join("nomic").join(NOMIC_MODEL_FILENAME),
+        };
+        if !resolved_model_path.exists() {
+            return Err(format!(
+                "nomic model not found at {} — download it from Preferences > Embeddings",
+                resolved_model_path.display()
+            ));
         }
 
-        let actual_port = port.unwrap_or(11434);
+        let actual_port = port.unwrap_or(EMBEDDINGS_PORT_DEFAULT);
+
+        // Orphan-awareness without indiscriminate killing: if something is
+        // already listening on our dedicated port, adopt it instead of
+        // spawning a second instance (we can never kill another app's
+        // process by name — that once risked taking down the chat server).
+        if std::net::TcpStream::connect_timeout(
+            &std::net::SocketAddr::from(([127, 0, 0, 1], actual_port)),
+            std::time::Duration::from_millis(300),
+        )
+        .is_ok()
+        {
+            *state = Some(LlamaServerState {
+                pid: 0,
+                port: actual_port,
+                model_path: resolved_model_path.display().to_string(),
+            });
+            return Ok(LlamaServerStatus {
+                running: true,
+                pid: None,
+                port: Some(actual_port),
+                model_path: Some(resolved_model_path.display().to_string()),
+            });
+        }
 
         let mut cmd = Command::new(&binary);
-        cmd.arg("--model").arg(&model_path);
+        cmd.arg("--model").arg(&resolved_model_path);
         cmd.arg("--port").arg(actual_port.to_string());
         cmd.arg("--host").arg("127.0.0.1");
         cmd.arg("--embedding");
@@ -2361,14 +2382,14 @@ pub async fn llamacpp_spawn_embeddings_server(
         *state = Some(LlamaServerState {
             pid,
             port: actual_port,
-            model_path: model_path.clone(),
+            model_path: resolved_model_path.display().to_string(),
         });
 
         Ok(LlamaServerStatus {
             running: true,
             pid: Some(pid),
             port: Some(actual_port),
-            model_path: Some(model_path),
+            model_path: Some(resolved_model_path.display().to_string()),
         })
     }).await.map_err(|e| format!("join error: {}", e))?
 }
@@ -2379,21 +2400,15 @@ pub async fn llamacpp_stop_embeddings_server() -> Result<LlamaServerStatus, Stri
         let server_state = LLAMA_EMBEDDINGS_SERVER.get_or_init(|| Mutex::new(None));
         let mut state = server_state.lock().map_err(|e| format!("lock error: {}", e))?;
 
-        // Kill ALL llama-server instances immediately (catches orphans too)
-        #[cfg(target_os = "windows")]
-        {
-            let _ = silent_command("taskkill")
-                .args(["/F", "/IM", "llama-server.exe", "/T"])
-                .output();
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = Command::new("pkill")
-                .args(["-9", "-f", "llama-server"])
-                .output();
+        // Kill ONLY the instance we spawned (by PID). Never kill other
+        // llama-server processes by name: the chat local models use the same
+        // executable and must not be touched.
+        if let Some(existing) = state.take() {
+            if existing.pid != 0 && is_process_alive(existing.pid) {
+                kill_pid(existing.pid);
+            }
         }
 
-        *state = None;
         Ok(LlamaServerStatus {
             running: false,
             pid: None,
@@ -2459,5 +2474,20 @@ pub fn is_process_alive(pid: u32) -> bool {
     {
         // Check if /proc/<pid> exists
         std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+}
+
+/// Kill a specific process we own, by PID. Cross-platform, targeted:
+/// never used with a process-name pattern.
+fn kill_pid(pid: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = silent_command("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
     }
 }
