@@ -361,7 +361,9 @@ export function createSectionElement(section: Section): HTMLElement {
   header.className = "item-header";
 
   const dragHandle = document.createElement("span");
-  dragHandle.className = "drag-handle";
+  // Section handles carry "section-drag-handle" (see createSectionElement):
+  // distinct classes keep the two Sortable engines from cross-matching.
+  dragHandle.className = "drag-handle section-drag-handle";
   dragHandle.textContent = "⋮";
   dragHandle.title = "Drag to move";
 
@@ -574,7 +576,7 @@ export function createDocumentElement(doc: Document): HTMLElement {
   header.className = "item-header";
 
   const dragHandle = document.createElement("span");
-  dragHandle.className = "drag-handle";
+  dragHandle.className = "drag-handle doc-drag-handle";
   dragHandle.textContent = "⋮";
   dragHandle.title = "Drag to move";
 

@@ -813,7 +813,9 @@ export function initSortable(): void {
   projectEl.querySelectorAll<HTMLElement>(".section-children").forEach((listEl) => {
     const inst = new Sortable(listEl, {
       group: { name: "sections", pull: true, put: true },
-      handle: ".drag-handle",
+      // Section-specific handle: prevents the section engine from hijacking
+      // drags started on a nested document's handle (same-selector conflict).
+      handle: ".section-drag-handle",
       draggable: ".section-item",
       animation: 150,
       forceFallback: true,
@@ -933,7 +935,7 @@ export function initSortable(): void {
       },
       animation: 150,
       draggable: ".document-item",
-      handle: ".drag-handle",
+      handle: ".doc-drag-handle",
       ghostClass: "sortable-ghost",
       chosenClass: "sortable-chosen",
       dragClass: "sortable-drag",
