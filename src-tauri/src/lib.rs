@@ -826,7 +826,52 @@ async fn embedding_check_service(base_url: Option<String>) -> Result<bool, Strin
 }
 
 #[tauri::command]
-async fn embedding_generate(text: String, is_query: Option<bool>, base_url: Option<String>) -> Result<Vec<f32>, String> {
+/// Make sure the built-in local embeddings service is reachable. No-op when
+/// the caller manages its own service via a custom base_url. Returns
+/// Err("service_unavailable") if it could not be brought up.
+async fn ensure_local_embeddings_service(
+    app: tauri::AppHandle,
+    base_url: Option<&str>,
+) -> Result<(), String> {
+    if base_url.is_some() {
+        return Ok(());
+    }
+    let mut ready = embeddings::check_embeddings_available(None).await.unwrap_or(false);
+    if !ready {
+        println!(
+            "[Embeddings] service not running — starting built-in llama.cpp server on port {}...",
+            resources::EMBEDDINGS_PORT_DEFAULT
+        );
+        match resources::llamacpp_spawn_embeddings_server(app, None, None, None).await {
+            Ok(status) if status.running => {
+                for _ in 0..60 {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    if embeddings::check_embeddings_available(None).await.unwrap_or(false) {
+                        ready = true;
+                        break;
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("[Embeddings] auto-start failed: {}", e),
+        }
+        println!(
+            "[Embeddings] auto-start {}",
+            if ready { "ready" } else { "failed (service still down)" }
+        );
+    }
+    if ready {
+        Ok(())
+    } else {
+        Err("service_unavailable".to_string())
+    }
+}
+
+#[tauri::command]
+async fn embedding_generate(app: tauri::AppHandle, text: String, is_query: Option<bool>, base_url: Option<String>) -> Result<Vec<f32>, String> {
+    // Queries must never silently fail because the service is down: bring
+    // the built-in server up on demand, exactly like the save path does.
+    ensure_local_embeddings_service(app, base_url.as_deref()).await?;
     embeddings::generate_embedding(&text, is_query.unwrap_or(false), base_url.as_deref()).await.map_err(|e| e.to_string())
 }
 /// Outcome of indexing one document for semantic search. `skipped_reason`
@@ -899,42 +944,14 @@ async fn embedding_save_document(
         skipped_reason: None,
     };
 
-    // Auto-start the built-in service when it is down. Only for the default
-    // dedicated port: a custom base_url means the user manages that service
-    // themselves. This is what makes AuraWrite fully Ollama-independent.
-    if base_url.is_none() {
-        let mut ready = embeddings::check_embeddings_available(None).await.unwrap_or(false);
-        if !ready {
-            println!(
-                "[Embeddings] service not running — starting built-in llama.cpp server on port {}...",
-                resources::EMBEDDINGS_PORT_DEFAULT
-            );
-            match resources::llamacpp_spawn_embeddings_server(app, None, None, None).await {
-                Ok(status) if status.running => {
-                    for _ in 0..60 {
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                        if embeddings::check_embeddings_available(None).await.unwrap_or(false) {
-                            ready = true;
-                            break;
-                        }
-                    }
-                }
-                Ok(_) => {}
-                Err(e) => eprintln!("[Embeddings] auto-start failed: {}", e),
-            }
-            println!(
-                "[Embeddings] auto-start {}",
-                if ready { "ready" } else { "failed (service still down)" }
-            );
-        }
-        if !ready {
-            result.skipped_reason = Some("service_unavailable".to_string());
-            println!(
-                "[Embeddings] document {}: 0/{} chunks embedded (service_unavailable)",
-                document_id, result.chunks_total
-            );
-            return Ok(result);
-        }
+    // Auto-start the built-in service when it is down (see helper above).
+    if let Err(reason) = ensure_local_embeddings_service(app, base_url.as_deref()).await {
+        result.skipped_reason = Some(reason);
+        println!(
+            "[Embeddings] document {}: 0/{} chunks embedded (service_unavailable)",
+            document_id, result.chunks_total
+        );
+        return Ok(result);
     }
 
     // Phase 2 — no lock held: call the local embedding service per chunk.
