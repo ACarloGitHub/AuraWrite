@@ -842,6 +842,7 @@ pub struct IndexDocumentResult {
 
 #[tauri::command]
 async fn embedding_save_document(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     project_id: String,
     document_id: String,
@@ -897,6 +898,44 @@ async fn embedding_save_document(
         chunks_indexed: 0,
         skipped_reason: None,
     };
+
+    // Auto-start the built-in service when it is down. Only for the default
+    // dedicated port: a custom base_url means the user manages that service
+    // themselves. This is what makes AuraWrite fully Ollama-independent.
+    if base_url.is_none() {
+        let mut ready = embeddings::check_embeddings_available(None).await.unwrap_or(false);
+        if !ready {
+            println!(
+                "[Embeddings] service not running — starting built-in llama.cpp server on port {}...",
+                resources::EMBEDDINGS_PORT_DEFAULT
+            );
+            match resources::llamacpp_spawn_embeddings_server(app, None, None, None).await {
+                Ok(status) if status.running => {
+                    for _ in 0..60 {
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        if embeddings::check_embeddings_available(None).await.unwrap_or(false) {
+                            ready = true;
+                            break;
+                        }
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("[Embeddings] auto-start failed: {}", e),
+            }
+            println!(
+                "[Embeddings] auto-start {}",
+                if ready { "ready" } else { "failed (service still down)" }
+            );
+        }
+        if !ready {
+            result.skipped_reason = Some("service_unavailable".to_string());
+            println!(
+                "[Embeddings] document {}: 0/{} chunks embedded (service_unavailable)",
+                document_id, result.chunks_total
+            );
+            return Ok(result);
+        }
+    }
 
     // Phase 2 — no lock held: call the local embedding service per chunk.
     // First failure aborts generation; placeholders stay in place.
