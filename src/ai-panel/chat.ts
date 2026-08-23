@@ -1079,7 +1079,10 @@ function buildChatContext(prefs: Preferences): { context: AIContext; hasDocument
     userName: prefs.aiUserName || undefined,
     interfaceLanguage: prefs.aiInterfaceLanguage || undefined,
     writingLanguage: prefs.aiWritingLanguage || undefined,
-    customAssistantPrompt: prefs.aiAssistantPrompt || undefined,
+    customAssistantPrompt:
+      (currentProject?.chat_prompt_override || undefined) ||
+      prefs.aiAssistantPrompt ||
+      undefined,
     writingStyleFragment: currentProject && currentSection
       ? resolveWritingStyleFragment(currentSection, currentProject, currentDocument)
       : undefined,
