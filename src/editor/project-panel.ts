@@ -122,7 +122,7 @@ export function initProjectPanel(
   const btnReadProject = document.getElementById("btn-read-project");
   btnReadProject?.addEventListener("click", () => {
     if (!currentProject) return;
-    sendProgrammaticMessage(`Read all documents in the project "${currentProject.name}". Use the read_project tool.`);
+    sendProgrammaticMessage(`Read all documents in the project "${currentProject.name}" (project_id: "${currentProject.id}"). Use the read_project tool.`);
   });
 
   const btnAiSettings = document.getElementById("btn-ai-settings");
