@@ -58,9 +58,6 @@ export async function setupEmbeddingsTab(): Promise<void> {
   const nomicMeta = document.getElementById("embed-nomic-meta");
   const nomicDownload = document.getElementById("embed-nomic-download") as HTMLButtonElement | null;
   const nomicRemove = document.getElementById("embed-nomic-remove") as HTMLButtonElement | null;
-  const ollamaStatus = document.getElementById("embed-ollama-status");
-  const ollamaInstall = document.getElementById("embed-ollama-install") as HTMLButtonElement | null;
-  const ollamaPullNomic = document.getElementById("embed-ollama-pull-nomic") as HTMLButtonElement | null;
   const removeAll = document.getElementById("embed-remove-all") as HTMLButtonElement | null;
   const reshowOnboarding = document.getElementById("embed-reshow-onboarding") as HTMLButtonElement | null;
 
@@ -74,23 +71,7 @@ export async function setupEmbeddingsTab(): Promise<void> {
   if (nomicDownload) nomicDownload.style.display = status.nomic.present ? "none" : "";
   if (nomicRemove) nomicRemove.style.display = status.nomic.present ? "" : "none";
 
-  if (ollamaStatus) ollamaStatus.textContent = `Ollama status: ${status.ollama_installed ? "installed" : "not installed"} (${status.ollama_path || "not on PATH"})`;
-  if (ollamaInstall) ollamaInstall.style.display = status.ollama_installed ? "none" : "";
-  if (ollamaPullNomic) ollamaPullNomic.style.display = status.ollama_installed ? "" : "none";
-
   installEmbeddingsButtonHandlers();
-  ollamaPullNomic?.addEventListener("click", async () => {
-    ollamaPullNomic.disabled = true;
-    ollamaPullNomic.textContent = "Pulling nomic via Ollama...";
-    try {
-      await invoke("ollama_pull_nomic");
-      ollamaPullNomic.textContent = "nomic pulled via Ollama ✓";
-    } catch (e) {
-      ollamaPullNomic.disabled = false;
-      ollamaPullNomic.textContent = "Download nomic via Ollama";
-      alert("Failed to pull nomic via Ollama: " + (e instanceof Error ? e.message : String(e)));
-    }
-  });
   removeAll?.addEventListener("click", async () => {
     if (!window.confirm("Remove all local AI resources (llama.cpp, embeddings, nomic)? You can re-download at any time.")) return;
     await invoke("resources_remove_all");

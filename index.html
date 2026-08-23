@@ -820,22 +820,6 @@
               </div>
 
               <div class="preference-group">
-                <h3>Fallback: Ollama</h3>
-                <p id="embed-ollama-status" class="preference-hint">Ollama status: unknown</p>
-                <p class="preference-hint">
-                  If llama.cpp cannot be downloaded, you can use Ollama as a fallback to run
-                  nomic. Note: Ollama on its own is not enough — you will also need to
-                  download the <code>nomic-embed-text-v2-moe</code> model through Ollama
-                  (one click below). The button is shown only if Ollama is installed on this
-                  machine.
-                </p>
-                <div class="preference-row">
-                  <button id="embed-ollama-install" class="pref-btn" style="display:none;">Open Ollama download page</button>
-                  <button id="embed-ollama-pull-nomic" class="pref-btn" style="display:none;">Download nomic via Ollama</button>
-                </div>
-              </div>
-
-              <div class="preference-group">
                 <h3>Remove everything</h3>
                 <p class="preference-hint">
                   Frees the disk space used by llama.cpp and nomic. The next time you
@@ -1090,7 +1074,7 @@
                 <label>Semantic Search Indexing</label>
                 <div class="checkbox-row">
                   <input type="checkbox" id="pref-semantic-search-enabled" checked />
-                  <span>Auto index on save (requires Ollama)</span>
+                  <span>Auto semantic index on save (local, private — no external service)</span>
                 </div>
               </div>
               <div class="preference-group">
