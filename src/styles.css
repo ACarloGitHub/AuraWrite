@@ -6088,8 +6088,14 @@ kbd {
   transition: border-color 0.15s;
 }
 
+/* Managed images (ImageNodeView): exempt from the generic DOCX-import caps
+   and default decoration — explicit attrs + self-heal sizing govern here
+   (Phase 1 enrichment). Without this, tall photos get vertically squashed
+   by max-height:480px while width stays put (the "stretched insert" bug). */
 .ProseMirror .image-node-wrapper img {
   max-width: none;
+  max-height: none;
+  border-radius: 0;
 }
 
 .ProseMirror .ProseMirror-selectednode + .image-node-wrapper img,
@@ -6235,6 +6241,7 @@ kbd {
 .image-toolbar {
   display: none;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 4px 12px;
   background: var(--color-toolbar);
@@ -6327,6 +6334,44 @@ kbd {
   color: var(--color-text);
   font-size: 12px;
   height: 26px;
+}
+
+/* ============================================================================
+   IMAGE TOOLBAR — Style section (Phase 1 enrichment: radius/border/shadow)
+   ============================================================================ */
+
+.image-toolbar__select {
+  height: 26px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.image-toolbar__color {
+  width: 28px;
+  height: 26px;
+  padding: 1px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.image-toolbar__field[hidden] {
+  display: none !important;
+}
+
+#img-shadow-fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#img-shadow-fields[hidden] {
+  display: none !important;
 }
 
 /* ============================================================================

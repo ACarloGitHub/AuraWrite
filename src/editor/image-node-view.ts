@@ -3,6 +3,7 @@ import { NodeView, EditorView } from "prosemirror-view";
 import { NodeSelection } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import { resolveImageSrc, uploadImageFile } from "./image-uploader";
+import { computeImageCss, normalizeImageStyle } from "./image-style";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -17,8 +18,11 @@ export class ImageNodeView implements NodeView {
   private handles: HandleEl[] = [];
   private rotateHandle: HTMLElement | null = null;
   private captionEl: HTMLElement | null = null;
-  private resolved = false;
   private aspect = 1;
+  /** Last-applied inline style values (idempotent writes: avoid spurious
+   *  DOM mutations that ProseMirror's observer misreads as document edits). */
+  private appliedImg: Record<string, string | undefined> = {};
+  private appliedWrapper: Record<string, string | undefined> = {};
 
   constructor(
     node: PMNode,
@@ -36,6 +40,7 @@ export class ImageNodeView implements NodeView {
     this.img.alt = (attrs.alt as string) || "";
     this.img.title = (attrs.title as string) || "";
     this.applySize(attrs);
+    this.applyStyle(attrs);
     this.img.setAttribute("src", (attrs.src as string) || "");
     this.img.draggable = false;
 
@@ -46,36 +51,110 @@ export class ImageNodeView implements NodeView {
     this.bindEvents();
 
     this.dom = this.wrapper;
-    void this.resolveSrc(attrs.src as string);
-    void this.loadNaturalDimensions(attrs.src as string);
+    // Resolve the asset URL first, THEN probe natural dimensions: probing the
+    // raw internal path fails silently and skips sizing/self-heal entirely.
+    void this.resolveAndProbe((attrs.src as string) || "");
   }
 
-  private async resolveSrc(src: string): Promise<void> {
-    if (this.resolved) return;
-    this.resolved = true;
+  /** Write an inline style property only when its value actually changes.
+   *  A value of null/undefined removes the property (falls back to CSS). */
+  private setStyleCached(
+    cache: Record<string, string | undefined>,
+    el: HTMLElement,
+    prop: string,
+    value: string | null | undefined
+  ): void {
+    const v = value ?? undefined;
+    if (cache[prop] === v) return;
+    cache[prop] = v;
+    if (v === undefined) el.style.removeProperty(prop);
+    else el.style.setProperty(prop, v);
+  }
+
+  private async resolveAndProbe(rawSrc: string): Promise<void> {
+    let url = rawSrc;
     try {
-      const resolved = await resolveImageSrc(src);
-      if (resolved && resolved !== this.img.getAttribute("src")) {
-        this.img.setAttribute("src", resolved);
+      const resolved = await resolveImageSrc(rawSrc);
+      if (resolved) {
+        url = resolved;
+        if (this.img.getAttribute("src") === rawSrc) this.img.setAttribute("src", resolved);
       }
     } catch (e) {
       console.warn("[image] resolve failed, using original src:", e);
     }
+    this.probeNaturalDimensions(url);
   }
 
-  private async loadNaturalDimensions(src: string): Promise<void> {
-    return new Promise((resolve) => {
-      const probe = new Image();
-      probe.onload = () => {
-        if (probe.naturalWidth > 0) {
-          this.aspect = probe.naturalHeight / probe.naturalWidth;
-        }
-        resolve();
-      };
-      probe.onerror = () => resolve();
-      const url = this.img.getAttribute("src") || src;
-      probe.src = url;
-    });
+  private probeNaturalDimensions(url: string): void {
+    if (!url) return;
+    const probe = new Image();
+    probe.onload = () => {
+      if (probe.naturalWidth > 0) {
+        this.aspect = probe.naturalHeight / probe.naturalWidth;
+        // Self-heal: correct distorted or missing sizes once the natural
+        // aspect is known (bad import data, legacy docs, unknown formats).
+        void this.selfHealSize(probe.naturalWidth, probe.naturalHeight);
+      }
+    };
+    probe.onerror = () => {
+      /* dimension probe unavailable — leave stored size untouched */
+    };
+    probe.src = url;
+  }
+
+  /**
+   * Once natural dimensions are known:
+   *  - an image with NO explicit size gets sized from naturals, capped to the
+   *    editor width so wide images fit instead of overflowing;
+   *  - an ASPECT-LOCKED image whose stored w/h contradict the natural ratio
+   *    (stretched import) gets its height corrected back to the true ratio.
+   * Unlocked images with explicit size are left untouched (user's choice).
+   */
+  private async selfHealSize(naturalWidth: number, naturalHeight: number): Promise<void> {
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node || node.type.name !== "image") return;
+
+    const w = node.attrs.width as number | null;
+    const h = node.attrs.height as number | null;
+    const containerWidth = this.measureContentWidth();
+
+    // Virgin insert storing raw natural size wider than the content column:
+    // fit it to the column, preserving the ratio (high-resolution photos).
+    if (
+      node.attrs.aspectLocked !== false &&
+      w != null && h != null &&
+      w === naturalWidth && h === naturalHeight &&
+      w > containerWidth
+    ) {
+      const target = Math.max(200, containerWidth);
+      await this.persistSize(target, Math.round((target * naturalHeight) / naturalWidth));
+      return;
+    }
+
+    if (w == null && h == null) {
+      const target = Math.max(120, Math.min(naturalWidth, Math.max(200, containerWidth)));
+      await this.persistSize(target, Math.round((target * naturalHeight) / naturalWidth));
+      return;
+    }
+
+    if (node.attrs.aspectLocked === false || w == null || h == null || w <= 0) return;
+    const currentRatio = h / w;
+    const naturalRatio = naturalHeight / naturalWidth;
+    if (Math.abs(currentRatio - naturalRatio) > 0.02) {
+      await this.persistSize(w, Math.round(w * naturalRatio));
+    }
+  }
+
+  /** Usable content width of the editor (client width minus its paddings). */
+  private measureContentWidth(): number {
+    const dom = this.view.dom as HTMLElement | null;
+    if (!dom) return 602;
+    const cs = window.getComputedStyle(dom);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    return Math.max(200, dom.clientWidth - padL - padR);
   }
 
   private applyTransform(attrs: Record<string, unknown>): void {
@@ -87,11 +166,14 @@ export class ImageNodeView implements NodeView {
     if (flipH && flipV) parts.push("scale(-1, -1)");
     else if (flipH) parts.push("scaleX(-1)");
     else if (flipV) parts.push("scaleY(-1)");
-    if (parts.length) {
-      this.wrapper.style.transform = parts.join(" ");
-    } else {
-      this.wrapper.style.removeProperty("transform");
-    }
+    this.setStyleCached(this.appliedWrapper, this.wrapper, "transform", parts.length ? parts.join(" ") : undefined);
+  }
+
+  private applyStyle(attrs: Record<string, unknown>): void {
+    const css = computeImageCss(normalizeImageStyle(attrs));
+    this.setStyleCached(this.appliedImg, this.img, "border-radius", css.borderRadius ?? null);
+    this.setStyleCached(this.appliedImg, this.img, "border", css.border ?? null);
+    this.setStyleCached(this.appliedImg, this.img, "box-shadow", css.boxShadow ?? null);
   }
 
   private applyCaption(attrs: Record<string, unknown>): void {
@@ -114,10 +196,8 @@ export class ImageNodeView implements NodeView {
   private applySize(attrs: Record<string, unknown>): void {
     const w = attrs.width as number | null;
     const h = attrs.height as number | null;
-    if (w) this.img.style.width = `${w}px`;
-    else this.img.style.removeProperty("width");
-    if (h) this.img.style.height = `${h}px`;
-    else this.img.style.removeProperty("height");
+    this.setStyleCached(this.appliedImg, this.img, "width", w ? `${w}px` : null);
+    this.setStyleCached(this.appliedImg, this.img, "height", h ? `${h}px` : null);
   }
 
   private createHandles(): void {
@@ -369,6 +449,7 @@ export class ImageNodeView implements NodeView {
       this.wrapper.removeAttribute("data-wrap");
     }
     this.applyTransform(attrs);
+    this.applyStyle(attrs);
     this.applyCaption(attrs);
     return true;
   }

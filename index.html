@@ -303,6 +303,32 @@
         <div class="image-toolbar__separator"></div>
         <button id="img-aspect-lock" class="image-toolbar__btn image-toolbar__btn--active" title="Lock Aspect Ratio">🔒</button>
         <div class="image-toolbar__separator"></div>
+        <!-- Phase 1 enrichment: image style (radius / border / frame effect / shadow) -->
+        <span class="image-toolbar__label">Style</span>
+        <label class="image-toolbar__field" title="Corner radius in pixels">⌒ <input id="img-radius" type="number" min="0" max="300" step="2" value="" placeholder="px" /></label>
+        <select id="img-border-style" class="image-toolbar__select" title="Border style">
+          <option value="none">No border</option>
+          <option value="solid">Solid</option>
+          <option value="dashed">Dashed</option>
+          <option value="dotted">Dotted</option>
+          <option value="double">Double</option>
+        </select>
+        <label class="image-toolbar__field" title="Border width in pixels">W <input id="img-border-width" type="number" min="0" max="24" step="1" value="" placeholder="px" /></label>
+        <input id="img-border-color" type="color" class="image-toolbar__color" title="Border color" value="#333333" />
+        <select id="img-frame-effect" class="image-toolbar__select" title="Frame effect">
+          <option value="none">No effect</option>
+          <option value="raised">Raised</option>
+          <option value="inset">Inset</option>
+        </select>
+        <button id="img-shadow-toggle" class="image-toolbar__btn" title="Toggle drop shadow">Shadow</button>
+        <span id="img-shadow-fields" hidden>
+          <label class="image-toolbar__field" title="Shadow distance in pixels">Dist <input id="img-shadow-distance" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field" title="Shadow blur in pixels">Blur <input id="img-shadow-blur" type="number" min="0" max="100" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field" title="Shadow opacity percent">Opa <input id="img-shadow-opacity" type="number" min="0" max="100" step="5" value="" placeholder="35" /></label>
+          <input id="img-shadow-color" type="color" class="image-toolbar__color" title="Shadow color (pick a lighter tone on dark backgrounds)" value="#000000" />
+          <label class="image-toolbar__field" title="Light direction: 0=top, 90=right, 180=bottom, 270=left (shadow falls opposite)">Light <input id="img-shadow-angle" type="number" min="0" max="359" step="15" value="" placeholder="315" /></label>
+        </span>
+        <div class="image-toolbar__separator"></div>
         <label class="image-toolbar__field image-toolbar__field--caption" title="Image caption">Cap <input id="img-caption" type="text" value="" placeholder="caption" /></label>
         <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>

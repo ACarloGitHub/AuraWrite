@@ -272,6 +272,20 @@ export async function setImageCaption(
   return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, caption });
 }
 
+/**
+ * Phase 1 (enrichment): patch any subset of the image style attrs
+ * (radius / shadow / border / frame effect) on the selected image.
+ * Types come from image-style.ts; values are merged over current attrs.
+ */
+export async function setImageStyleAttrs(
+  view: EditorView,
+  patch: Record<string, unknown>
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, ...patch });
+}
+
 export async function removeImage(view: EditorView): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;

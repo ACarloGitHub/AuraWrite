@@ -26,6 +26,7 @@ import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
+import { IMAGE_STYLE_ATTRS, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -245,6 +246,8 @@ const imageSpec: NodeSpec = {
     flipV: { default: false },
     aspectLocked: { default: true },
     caption: { default: "" },
+    // Phase 1 (enrichment) style attrs — dialect + logic in enriched-schema.ts
+    ...IMAGE_STYLE_ATTRS,
   },
   parseDOM: [
     {
@@ -266,6 +269,7 @@ const imageSpec: NodeSpec = {
           flipV: dom.hasAttribute("data-flip-v"),
           aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
           caption: dom.getAttribute("data-caption") || "",
+          ...imageStyleGetDOM(dom),
         };
       },
     },
@@ -285,6 +289,7 @@ const imageSpec: NodeSpec = {
     if (node.attrs.flipV) attrs["data-flip-v"] = "";
     if (!node.attrs.aspectLocked) attrs["data-aspect-unlocked"] = "";
     if (node.attrs.caption) attrs["data-caption"] = node.attrs.caption as string;
+    Object.assign(attrs, imageStyleToDOM(node));
     return ["img", attrs];
   },
 };

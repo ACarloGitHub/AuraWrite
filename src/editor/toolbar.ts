@@ -2197,11 +2197,14 @@ function setupImageToolbar(view: EditorView): void {
   if (!toolbar) return;
 
   toolbar.addEventListener("mousedown", (e) => {
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    // Keep native controls interactive (text fields, dropdowns, color swatches)
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "SELECT") return;
     e.preventDefault();
   });
   toolbar.addEventListener("keydown", (e) => {
-    if ((e.target as HTMLElement).tagName === "INPUT") {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "SELECT") {
       e.stopPropagation();
     }
   });
@@ -2286,6 +2289,9 @@ function setupImageToolbar(view: EditorView): void {
   inputCaption?.addEventListener("change", () => {
     void setImageCaption(view, inputCaption.value);
   });
+
+  // Phase 1 (enrichment): wire the "Style" section (dynamic, anti-bloat hook)
+  void import("./image-style-toolbar").then((m) => m.setupImageStyleToolbar(view));
 }
 
 export function updateImageToolbar(view: EditorView): void {
@@ -2341,5 +2347,8 @@ export function updateImageToolbar(view: EditorView): void {
     if (inputCaption) {
       inputCaption.value = (attrs.caption as string) || "";
     }
+
+    // Phase 1 (enrichment): sync the "Style" section (thin hook)
+    void import("./image-style-toolbar").then((m) => m.syncImageStyleControls(view));
   })();
 }
