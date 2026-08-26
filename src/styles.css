@@ -6368,6 +6368,14 @@ kbd {
   display: none !important;
 }
 
+/* Figure caption section (Phase 1 G3): flex group so its controls share the
+   same center line and spacing as the rest of the image toolbar. */
+#figure-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 #img-shadow-fields {
   display: inline-flex;
   align-items: center;
