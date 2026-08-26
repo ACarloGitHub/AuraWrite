@@ -6445,6 +6445,17 @@ kbd {
   outline-offset: 2px;
 }
 
+/* Horizontal alignment within the column (meaningful when a width is set) */
+.aw-box[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.aw-box[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
 .aw-box--ghost {
   position: fixed;
   top: 0;

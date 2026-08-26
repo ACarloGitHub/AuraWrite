@@ -177,6 +177,10 @@ export class StyledBoxNodeView implements NodeView {
     if (this.dom.getAttribute("data-variant") !== variant) {
       this.dom.setAttribute("data-variant", variant);
     }
+    const align = String(attrs.align ?? "left");
+    if (this.dom.getAttribute("data-align") !== align) {
+      this.dom.setAttribute("data-align", align);
+    }
     // Screen-only legibility: dark text over light backgrounds. Exports and
     // print are untouched (they read the doc, not the editor DOM).
     const light = isLightBgColor(normalizeBoxStyle(attrs).bgColor) ? "true" : "false";

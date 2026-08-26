@@ -16,9 +16,13 @@ export type BoxVariant = "text" | "note";
 
 export type BoxBorderStyle = "none" | "solid" | "dashed" | "dotted" | "double";
 
+export type BoxAlign = "left" | "center" | "right";
+
 export interface BoxStyleAttrs {
   /** Dress of the box: plain text box or sticky-note (preset colors). */
   variant: BoxVariant;
+  /** Horizontal alignment of the box within the column (left default). */
+  align: BoxAlign;
   /** Background fill (#rrggbb); empty = transparent. */
   bgColor: string;
   /** Border width, px (0 = no border). */
@@ -38,6 +42,7 @@ export const BOX_WIDTH_MAX = 4000;
 
 export const DEFAULT_BOX_STYLE: BoxStyleAttrs = {
   variant: "text",
+  align: "left",
   bgColor: "",
   borderWidth: 0,
   borderColor: "#999999",
@@ -70,6 +75,7 @@ export const TEXT_BOX_PRESET: Partial<BoxStyleAttrs> = {
 
 const BOX_BORDER_STYLES: BoxBorderStyle[] = ["none", "solid", "dashed", "dotted", "double"];
 const BOX_VARIANTS: BoxVariant[] = ["text", "note"];
+const BOX_ALIGNS: BoxAlign[] = ["left", "center", "right"];
 
 function clampNum(v: unknown, min: number, max: number, fallback: number): number {
   const n = typeof v === "number" ? v : parseFloat(String(v));
@@ -86,6 +92,7 @@ function clampColor(v: unknown, fallback: string): string {
 export function normalizeBoxStyle(raw: Record<string, unknown>): BoxStyleAttrs {
   const bs = String(raw.borderStyle ?? DEFAULT_BOX_STYLE.borderStyle) as BoxBorderStyle;
   const bv = String(raw.variant ?? DEFAULT_BOX_STYLE.variant) as BoxVariant;
+  const al = String(raw.align ?? DEFAULT_BOX_STYLE.align) as BoxAlign;
   let widthPx: number | null = null;
   if (raw.widthPx !== null && raw.widthPx !== undefined && raw.widthPx !== "") {
     const n = clampNum(raw.widthPx, BOX_WIDTH_MIN, BOX_WIDTH_MAX, NaN);
@@ -93,6 +100,7 @@ export function normalizeBoxStyle(raw: Record<string, unknown>): BoxStyleAttrs {
   }
   return {
     variant: BOX_VARIANTS.includes(bv) ? bv : DEFAULT_BOX_STYLE.variant,
+    align: BOX_ALIGNS.includes(al) ? al : DEFAULT_BOX_STYLE.align,
     bgColor: clampColor(raw.bgColor, ""),
     borderWidth: clampNum(raw.borderWidth, 0, 24, DEFAULT_BOX_STYLE.borderWidth),
     borderColor: clampColor(raw.borderColor, DEFAULT_BOX_STYLE.borderColor),

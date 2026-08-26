@@ -22,6 +22,7 @@ import {
   DEFAULT_BOX_STYLE,
   normalizeBoxStyle,
   computeBoxCss,
+  type BoxAlign,
   type BoxBorderStyle,
   type BoxVariant,
 } from "./box-style";
@@ -96,6 +97,7 @@ export function imageStyleToDOM(node: PMNode): Record<string, string> {
 
 const BOX_VARIANTS: BoxVariant[] = ["text", "note"];
 const BOX_BORDER_STYLES: BoxBorderStyle[] = ["none", "solid", "dashed", "dotted", "double"];
+const BOX_ALIGNS: BoxAlign[] = ["left", "center", "right"];
 
 function oneOf<T extends string>(value: string, allowed: T[], fallback: T): T {
   return allowed.includes(value as T) ? (value as T) : fallback;
@@ -109,6 +111,7 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
   selectable: true,
   attrs: {
     variant: { default: DEFAULT_BOX_STYLE.variant },
+    align: { default: DEFAULT_BOX_STYLE.align },
     bgColor: { default: DEFAULT_BOX_STYLE.bgColor },
     borderWidth: { default: DEFAULT_BOX_STYLE.borderWidth },
     borderColor: { default: DEFAULT_BOX_STYLE.borderColor },
@@ -139,6 +142,7 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
       attrs["data-border-color"] = s.borderColor;
     if (s.cornerRadius !== DEFAULT_BOX_STYLE.cornerRadius) attrs["data-radius"] = String(s.cornerRadius);
     if (s.widthPx != null) attrs["data-width"] = String(s.widthPx);
+    if (s.align !== DEFAULT_BOX_STYLE.align) attrs["data-align"] = s.align;
     // D10 rule 1: emit BOTH the stable markers and the inline style, so the
     // markup renders universally outside AuraWrite and re-imports exactly.
     const css = computeBoxCss(s);
@@ -167,5 +171,10 @@ export function boxStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
     ),
     cornerRadius: numAttr(dom, "data-radius", DEFAULT_BOX_STYLE.cornerRadius),
     widthPx: dom.hasAttribute("data-width") ? numAttr(dom, "data-width", NaN) : null,
+    align: oneOf<BoxAlign>(
+      dom.getAttribute("data-align") || "",
+      BOX_ALIGNS,
+      DEFAULT_BOX_STYLE.align
+    ),
   };
 }

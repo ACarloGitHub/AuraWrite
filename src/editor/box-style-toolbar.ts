@@ -44,6 +44,9 @@ export function setupBoxToolbar(view: EditorView): void {
   });
 
   const variant = el<HTMLSelectElement>("box-variant");
+  const alignLeft = el("box-align-left");
+  const alignCenter = el("box-align-center");
+  const alignRight = el("box-align-right");
   const bg = el<HTMLInputElement>("box-bg");
   const bgClear = el("box-bg-clear");
   const borderStyle = el<HTMLSelectElement>("box-border-style");
@@ -56,6 +59,10 @@ export function setupBoxToolbar(view: EditorView): void {
   variant?.addEventListener("change", () => {
     void setBoxAttrs(view, { variant: variant.value });
   });
+
+  alignLeft?.addEventListener("click", () => void setBoxAttrs(view, { align: "left" }));
+  alignCenter?.addEventListener("click", () => void setBoxAttrs(view, { align: "center" }));
+  alignRight?.addEventListener("click", () => void setBoxAttrs(view, { align: "right" }));
 
   bg?.addEventListener("input", () => {
     if (!bg.value) return;
@@ -126,6 +133,15 @@ export function syncBoxToolbar(view: EditorView): void {
 
   const variant = el<HTMLSelectElement>("box-variant");
   if (variant) variant.value = a.variant;
+
+  const alignButtons: Record<string, HTMLElement | null> = {
+    left: el("box-align-left"),
+    center: el("box-align-center"),
+    right: el("box-align-right"),
+  };
+  for (const [value, btn] of Object.entries(alignButtons)) {
+    btn?.classList.toggle("image-toolbar__btn--active", a.align === value);
+  }
 
   const bg = el<HTMLInputElement>("box-bg");
   if (bg) bg.value = a.bgColor || "#ffffff";
