@@ -1101,6 +1101,8 @@ function setupFormattingButtons(): void {
   const btnLink = document.getElementById("btn-link");
   const btnTable = document.getElementById("btn-table");
   const btnImage = document.getElementById("btn-image");
+  const btnNote = document.getElementById("btn-note");
+  const btnTextBox = document.getElementById("btn-textbox");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
@@ -1108,9 +1110,17 @@ function setupFormattingButtons(): void {
   btnLink?.addEventListener("click", () => openLinkPopover(editorView));
   btnTable?.addEventListener("click", () => toggleTableDropdown());
   btnImage?.addEventListener("click", () => openImagePicker(editorView));
+  // Phase 1 (G2): box insertions — dynamic import, anti-bloat hook
+  btnNote?.addEventListener("click", () => {
+    void import("./box-commands").then((m) => m.insertStyledBox(editorView, "note"));
+  });
+  btnTextBox?.addEventListener("click", () => {
+    void import("./box-commands").then((m) => m.insertStyledBox(editorView, "text"));
+  });
 
   setupTableToolbar(editorView);
   setupImageToolbar(editorView);
+  void import("./box-style-toolbar").then((m) => m.setupBoxToolbar(editorView));
 
   document.addEventListener("click", (e: MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -2299,6 +2309,8 @@ export function updateImageToolbar(view: EditorView): void {
   if (!toolbar) return;
 
   void (async () => {
+    // Phase 1 (G2): the box panel follows every selection change too.
+    void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
     const info = await getSelectedImage(view);
     if (!info) {
       toolbar.classList.remove("image-toolbar--visible");

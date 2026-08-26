@@ -115,6 +115,12 @@
           <button id="btn-table" class="toolbar__btn" title="Insert Table">
             <span class="toolbar__btn-icon">⊞</span>
           </button>
+          <button id="btn-note" class="toolbar__btn toolbar__btn--with-text" title="Insert Note (sticky card)">
+            <span class="toolbar__btn-text">Note</span>
+          </button>
+          <button id="btn-textbox" class="toolbar__btn toolbar__btn--with-text" title="Insert Text Box">
+            <span class="toolbar__btn-text">Box</span>
+          </button>
           <button id="btn-image" class="toolbar__btn" title="Insert Image">
             <span class="toolbar__btn-icon">🖼</span>
           </button>
@@ -332,6 +338,30 @@
         <label class="image-toolbar__field image-toolbar__field--caption" title="Image caption">Cap <input id="img-caption" type="text" value="" placeholder="caption" /></label>
         <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
+      </div>
+      <!-- BOX TOOLBAR (Phase 1 enrichment G2): contextual panel for the styled box -->
+      <div id="box-toolbar" class="image-toolbar">
+        <select id="box-variant" class="image-toolbar__select" title="Box kind">
+          <option value="text">Text Box</option>
+          <option value="note">Note</option>
+        </select>
+        <div class="image-toolbar__separator"></div>
+        <label class="image-toolbar__field" title="Background fill">BG <input id="box-bg" type="color" class="image-toolbar__color" value="#fef6d8" /></label>
+        <button id="box-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No background (transparent)">×</button>
+        <div class="image-toolbar__separator"></div>
+        <select id="box-border-style" class="image-toolbar__select" title="Border stroke">
+          <option value="none">none</option>
+          <option value="solid">solid</option>
+          <option value="dashed">dashed</option>
+          <option value="dotted">dotted</option>
+          <option value="double">double</option>
+        </select>
+        <label class="image-toolbar__field" title="Border width in pixels">W <input id="box-border-width" type="number" min="0" max="24" step="1" value="" placeholder="px" /></label>
+        <input id="box-border-color" type="color" class="image-toolbar__color" title="Border color" value="#999999" />
+        <label class="image-toolbar__field" title="Corner rounding in pixels">R <input id="box-radius" type="number" min="0" max="100" step="2" value="" placeholder="px" /></label>
+        <label class="image-toolbar__field" title="Box width in pixels; empty = full column">Width <input id="box-width" type="number" min="60" max="4000" step="10" value="" placeholder="full" /></label>
+        <div class="image-toolbar__separator"></div>
+        <button id="box-delete" class="image-toolbar__btn" title="Delete Box">Delete</button>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">
         <button id="ocr-load" class="ocr-bar__btn" title="Load file for OCR">📂 Load</button>

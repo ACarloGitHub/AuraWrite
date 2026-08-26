@@ -26,7 +26,8 @@ import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
-import { IMAGE_STYLE_ATTRS, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
+import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
+import { StyledBoxNodeView, createBoxTypeGuardPlugin } from "./box-node-view";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -374,13 +375,13 @@ const highlightMark: MarkSpec = {
       getAttrs: (dom: HTMLElement) => {
         const bg = dom.style.backgroundColor;
         if (!bg) return false;
-        return { color: rgbToHex(bg) || "#ffff00" };
+        return highlightColorFromCss(bg);
       },
     },
     {
       style: "background-color",
       getAttrs: (value) => {
-        return { color: rgbToHex(value as string) || value };
+        return highlightColorFromCss(value as string) || false;
       },
     },
   ],
@@ -388,6 +389,38 @@ const highlightMark: MarkSpec = {
     return ["span", { style: `background-color: ${node.attrs.color}` }, 0];
   },
 };
+
+/**
+ * Accept a CSS background-color as an explicit highlight ONLY when it is a
+ * real, visible fill. Google Docs attaches white/transparent backgrounds to
+ * plain copied text; treating those as highlights painted spurious yellow
+ * marks on paste (Carlo, 2026-08-26).
+ */
+function highlightColorFromCss(bg: string): { color: string } | false {
+  if (!bg) return false;
+  const v = bg.trim().toLowerCase();
+  if (!v || v === "transparent" || v === "none" || v === "inherit" || v === "initial") {
+    return false;
+  }
+  const hex = rgbToHex(v);
+  if (hex) {
+    // Near-white fills are not highlights.
+    if (/^#f[f]{6}$/i.test(hex)) return false;
+    return { color: hex };
+  }
+  // rgb()/rgba(): reject transparent or near-white, accept the rest as hex.
+  const rgba = v.match(/rgba?\(([^)]+)\)/);
+  if (rgba) {
+    const parts = rgba[1].split(",").map((s) => parseFloat(s.trim()));
+    const [r, g, b] = parts;
+    const alpha = parts.length > 3 ? parts[3] : 1;
+    if (!isFinite(alpha) || alpha < 0.05) return false;
+    if (r > 245 && g > 245 && b > 245) return false;
+    return { color: `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}` };
+  }
+  // Named colors (e.g. "yellow"): keep them as-is.
+  return { color: v };
+}
 
 const fontSizeMark: MarkSpec = {
   attrs: {
@@ -464,6 +497,7 @@ nodes = nodes
     blockquote: blockquoteSpec,
     code_block: codeBlockSpec,
     image: imageSpec,
+    styled_box: STYLED_BOX_NODE_SPEC,
     ...tableNodeSpecs,
   });
 
@@ -589,6 +623,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
       tableEditing(),
       createTableMonitorPlugin(),
+      createBoxTypeGuardPlugin(),
       new Plugin({
         key: new PluginKey("imageToolbarSync"),
         view() {
@@ -609,6 +644,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
     },
     nodeViews: {
       image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
+      styled_box: (node, view, getPos) => new StyledBoxNodeView(node, view, getPos),
     },
     handleScrollToSelection(view) {
       scrollSelectionIntoView(view);

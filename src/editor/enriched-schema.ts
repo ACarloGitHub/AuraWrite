@@ -11,13 +11,20 @@
 // emitted to keep exported HTML clean.
 // ============================================================================
 
-import type { Node as PMNode } from "prosemirror-model";
+import type { Node as PMNode, NodeSpec } from "prosemirror-model";
 import {
   DEFAULT_IMAGE_STYLE,
   normalizeImageStyle,
   type ImageBorderStyle,
   type ImageFrameEffect,
 } from "./image-style";
+import {
+  DEFAULT_BOX_STYLE,
+  normalizeBoxStyle,
+  computeBoxCss,
+  type BoxBorderStyle,
+  type BoxVariant,
+} from "./box-style";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
 export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
@@ -79,4 +86,86 @@ export function imageStyleToDOM(node: PMNode): Record<string, string> {
   if (s.borderStyle !== DEFAULT_IMAGE_STYLE.borderStyle) out["data-border-style"] = s.borderStyle;
   if (s.frameEffect !== DEFAULT_IMAGE_STYLE.frameEffect) out["data-frame-effect"] = s.frameEffect;
   return out;
+}
+
+// ============================================================================
+// styled_box node (Phase 1, step G2) — framed block container with editable
+// normal content. Rendered by StyledBoxNodeView (box-node-view.ts), which owns
+// its DOM: selection from the surface, flow drag via drop line, width resize.
+// ============================================================================
+
+const BOX_VARIANTS: BoxVariant[] = ["text", "note"];
+const BOX_BORDER_STYLES: BoxBorderStyle[] = ["none", "solid", "dashed", "dotted", "double"];
+
+function oneOf<T extends string>(value: string, allowed: T[], fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+/** Node spec appended to the schema in editor.ts (single hook point). */
+export const STYLED_BOX_NODE_SPEC: NodeSpec = {
+  content: "block+",
+  group: "block",
+  defining: true,
+  selectable: true,
+  attrs: {
+    variant: { default: DEFAULT_BOX_STYLE.variant },
+    bgColor: { default: DEFAULT_BOX_STYLE.bgColor },
+    borderWidth: { default: DEFAULT_BOX_STYLE.borderWidth },
+    borderColor: { default: DEFAULT_BOX_STYLE.borderColor },
+    borderStyle: { default: DEFAULT_BOX_STYLE.borderStyle },
+    cornerRadius: { default: DEFAULT_BOX_STYLE.cornerRadius },
+    widthPx: { default: DEFAULT_BOX_STYLE.widthPx },
+  },
+  parseDOM: [
+    {
+      tag: "div[data-aw-box]",
+      getAttrs: (dom: HTMLElement | string) => {
+        if (typeof dom === "string") return false;
+        return boxStyleGetDOM(dom);
+      },
+    },
+  ],
+  toDOM(node) {
+    const s = normalizeBoxStyle(node.attrs as Record<string, unknown>);
+    const attrs: Record<string, string> = {
+      "data-aw-box": s.variant,
+      class: "aw-box",
+    };
+    if (s.bgColor) attrs["data-bg"] = s.bgColor;
+    if (s.borderWidth > 0) attrs["data-border-width"] = String(s.borderWidth);
+    if (s.borderWidth > 0 && s.borderStyle !== DEFAULT_BOX_STYLE.borderStyle)
+      attrs["data-border-style"] = s.borderStyle;
+    if (s.borderWidth > 0 && s.borderColor.toLowerCase() !== DEFAULT_BOX_STYLE.borderColor)
+      attrs["data-border-color"] = s.borderColor;
+    if (s.cornerRadius !== DEFAULT_BOX_STYLE.cornerRadius) attrs["data-radius"] = String(s.cornerRadius);
+    if (s.widthPx != null) attrs["data-width"] = String(s.widthPx);
+    // D10 rule 1: emit BOTH the stable markers and the inline style, so the
+    // markup renders universally outside AuraWrite and re-imports exactly.
+    const css = computeBoxCss(s);
+    const styleText = Object.entries(css)
+      .map(([prop, value]) => `${prop.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}: ${value}`)
+      .join("; ");
+    if (styleText) attrs.style = styleText;
+    return ["div", attrs, 0];
+  },
+};
+
+/**
+ * Read the D10 box markers off a <div data-aw-box> element (re-import side).
+ * Markers are authoritative over inline style.
+ */
+export function boxStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
+  return {
+    variant: oneOf<BoxVariant>(dom.getAttribute("data-aw-box") || "", BOX_VARIANTS, DEFAULT_BOX_STYLE.variant),
+    bgColor: dom.getAttribute("data-bg") || "",
+    borderWidth: numAttr(dom, "data-border-width", DEFAULT_BOX_STYLE.borderWidth),
+    borderColor: dom.getAttribute("data-border-color") || DEFAULT_BOX_STYLE.borderColor,
+    borderStyle: oneOf<BoxBorderStyle>(
+      dom.getAttribute("data-border-style") || "",
+      BOX_BORDER_STYLES,
+      DEFAULT_BOX_STYLE.borderStyle
+    ),
+    cornerRadius: numAttr(dom, "data-radius", DEFAULT_BOX_STYLE.cornerRadius),
+    widthPx: dom.hasAttribute("data-width") ? numAttr(dom, "data-width", NaN) : null,
+  };
 }

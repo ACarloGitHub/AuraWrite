@@ -6136,12 +6136,27 @@ kbd {
   float: left;
   margin-right: 12px;
   margin-left: 0;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .image-node-wrapper[data-wrap][data-align="right"] {
   float: right;
   margin-left: 12px;
   margin-right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Floated image + empty host paragraph: insertImageBlock guarantees a
+   paragraph after every image; beside a float it renders as a full empty
+   line and pushes following blocks (notes) one line BELOW the image top —
+   the "step" Carlo reported. Collapse it in this exact situation only. */
+.ProseMirror .image-node-wrapper[data-wrap] + p:has(> br.ProseMirror-trailingBreak:only-child) {
+  height: 0;
+  margin: 0;
+  line-height: 0;
+  font-size: 0;
 }
 
 .image-node-wrapper img {
@@ -6372,6 +6387,114 @@ kbd {
 
 #img-shadow-fields[hidden] {
   display: none !important;
+}
+
+/* ============================================================================
+   BOX TOOLBAR — contextual panel for the styled box (Phase 1 enrichment G2).
+   Reuses .image-toolbar* classes; only the compact clear button is new.
+   ============================================================================ */
+
+.image-toolbar__btn--small {
+  min-width: 20px;
+  width: 20px;
+  padding: 2px 0;
+  font-size: 14px;
+}
+
+/* ============================================================================
+   STYLED BOX (Phase 1 enrichment G2) — editor-side look. Colors/borders/
+   width come as inline styles from the node view (owned DOM, cached writes);
+   this block provides geometry and the interaction affordances.
+   ============================================================================ */
+
+.aw-box {
+  position: relative;
+  /* Top margin 0: keeps the top edge flush with floated images beside it
+     (alignment fix, Carlo 2026-08-26); bottom margin spaces blocks. */
+  margin: 0 0 10px 0;
+  padding: 14px 16px;
+  /* Atomic block vs floats: frame AND inner text keep clear of wrapped
+     images as ONE unit (option 2, Carlo 2026-08-26) instead of the frame
+     painting across the float while only the text warped. */
+  display: flow-root;
+}
+
+/* Drag grip: REAL element, high contrast on both themes, inside the frame.
+   Pressing grip or frame padding selects the box and starts a self-tracked
+   flow drag with a drop line; inner text keeps normal editing. */
+.aw-box__grip {
+  position: absolute;
+  top: 4px;
+  left: 12px;
+  width: 34px;
+  height: 9px;
+  border-radius: 5px;
+  cursor: grab;
+  background-color: var(--color-border);
+  background-image: radial-gradient(circle, var(--color-text) 1.4px, transparent 1.7px);
+  background-size: 7px 5px;
+  background-position: center;
+  opacity: 0.9;
+}
+
+.aw-box__grip:hover {
+  background-color: var(--color-primary);
+  opacity: 1;
+}
+
+.aw-box__grip:active {
+  cursor: grabbing;
+}
+
+/* Inner editable content keeps its normal cursors */
+.aw-box :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre) {
+  cursor: auto;
+}
+
+.aw-box--selected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.aw-box--ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0 !important;
+  z-index: 70;
+  pointer-events: none;
+  opacity: 0.8;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* Screen-only legibility over light backgrounds (notes): dark text on screen.
+   Print/export keep the user's font colors. */
+.aw-box[data-light-bg="true"] .aw-box__content {
+  color: #1f1f1f;
+}
+
+@media print {
+  .aw-box[data-light-bg="true"] .aw-box__content {
+    color: inherit;
+  }
+}
+
+/* Width resize handle (node-view-owned): right edge of the box */
+.aw-box__resize-handle {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 44px;
+  border-radius: 5px;
+  background: var(--color-primary);
+  opacity: 0.45;
+  cursor: ew-resize;
+}
+
+.aw-box__resize-handle:hover {
+  opacity: 0.95;
 }
 
 /* ============================================================================
