@@ -14,7 +14,12 @@
 
 import type { EditorView } from "prosemirror-view";
 import { getSelectedBox, setBoxAttrs, removeSelectedBox } from "./box-commands";
-import { normalizeBoxStyle } from "./box-style";
+import {
+  DEFAULT_BOX_STYLE,
+  NOTE_PRESET,
+  TEXT_BOX_PRESET,
+  normalizeBoxStyle,
+} from "./box-style";
 
 function el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -56,8 +61,17 @@ export function setupBoxToolbar(view: EditorView): void {
   const width = el<HTMLInputElement>("box-width");
   const deleteBtn = el("box-delete");
 
+  // Variant switch applies the FULL preset (background, border, radius,
+  // width) merged over the defaults and normalized — not just the variant
+  // label. Horizontal alignment is preserved across the switch.
   variant?.addEventListener("change", () => {
-    void setBoxAttrs(view, { variant: variant.value });
+    const preset = variant.value === "note" ? NOTE_PRESET : TEXT_BOX_PRESET;
+    const style = normalizeBoxStyle({ ...DEFAULT_BOX_STYLE, ...preset });
+    const info = getSelectedBox(view);
+    const current = info
+      ? normalizeBoxStyle(info.node.attrs as Record<string, unknown>)
+      : null;
+    void setBoxAttrs(view, { ...style, align: current ? current.align : style.align });
   });
 
   alignLeft?.addEventListener("click", () => void setBoxAttrs(view, { align: "left" }));
