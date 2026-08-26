@@ -57,12 +57,14 @@ export function setFigureAttrs(view: EditorView, patch: Record<string, unknown>)
  * gesture only (button in the caption section).
  */
 export function convertFigureToCaption(view: EditorView): boolean {
-  const { selection } = view.state;
-  if (!(selection instanceof NodeSelection) || selection.node.type.name !== FIGURE_NODE) {
-    return false;
-  }
-  const figure = selection.node;
-  const pos = selection.from;
+  // Locate the figure the same way the toolbar does (getSelectedFigure):
+  // the figure node itself, the inner image, or the caret inside the caption
+  // box. The old guard required a NodeSelection on the figure, so clicking
+  // into the caption (the natural interaction) made the button a no-op.
+  const info = getSelectedFigure(view);
+  if (!info) return false;
+  const figure = info.node;
+  const pos = info.pos;
 
   let foundImage: PMNode | null = null;
   let foundCaptionBox: PMNode | null = null;
