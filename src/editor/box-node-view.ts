@@ -42,32 +42,58 @@ export function createBoxTypeGuardPlugin(): Plugin {
         keydown: (view, event) => {
           const sel = view.state.selection;
 
-          // Atomic deletion (empty caret): at the seam OR at the very
-          // first/last position INSIDE the box — both remove frame+text as
-          // one unit (Carlo: "la nota come un unico gruppo assieme al testo").
+          // Atomic deletion (empty caret). Real gestures covered (Carlo,
+          // 2026-08-26): Canc/forward-Delete at the END of the paragraph
+          // BEFORE the note, Backspace at the START of the paragraph AFTER
+          // it, the direct seams, and the first/last position INSIDE the box.
+          // In every case the box goes as ONE unit (frame + text).
           if ((event.key === "Backspace" || event.key === "Delete") && sel.empty) {
+            const goingBack = event.key === "Backspace";
             const $pos = view.state.doc.resolve(sel.from);
-            const seamNeighbour =
-              event.key === "Backspace" ? $pos.nodeBefore : $pos.nodeAfter;
             let atomicBox: { pos: number; node: PMNode } | null = null;
+
+            // Direct seam neighbour.
+            const seamNeighbour = goingBack ? $pos.nodeBefore : $pos.nodeAfter;
             if (seamNeighbour && seamNeighbour.type.name === "styled_box") {
-              const pos =
-                event.key === "Backspace" ? sel.from - seamNeighbour.nodeSize : sel.from;
+              const pos = goingBack ? sel.from - seamNeighbour.nodeSize : sel.from;
               atomicBox = { pos, node: seamNeighbour };
-            } else {
-              // Caret inside the box at its first/last text position.
+            }
+
+            // Caret at the boundary of an adjacent textblock: the box sits on
+            // the OTHER side of that block (sibling), not inline before/after
+            // the caret. This is the "cursor in the paragraph before/after the
+            // note" gesture.
+            if (!atomicBox) {
+              const atBlockEdge = goingBack
+                ? $pos.parentOffset === 0
+                : $pos.parentOffset === $pos.parent.content.size;
+              if (atBlockEdge && $pos.depth >= 1) {
+                const blockStart = $pos.before($pos.depth);
+                const blockEnd = $pos.after($pos.depth);
+                const sibling = goingBack
+                  ? view.state.doc.resolve(blockStart).nodeBefore
+                  : view.state.doc.resolve(blockEnd).nodeAfter;
+                if (sibling && sibling.type.name === "styled_box") {
+                  const pos = goingBack ? blockStart - sibling.nodeSize : blockEnd;
+                  atomicBox = { pos, node: sibling };
+                }
+              }
+            }
+
+            // Caret inside the box at its first/last text position.
+            if (!atomicBox) {
               for (let d = $pos.depth; d >= 1; d--) {
                 const n = $pos.node(d);
                 if (n.type.name !== "styled_box") continue;
                 const boxPos = $pos.before(d);
                 const boxStart = boxPos + 1;
                 const boxEnd = boxPos + n.nodeSize - 1;
-                const atEdge =
-                  event.key === "Backspace" ? sel.from === boxStart : sel.from === boxEnd;
+                const atEdge = goingBack ? sel.from === boxStart : sel.from === boxEnd;
                 if (atEdge) atomicBox = { pos: boxPos, node: n };
                 break;
               }
             }
+
             if (atomicBox) {
               const size = atomicBox.node.nodeSize;
               let tr = view.state.tr.delete(atomicBox.pos, atomicBox.pos + size);

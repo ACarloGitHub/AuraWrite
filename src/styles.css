@@ -6148,17 +6148,6 @@ kbd {
   margin-bottom: 0;
 }
 
-/* Floated image + empty host paragraph: insertImageBlock guarantees a
-   paragraph after every image; beside a float it renders as a full empty
-   line and pushes following blocks (notes) one line BELOW the image top —
-   the "step" Carlo reported. Collapse it in this exact situation only. */
-.ProseMirror .image-node-wrapper[data-wrap] + p:has(> br.ProseMirror-trailingBreak:only-child) {
-  height: 0;
-  margin: 0;
-  line-height: 0;
-  font-size: 0;
-}
-
 .image-node-wrapper img {
   display: block;
   vertical-align: top;
