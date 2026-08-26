@@ -26,7 +26,7 @@ import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
-import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
+import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
 import { StyledBoxNodeView, createBoxTypeGuardPlugin } from "./box-node-view";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
@@ -498,6 +498,7 @@ nodes = nodes
     code_block: codeBlockSpec,
     image: imageSpec,
     styled_box: STYLED_BOX_NODE_SPEC,
+    figure: FIGURE_NODE_SPEC,
     ...tableNodeSpecs,
   });
 

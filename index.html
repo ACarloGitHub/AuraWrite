@@ -336,6 +336,19 @@
         </span>
         <div class="image-toolbar__separator"></div>
         <label class="image-toolbar__field image-toolbar__field--caption" title="Image caption">Cap <input id="img-caption" type="text" value="" placeholder="caption" /></label>
+        <button id="img-make-figure" class="image-toolbar__btn" title="Convert this caption into a composite figure (image + caption box)" hidden>Figure</button>
+        <span id="figure-section" hidden>
+          <div class="image-toolbar__separator"></div>
+          <span class="image-toolbar__label">Caption</span>
+          <select id="fig-caption-layout" class="image-toolbar__select" title="Caption position relative to the image">
+            <option value="below">Below</option>
+            <option value="above">Above</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+          <label class="image-toolbar__field" title="Distance between image and caption, pixels; 0 = attached">Gap <input id="fig-caption-gap" type="number" min="0" max="120" step="2" value="" placeholder="px" /></label>
+          <button id="fig-to-caption" class="image-toolbar__btn" title="Convert back to a plain image with the legacy caption">To Caption</button>
+        </span>
         <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
       </div>

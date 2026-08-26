@@ -6424,6 +6424,13 @@ kbd {
   background-size: 7px 5px;
   background-position: center;
   opacity: 0.9;
+  /* Visible only while the box is selected (Carlo, 2026-08-26): select the
+     box by clicking its frame, then the tools appear. */
+  display: none;
+}
+
+.aw-box--selected .aw-box__grip {
+  display: block;
 }
 
 .aw-box__grip:hover {
@@ -6456,6 +6463,53 @@ kbd {
   margin-right: 0;
 }
 
+/* ============================================================================
+   COMPOSITE FIGURE (Phase 1 enrichment G3) — image + optional caption box.
+   Plain CSS layout from data-caption-layout; gap via CSS variable emitted
+   inline by the dialect. Never split across pages (print/paged).
+   ============================================================================ */
+
+.aw-figure {
+  margin: 10px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.aw-figure__content {
+  display: flex;
+  gap: var(--aw-figure-gap, 12px);
+}
+
+.aw-figure[data-caption-layout="below"] .aw-figure__content {
+  flex-direction: column;
+}
+
+.aw-figure[data-caption-layout="above"] .aw-figure__content {
+  flex-direction: column-reverse;
+}
+
+.aw-figure[data-caption-layout="right"] .aw-figure__content {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.aw-figure[data-caption-layout="left"] .aw-figure__content {
+  flex-direction: row-reverse;
+  align-items: flex-start;
+}
+
+/* In row layouts children keep their natural width (the caption box has its
+   own width setting); in column layouts the caption stretches. */
+.aw-figure[data-caption-layout="left"] .aw-figure__content > *,
+.aw-figure[data-caption-layout="right"] .aw-figure__content > * {
+  flex: 0 0 auto;
+}
+
+.aw-figure.ProseMirror-selectednode {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .aw-box--ghost {
   position: fixed;
   top: 0;
@@ -6479,7 +6533,8 @@ kbd {
   }
 }
 
-/* Width resize handle (node-view-owned): right edge of the box */
+/* Width resize handle (node-view-owned): right edge of the box; visible only
+   while the box is selected */
 .aw-box__resize-handle {
   position: absolute;
   right: -5px;
@@ -6491,6 +6546,11 @@ kbd {
   background: var(--color-primary);
   opacity: 0.45;
   cursor: ew-resize;
+  display: none;
+}
+
+.aw-box--selected .aw-box__resize-handle {
+  display: block;
 }
 
 .aw-box__resize-handle:hover {

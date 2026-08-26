@@ -178,3 +178,65 @@ export function boxStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
     ),
   };
 }
+
+// ============================================================================
+// figure node (Phase 1, step G3) — composite figure: image + optional caption
+// box. Rendered with plain CSS (flex column/row) from the data-caption-layout
+// attribute; no custom node view. break-inside:avoid keeps it on one page.
+// ============================================================================
+
+const CAPTION_LAYOUTS = ["below", "above", "left", "right"] as const;
+export type CaptionLayout = (typeof CAPTION_LAYOUTS)[number];
+const DEFAULT_CAPTION_LAYOUT: CaptionLayout = "below";
+const DEFAULT_CAPTION_GAP_PX = 12;
+
+/** Node spec appended to the schema in editor.ts (single hook point). */
+export const FIGURE_NODE_SPEC: NodeSpec = {
+  content: "image styled_box?",
+  group: "block",
+  defining: true,
+  selectable: true,
+  attrs: {
+    captionLayout: { default: DEFAULT_CAPTION_LAYOUT },
+    captionGap: { default: DEFAULT_CAPTION_GAP_PX },
+  },
+  parseDOM: [
+    {
+      tag: "figure[data-aw-figure]",
+      getAttrs: (dom: HTMLElement | string) => {
+        if (typeof dom === "string") return false;
+        return figureStyleGetDOM(dom);
+      },
+    },
+  ],
+  toDOM(node) {
+    const layout = oneOf<string>(
+      String(node.attrs.captionLayout ?? ""),
+      CAPTION_LAYOUTS as unknown as string[],
+      DEFAULT_CAPTION_LAYOUT
+    );
+    const rawGap = Number(node.attrs.captionGap);
+    const gap = isFinite(rawGap) ? Math.max(0, Math.min(120, rawGap)) : DEFAULT_CAPTION_GAP_PX;
+    const attrs: Record<string, string> = {
+      "data-aw-figure": "",
+      "data-caption-layout": layout,
+      class: "aw-figure",
+    };
+    if (gap !== DEFAULT_CAPTION_GAP_PX) attrs["data-caption-gap"] = String(gap);
+    attrs.style = `--aw-figure-gap: ${gap}px`;
+    return ["figure", attrs, 0];
+  },
+};
+
+/** Read the D10 figure markers off a <figure data-aw-figure> element. */
+export function figureStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
+  const rawGap = numAttr(dom, "data-caption-gap", DEFAULT_CAPTION_GAP_PX);
+  return {
+    captionLayout: oneOf<string>(
+      dom.getAttribute("data-caption-layout") || "",
+      CAPTION_LAYOUTS as unknown as string[],
+      DEFAULT_CAPTION_LAYOUT
+    ),
+    captionGap: Math.max(0, Math.min(120, rawGap)),
+  };
+}

@@ -1121,6 +1121,7 @@ function setupFormattingButtons(): void {
   setupTableToolbar(editorView);
   setupImageToolbar(editorView);
   void import("./box-style-toolbar").then((m) => m.setupBoxToolbar(editorView));
+  void import("./figure-toolbar").then((m) => m.setupFigureToolbar(editorView));
 
   document.addEventListener("click", (e: MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -2309,8 +2310,10 @@ export function updateImageToolbar(view: EditorView): void {
   if (!toolbar) return;
 
   void (async () => {
-    // Phase 1 (G2): the box panel follows every selection change too.
+    // Phase 1 (G2/G3): the box panel and figure caption section follow every
+    // selection change too.
     void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
+    void import("./figure-toolbar").then((m) => m.syncFigureControls(view));
     const info = await getSelectedImage(view);
     if (!info) {
       toolbar.classList.remove("image-toolbar--visible");

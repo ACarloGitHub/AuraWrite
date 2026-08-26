@@ -32,6 +32,7 @@
 
 import { prepare, layout, prepareWithSegments, layoutWithLines } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
+import { normalizeBoxStyle } from "./box-style";
 
 export const PAGE_WIDTH_PX = 794;
 export const PAGE_HEIGHT_PX = 1123;
@@ -102,11 +103,24 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
   if (!node) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
   }
+  const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
+  // Phase 1 (G3): composite elements are measured structurally (box padding
+  // + inner lines; figure = image height + gap + caption lines).
+  if (node.type.name === "styled_box") {
+    return measureBoxNode(node, contentWidth);
+  }
+  if (node.type.name === "figure") {
+    return measureFigureNode(node, contentWidth);
+  }
+  return measureTextBlock(node, contentWidth);
+}
+
+/** Measure a text block at an explicit content width. */
+function measureTextBlock(node: PMNode, contentWidth: number): BlockMetrics {
   const text = node.textContent || "";
   if (!text.trim()) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
   }
-  const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   try {
     const prepared = prepare(text, EDITOR_FONT);
     const result = layout(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
@@ -117,6 +131,70 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
     const lineCount = Math.max(1, Math.ceil(text.length / charPerLine));
     return { heightPx: lineCount * EDITOR_LINE_HEIGHT_PX, lineCount };
   }
+}
+
+const BOX_PADDING_X_PX = 32; // 16px left + 16px right
+const BOX_PADDING_Y_PX = 28; // 14px top + 14px bottom
+
+/**
+ * styled_box: inner lines at the box's inner width + vertical paddings and
+ * borders (contract "Interazione con la paginazione Cassie").
+ */
+function measureBoxNode(node: PMNode, contentWidth: number): BlockMetrics {
+  const style = normalizeBoxStyle(node.attrs as Record<string, unknown>);
+  const outerWidth = style.widthPx ?? contentWidth;
+  const borders = style.borderWidth > 0 && style.borderStyle !== "none" ? style.borderWidth * 2 : 0;
+  const innerWidth = Math.max(120, outerWidth - BOX_PADDING_X_PX - borders);
+  let height = BOX_PADDING_Y_PX + borders;
+  let lines = 0;
+  node.forEach((child) => {
+    const m = measureTextBlock(child, innerWidth);
+    height += m.heightPx;
+    lines += m.lineCount;
+  });
+  if (lines === 0) {
+    height += EMPTY_BLOCK_HEIGHT_PX;
+    lines = 1;
+  }
+  return { heightPx: height, lineCount: lines };
+}
+
+const FIGURE_FALLBACK_IMAGE_HEIGHT_PX = 220;
+
+/**
+ * figure: image height (from stored attrs; documented fallback when missing)
+ * + gap + caption box lines. Side layouts take the taller of the two.
+ */
+function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
+  const layoutName = String(node.attrs.captionLayout ?? "below");
+  const rawGap = Number(node.attrs.captionGap);
+  const gap = isFinite(rawGap) ? Math.max(0, Math.min(120, rawGap)) : 12;
+
+  let imageHeight = FIGURE_FALLBACK_IMAGE_HEIGHT_PX;
+  let imageWidth = contentWidth;
+  let captionBox: PMNode | null = null;
+  node.forEach((child) => {
+    if (child.type.name === "image") {
+      const w = Number(child.attrs.width);
+      const h = Number(child.attrs.height);
+      if (isFinite(w) && w > 0) imageWidth = w;
+      if (isFinite(h) && h > 0) imageHeight = h;
+    } else if (child.type.name === "styled_box") {
+      captionBox = child;
+    }
+  });
+
+  if (layoutName === "left" || layoutName === "right") {
+    const captionWidth = Math.max(120, contentWidth - imageWidth - gap);
+    const captionHeight = captionBox ? measureBoxNode(captionBox, captionWidth).heightPx : 0;
+    const height = Math.max(imageHeight, captionHeight);
+    return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
+  }
+
+  const captionWidth = contentWidth;
+  const captionHeight = captionBox ? measureBoxNode(captionBox, captionWidth).heightPx : 0;
+  const height = imageHeight + gap + captionHeight;
+  return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
 }
 
 /**
