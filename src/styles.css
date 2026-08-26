@@ -6478,6 +6478,9 @@ kbd {
    ============================================================================ */
 
 .aw-figure {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--aw-figure-gap, 12px);
   margin: 10px 0;
   break-inside: avoid;
   page-break-inside: avoid;
@@ -6488,28 +6491,28 @@ kbd {
   gap: var(--aw-figure-gap, 12px);
 }
 
-.aw-figure[data-caption-layout="below"] .aw-figure__content {
+.aw-figure[data-caption-layout="below"] {
   flex-direction: column;
 }
 
-.aw-figure[data-caption-layout="above"] .aw-figure__content {
+.aw-figure[data-caption-layout="above"] {
   flex-direction: column-reverse;
 }
 
-.aw-figure[data-caption-layout="right"] .aw-figure__content {
+.aw-figure[data-caption-layout="right"] {
   flex-direction: row;
   align-items: flex-start;
 }
 
-.aw-figure[data-caption-layout="left"] .aw-figure__content {
+.aw-figure[data-caption-layout="left"] {
   flex-direction: row-reverse;
   align-items: flex-start;
 }
 
 /* In row layouts children keep their natural width (the caption box has its
    own width setting); in column layouts the caption stretches. */
-.aw-figure[data-caption-layout="left"] .aw-figure__content > *,
-.aw-figure[data-caption-layout="right"] .aw-figure__content > * {
+.aw-figure[data-caption-layout="left"] > *,
+.aw-figure[data-caption-layout="right"] > * {
   flex: 0 0 auto;
 }
 
