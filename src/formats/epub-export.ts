@@ -94,11 +94,13 @@ function escapeXml(s: string): string {
   );
 }
 
-function docBodyHtml(contentJson: string): string {
+async function docBodyHtml(contentJson: string): Promise<string> {
   try {
     const json = JSON.parse(contentJson || "{}");
     const doc = Node.fromJSON(schema, json);
-    const full = toHTML(doc);
+    // embedImages:false — EPUB packs the images itself (rewriteImages) and
+    // rewrites the relative srcs, so the pages must NOT carry base64 data URIs.
+    const full = await toHTML(doc, { embedImages: false });
     const match = full.match(/<body[^>]*>([\s\S]*)<\/body>/i);
     return match ? match[1] : full;
   } catch (e) {
@@ -286,7 +288,7 @@ export async function exportProjectToEpub(
       continue;
     }
 
-    const contentHtml = docBodyHtml(el.contentJson || "");
+    const contentHtml = await docBodyHtml(el.contentJson || "");
     const finalHtml = await rewriteImages(contentHtml, zip, imagesDir);
     chapIndex++;
     const fileName = `chap${chapIndex}.xhtml`;

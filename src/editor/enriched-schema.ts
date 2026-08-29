@@ -318,7 +318,22 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     if (node.attrs.aspectLocked === false) imgAttrs["data-aspect-unlocked"] = "";
     Object.assign(imgAttrs, imageStyleToDOM(node));
 
-    return ["figure", figAttrs, ["img", imgAttrs], ["figcaption", 0]];
+    // <figcaption> with an inline style for the caption background and the
+    // vertical whitespace (D10 rule 1: markers above + inline style below, so
+    // the look survives export without an external CSS file).
+    const capStyle: Record<string, string> = {};
+    if (bg) capStyle.background = bg;
+    const capPadTop = Number(node.attrs.captionPadTop);
+    const capPadBottom = Number(node.attrs.captionPadBottom);
+    const pt = isFinite(capPadTop) ? Math.max(0, Math.min(60, capPadTop)) : 0;
+    const pb = isFinite(capPadBottom) ? Math.max(0, Math.min(60, capPadBottom)) : 0;
+    if (pt > 0 || pb > 0) capStyle.padding = `${pt}px 8px ${pb}px`;
+    const capStyleText = Object.entries(capStyle)
+      .map(([prop, value]) => `${prop}: ${value}`)
+      .join("; ");
+    const capAttrs = capStyleText ? { style: capStyleText } : {};
+
+    return ["figure", figAttrs, ["img", imgAttrs], ["figcaption", capAttrs, 0]];
   },
 };
 

@@ -348,6 +348,7 @@ async function handleSaveAs(): Promise<void> {
   const filters = [
     { name: "ProseMirror JSON", extensions: ["json"] },
     { name: "Markdown", extensions: ["md"] },
+    { name: "HTML", extensions: ["html", "htm"] },
     { name: "Plain Text", extensions: ["txt"] },
     { name: "Word Document", extensions: ["docx"] },
   ];
@@ -380,7 +381,7 @@ async function getContentByFormat(format: string): Promise<string> {
     case "txt":
       return toPlainText(editorView.state.doc);
     case "html":
-      return toHTML(editorView.state.doc);
+      return await toHTML(editorView.state.doc);
     case "docx":
       return await docxToBase64(editorView.state.doc);
     default:
