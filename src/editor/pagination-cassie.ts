@@ -76,6 +76,12 @@ export const EDITOR_FONT = "11pt Lora, Georgia, serif";
 export const EDITOR_LINE_HEIGHT_PX = 22;
 const EMPTY_BLOCK_HEIGHT_PX = EDITOR_LINE_HEIGHT_PX;
 
+// Caption strips (figure <figcaption> and the legacy image caption) render
+// at 12px italic with the inherited 1.5 line-height → 18px per line
+// (see `.aw-figure__caption` and `.image-caption` in styles.css).
+const CAPTION_FONT = "italic 12px Lora, Georgia, serif";
+const CAPTION_LINE_HEIGHT_PX = 18;
+
 export interface BlockMetrics {
   heightPx: number;
   lineCount: number;
@@ -90,47 +96,74 @@ export interface LineInfo {
 /**
  * Measure a single block node's height in CSS pixels using Pretext.
  *
- * The text content of the node is the only input that matters for
- * height. Inline marks, images, tables, and lists are NOT accounted
- * for: this is a deliberate simplification. The pagination plugin
- * uses this measurement to decide where to break pages, and the
- * inaccuracy is acceptable for visual pagination. The exact pixel
- * position will always be off by a bit; what matters is that the
- * decision is consistent and does not depend on the browser having
- * laid out the page already.
+ * Text blocks are measured from their content; composite elements
+ * (styled_box, figure, image) are measured structurally from their own
+ * attrs (F1.1: plain `image` nodes no longer fall back to one empty
+ * text line — their stored photo height and caption strip are counted).
+ * Inline marks, tables, and lists are NOT accounted for: this remains a
+ * deliberate simplification. What matters is that the decision is
+ * consistent and does not depend on the browser having laid out the
+ * page already.
  */
 export function measureBlock(node: PMNode | null | undefined, margins?: PageMargins): BlockMetrics {
   if (!node) {
     return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
-  // Phase 1 (G3): composite elements are measured structurally (box padding
-  // + inner lines; figure = image height + gap + caption lines).
   if (node.type.name === "styled_box") {
     return measureBoxNode(node, contentWidth);
   }
   if (node.type.name === "figure") {
     return measureFigureNode(node, contentWidth);
   }
+  if (node.type.name === "image") {
+    return measureImageNode(node, contentWidth);
+  }
   return measureTextBlock(node, contentWidth);
 }
 
-/** Measure a text block at an explicit content width. */
-function measureTextBlock(node: PMNode, contentWidth: number): BlockMetrics {
-  const text = node.textContent || "";
+/** Measure a text string at an explicit width with an explicit style. */
+function measureTextHeight(
+  text: string,
+  contentWidth: number,
+  font: string,
+  lineHeight: number,
+): BlockMetrics {
   if (!text.trim()) {
-    return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
+    return { heightPx: lineHeight, lineCount: 1 };
   }
   try {
-    const prepared = prepare(text, EDITOR_FONT);
-    const result = layout(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
-    const lineCount = Math.max(1, result.lineCount ?? Math.ceil(result.height / EDITOR_LINE_HEIGHT_PX));
+    const prepared = prepare(text, font);
+    const result = layout(prepared, contentWidth, lineHeight);
+    const lineCount = Math.max(1, result.lineCount ?? Math.ceil(result.height / lineHeight));
     return { heightPx: result.height, lineCount };
   } catch {
     const charPerLine = 70;
     const lineCount = Math.max(1, Math.ceil(text.length / charPerLine));
-    return { heightPx: lineCount * EDITOR_LINE_HEIGHT_PX, lineCount };
+    return { heightPx: lineCount * lineHeight, lineCount };
   }
+}
+
+/** Measure a text block at an explicit content width. */
+function measureTextBlock(
+  node: PMNode,
+  contentWidth: number,
+  font: string = EDITOR_FONT,
+  lineHeight: number = EDITOR_LINE_HEIGHT_PX,
+): BlockMetrics {
+  return measureTextHeight(node.textContent || "", contentWidth, font, lineHeight);
+}
+
+/**
+ * Caption vertical paddings (attrs shared by `image` and `figure`, clamped
+ * exactly like the NodeViews do: 0..60 px).
+ */
+function captionPaddings(node: PMNode): { top: number; bottom: number } {
+  const rawTop = Number(node.attrs.captionPadTop);
+  const rawBottom = Number(node.attrs.captionPadBottom);
+  const top = isFinite(rawTop) ? Math.max(0, Math.min(60, rawTop)) : 0;
+  const bottom = isFinite(rawBottom) ? Math.max(0, Math.min(60, rawBottom)) : 0;
+  return { top, bottom };
 }
 
 const BOX_PADDING_X_PX = 32; // 16px left + 16px right
@@ -159,14 +192,40 @@ function measureBoxNode(node: PMNode, contentWidth: number): BlockMetrics {
   return { heightPx: height, lineCount: lines };
 }
 
-const FIGURE_FALLBACK_IMAGE_HEIGHT_PX = 220;
+const FALLBACK_IMAGE_HEIGHT_PX = 220;
 
 /**
- * figure (Phase 1 G3, refactor 2026-08-29): the photo is carried as node attrs
- * and the caption is real text content. Height = photo height (from the stored
- * attrs; documented fallback when missing) + gap + caption paragraph lines.
- * While the aspect is locked the rendered photo keeps its ratio, so the stored
- * height attr is the authoritative value.
+ * image (F1.1): the block's vertical footprint is the photo height from the
+ * stored attrs (set at insertion and on resize; the NodeView also self-heals
+ * missing sizes by persisting the natural ones) plus the legacy caption strip
+ * when `caption` carries text. Rotation is a CSS transform: the layout box —
+ * the space subsequent blocks actually see — is always the unrotated one, so
+ * rotation does NOT change the measured height.
+ */
+function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
+  const w = Number(node.attrs.width);
+  const h = Number(node.attrs.height);
+  const imageWidth = isFinite(w) && w > 0 ? w : contentWidth;
+  const imageHeight = isFinite(h) && h > 0 ? h : FALLBACK_IMAGE_HEIGHT_PX;
+
+  let height = imageHeight;
+  const caption = String(node.attrs.caption || "");
+  if (caption.trim()) {
+    const pad = captionPaddings(node);
+    const captionWidth = Math.max(120, Math.min(imageWidth, contentWidth));
+    const strip = measureTextHeight(caption, captionWidth, CAPTION_FONT, CAPTION_LINE_HEIGHT_PX);
+    height += pad.top + pad.bottom + strip.heightPx;
+  }
+  return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
+}
+
+/**
+ * figure (Phase 1 G3, refactor 2026-08-29; caption metrics fixed in F1.1):
+ * the photo is carried as node attrs and the caption is real text content.
+ * Height = photo height (from the stored attrs; documented fallback when
+ * missing) + gap + caption block (12px italic lines + vertical paddings).
+ * While the aspect is locked the rendered photo keeps its ratio, so the
+ * stored height attr is the authoritative value.
  */
 function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
   const rawGap = Number(node.attrs.captionGap);
@@ -175,21 +234,23 @@ function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
   const w = Number(node.attrs.width);
   const h = Number(node.attrs.height);
   const imageWidth = isFinite(w) && w > 0 ? w : contentWidth;
-  const imageHeight = isFinite(h) && h > 0 ? h : FIGURE_FALLBACK_IMAGE_HEIGHT_PX;
+  const imageHeight = isFinite(h) && h > 0 ? h : FALLBACK_IMAGE_HEIGHT_PX;
 
   // Caption spans the figure width (= the photo width, capped to the column).
   const captionWidth = Math.max(120, Math.min(imageWidth, contentWidth));
   let captionHeight = 0;
   let captionLines = 0;
   node.forEach((child) => {
-    const m = measureTextBlock(child, captionWidth);
+    const m = measureTextBlock(child, captionWidth, CAPTION_FONT, CAPTION_LINE_HEIGHT_PX);
     captionHeight += m.heightPx;
     captionLines += m.lineCount;
   });
   if (captionLines === 0) {
-    captionHeight += EMPTY_BLOCK_HEIGHT_PX;
+    captionHeight += CAPTION_LINE_HEIGHT_PX;
     captionLines = 1;
   }
+  const pad = captionPaddings(node);
+  captionHeight += pad.top + pad.bottom;
 
   const height = imageHeight + gap + captionHeight;
   return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
