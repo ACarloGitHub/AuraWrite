@@ -293,6 +293,24 @@ export async function setImageCaptionBg(
   return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, captionBg: bg });
 }
 
+/** Set the caption's vertical whitespace (top/bottom px, clamped 0-60). */
+export async function setImageCaptionPadding(
+  view: EditorView,
+  patch: { padTop?: number; padBottom?: number }
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  if (info.node.type.name === "figure") return false;
+  const attrs: Record<string, unknown> = { ...info.node.attrs };
+  if (patch.padTop !== undefined) {
+    attrs.captionPadTop = Math.max(0, Math.min(60, Math.round(patch.padTop)));
+  }
+  if (patch.padBottom !== undefined) {
+    attrs.captionPadBottom = Math.max(0, Math.min(60, Math.round(patch.padBottom)));
+  }
+  return safeSetNodeMarkup(view, info.pos, attrs);
+}
+
 /** Remove the caption (and its background), leaving a bare image. */
 export async function removeImageCaption(view: EditorView): Promise<boolean> {
   const info = await getSelectedImage(view);

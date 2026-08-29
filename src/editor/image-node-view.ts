@@ -215,6 +215,15 @@ export class ImageNodeView implements NodeView {
       if (this.captionEl.style.background !== bg) {
         this.captionEl.style.background = bg;
       }
+      // Vertical whitespace around the text (side padding stays fixed at 8px).
+      const padTop = Number(attrs.captionPadTop);
+      const padBottom = Number(attrs.captionPadBottom);
+      const top = isFinite(padTop) ? Math.max(0, Math.min(60, padTop)) : 0;
+      const bottom = isFinite(padBottom) ? Math.max(0, Math.min(60, padBottom)) : 0;
+      const padding = `${top}px 8px ${bottom}px`;
+      if (this.captionEl.style.padding !== padding) {
+        this.captionEl.style.padding = padding;
+      }
       const dark = !!bg && !isLightBgColor(bg);
       this.captionEl.classList.toggle("image-caption--dark-bg", dark);
     } else if (this.captionEl) {

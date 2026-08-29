@@ -6162,7 +6162,7 @@ kbd {
   font-size: 12px;
   font-style: italic;
   color: var(--color-text-muted, #666);
-  padding: 4px 8px 0;
+  padding: 0 8px;
   margin: 0;
 }
 
@@ -6374,6 +6374,10 @@ kbd {
 }
 
 .image-toolbar__field[hidden] {
+  display: none !important;
+}
+
+.image-toolbar__btn[hidden] {
   display: none !important;
 }
 

@@ -15,7 +15,7 @@ import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, setImageCaption, setImageCaptionBg, removeImageCaption, removeImage } from "./image-commands";
+import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, setImageCaption, setImageCaptionBg, setImageCaptionPadding, removeImageCaption, removeImage } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -2305,6 +2305,18 @@ function setupImageToolbar(view: EditorView): void {
     void setImageCaptionBg(view, "");
   });
 
+  // Caption vertical whitespace ("Above" / "Below").
+  const inputPadTop = document.getElementById("img-caption-pad-top") as HTMLInputElement | null;
+  const inputPadBottom = document.getElementById("img-caption-pad-bottom") as HTMLInputElement | null;
+  inputPadTop?.addEventListener("change", () => {
+    const v = parseInt(inputPadTop.value, 10);
+    void setImageCaptionPadding(view, { padTop: isNaN(v) || v < 0 ? 0 : v });
+  });
+  inputPadBottom?.addEventListener("change", () => {
+    const v = parseInt(inputPadBottom.value, 10);
+    void setImageCaptionPadding(view, { padBottom: isNaN(v) || v < 0 ? 0 : v });
+  });
+
   // Phase 1 (enrichment): wire the "Style" section (dynamic, anti-bloat hook)
   void import("./image-style-toolbar").then((m) => m.setupImageStyleToolbar(view));
 }
@@ -2380,12 +2392,22 @@ export function updateImageToolbar(view: EditorView): void {
       const bgField = document.getElementById("img-caption-bg")?.closest(".image-toolbar__field--caption-bg") as HTMLElement | null;
       const bgInput = document.getElementById("img-caption-bg") as HTMLInputElement | null;
       const btnBgClear = document.getElementById("img-caption-bg-clear") as HTMLElement | null;
+      const padTopField = document.getElementById("img-caption-pad-top")?.closest(".image-toolbar__field--caption-pad") as HTMLElement | null;
+      const padBottomField = document.getElementById("img-caption-pad-bottom")?.closest(".image-toolbar__field--caption-pad") as HTMLElement | null;
       const showCaptionTools = !isFigure && hasCaption;
       if (btnRemoveCaption) btnRemoveCaption.hidden = !showCaptionTools;
       if (bgField) bgField.hidden = !showCaptionTools;
       if (btnBgClear) btnBgClear.hidden = !showCaptionTools;
+      if (padTopField) padTopField.hidden = !showCaptionTools;
+      if (padBottomField) padBottomField.hidden = !showCaptionTools;
       if (showCaptionTools && bgInput) {
         bgInput.value = (attrs.captionBg as string) || "#ffffff";
+      }
+      if (showCaptionTools) {
+        const padTop = document.getElementById("img-caption-pad-top") as HTMLInputElement | null;
+        const padBottom = document.getElementById("img-caption-pad-bottom") as HTMLInputElement | null;
+        if (padTop) padTop.value = String(attrs.captionPadTop ?? "");
+        if (padBottom) padBottom.value = String(attrs.captionPadBottom ?? "");
       }
     }
 
