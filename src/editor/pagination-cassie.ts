@@ -162,37 +162,35 @@ function measureBoxNode(node: PMNode, contentWidth: number): BlockMetrics {
 const FIGURE_FALLBACK_IMAGE_HEIGHT_PX = 220;
 
 /**
- * figure: image height (from stored attrs; documented fallback when missing)
- * + gap + caption box lines. Side layouts take the taller of the two.
+ * figure (Phase 1 G3, refactor 2026-08-29): the photo is carried as node attrs
+ * and the caption is real text content. Height = photo height (from the stored
+ * attrs; documented fallback when missing) + gap + caption paragraph lines.
+ * While the aspect is locked the rendered photo keeps its ratio, so the stored
+ * height attr is the authoritative value.
  */
 function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
-  const layoutName = String(node.attrs.captionLayout ?? "below");
   const rawGap = Number(node.attrs.captionGap);
-  const gap = isFinite(rawGap) ? Math.max(0, Math.min(120, rawGap)) : 12;
+  const gap = isFinite(rawGap) ? Math.max(0, Math.min(120, rawGap)) : 0;
 
-  let imageHeight = FIGURE_FALLBACK_IMAGE_HEIGHT_PX;
-  let imageWidth = contentWidth;
-  let captionBox: PMNode | null = null;
+  const w = Number(node.attrs.width);
+  const h = Number(node.attrs.height);
+  const imageWidth = isFinite(w) && w > 0 ? w : contentWidth;
+  const imageHeight = isFinite(h) && h > 0 ? h : FIGURE_FALLBACK_IMAGE_HEIGHT_PX;
+
+  // Caption spans the figure width (= the photo width, capped to the column).
+  const captionWidth = Math.max(120, Math.min(imageWidth, contentWidth));
+  let captionHeight = 0;
+  let captionLines = 0;
   node.forEach((child) => {
-    if (child.type.name === "image") {
-      const w = Number(child.attrs.width);
-      const h = Number(child.attrs.height);
-      if (isFinite(w) && w > 0) imageWidth = w;
-      if (isFinite(h) && h > 0) imageHeight = h;
-    } else if (child.type.name === "styled_box") {
-      captionBox = child;
-    }
+    const m = measureTextBlock(child, captionWidth);
+    captionHeight += m.heightPx;
+    captionLines += m.lineCount;
   });
-
-  if (layoutName === "left" || layoutName === "right") {
-    const captionWidth = Math.max(120, contentWidth - imageWidth - gap);
-    const captionHeight = captionBox ? measureBoxNode(captionBox, captionWidth).heightPx : 0;
-    const height = Math.max(imageHeight, captionHeight);
-    return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
+  if (captionLines === 0) {
+    captionHeight += EMPTY_BLOCK_HEIGHT_PX;
+    captionLines = 1;
   }
 
-  const captionWidth = contentWidth;
-  const captionHeight = captionBox ? measureBoxNode(captionBox, captionWidth).heightPx : 0;
   const height = imageHeight + gap + captionHeight;
   return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
 }

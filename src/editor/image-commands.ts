@@ -134,9 +134,16 @@ export interface SelectedImageInfo {
   resolvedSrc: string;
 }
 
+/** A node that behaves like a photo for the image toolbar: a plain image OR a
+ *  figure (which carries the photo as attrs). Commands patch the node attrs in
+ *  both cases, so the toolbar controls work on the figure as a unit. */
+function isPhotoLike(name: string): boolean {
+  return name === "image" || name === "figure";
+}
+
 export async function getSelectedImage(view: EditorView): Promise<SelectedImageInfo | null> {
   const { selection } = view.state;
-  if (selection instanceof NodeSelection && selection.node.type.name === "image") {
+  if (selection instanceof NodeSelection && isPhotoLike(selection.node.type.name)) {
     const pos = selection.from;
     const node = selection.node;
     const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
@@ -145,7 +152,7 @@ export async function getSelectedImage(view: EditorView): Promise<SelectedImageI
   const { $from } = selection;
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d);
-    if (node.type.name === "image") {
+    if (isPhotoLike(node.type.name)) {
       const pos = $from.before(d);
       const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
       return { pos, node, resolvedSrc };
@@ -269,6 +276,9 @@ export async function setImageCaption(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
+  // A figure's caption is real content, not an attribute: it is edited in
+  // place. The toolbar field that calls this is hidden for figures anyway.
+  if (info.node.type.name === "figure") return false;
   return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, caption });
 }
 

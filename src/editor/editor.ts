@@ -26,6 +26,7 @@ import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
+import { FigureNodeView, createFigureTypeGuardPlugin } from "./figure-node-view";
 import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
 import { StyledBoxNodeView, createBoxTypeGuardPlugin } from "./box-node-view";
 import { updateImageToolbar } from "./toolbar";
@@ -625,6 +626,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       tableEditing(),
       createTableMonitorPlugin(),
       createBoxTypeGuardPlugin(),
+      createFigureTypeGuardPlugin(),
       new Plugin({
         key: new PluginKey("imageToolbarSync"),
         view() {
@@ -646,6 +648,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
     nodeViews: {
       image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
       styled_box: (node, view, getPos) => new StyledBoxNodeView(node, view, getPos),
+      figure: (node, view, getPos) => new FigureNodeView(node, view, getPos),
     },
     handleScrollToSelection(view) {
       scrollSelectionIntoView(view);

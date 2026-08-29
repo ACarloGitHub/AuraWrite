@@ -1,4 +1,5 @@
 import { createEditor, syncDocumentPaginationState } from "./editor/editor";
+import { migrateLegacyDocumentJson } from "./editor/enriched-schema";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupMCPPanel } from "./ai-panel/mcp-panel";
@@ -206,18 +207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setLoading(false);
 
   function migrateImageNodesInJson(node: any): any {
-    if (!node || typeof node !== "object") return node;
-    if (Array.isArray(node)) {
-      return node.map((child) => migrateImageNodesInJson(child));
-    }
-    if (node.type === "image") {
-      return { type: "paragraph", content: [node] };
-    }
-    if (Array.isArray(node.content)) {
-      const newContent = node.content.map((child: any) => migrateImageNodesInJson(child));
-      return { ...node, content: newContent };
-    }
-    return node;
+    return migrateLegacyDocumentJson(node);
   }
 
   // Listen for clear editor events

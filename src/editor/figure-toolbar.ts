@@ -67,7 +67,7 @@ export function syncFigureControls(view: EditorView): void {
     if (layout) layout.value = String(figure.node.attrs.captionLayout ?? "below");
 
     const gap = el<HTMLInputElement>("fig-caption-gap");
-    const gapValue = Number(figure.node.attrs.captionGap ?? 12);
+    const gapValue = Number(figure.node.attrs.captionGap ?? 0);
     if (gap && isFinite(gapValue)) gap.value = String(gapValue);
     return;
   }

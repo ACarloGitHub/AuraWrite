@@ -11,6 +11,7 @@ import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { setLoading as setLoadingState, isLoading as isLoadingState } from "../loading-state";
 import { schema } from "./editor";
+import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
@@ -613,20 +614,7 @@ export async function closeCurrentFileIfInside(baseDir: string): Promise<boolean
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrateImageNodesInJson(node: any): any {
-  if (!node || typeof node !== "object") return node;
-  if (Array.isArray(node)) {
-    return node.map((child) => migrateImageNodesInJson(child));
-  }
-  if (node.type === "image") {
-    return { type: "paragraph", content: [node] };
-  }
-  if (Array.isArray(node.content)) {
-    const newContent = node.content.map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (child: any) => migrateImageNodesInJson(child));
-    return { ...node, content: newContent };
-  }
-  return node;
+  return migrateLegacyDocumentJson(node);
 }
 
 async function handleExport(): Promise<void> {
@@ -2360,7 +2348,13 @@ export function updateImageToolbar(view: EditorView): void {
       inputRotation.value = r ? String(r) : "";
     }
     if (inputCaption) {
-      inputCaption.value = (attrs.caption as string) || "";
+      // Phase 1 (G3, refactor): the caption of a FIGURE is edited in place
+      // inside the figure — the mini field is hidden for figures (removed
+      // entirely in a later phase) and shown for plain images only.
+      const isFigure = info.node.type.name === "figure";
+      const captionField = inputCaption.closest(".image-toolbar__field--caption");
+      if (captionField instanceof HTMLElement) captionField.hidden = isFigure;
+      if (!isFigure) inputCaption.value = (attrs.caption as string) || "";
     }
 
     // Phase 1 (enrichment): sync the "Style" section (thin hook)

@@ -6472,53 +6472,99 @@ kbd {
 }
 
 /* ============================================================================
-   COMPOSITE FIGURE (Phase 1 enrichment G3) — image + optional caption box.
-   Plain CSS layout from data-caption-layout; gap via CSS variable emitted
-   inline by the dialect. Never split across pages (print/paged).
+   FIGURE NODE (Phase 1 enrichment G3, refactor 2026-08-29) — a single unit:
+   photo <img> (built from the node attrs) + editable <figcaption>. The
+   wrapper carries border/shadow/radius so it embraces photo AND caption.
+   The inner <img> is EXEMPT from the generic DOCX-import caps (the
+   "container not to reduce" rule: max-height removed; ratio preserved by
+   height:auto while the aspect is locked). Never split across pages.
    ============================================================================ */
 
-.aw-figure {
+.ProseMirror .aw-figure {
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: var(--aw-figure-gap, 12px);
-  margin: 10px 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--aw-figure-gap, 0px);
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px auto;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
-.aw-figure__content {
-  display: flex;
-  gap: var(--aw-figure-gap, 12px);
-}
-
-.aw-figure[data-caption-layout="below"] {
-  flex-direction: column;
-}
-
-.aw-figure[data-caption-layout="above"] {
+.ProseMirror .aw-figure[data-caption-layout="above"] {
   flex-direction: column-reverse;
 }
 
-.aw-figure[data-caption-layout="right"] {
-  flex-direction: row;
-  align-items: flex-start;
+.ProseMirror .aw-figure[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
 }
 
-.aw-figure[data-caption-layout="left"] {
-  flex-direction: row-reverse;
-  align-items: flex-start;
+.ProseMirror .aw-figure[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* In row layouts children keep their natural width (the caption box has its
-   own width setting); in column layouts the caption stretches. */
-.aw-figure[data-caption-layout="left"] > *,
-.aw-figure[data-caption-layout="right"] > * {
-  flex: 0 0 auto;
+.ProseMirror .aw-figure[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
 }
 
-.aw-figure.ProseMirror-selectednode {
+.ProseMirror .aw-figure[data-wrap][data-align="left"] {
+  float: left;
+  margin-right: 12px;
+  margin-left: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.ProseMirror .aw-figure[data-wrap][data-align="right"] {
+  float: right;
+  margin-left: 12px;
+  margin-right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* THE exemption: this is the container not to reduce. The generic
+   `.ProseMirror img` caps (max-width:100%; max-height:480px) must NOT apply
+   to the photo inside a figure — max-height is removed so a circle never
+   becomes an ellipse; height:auto keeps the intrinsic ratio. */
+.ProseMirror .aw-figure img {
+  max-width: 100%;
+  max-height: none;
+  height: auto;
+  display: block;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  -webkit-user-drag: none;
+}
+
+.ProseMirror .aw-figure .aw-figure__caption {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.ProseMirror .aw-figure .aw-figure__caption p {
+  margin: 0;
+}
+
+.ProseMirror .aw-figure.ProseMirror-selectednode,
+.ProseMirror .aw-figure.aw-figure--selected {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.aw-figure--selected .image-resize-handle,
+.aw-figure--selected .image-rotate-handle {
+  display: block;
 }
 
 .aw-box--ghost {

@@ -14,6 +14,7 @@
 import type { Node as PMNode, NodeSpec } from "prosemirror-model";
 import {
   DEFAULT_IMAGE_STYLE,
+  computeImageCss,
   normalizeImageStyle,
   type ImageBorderStyle,
   type ImageFrameEffect,
@@ -180,36 +181,89 @@ export function boxStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
 }
 
 // ============================================================================
-// figure node (Phase 1, step G3) — composite figure: image + optional caption
-// box. Rendered with plain CSS (flex column/row) from the data-caption-layout
-// attribute; no custom node view. break-inside:avoid keeps it on one page.
+// figure node (Phase 1, step G3, refactor 2026-08-29) — the FIGURE carries the
+// photo as node ATTRS (not as a child node) and its CONTENT is the caption
+// text. Canonical ProseMirror figure+caption pattern (forum #462 / #1326):
+// the image cannot be deleted separately, and the caption is real editable
+// text without any box chrome. Rendered by FigureNodeView (figure-node-view.ts),
+// which owns the DOM; the D10 dialect below emits <figure><img/><figcaption>.
 // ============================================================================
 
 const CAPTION_LAYOUTS = ["below", "above", "left", "right"] as const;
 export type CaptionLayout = (typeof CAPTION_LAYOUTS)[number];
 const DEFAULT_CAPTION_LAYOUT: CaptionLayout = "below";
-const DEFAULT_CAPTION_GAP_PX = 12;
+const DEFAULT_CAPTION_GAP_PX = 0;
+
+/** Read the photo attrs off an <img> element (shared by image + figure). */
+export function readImageAttrsFromDOM(dom: HTMLElement): Record<string, unknown> {
+  const w = dom.getAttribute("width");
+  const h = dom.getAttribute("height");
+  return {
+    src: dom.getAttribute("src") || "",
+    alt: dom.getAttribute("alt") || "",
+    title: dom.getAttribute("title") || "",
+    width: w ? parseInt(w, 10) || null : null,
+    height: h ? parseInt(h, 10) || null : null,
+    align: dom.getAttribute("data-align") || "center",
+    wrap: dom.hasAttribute("data-wrap"),
+    rotation: parseFloat(dom.getAttribute("data-rotation") || "0") || 0,
+    flipH: dom.hasAttribute("data-flip-h"),
+    flipV: dom.hasAttribute("data-flip-v"),
+    aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
+    caption: dom.getAttribute("data-caption") || "",
+    ...imageStyleGetDOM(dom),
+  };
+}
 
 /** Node spec appended to the schema in editor.ts (single hook point). */
 export const FIGURE_NODE_SPEC: NodeSpec = {
-  content: "image styled_box?",
+  content: "paragraph+",
   group: "block",
   defining: true,
   selectable: true,
   attrs: {
+    // Photo carried as attrs (canonical figure+caption pattern).
+    src: { default: "" },
+    alt: { default: "" },
+    title: { default: "" },
+    width: { default: null },
+    height: { default: null },
+    align: { default: "center" },
+    wrap: { default: false },
+    rotation: { default: 0 },
+    flipH: { default: false },
+    flipV: { default: false },
+    aspectLocked: { default: true },
+    // Caption styling.
     captionLayout: { default: DEFAULT_CAPTION_LAYOUT },
     captionGap: { default: DEFAULT_CAPTION_GAP_PX },
+    captionBg: { default: "" },
+    // Phase 1 (enrichment) style attrs — same dialect/logic as the image node.
+    ...IMAGE_STYLE_ATTRS,
   },
   parseDOM: [
     {
       tag: "figure[data-aw-figure]",
       getAttrs: (dom: HTMLElement | string) => {
         if (typeof dom === "string") return false;
-        return figureStyleGetDOM(dom);
+        const img = dom.querySelector("img");
+        const layout = String(dom.getAttribute("data-caption-layout") || "");
+        const rawGap = numAttr(dom, "data-caption-gap", DEFAULT_CAPTION_GAP_PX);
+        return {
+          ...(img ? readImageAttrsFromDOM(img) : {}),
+          captionLayout: oneOf<string>(
+            layout,
+            CAPTION_LAYOUTS as unknown as string[],
+            DEFAULT_CAPTION_LAYOUT
+          ),
+          captionGap: Math.max(0, Math.min(120, rawGap)),
+          captionBg: dom.getAttribute("data-caption-bg") || "",
+        };
       },
     },
   ],
   toDOM(node) {
+    const s = normalizeImageStyle(node.attrs as Record<string, unknown>);
     const layout = oneOf<string>(
       String(node.attrs.captionLayout ?? ""),
       CAPTION_LAYOUTS as unknown as string[],
@@ -217,26 +271,81 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     );
     const rawGap = Number(node.attrs.captionGap);
     const gap = isFinite(rawGap) ? Math.max(0, Math.min(120, rawGap)) : DEFAULT_CAPTION_GAP_PX;
-    const attrs: Record<string, string> = {
+    const bg = String(node.attrs.captionBg ?? "");
+
+    const figAttrs: Record<string, string> = {
       "data-aw-figure": "",
       "data-caption-layout": layout,
       class: "aw-figure",
     };
-    if (gap !== DEFAULT_CAPTION_GAP_PX) attrs["data-caption-gap"] = String(gap);
-    attrs.style = `--aw-figure-gap: ${gap}px`;
-    return ["figure", attrs, 0];
+    if (gap !== DEFAULT_CAPTION_GAP_PX) figAttrs["data-caption-gap"] = String(gap);
+    if (bg) figAttrs["data-caption-bg"] = bg;
+
+    // The style (border / shadow / radius) wraps the WHOLE unit: emit on the
+    // <figure> element (D10 rule 1: marker + inline style, both present).
+    const imgCss = computeImageCss(s);
+    const cssMap: Record<string, string> = {
+      ...(imgCss.borderRadius ? { "border-radius": imgCss.borderRadius } : {}),
+      ...(imgCss.border ? { border: imgCss.border } : {}),
+      ...(imgCss.boxShadow ? { "box-shadow": imgCss.boxShadow } : {}),
+    };
+    const styleText = Object.entries(cssMap)
+      .map(([prop, value]) => `${prop}: ${value}`)
+      .join("; ");
+    if (styleText) figAttrs.style = styleText;
+
+    // <img> built from the photo attrs (same data-* dialect as the image node).
+    const imgAttrs: Record<string, string> = {
+      src: String(node.attrs.src ?? ""),
+      alt: String(node.attrs.alt ?? ""),
+    };
+    if (node.attrs.title) imgAttrs.title = String(node.attrs.title);
+    if (node.attrs.width) imgAttrs.width = String(node.attrs.width);
+    if (node.attrs.height) imgAttrs.height = String(node.attrs.height);
+    imgAttrs["data-align"] = String(node.attrs.align ?? "center");
+    if (node.attrs.wrap) imgAttrs["data-wrap"] = "";
+    if (node.attrs.rotation) imgAttrs["data-rotation"] = String(node.attrs.rotation);
+    if (node.attrs.flipH) imgAttrs["data-flip-h"] = "";
+    if (node.attrs.flipV) imgAttrs["data-flip-v"] = "";
+    if (node.attrs.aspectLocked === false) imgAttrs["data-aspect-unlocked"] = "";
+    Object.assign(imgAttrs, imageStyleToDOM(node));
+
+    return ["figure", figAttrs, ["img", imgAttrs], ["figcaption", 0]];
   },
 };
 
-/** Read the D10 figure markers off a <figure data-aw-figure> element. */
-export function figureStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
-  const rawGap = numAttr(dom, "data-caption-gap", DEFAULT_CAPTION_GAP_PX);
-  return {
-    captionLayout: oneOf<string>(
-      dom.getAttribute("data-caption-layout") || "",
-      CAPTION_LAYOUTS as unknown as string[],
-      DEFAULT_CAPTION_LAYOUT
-    ),
-    captionGap: Math.max(0, Math.min(120, rawGap)),
-  };
+/**
+ * Defensive migration of legacy document JSON before parsing with the current
+ * schema (document load / open JSON). Handles:
+ *  - old `figure` nodes (content: image + styled_box) → the new figure that
+ *    carries the photo as attrs and the caption text as content;
+ *  - bare `image` nodes → wrapped in a paragraph (as the rest of the app does).
+ */
+export function migrateLegacyDocumentJson(node: unknown): unknown {
+  if (!node || typeof node !== "object") return node;
+  if (Array.isArray(node)) {
+    return node.map((child) => migrateLegacyDocumentJson(child));
+  }
+  const n = node as { type?: string; attrs?: Record<string, unknown>; content?: unknown[] };
+  if (n.type === "figure") {
+    const children = Array.isArray(n.content) ? n.content : [];
+    const image = children.find((c) => (c as { type?: string })?.type === "image");
+    const box = children.find((c) => (c as { type?: string })?.type === "styled_box");
+    const attrs: Record<string, unknown> = {
+      ...(n.attrs ?? {}),
+      ...((image as { attrs?: Record<string, unknown> } | undefined)?.attrs ?? {}),
+    };
+    delete attrs.caption;
+    const boxContent = (box as { content?: unknown[] } | undefined)?.content;
+    const content: unknown[] =
+      Array.isArray(boxContent) && boxContent.length > 0 ? boxContent : [{ type: "paragraph" }];
+    return { ...n, attrs, content };
+  }
+  if (n.type === "image") {
+    return { type: "paragraph", content: [node] };
+  }
+  if (Array.isArray(n.content)) {
+    return { ...n, content: n.content.map((child) => migrateLegacyDocumentJson(child)) };
+  }
+  return node;
 }
