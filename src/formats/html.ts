@@ -158,7 +158,16 @@ function wrapInHTMLDocument(bodyContent: string): string {
       background: #f5f5f5;
     }
     img { max-width: 100%; height: auto; }
-    figure { margin: 1em 0; break-inside: avoid; page-break-inside: avoid; }
+    figure[data-aw-figure] {
+      width: fit-content;
+      max-width: 100%;
+      margin: 1em auto;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    figure[data-aw-figure][data-align="left"] { margin-left: 0; margin-right: auto; }
+    figure[data-aw-figure][data-align="right"] { margin-left: auto; margin-right: 0; }
+    figure[data-aw-figure] img { display: block; }
     figcaption { font-size: 12px; font-style: italic; color: #666; }
     .page-break-before {
       page-break-before: always;

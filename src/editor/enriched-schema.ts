@@ -280,6 +280,7 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     const figAttrs: Record<string, string> = {
       "data-aw-figure": "",
       "data-caption-layout": layout,
+      "data-align": String(node.attrs.align ?? "center"),
       class: "aw-figure",
     };
     if (gap !== DEFAULT_CAPTION_GAP_PX) figAttrs["data-caption-gap"] = String(gap);
