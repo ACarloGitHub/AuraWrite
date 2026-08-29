@@ -6553,6 +6553,7 @@ kbd {
   margin: 0;
   border-radius: 0;
   border: none;
+  box-shadow: none;
   -webkit-user-drag: none;
 }
 
@@ -6560,13 +6561,20 @@ kbd {
   width: 100%;
   padding: 0;
   margin: 0;
-  font-size: inherit;
+  text-align: center;
+  font-size: 12px;
+  font-style: italic;
   line-height: inherit;
-  color: inherit;
+  color: var(--color-text-muted, #666);
 }
 
 .ProseMirror .aw-figure .aw-figure__caption p {
   margin: 0;
+}
+
+/* Dark caption fill → light text, so the subtitle stays readable. */
+.ProseMirror .aw-figure .aw-figure__caption.image-caption--dark-bg {
+  color: #f2f2f2;
 }
 
 .ProseMirror .aw-figure.ProseMirror-selectednode,

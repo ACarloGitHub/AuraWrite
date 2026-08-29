@@ -22,6 +22,7 @@ import { NodeView, EditorView, type ViewMutationRecord } from "prosemirror-view"
 import { NodeSelection, Plugin, TextSelection } from "prosemirror-state";
 import { resolveImageSrc } from "./image-uploader";
 import { computeImageCss, normalizeImageStyle } from "./image-style";
+import { isLightBgColor } from "./box-style";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -223,6 +224,8 @@ export class FigureNodeView implements NodeView {
       else this.dom.removeAttribute("data-caption-bg");
     }
 
+    this.applyCaptionStyle(attrs);
+
     this.applyTransform(attrs);
     this.applyStyle(attrs);
 
@@ -250,12 +253,35 @@ export class FigureNodeView implements NodeView {
     this.setStyle(this.applied, this.dom, "transform", parts.length ? parts.join(" ") : undefined);
   }
 
-  /** Border / shadow / radius wrap the WHOLE figure (photo + caption). */
+  /** Frame (outline, decorative) + shadow wrap the WHOLE figure (photo + caption)
+   *  without reducing anything; the photo keeps only its corner radius. */
   private applyStyle(attrs: Record<string, unknown>): void {
     const css = computeImageCss(normalizeImageStyle(attrs));
     this.setStyle(this.applied, this.dom, "border-radius", css.borderRadius ?? null);
-    this.setStyle(this.applied, this.dom, "border", css.border ?? null);
+    this.setStyle(this.applied, this.dom, "outline", css.border ?? null);
+    this.setStyle(this.applied, this.dom, "outline-offset", css.border ? "0px" : null);
     this.setStyle(this.applied, this.dom, "box-shadow", css.boxShadow ?? null);
+    this.setStyle(this.appliedImg, this.img, "border-radius", css.borderRadius ?? null);
+    this.setStyle(this.appliedImg, this.img, "border", null);
+    this.setStyle(this.appliedImg, this.img, "box-shadow", null);
+  }
+
+  /** Caption look: background fills the strip, vertical whitespace via padding. */
+  private applyCaptionStyle(attrs: Record<string, unknown>): void {
+    const bg = String(attrs.captionBg ?? "");
+    if (this.contentDOM.style.background !== bg) {
+      this.contentDOM.style.background = bg;
+    }
+    const padTop = Number(attrs.captionPadTop);
+    const padBottom = Number(attrs.captionPadBottom);
+    const top = isFinite(padTop) ? Math.max(0, Math.min(60, padTop)) : 0;
+    const bottom = isFinite(padBottom) ? Math.max(0, Math.min(60, padBottom)) : 0;
+    const padding = `${top}px 8px ${bottom}px`;
+    if (this.contentDOM.style.padding !== padding) {
+      this.contentDOM.style.padding = padding;
+    }
+    const dark = !!bg && !isLightBgColor(bg);
+    this.contentDOM.classList.toggle("image-caption--dark-bg", dark);
   }
 
   /**

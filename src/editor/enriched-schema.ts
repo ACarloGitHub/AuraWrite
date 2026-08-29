@@ -189,7 +189,7 @@ export function boxStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
 // which owns the DOM; the D10 dialect below emits <figure><img/><figcaption>.
 // ============================================================================
 
-const CAPTION_LAYOUTS = ["below", "above", "left", "right"] as const;
+const CAPTION_LAYOUTS = ["below", "above"] as const;
 export type CaptionLayout = (typeof CAPTION_LAYOUTS)[number];
 const DEFAULT_CAPTION_LAYOUT: CaptionLayout = "below";
 const DEFAULT_CAPTION_GAP_PX = 0;
@@ -238,6 +238,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     captionLayout: { default: DEFAULT_CAPTION_LAYOUT },
     captionGap: { default: DEFAULT_CAPTION_GAP_PX },
     captionBg: { default: "" },
+    captionPadTop: { default: 4 },
+    captionPadBottom: { default: 0 },
     // Phase 1 (enrichment) style attrs — same dialect/logic as the image node.
     ...IMAGE_STYLE_ATTRS,
   },
@@ -258,6 +260,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
           ),
           captionGap: Math.max(0, Math.min(120, rawGap)),
           captionBg: dom.getAttribute("data-caption-bg") || "",
+          captionPadTop: numAttr(dom, "data-caption-pad-top", 4),
+          captionPadBottom: numAttr(dom, "data-caption-pad-bottom", 0),
         };
       },
     },
@@ -280,6 +284,10 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     };
     if (gap !== DEFAULT_CAPTION_GAP_PX) figAttrs["data-caption-gap"] = String(gap);
     if (bg) figAttrs["data-caption-bg"] = bg;
+    const padTop = Number(node.attrs.captionPadTop);
+    const padBottom = Number(node.attrs.captionPadBottom);
+    if (isFinite(padTop) && padTop > 0) figAttrs["data-caption-pad-top"] = String(Math.round(padTop));
+    if (isFinite(padBottom) && padBottom > 0) figAttrs["data-caption-pad-bottom"] = String(Math.round(padBottom));
 
     // The style (border / shadow / radius) wraps the WHOLE unit: emit on the
     // <figure> element (D10 rule 1: marker + inline style, both present).

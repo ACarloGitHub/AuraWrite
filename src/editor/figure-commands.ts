@@ -54,12 +54,12 @@ export function setFigureAttrs(view: EditorView, patch: Record<string, unknown>)
 }
 
 /**
- * Convert the selected image's LEGACY caption (plain text attribute) into a
- * composite figure: the same photo moves into the figure attrs (unchanged),
- * the caption text becomes editable content. The caret lands inside the
- * caption so typing starts immediately. Explicit gesture only.
+ * Convert the selected bare image into a figure with an EMPTY editable caption.
+ * The photo moves into the figure attrs unchanged; the caption is a real
+ * paragraph and the caret lands inside it so typing starts immediately.
+ * This is the "Add Caption" gesture (no legacy caption field anymore).
  */
-export function convertCaptionToFigure(view: EditorView): boolean {
+export function addCaptionToImage(view: EditorView): boolean {
   const { selection } = view.state;
   if (!(selection instanceof NodeSelection) || selection.node.type.name !== "image") {
     return false;
@@ -74,11 +74,7 @@ export function convertCaptionToFigure(view: EditorView): boolean {
   const figAttrs: Record<string, unknown> = { ...image.attrs };
   delete figAttrs.caption;
 
-  const caption = String(image.attrs.caption ?? "");
-  const captionPar = caption.trim()
-    ? paragraph.create(null, schema.text(caption))
-    : paragraph.create();
-  const figure = figureType.create(figAttrs, [captionPar]);
+  const figure = figureType.create(figAttrs, [paragraph.create()]);
 
   const pos = selection.from;
   let tr = view.state.tr.replaceWith(pos, pos + image.nodeSize, figure);
@@ -96,11 +92,10 @@ export function convertCaptionToFigure(view: EditorView): boolean {
 }
 
 /**
- * Convert a composite figure back into a plain image with the legacy caption:
- * the caption text becomes the image caption attribute. Photo attrs unchanged.
- * Explicit gesture only.
+ * Convert a figure back into a bare image (drops the caption). Photo attrs
+ * unchanged. This is the "Remove Caption" gesture.
  */
-export function convertFigureToCaption(view: EditorView): boolean {
+export function removeFigureCaption(view: EditorView): boolean {
   const info = getSelectedFigure(view);
   if (!info) return false;
   const figure = info.node;
@@ -110,16 +105,17 @@ export function convertFigureToCaption(view: EditorView): boolean {
   const paragraph = schema.nodes.paragraph;
   if (!imageType || !paragraph) return false;
 
-  const caption = figure.textContent || "";
   const imageAttrs: Record<string, unknown> = { ...figure.attrs };
   delete imageAttrs.captionLayout;
   delete imageAttrs.captionGap;
   delete imageAttrs.captionBg;
-  imageAttrs.caption = caption;
-  const restoredImage = imageType.create(imageAttrs);
+  delete imageAttrs.captionPadTop;
+  delete imageAttrs.captionPadBottom;
+  delete imageAttrs.caption;
+  const bareImage = imageType.create(imageAttrs);
 
-  let tr = view.state.tr.replaceWith(pos, pos + figure.nodeSize, restoredImage);
-  const imageEnd = pos + restoredImage.nodeSize;
+  let tr = view.state.tr.replaceWith(pos, pos + figure.nodeSize, bareImage);
+  const imageEnd = pos + bareImage.nodeSize;
   const nodeAfter = tr.doc.nodeAt(imageEnd);
   if (!nodeAfter || nodeAfter.type !== paragraph) {
     tr = tr.insert(imageEnd, paragraph.create());

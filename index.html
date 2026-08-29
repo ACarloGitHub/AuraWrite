@@ -335,24 +335,19 @@
           <label class="image-toolbar__field" title="Light direction: 0=top, 90=right, 180=bottom, 270=left (shadow falls opposite)">Light <input id="img-shadow-angle" type="number" min="0" max="359" step="15" value="" placeholder="315" /></label>
         </span>
         <div class="image-toolbar__separator"></div>
-        <label class="image-toolbar__field image-toolbar__field--caption" title="Image caption">Cap <input id="img-caption" type="text" value="" placeholder="caption" /></label>
-        <button id="img-remove-caption" class="image-toolbar__btn" title="Remove the caption" hidden>Remove Caption</button>
-        <label class="image-toolbar__field image-toolbar__field--caption-bg" title="Caption background color (pick a lighter tone on dark backgrounds)" hidden>BG <input id="img-caption-bg" type="color" class="image-toolbar__color" value="#ffffff" /></label>
-        <button id="img-caption-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No caption background (transparent)" hidden>×</button>
-        <label class="image-toolbar__field image-toolbar__field--caption-pad" title="Space between the image and the caption text" hidden>Above <input id="img-caption-pad-top" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
-        <label class="image-toolbar__field image-toolbar__field--caption-pad" title="Space between the caption text and the frame" hidden>Below <input id="img-caption-pad-bottom" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
-        <button id="img-make-figure" class="image-toolbar__btn" title="Convert this caption into a composite figure (image + caption box)" hidden>Figure</button>
+        <button id="img-add-caption" class="image-toolbar__btn" title="Add an editable caption to this image" hidden>Add Caption</button>
         <span id="figure-section" hidden>
           <div class="image-toolbar__separator"></div>
           <span class="image-toolbar__label">Caption</span>
           <select id="fig-caption-layout" class="image-toolbar__select" title="Caption position relative to the image">
             <option value="below">Below</option>
             <option value="above">Above</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
           </select>
-          <label class="image-toolbar__field" title="Distance between image and caption, pixels; 0 = attached">Gap <input id="fig-caption-gap" type="number" min="0" max="120" step="2" value="" placeholder="px" /></label>
-          <button id="fig-to-caption" class="image-toolbar__btn" title="Convert back to a plain image with the legacy caption">To Caption</button>
+          <label class="image-toolbar__field image-toolbar__field--caption-bg" title="Caption background color (pick a lighter tone on dark backgrounds)">BG <input id="img-caption-bg" type="color" class="image-toolbar__color" value="#ffffff" /></label>
+          <button id="img-caption-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No caption background (transparent)">×</button>
+          <label class="image-toolbar__field image-toolbar__field--caption-pad" title="Space between the image and the caption text">Above <input id="img-caption-pad-top" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field image-toolbar__field--caption-pad" title="Space between the caption text and the frame">Below <input id="img-caption-pad-bottom" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
+          <button id="img-remove-caption" class="image-toolbar__btn" title="Remove the caption">Remove Caption</button>
         </span>
         <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
