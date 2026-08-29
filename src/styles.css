@@ -6096,6 +6096,8 @@ kbd {
   max-width: none;
   max-height: none;
   border-radius: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .ProseMirror .ProseMirror-selectednode + .image-node-wrapper img,

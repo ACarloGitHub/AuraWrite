@@ -127,8 +127,14 @@ export function computeImageBoxShadow(style: ImageStyleAttrs): string {
     const opposite = (style.shadowAngle + 180) % 360;
     const { dx, dy } = bearingToOffset(opposite, style.shadowDistance);
     const alpha = clampNum(style.shadowOpacity, 0, 100, 35) / 100;
+    // When a frame is present it sits OUTSIDE the photo/caption, so the drop
+    // shadow would be hidden behind it. Widen the shadow's source by the frame
+    // width (spread) so it is cast from the frame's outer edge, not under it.
+    const spread =
+      style.borderWidth > 0 && style.borderStyle !== "none" ? style.borderWidth : 0;
     layers.push(
-      `${fmt(dx)}px ${fmt(dy)}px ${fmt(style.shadowBlur)}px ${hexToCssRgba(style.shadowColor, alpha)}`
+      `${fmt(dx)}px ${fmt(dy)}px ${fmt(style.shadowBlur)}px` +
+        `${spread > 0 ? ` ${fmt(spread)}px` : ""} ${hexToCssRgba(style.shadowColor, alpha)}`
     );
   }
   if (style.frameEffect === "raised") {

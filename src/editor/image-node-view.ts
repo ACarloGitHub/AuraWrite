@@ -169,11 +169,32 @@ export class ImageNodeView implements NodeView {
     this.setStyleCached(this.appliedWrapper, this.wrapper, "transform", parts.length ? parts.join(" ") : undefined);
   }
 
+  /**
+   * Frame (cornice) and shadow are DECORATIVE and wrap the whole unit (photo +
+   * caption): the photo keeps only its corner radius; the frame is drawn as an
+   * `outline` on the wrapper and the shadow as a `box-shadow` on the wrapper.
+   * Neither participates in layout, so the photo/caption are NEVER reduced and
+   * there is NO gap between them or between frame and content (the frame hugs
+   * the unit's outer edge, offset 0).
+   */
   private applyStyle(attrs: Record<string, unknown>): void {
     const css = computeImageCss(normalizeImageStyle(attrs));
-    this.setStyleCached(this.appliedImg, this.img, "border-radius", css.borderRadius ?? null);
-    this.setStyleCached(this.appliedImg, this.img, "border", css.border ?? null);
-    this.setStyleCached(this.appliedImg, this.img, "box-shadow", css.boxShadow ?? null);
+    const radius = css.borderRadius ?? null;
+    const frame = css.border ?? null; // e.g. "2px solid #333" → used as outline
+    const shadow = css.boxShadow ?? null;
+
+    // Wrapper = the whole unit: rounded outline (frame) + drop shadow.
+    this.setStyleCached(this.appliedWrapper, this.wrapper, "border-radius", radius);
+    this.setStyleCached(this.appliedWrapper, this.wrapper, "outline", frame);
+    this.setStyleCached(this.appliedWrapper, this.wrapper, "outline-offset", frame ? "0px" : null);
+    this.setStyleCached(this.appliedWrapper, this.wrapper, "box-shadow", shadow);
+
+    // Photo: rounded corners only (matches the wrapper), no frame/shadow of its
+    // own — a border on the <img> would shrink it (border-box) and split the
+    // frame away from the caption.
+    this.setStyleCached(this.appliedImg, this.img, "border-radius", radius);
+    this.setStyleCached(this.appliedImg, this.img, "border", null);
+    this.setStyleCached(this.appliedImg, this.img, "box-shadow", null);
   }
 
   private applyCaption(attrs: Record<string, unknown>): void {
