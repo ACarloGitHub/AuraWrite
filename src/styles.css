@@ -5456,6 +5456,10 @@ kbd {
 }
 
 /* Text alignment via data attributes */
+.ProseMirror p[data-align="left"] {
+  text-align: left;
+}
+
 .ProseMirror p[data-align="center"] {
   text-align: center;
 }
@@ -6561,7 +6565,6 @@ kbd {
   width: 100%;
   padding: 0;
   margin: 0;
-  text-align: center;
   font-size: 12px;
   font-style: italic;
   line-height: inherit;
