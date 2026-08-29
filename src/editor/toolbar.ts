@@ -15,7 +15,7 @@ import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, setImageCaption, removeImage } from "./image-commands";
+import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, setImageCaption, setImageCaptionBg, removeImageCaption, removeImage } from "./image-commands";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -2289,6 +2289,22 @@ function setupImageToolbar(view: EditorView): void {
     void setImageCaption(view, inputCaption.value);
   });
 
+  // Caption background + remove caption (simple images; the figure route keeps
+  // its own in-place caption).
+  const btnRemoveCaption = document.getElementById("img-remove-caption") as HTMLButtonElement | null;
+  const inputCaptionBg = document.getElementById("img-caption-bg") as HTMLInputElement | null;
+  const btnCaptionBgClear = document.getElementById("img-caption-bg-clear") as HTMLButtonElement | null;
+
+  btnRemoveCaption?.addEventListener("click", () => {
+    void removeImageCaption(view);
+  });
+  inputCaptionBg?.addEventListener("input", () => {
+    if (inputCaptionBg.value) void setImageCaptionBg(view, inputCaptionBg.value);
+  });
+  btnCaptionBgClear?.addEventListener("click", () => {
+    void setImageCaptionBg(view, "");
+  });
+
   // Phase 1 (enrichment): wire the "Style" section (dynamic, anti-bloat hook)
   void import("./image-style-toolbar").then((m) => m.setupImageStyleToolbar(view));
 }
@@ -2352,9 +2368,25 @@ export function updateImageToolbar(view: EditorView): void {
       // inside the figure — the mini field is hidden for figures (removed
       // entirely in a later phase) and shown for plain images only.
       const isFigure = info.node.type.name === "figure";
+      const caption = (attrs.caption as string) || "";
+      const hasCaption = caption.trim() !== "";
       const captionField = inputCaption.closest(".image-toolbar__field--caption");
       if (captionField instanceof HTMLElement) captionField.hidden = isFigure;
-      if (!isFigure) inputCaption.value = (attrs.caption as string) || "";
+      if (!isFigure) inputCaption.value = caption;
+
+      // Caption background + "Remove Caption" only for a plain image that has
+      // a caption. Hidden for figures and for images without a caption.
+      const btnRemoveCaption = document.getElementById("img-remove-caption") as HTMLElement | null;
+      const bgField = document.getElementById("img-caption-bg")?.closest(".image-toolbar__field--caption-bg") as HTMLElement | null;
+      const bgInput = document.getElementById("img-caption-bg") as HTMLInputElement | null;
+      const btnBgClear = document.getElementById("img-caption-bg-clear") as HTMLElement | null;
+      const showCaptionTools = !isFigure && hasCaption;
+      if (btnRemoveCaption) btnRemoveCaption.hidden = !showCaptionTools;
+      if (bgField) bgField.hidden = !showCaptionTools;
+      if (btnBgClear) btnBgClear.hidden = !showCaptionTools;
+      if (showCaptionTools && bgInput) {
+        bgInput.value = (attrs.captionBg as string) || "#ffffff";
+      }
     }
 
     // Phase 1 (enrichment): sync the "Style" section (thin hook)

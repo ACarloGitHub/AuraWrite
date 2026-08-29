@@ -282,6 +282,25 @@ export async function setImageCaption(
   return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, caption });
 }
 
+/** Set the caption background color; "" = transparent (no fill). */
+export async function setImageCaptionBg(
+  view: EditorView,
+  bg: string
+): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  if (info.node.type.name === "figure") return false;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, captionBg: bg });
+}
+
+/** Remove the caption (and its background), leaving a bare image. */
+export async function removeImageCaption(view: EditorView): Promise<boolean> {
+  const info = await getSelectedImage(view);
+  if (!info) return false;
+  if (info.node.type.name === "figure") return false;
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, caption: "", captionBg: "" });
+}
+
 /**
  * Phase 1 (enrichment): patch any subset of the image style attrs
  * (radius / shadow / border / frame effect) on the selected image.

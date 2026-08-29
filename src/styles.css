@@ -6153,6 +6153,7 @@ kbd {
 .image-node-wrapper img {
   display: block;
   vertical-align: top;
+  margin: 0;
   -webkit-user-drag: none;
 }
 
@@ -6163,6 +6164,12 @@ kbd {
   color: var(--color-text-muted, #666);
   padding: 4px 8px 0;
   margin: 0;
+}
+
+/* Caption background fills the whole strip under the photo. On a dark fill we
+   switch to light text so the caption stays readable (see ImageNodeView). */
+.image-caption--dark-bg {
+  color: #f2f2f2;
 }
 
 .image-node-wrapper--selected {

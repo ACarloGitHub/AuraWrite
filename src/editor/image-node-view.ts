@@ -4,6 +4,7 @@ import { NodeSelection } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import { resolveImageSrc, uploadImageFile } from "./image-uploader";
 import { computeImageCss, normalizeImageStyle } from "./image-style";
+import { isLightBgColor } from "./box-style";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -208,6 +209,14 @@ export class ImageNodeView implements NodeView {
       if (this.captionEl.textContent !== caption) {
         this.captionEl.textContent = caption;
       }
+      // Background fills the whole caption strip; dark backgrounds get light
+      // text so it stays readable.
+      const bg = (attrs.captionBg as string) || "";
+      if (this.captionEl.style.background !== bg) {
+        this.captionEl.style.background = bg;
+      }
+      const dark = !!bg && !isLightBgColor(bg);
+      this.captionEl.classList.toggle("image-caption--dark-bg", dark);
     } else if (this.captionEl) {
       this.captionEl.remove();
       this.captionEl = null;

@@ -248,6 +248,7 @@ const imageSpec: NodeSpec = {
     flipV: { default: false },
     aspectLocked: { default: true },
     caption: { default: "" },
+    captionBg: { default: "" },
     // Phase 1 (enrichment) style attrs — dialect + logic in enriched-schema.ts
     ...IMAGE_STYLE_ATTRS,
   },
@@ -271,6 +272,7 @@ const imageSpec: NodeSpec = {
           flipV: dom.hasAttribute("data-flip-v"),
           aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
           caption: dom.getAttribute("data-caption") || "",
+          captionBg: dom.getAttribute("data-caption-bg") || "",
           ...imageStyleGetDOM(dom),
         };
       },
@@ -291,6 +293,7 @@ const imageSpec: NodeSpec = {
     if (node.attrs.flipV) attrs["data-flip-v"] = "";
     if (!node.attrs.aspectLocked) attrs["data-aspect-unlocked"] = "";
     if (node.attrs.caption) attrs["data-caption"] = node.attrs.caption as string;
+    if (node.attrs.captionBg) attrs["data-caption-bg"] = node.attrs.captionBg as string;
     Object.assign(attrs, imageStyleToDOM(node));
     return ["img", attrs];
   },
