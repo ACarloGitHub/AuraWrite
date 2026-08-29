@@ -21,6 +21,7 @@ function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: bool
         const wrap = document.createElement("div");
         wrap.className = cassiePaged ? "aw-page-break aw-page-break--paged" : "aw-page-break";
         wrap.setAttribute("data-page", String(bp.pageNumber));
+        if (bp.midParagraph) wrap.setAttribute("data-mid-paragraph", "1");
         wrap.contentEditable = "false";
 
         if (cassiePaged) {

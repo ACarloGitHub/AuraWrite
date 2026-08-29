@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Cassie-style deterministic pagination measurements.
  *
  * This module replaces DOM-based block height measurement with a
@@ -77,10 +77,20 @@ export const EDITOR_LINE_HEIGHT_PX = 22;
 const EMPTY_BLOCK_HEIGHT_PX = EDITOR_LINE_HEIGHT_PX;
 
 // Caption strips (figure <figcaption> and the legacy image caption) render
-// at 12px italic with the inherited 1.5 line-height → 18px per line
+// at 12px italic with the inherited 1.5 line-height â†’ 18px per line
 // (see `.aw-figure__caption` and `.image-caption` in styles.css).
 const CAPTION_FONT = "italic 12px Lora, Georgia, serif";
 const CAPTION_LINE_HEIGHT_PX = 18;
+
+// Grapheme splitter used to resolve line-start cursors that fall inside a
+// fragment (same segmentation the layout engine works with).
+const LINE_START_GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+// The editor renders paragraphs with `white-space: pre-wrap` (styles.css),
+// so pagination MUST measure in the same mode: spaces preserved, no
+// collapsing, fragment lengths identical to the source. The default "normal"
+// mode collapses runs and desyncs line starts from document positions.
+const WS_OPTIONS = { whiteSpace: "pre-wrap" } as const;
 
 export interface BlockMetrics {
   heightPx: number;
@@ -99,7 +109,7 @@ export interface LineInfo {
  * Text blocks are measured from their content; composite elements
  * (styled_box, figure, image) are measured structurally from their own
  * attrs (F1.1: plain `image` nodes no longer fall back to one empty
- * text line — their stored photo height and caption strip are counted).
+ * text line â€” their stored photo height and caption strip are counted).
  * Inline marks, tables, and lists are NOT accounted for: this remains a
  * deliberate simplification. What matters is that the decision is
  * consistent and does not depend on the browser having laid out the
@@ -133,7 +143,7 @@ function measureTextHeight(
     return { heightPx: lineHeight, lineCount: 1 };
   }
   try {
-    const prepared = prepare(text, font);
+    const prepared = prepare(text, font, WS_OPTIONS);
     const result = layout(prepared, contentWidth, lineHeight);
     const lineCount = Math.max(1, result.lineCount ?? Math.ceil(result.height / lineHeight));
     return { heightPx: result.height, lineCount };
@@ -198,8 +208,8 @@ const FALLBACK_IMAGE_HEIGHT_PX = 220;
  * image (F1.1): the block's vertical footprint is the photo height from the
  * stored attrs (set at insertion and on resize; the NodeView also self-heals
  * missing sizes by persisting the natural ones) plus the legacy caption strip
- * when `caption` carries text. Rotation is a CSS transform: the layout box —
- * the space subsequent blocks actually see — is always the unrotated one, so
+ * when `caption` carries text. Rotation is a CSS transform: the layout box â€”
+ * the space subsequent blocks actually see â€” is always the unrotated one, so
  * rotation does NOT change the measured height.
  */
 function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
@@ -271,7 +281,7 @@ export function getBlockLines(node: PMNode | null | undefined, margins?: PageMar
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   try {
-    const prepared = prepareWithSegments(text, EDITOR_FONT);
+    const prepared = prepareWithSegments(text, EDITOR_FONT, WS_OPTIONS);
     const result = layoutWithLines(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
     const lines = (result.lines ?? []).map((l: { text: string }) => l.text);
     return { heightPx: result.height, lines, fullText: text };
@@ -283,6 +293,8 @@ export function getBlockLines(node: PMNode | null | undefined, margins?: PageMar
 export interface PageBreakAt {
   pos: number;
   pageNumber: number;
+  /** True when the break falls INSIDE a paragraph (mid-paragraph split). */
+  midParagraph?: boolean;
 }
 
 export interface PaginationCalculation {
@@ -291,18 +303,138 @@ export interface PaginationCalculation {
 }
 
 /**
- * Walk the top-level children of `doc` and decide where to insert
- * page breaks. A break is inserted before a block if adding it to
- * the current page would exceed CONTENT_HEIGHT_PX.
+ * F1.2: mid-paragraph splitting.
  *
- * This is the "simple" version: it only breaks between blocks, not
- * mid-paragraph. A single paragraph taller than one page will be
- * placed entirely on the next page, and the previous page will
- * have empty space at the bottom. The mid-paragraph split is a
- * separate, optional step.
+ * Only plain top-level `paragraph` nodes whose entire inline content is
+ * text (no hard breaks, no inline atoms) are splittable: for them the
+ * mapping character-index â†’ ProseMirror position is exact
+ * (blockStart + 1 + offset). Anything else keeps the old all-or-nothing
+ * behaviour.
+ *
+ * Line texts from Pretext are verbatim substrings of the source; the
+ * offsets are reconstructed by walking the text and skipping the
+ * whitespace the layout consumed between lines. Every line is verified
+ * against the source â€” on the first mismatch the paragraph is NOT split
+ * (conservative fallback to whole-block placement).
+ */
+const MIN_LINES_PER_PAGE_FRAGMENT = 2; // widow/orphan guard (Word-style minimum)
+
+interface SplitPlan {
+  /** Character offsets (into node.textContent) where a new page starts. */
+  cuts: number[];
+  /** Lines of this paragraph that land on its LAST page. */
+  lastPageLines: number;
+}
+
+function isPlainSplittableParagraph(node: PMNode): boolean {
+  if (node.type.name !== "paragraph") return false;
+  let ok = node.textContent.trim().length > 0;
+  node.forEach((child) => {
+    if (!child.isText) ok = false;
+  });
+  return ok;
+}
+
+/**
+ * EXACT line-start offsets for a measured paragraph, derived from the
+ * prepared fragments themselves (layoutWithLines): fragment k of the source
+ * begins at sum(lengths of fragments 0..k-1), so a line starts exactly where
+ * its FIRST fragment starts. Whitespace swallowed at a break cannot desync
+ * the mapping â€” there is no string guessing and no silent give-up path.
+ * Returns null only when the text cannot be measured at all.
+ */
+export function lineStartOffsets(text: string, contentWidth: number): number[] | null {
+  try {
+    const prepared = prepareWithSegments(text, EDITOR_FONT, WS_OPTIONS);
+    const result = layoutWithLines(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
+    const lines = result.lines;
+    if (!lines || lines.length < 2) return null;
+    const segments: string[] | undefined = (prepared as unknown as { segments?: string[] }).segments;
+    if (!segments) return null;
+    const segStart: number[] = new Array(segments.length + 1);
+    segStart[0] = 0;
+    for (let i = 0; i < segments.length; i++) {
+      segStart[i + 1] = segStart[i] + (segments[i]?.length ?? 0);
+    }
+    const offsets: number[] = [];
+    for (const line of lines as { start: { segmentIndex: number; graphemeIndex: number } }[]) {
+      const si = line.start.segmentIndex;
+      let off = segStart[Math.min(si, segments.length)] ?? text.length;
+      // A line may start INSIDE a fragment (the previous line broke in the
+      // middle of a long word): advance by graphemes to be exact.
+      const gi = line.start.graphemeIndex;
+      if (gi > 0 && segments[si]) {
+        let g = 0;
+        for (const gr of LINE_START_GRAPHEMES.segment(segments[si])) {
+          if (g++ >= gi) break;
+          off += gr.segment.length;
+        }
+      }
+      while (off < text.length && /\s/.test(text[off])) off++; // never cut inside whitespace
+      // Word-boundary guarantee: the shaper may break overflow-prone tokens
+      // (URL-like runs) mid-word, where the browser would NOT. Snap such a
+      // start back to the beginning of its word and re-normalise. A cut is
+      // only ever allowed right after a whitespace run.
+      if (off > 0 && off < text.length && !/\s/.test(text[off - 1])) {
+        let b = off;
+        while (b > 0 && !/\s/.test(text[b - 1])) b--;
+        off = b;
+        while (off < text.length && /\s/.test(text[off])) off++;
+      }
+      // Keep line starts strictly increasing (two snapped lines sharing a
+      // word start collapse into one).
+      if (offsets.length && off <= offsets[offsets.length - 1]) continue;
+      if (!offsets.length && off <= 0) {
+        offsets.push(0); // line 0 anchor
+        continue;
+      }
+      offsets.push(off);
+    }
+    return offsets;
+  } catch {
+    return null;
+  }
+}
+
+function planMidSplits(
+  node: PMNode,
+  contentWidth: number,
+  remainingOnPage: number,
+  fullPageHeight: number,
+): SplitPlan | null {
+  const offsets = lineStartOffsets(node.textContent || "", contentWidth);
+  if (!offsets || offsets.length < MIN_LINES_PER_PAGE_FRAGMENT * 2) return null;
+  const lines = offsets.length;
+
+  const perLine = EDITOR_LINE_HEIGHT_PX;
+  const cuts: number[] = [];
+  let consumed = 0;
+  let space = remainingOnPage;
+  for (;;) {
+    const rest = lines - consumed;
+    let fit = Math.floor(space / perLine);
+    if (rest <= fit) break; // the remainder fits on the current page
+    if (rest < fit + MIN_LINES_PER_PAGE_FRAGMENT) fit = rest - MIN_LINES_PER_PAGE_FRAGMENT;
+    if (fit < MIN_LINES_PER_PAGE_FRAGMENT) break;
+    consumed += fit;
+    cuts.push(offsets[consumed]);
+    space = fullPageHeight;
+  }
+  if (cuts.length === 0) return null;
+  return { cuts, lastPageLines: lines - consumed };
+}
+
+/**
+ * Walk the top-level children of `doc` and decide where to insert
+ * page breaks. A break is inserted before a block if adding it to the
+ * current page would exceed the page's content height. Plain text
+ * paragraphs that overflow are SPLIT at the right line (F1.2), so a
+ * paragraph can flow across pages like in Word; every other block keeps
+ * the all-or-nothing placement.
  */
 export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): PaginationCalculation {
   const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
+  const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   const breaks: PageBreakAt[] = [];
   let currentPageHeight = 0;
   let pageNumber = 1;
@@ -318,15 +450,43 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       pos += node.nodeSize;
       return;
     }
-    if (currentPageHeight > 0 && currentPageHeight + heightPx > contentHeight) {
-      breaks.push({ pos, pageNumber: pageNumber + 1 });
-      pageNumber++;
-      currentPageHeight = heightPx;
-    } else {
+    const remaining = contentHeight - currentPageHeight;
+    if (heightPx <= remaining) {
       currentPageHeight += heightPx;
+      pos += node.nodeSize;
+      return;
+    }
+    // Overflow: try a mid-paragraph split first (F1.2), then fall back to
+    // moving the whole block to the next page.
+    let split: SplitPlan | null = null;
+    if (isPlainSplittableParagraph(node)) {
+      split = planMidSplits(node, contentWidth, remaining, contentHeight);
+    }
+    if (split) {
+      for (const offset of split.cuts) {
+        pageNumber++;
+        breaks.push({ pos: pos + 1 + offset, pageNumber, midParagraph: true });
+      }
+      currentPageHeight = split.lastPageLines * EDITOR_LINE_HEIGHT_PX;
+    } else {
+      // Unbreakable overflow: the block still OWNS the pages it needs, so
+      // pagination RESUMES after it with correct numbering. The portion
+      // beyond its first page overflows visually (rare: boxes/figures/tables
+      // taller than one page) instead of silently killing every page below.
+      const spanned = Math.max(1, Math.ceil(heightPx / contentHeight));
+      if (currentPageHeight > 0) {
+        pageNumber++;
+        breaks.push({ pos, pageNumber });
+        pageNumber += spanned - 1;
+        currentPageHeight = heightPx - (spanned - 1) * contentHeight;
+      } else {
+        pageNumber += spanned - 1;
+        currentPageHeight = heightPx - (spanned - 1) * contentHeight;
+      }
     }
     pos += node.nodeSize;
   });
 
   return { breaks, totalPages: Math.max(1, pageNumber) };
 }
+
