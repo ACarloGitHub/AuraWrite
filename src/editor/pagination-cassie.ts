@@ -142,47 +142,216 @@ function lineHeightFactor(raw: unknown, sizePx: number, fallbackFactor: number):
   return isFinite(n) && n > 0 ? n : fallbackFactor;
 }
 
-function markSizePx(child: PMNode): number | null {
-  for (const mark of child.marks) {
-    if (mark.type.name === "fontSize") {
-      const px = parseFloat(String(mark.attrs.size));
-      if (isFinite(px) && px > 0) return px;
-    }
-  }
-  return null;
+
+/** Family portion of a base font string (e.g. 'Lora, Georgia, serif'). */
+function baseFamilyOf(base: TextMetrics): string {
+  const i = base.font.lastIndexOf("px ");
+  return i >= 0 ? base.font.slice(i + 3) : metrics.familyStack;
 }
 
-function dominantTextSize(node: PMNode, baseSizePx: number): number {
-  const tally = new Map<number, number>();
-  node.forEach((child) => {
-    if (child.isText) {
-      const s = markSizePx(child) ?? baseSizePx;
-      tally.set(s, (tally.get(s) ?? 0) + (child.text || "").length);
-    }
-  });
-  let best = baseSizePx;
-  let bestWeight = -1;
-  for (const [s, w] of tally) {
-    if (w > bestWeight) { best = s; bestWeight = w; }
-  }
-  return best;
+/** Italic prefix of a base font string (caption bases are italic). */
+function baseStylePrefixOf(base: TextMetrics): string {
+  const m = /^(italic |oblique )/.exec(base.font);
+  return m ? m[0] : "";
 }
 
 /**
- * v2a text style of a block measured as a unit: paragraph `lineHeight` attr
- * × dominant inline size (v2b will replace the dominant-size approximation
- * with exact per-run measurement). `base` carries the node type's cascade
- * metrics (body, heading level, caption, code).
+ * v2b: the CSS font a text child actually renders with, from its marks
+ * (fontSize, fontFamily, em, strong, code) layered on the block's base.
  */
-function textStyleFor(node: PMNode, base: TextMetrics): TextMetrics {
-  const sizePx = dominantTextSize(node, base.sizePx);
+function fontOfChild(child: PMNode, base: TextMetrics): { font: string; sizePx: number } {
+  if (child.marks.length === 0) return { font: base.font, sizePx: base.sizePx };
+  let sizePx = base.sizePx;
+  let family = baseFamilyOf(base);
+  let stylePrefix = baseStylePrefixOf(base);
+  let weightPrefix = "";
+  for (const m of child.marks) {
+    switch (m.type.name) {
+      case "fontSize": {
+        const px = parseFloat(String(m.attrs.size));
+        if (isFinite(px) && px > 0) sizePx = px;
+        break;
+      }
+      case "fontFamily": {
+        const fam = String(m.attrs.font || "").trim();
+        if (fam) family = fam + ", " + baseFamilyOf(base);
+        break;
+      }
+      case "em": stylePrefix = "italic "; weightPrefix = ""; break;
+      case "strong": weightPrefix = "700 "; break;
+      case "code": family = '"Courier New", Courier, monospace'; break;
+      default: break;
+    }
+  }
+  return { font: stylePrefix + weightPrefix + sizePx.toFixed(2) + "px " + family, sizePx };
+}
+
+const WORD_TOKENIZER = new Intl.Segmenter(undefined, { granularity: "word" });
+
+const WORD_WIDTH_CACHE = new Map<string, number>();
+
+/** Width of one word (or whitespace run) in a given font, via the shaper. */
+function measureWord(word: string, font: string): number {
+  const key = font + "\u0000" + word;
+  const hit = WORD_WIDTH_CACHE.get(key);
+  if (hit !== undefined) return hit;
+  let w: number;
+  try {
+    const prepared = prepareWithSegments(word, font, WS_OPTIONS);
+    const ln = layoutNextLine(prepared, { segmentIndex: 0, graphemeIndex: 0 }, 1e6);
+    w = ln ? ln.width : word.length * 7;
+  } catch {
+    w = word.length * 7;
+  }
+  if (WORD_WIDTH_CACHE.size > 80000) WORD_WIDTH_CACHE.clear();
+  WORD_WIDTH_CACHE.set(key, w);
+  return w;
+}
+
+interface ParagraphStyle {
+  mixed: boolean;
+  /** Uniform style when !mixed; first-child style otherwise (fallback metrics). */
+  style: TextMetrics;
+}
+
+/** v2b: does every text child render with the same font? */
+function paragraphStyle(node: PMNode, base: TextMetrics): ParagraphStyle {
   const baseFactor = base.linePx / base.sizePx;
+  let only: { font: string; sizePx: number } | null = null;
+  let mixed = false;
+  node.forEach((c) => {
+    if (!c.isText || !(c.text || "").length) return;
+    const f = fontOfChild(c, base);
+    if (!only) only = f;
+    else if (only.font !== f.font) mixed = true;
+  });
+  const first = only as { font: string; sizePx: number } | null;
+  const sizePx = first ? first.sizePx : base.sizePx;
   const factor = lineHeightFactor((node.attrs as Record<string, unknown> | undefined)?.lineHeight, sizePx, baseFactor);
-  const font =
-    sizePx === base.sizePx
-      ? base.font
-      : `${sizePx.toFixed(2)}px ${metrics.familyStack}`;
-  return { sizePx, linePx: sizePx * factor, font };
+  const style: TextMetrics = {
+    font: first ? first.font : base.font,
+    sizePx,
+    linePx: sizePx * factor,
+  };
+  return { mixed, style };
+}
+
+/** v2a-compatible single-style resolution (kept for call sites that need one). */
+function textStyleFor(node: PMNode, base: TextMetrics): TextMetrics {
+  return paragraphStyle(node, base).style;
+}
+
+/**
+ * v2b greedy line breaker for MIXED-style paragraphs: each word measured in
+ * its own font, line height = max of the inline boxes on the line (CSS line
+ * box model), trailing whitespace hangs at line end (never counted toward
+ * fit), widths come from the same shaper the browser-matching batch uses.
+ * `widthAt(relY)` gives the available width at a line's RELATIVE height
+ * (floats). Returns lines with absolute-from-0 y and their own height.
+ */
+function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, base: TextMetrics): LaidLine[] {
+  const lines: LaidLine[] = [];
+  const factor = lineHeightFactor(
+    (node.attrs as Record<string, unknown> | undefined)?.lineHeight,
+    base.sizePx,
+    base.linePx / base.sizePx,
+  );
+  let y = 0;
+  let x = 0;
+  // CSS line boxes include the block STRUT (base font line-height): every
+  // line is at least base.linePx tall, whatever sits on it.
+  let curH = base.linePx;
+  let pendingSpace = 0;
+  let lineStart = 0;
+  let lineOpen = false;
+  let charInRun = 0;
+  let runPmStart = 0;
+  let pm = 0;
+  const flushLine = (nextStart: number) => {
+    lines.push({ off: lineStart, y, h: curH });
+    y += curH;
+    x = 0;
+    curH = base.linePx;
+    pendingSpace = 0;
+    lineStart = nextStart;
+  };
+  node.forEach((child) => {
+    if (child.isText) {
+      const { font, sizePx } = fontOfChild(child, base);
+      const h = sizePx * factor;
+      // Intl word granularity: break opportunities match the browser's
+      // (hyphenated words split after the hyphen). Apostrophes GLUE: the
+      // word splitter cuts "l'orlo" into "l'"+"orlo" but the browser never
+      // breaks there - merge glue tokens back together.
+      const parts: string[] = [];
+      for (const s of WORD_TOKENIZER.segment(child.text || "")) parts.push(s.segment);
+      const merged: string[] = [];
+      for (const tok of parts) {
+        const prev = merged[merged.length - 1];
+        if (prev && !/\s/.test(prev) && /['\u2019\u02BC]$/u.test(prev) && /^[\p{L}]/u.test(tok)) {
+          merged[merged.length - 1] = prev + tok;
+        } else {
+          merged.push(tok);
+        }
+      }
+      for (const part of merged) {
+        const w = measureWord(part, font);
+        if (/^\s/.test(part)) {
+          pendingSpace += w;
+          charInRun += part.length;
+          continue;
+        }
+        const avail = widthAt(y);
+        if (lineOpen && x + pendingSpace + w > avail) {
+          flushLine(runPmStart + charInRun);
+        }
+        if (!lineOpen) {
+          lineStart = runPmStart + charInRun;
+          lineOpen = true;
+        } else {
+          x += pendingSpace;
+        }
+        pendingSpace = 0;
+        x += w;
+        curH = Math.max(curH, h);
+        charInRun += part.length;
+      }
+      pm += child.nodeSize;
+      return;
+    }
+    // hard break: ends the line; the next run starts fresh after it
+    if (lineOpen) flushLine(pm + 1);
+    else {
+      lines.push({ off: runPmStart + charInRun, y, h: curH });
+      y += curH;
+      curH = base.linePx;
+    }
+    pm += child.nodeSize;
+    runPmStart = pm;
+    charInRun = 0;
+    lineOpen = false;
+  });
+  if (lineOpen) flushLine(runPmStart + charInRun);
+  else lines.push({ off: lineStart, y, h: curH });
+  return lines;
+}
+
+/** Height of a paragraph/heading measured exactly (uniform batch or mixed). */
+function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics): BlockMetrics {
+  const ps = paragraphStyle(node, base);
+  if (!ps.mixed) {
+    if (!hasHardBreak(node)) {
+      // cheap batch height (line count only); exact line positions are
+      // computed later, and only for paragraphs that cross a boundary
+      return measureTextBlock(node, contentWidth, ps.style);
+    }
+    const offs = paragraphLineOffsets(node, contentWidth, ps.style);
+    const n = Math.max(1, offs.length);
+    return { heightPx: n * ps.style.linePx, lineCount: n };
+  }
+  const lines = mixedParagraphLines(node, () => contentWidth, base);
+  const last = lines[lines.length - 1];
+  return { heightPx: last.y + last.h, lineCount: lines.length };
 }
 
 export function getEditorMetrics(): EditorMetrics {
@@ -306,13 +475,10 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
   if (node.type.name === "image") {
     return measureImageNode(node, contentWidth);
   }
-  // R-b: a paragraph with hard breaks must be measured run-by-run like the
-  // renderer lays it out (its plain textContent, without the breaks, would
-  // merge runs and undercount lines).
-  if (node.type.name === "paragraph" && hasHardBreak(node)) {
-    const style = textStyleFor(node, baseMetricsFor(node));
-    const n = paragraphLineOffsets(node, contentWidth, style).length;
-    return { heightPx: n * style.linePx, lineCount: n };
+  // R-b/v2b: paragraphs and headings are measured through the line model
+  // (hard breaks split runs, mixed styles measure word by word).
+  if (node.type.name === "paragraph" || node.type.name === "heading") {
+    return measureParagraph(node, contentWidth, baseMetricsFor(node));
   }
   return measureTextBlock(node, contentWidth);
 }
@@ -391,7 +557,9 @@ function measureBoxNode(node: PMNode, contentWidth: number): BlockMetrics {
   let height = BOX_PADDING_Y_PX + borders;
   let lines = 0;
   node.forEach((child) => {
-    const m = measureTextBlock(child, innerWidth);
+    const m = child.type.name === "paragraph"
+      ? measureParagraph(child, innerWidth, metrics.body)
+      : measureTextBlock(child, innerWidth);
     height += m.heightPx;
     lines += m.lineCount;
   });
@@ -451,7 +619,9 @@ function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
   let captionHeight = 0;
   let captionLines = 0;
   node.forEach((child) => {
-    const m = measureTextBlock(child, captionWidth, textStyleFor(child, metrics.caption));
+    const m = child.type.name === "paragraph"
+      ? measureParagraph(child, captionWidth, metrics.caption)
+      : measureTextBlock(child, captionWidth, textStyleFor(child, metrics.caption));
     captionHeight += m.heightPx;
     captionLines += m.lineCount;
   });
@@ -709,7 +879,7 @@ function cursorOffsetOf(
   return off;
 }
 
-interface LaidLine { off: number; y: number; }
+interface LaidLine { off: number; y: number; h: number; }
 
 /**
  * Lay out one text run line by line (layoutNextLine: width may change per
@@ -725,7 +895,7 @@ function walkRunLines(
   try {
     const prepared = prepareWithSegments(text, style.font, WS_OPTIONS);
     const segments = (prepared as unknown as { segments?: string[] }).segments;
-    if (!segments || !text.trim()) return [{ off: 0, y: startY }];
+    if (!segments || !text.trim()) return [{ off: 0, y: startY, h: style.linePx }];
     const segStart = new Array(segments.length + 1);
     segStart[0] = 0;
     for (let i = 0; i < segments.length; i++) {
@@ -739,6 +909,7 @@ function walkRunLines(
       out.push({
         off: normalizeCut(text, cursorOffsetOf(text, segments, segStart, ln.start.segmentIndex, ln.start.graphemeIndex)),
         y,
+        h: style.linePx,
       });
       cursor = ln.end;
       y += style.linePx;
@@ -746,7 +917,7 @@ function walkRunLines(
   } catch {
     // whatever was collected stands
   }
-  if (!out.length) out.push({ off: 0, y: startY });
+  if (!out.length) out.push({ off: 0, y: startY, h: style.linePx });
   return out;
 }
 
@@ -768,13 +939,13 @@ function walkParagraphLines(
   let y = startY;
   const emitRun = () => {
     if (!runText.trim()) {
-      all.push({ off: runPmStart, y });
+      all.push({ off: runPmStart, y, h: style.linePx });
       y += style.linePx;
       runText = "";
       return;
     }
     const lines = walkRunLines(runText, style, y, widthAt);
-    for (const l of lines) all.push({ off: runPmStart + l.off, y: l.y });
+    for (const l of lines) all.push({ off: runPmStart + l.off, y: l.y, h: l.h });
     y = lines[lines.length - 1].y + style.linePx;
     runText = "";
   };
@@ -855,18 +1026,18 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
     }
     const sp = spacingFor(node);
     if (isSplittableParagraph(node)) {
-      const style = textStyleFor(node, baseMetricsFor(node));
+      const ps = paragraphStyle(node, baseMetricsFor(node));
+      const style = ps.style;
       let startY = y + Math.max(pendingAfter, sp.beforePx);
 
-      // FAST PATH (performance): when the paragraph overlaps no active float
-      // span and fits entirely in the current page, its uniform-line height
-      // is exact - skip the per-line walk.
       const overlapsFloat = (fromY: number, toY: number): boolean => {
         for (const f of floats) {
           if (fromY < f.y1 && toY > f.y0) return true;
         }
         return false;
       };
+      // FAST PATH: no float overlap and the paragraph fits the current page
+      // whole -> the batch height from measureBlock is exact; skip the walk.
       const boundaryEnd = pageOf(startY) * contentHeight;
       if (!overlapsFloat(startY, startY + heightPx) && startY + heightPx <= boundaryEnd) {
         y = startY + heightPx;
@@ -875,14 +1046,20 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         return;
       }
 
-      // Line model: with no float overlapping the paragraph, batch layout
-      // (layoutWithLines, the F1.2-proven driver) gives the exact uniform
-      // lines; the per-line walk (layoutNextLine, width per height) is used
-      // only where floats actually shorten lines.
+      // Line model (v2b):
+      //  - uniform + no float  -> batch driver (layoutWithLines, F1.2-proven)
+      //  - uniform + floats    -> per-line walk (layoutNextLine, width/height)
+      //  - mixed styles        -> greedy breaker (word widths in each word's
+      //                           own font, line height = max inline box,
+      //                           trailing spaces hanging, floats aware)
       const computeLines = (sy: number): LaidLine[] => {
+        if (ps.mixed) {
+          const rel = mixedParagraphLines(node, (relY) => widthAt(sy + relY), baseMetricsFor(node));
+          return rel.map((l) => ({ ...l, y: sy + l.y }));
+        }
         if (!overlapsFloat(sy, sy + heightPx)) {
           const offs = paragraphLineOffsets(node, contentWidth, style);
-          return offs.map((off, i) => ({ off, y: sy + i * style.linePx }));
+          return offs.map((off, i) => ({ off, y: sy + i * style.linePx, h: style.linePx }));
         }
         return walkParagraphLines(node, style, sy, widthAt);
       };
@@ -890,7 +1067,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       let lines = computeLines(startY);
       // If not even the widow-guard minimum fits left on the page, move the
       // paragraph down first (matches the old whole-block semantics).
-      if (pageRemainder(startY) < style.linePx * MIN_LINES_PER_PAGE_FRAGMENT) {
+      if (pageRemainder(startY) < lines[0].h * MIN_LINES_PER_PAGE_FRAGMENT) {
         const moved = pageOf(startY) * contentHeight;
         pushBreak(pos, moved, false);
         y = moved;
@@ -905,7 +1082,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         if (from >= n - 1) break;
         let idx = -1;
         for (let i = from + 1; i < n; i++) {
-          if (lines[i].y + style.linePx > boundary) { idx = i; break; }
+          if (lines[i].y + lines[i].h > boundary) { idx = i; break; }
         }
         if (idx === -1) break; // the remainder fits before the boundary
         // orphan guard: never leave fewer than MIN lines on the NEXT page;
@@ -919,13 +1096,11 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         pushBreak(pos + 1 + lines[idx].off, lines[idx].y, true);
         from = idx;
         // The cut line straddles the boundary: the NEXT boundary is the end
-        // of the page containing that line's BOTTOM. Deriving it from the
-        // line's TOP (previous bug) kept the same boundary and cascaded
-        // empty pages.
-        boundary = (Math.floor((lines[idx].y + style.linePx) / contentHeight) + 1) * contentHeight;
+        // of the page containing that line's BOTTOM (deriving it from the
+        // TOP was the empty-pages bug).
+        boundary = (Math.floor((lines[idx].y + lines[idx].h) / contentHeight) + 1) * contentHeight;
       }
-      y = lines[n - 1].y + style.linePx;
-      pendingAfter = sp.afterPx;
+      y = lines[n - 1].y + lines[n - 1].h;
       pos += node.nodeSize;
       return;
     }
