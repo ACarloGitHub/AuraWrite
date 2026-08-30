@@ -106,6 +106,10 @@ function applyPreferences(prefs: Preferences): void {
       `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
     );
   }
+
+  // R-b: the editor's rendered font changed - let the pagination plugin
+  // re-probe the live metrics and redraw page breaks immediately.
+  window.dispatchEvent(new Event("aurawrite:editor-metrics-changed"));
 }
 
 function initTheme(): void {

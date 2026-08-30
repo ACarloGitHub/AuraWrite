@@ -1,14 +1,22 @@
 import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
-import { calculatePageBreaks } from "./pagination-cassie";
+import { calculatePageBreaks, syncEditorMetricsFromDom } from "./pagination-cassie";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
-function buildDecorations(doc: PMNode, cassieEnabled: boolean, cassiePaged: boolean): DecorationSet {
+function buildDecorations(
+  doc: PMNode,
+  cassieEnabled: boolean,
+  cassiePaged: boolean,
+  editorDom: HTMLElement | null,
+): DecorationSet {
   if (getPagedMode()) return DecorationSet.empty;
   if (!cassieEnabled && !cassiePaged) return DecorationSet.empty;
+  // R-b: measure with the SAME style the editor renders with (container
+  // family/size/line-height and the cascade per node type, probed).
+  syncEditorMetricsFromDom(editorDom);
 
   const margins = getMargins();
   const { breaks } = calculatePageBreaks(doc, margins);
@@ -91,18 +99,57 @@ export interface CassiePaginationOptions {
 export function createCassiePaginationPlugin(
   options: CassiePaginationOptions,
 ): Plugin {
+  let editorDom: HTMLElement | null = null;
+
   return new Plugin({
     key: cassiePaginationPluginKey,
 
     state: {
-      init: (_, state) => buildDecorations(state.doc, options.enabled(), getCassiePagedMode()),
+      init: (_, state) => buildDecorations(state.doc, options.enabled(), getCassiePagedMode(), editorDom),
       apply: (tr, old, _oldState, newState) => {
         if (tr.getMeta("force-cassie-recompute")) {
-          return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode());
+          return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode(), editorDom);
         }
         if (!tr.docChanged) return old;
-        return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode());
+        return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode(), editorDom);
       },
+    },
+
+    view() {
+      let dom: HTMLElement | null = null;
+      const onMetricsChanged = () => {
+        syncEditorMetricsFromDom(dom);
+        const v = liveView;
+        if (v && !v.isDestroyed) {
+          v.dispatch(
+            v.state.tr.setMeta("force-cassie-recompute", true).setMeta("addToHistory", false),
+          );
+        }
+      };
+      let liveView: import("prosemirror-view").EditorView | null = null;
+      window.addEventListener("aurawrite:editor-metrics-changed", onMetricsChanged);
+      return {
+        update(view) {
+          liveView = view;
+          if (!dom) {
+            dom = view.dom as HTMLElement;
+            editorDom = dom;
+            syncEditorMetricsFromDom(dom);
+            // One refresh so a doc opened directly in a paged mode uses the
+            // live metrics even before the first keystroke.
+            setTimeout(() => {
+              if (!view.isDestroyed) {
+                view.dispatch(
+                  view.state.tr.setMeta("force-cassie-recompute", true).setMeta("addToHistory", false),
+                );
+              }
+            }, 0);
+          }
+        },
+        destroy() {
+          window.removeEventListener("aurawrite:editor-metrics-changed", onMetricsChanged);
+        },
+      };
     },
 
     props: {

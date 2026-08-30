@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Cassie-style deterministic pagination measurements.
  *
  * This module replaces DOM-based block height measurement with a
@@ -68,19 +68,163 @@ export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - DEFAULT_MARGIN_LEFT - DEFAULT_MA
 export const CONTENT_HEIGHT_PX =
   PAGE_HEIGHT_PX - DEFAULT_MARGIN_TOP - DEFAULT_MARGIN_BOTTOM - PAGE_HEADER_PX - PAGE_FOOTER_PX;
 
-// Font and metrics for the editor body text. The editor uses Lora
-// at 11pt (=14.67px at 96 DPI) with a 1.5 line-height, giving 22px
-// per line. These constants are exported so tests and other modules
-// can refer to the same values.
-export const EDITOR_FONT = "11pt Lora, Georgia, serif";
-export const EDITOR_LINE_HEIGHT_PX = 22;
-const EMPTY_BLOCK_HEIGHT_PX = EDITOR_LINE_HEIGHT_PX;
+// ---- Live editor metrics (R-b) ---------------------------------------------
+// Pagination must measure the CSS the editor ACTUALLY renders with:
+//  - the container computed style (.ProseMirror: family, size, line-height);
+//  - the DOCUMENT itself: every paragraph carries its own `lineHeight` attr
+//    (toolbar "Line Height": 1.0/1.15/1.5/2.0) and inline `fontSize` marks;
+//  - the cascade per node type (h1..h6, pre/code, caption strips), PROBED
+//    once per sync from a hidden sample so no CSS value is ever duplicated
+//    as a constant here.
+// Before the first DOM sync (non-browser use) a static fallback matching the
+// current styles.css applies.
+export interface TextMetrics {
+  font: string;
+  sizePx: number;
+  linePx: number;
+}
 
-// Caption strips (figure <figcaption> and the legacy image caption) render
-// at 12px italic with the inherited 1.5 line-height â†’ 18px per line
-// (see `.aw-figure__caption` and `.image-caption` in styles.css).
-const CAPTION_FONT = "italic 12px Lora, Georgia, serif";
-const CAPTION_LINE_HEIGHT_PX = 18;
+interface EditorMetrics {
+  familyStack: string;
+  body: TextMetrics;
+  caption: TextMetrics; // .image-caption / .aw-figure__caption base (12px)
+  headings: TextMetrics[]; // index 0..5 = level 1..6
+  code: TextMetrics;
+}
+
+function fallbackMetrics(): EditorMetrics {
+  const size = 11 * 96 / 72; // 11pt at 96 DPI
+  const body: TextMetrics = { font: `${size.toFixed(2)}px Lora, Georgia, serif`, sizePx: size, linePx: size * 1.5 };
+  const headingSize = [2, 1.5, 1.17, 1, 0.83, 0.67].map((em) => size * em);
+  const headingFactor = [1.2, 1.3, 1.4, 1.4, 1.4, 1.4];
+  return {
+    familyStack: "Lora, Georgia, serif",
+    body,
+    caption: { font: `${12}px Lora, Georgia, serif`, sizePx: 12, linePx: 12 * 1.5 },
+    headings: headingSize.map((s, i) => ({
+      font: `${s.toFixed(2)}px Inter, system-ui, sans-serif`,
+      sizePx: s,
+      linePx: s * headingFactor[i],
+    })),
+    code: { font: `${12}px JetBrains Mono, monospace`, sizePx: 12, linePx: 12 * 1.5 },
+  };
+}
+
+let metrics: EditorMetrics = fallbackMetrics();
+
+function lineHeightPxOf(spec: string, sizePx: number): number {
+  const v = parseFloat(spec);
+  if (!isFinite(v) || v <= 0) return sizePx * 1.2;
+  return v < 6 ? v * sizePx : v; // a bare number is a factor, otherwise px
+}
+
+function lineHeightFactor(raw: unknown, sizePx: number, fallbackFactor: number): number {
+  const s = String(raw ?? "").trim();
+  if (!s) return fallbackFactor;
+  if (s.endsWith("px")) {
+    const px = parseFloat(s);
+    return isFinite(px) && px > 0 && sizePx > 0 ? px / sizePx : fallbackFactor;
+  }
+  const n = parseFloat(s);
+  return isFinite(n) && n > 0 ? n : fallbackFactor;
+}
+
+function markSizePx(child: PMNode): number | null {
+  for (const mark of child.marks) {
+    if (mark.type.name === "fontSize") {
+      const px = parseFloat(String(mark.attrs.size));
+      if (isFinite(px) && px > 0) return px;
+    }
+  }
+  return null;
+}
+
+function dominantTextSize(node: PMNode, baseSizePx: number): number {
+  const tally = new Map<number, number>();
+  node.forEach((child) => {
+    if (child.isText) {
+      const s = markSizePx(child) ?? baseSizePx;
+      tally.set(s, (tally.get(s) ?? 0) + (child.text || "").length);
+    }
+  });
+  let best = baseSizePx;
+  let bestWeight = -1;
+  for (const [s, w] of tally) {
+    if (w > bestWeight) { best = s; bestWeight = w; }
+  }
+  return best;
+}
+
+/**
+ * v2a text style of a block measured as a unit: paragraph `lineHeight` attr
+ * × dominant inline size (v2b will replace the dominant-size approximation
+ * with exact per-run measurement). `base` carries the node type's cascade
+ * metrics (body, heading level, caption, code).
+ */
+function textStyleFor(node: PMNode, base: TextMetrics): TextMetrics {
+  const sizePx = dominantTextSize(node, base.sizePx);
+  const baseFactor = base.linePx / base.sizePx;
+  const factor = lineHeightFactor((node.attrs as Record<string, unknown> | undefined)?.lineHeight, sizePx, baseFactor);
+  const font =
+    sizePx === base.sizePx
+      ? base.font
+      : `${sizePx.toFixed(2)}px ${metrics.familyStack}`;
+  return { sizePx, linePx: sizePx * factor, font };
+}
+
+export function getEditorMetrics(): EditorMetrics {
+  return metrics;
+}
+
+/**
+ * Refresh metrics by probing the real cascade. Attach a hidden sample to the
+ * editor's own parent so descendant selectors (`.ProseMirror h1`,
+ * `.aw-figure__caption`...) match exactly as in the live editor.
+ */
+export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
+  if (!el || typeof window === "undefined" || typeof document === "undefined") return;
+  try {
+    const cs = window.getComputedStyle(el);
+    const bodySizePx = parseFloat(cs.fontSize);
+    if (!isFinite(bodySizePx) || bodySizePx <= 0) return;
+    const bodyLinePx = cs.lineHeight && cs.lineHeight !== "normal"
+      ? lineHeightPxOf(cs.lineHeight, bodySizePx)
+      : bodySizePx * 1.5;
+    const host = document.createElement("div");
+    host.className = "ProseMirror";
+    host.setAttribute("aria-hidden", "true");
+    host.style.cssText = "position:absolute;visibility:hidden;left:-9999px;top:0;width:auto;padding:0;margin:0;";
+    host.innerHTML =
+      "<h1>x</h1><h2>x</h2><h3>x</h3><h4>x</h4><h5>x</h5><h6>x</h6>" +
+      "<pre><code>x</code></pre>" +
+      "<div class=\"image-caption\">x</div>" +
+      "<figure class=\"aw-figure\"><figcaption class=\"aw-figure__caption\"><p>x</p></figcaption></figure>";
+    const parent = el.parentElement ?? document.body;
+    parent.appendChild(host);
+    const read = (q: string, sizePx: number): TextMetrics => {
+      const found = host.querySelector(q) as Element | null;
+      if (!found) return { font: `${sizePx.toFixed(2)}px ${metrics.familyStack}`, sizePx, linePx: sizePx * 1.5 };
+      const s = window.getComputedStyle(found);
+      const sz = parseFloat(s.fontSize) || sizePx;
+      const lh = s.lineHeight && s.lineHeight !== "normal" ? lineHeightPxOf(s.lineHeight, sz) : sz * 1.5;
+      const style = s.fontStyle === "italic" || s.fontStyle === "oblique" ? `${s.fontStyle} ` : "";
+      return { font: `${style}${sz.toFixed(2)}px ${s.fontFamily}`, sizePx: sz, linePx: lh };
+    };
+    const next: EditorMetrics = {
+      familyStack: cs.fontFamily || metrics.familyStack,
+      body: { font: `${bodySizePx.toFixed(2)}px ${cs.fontFamily}`, sizePx: bodySizePx, linePx: bodyLinePx },
+      caption: read(".image-caption", 12),
+      headings: (["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((tag, i) =>
+        read(tag, metrics.headings[i]?.sizePx ?? bodySizePx),
+      ),
+      code: read("pre code", 12),
+    };
+    parent.removeChild(host);
+    metrics = next;
+  } catch {
+    // keep the last known metrics
+  }
+}
 
 // Grapheme splitter used to resolve line-start cursors that fall inside a
 // fragment (same segmentation the layout engine works with).
@@ -106,18 +250,17 @@ export interface LineInfo {
 /**
  * Measure a single block node's height in CSS pixels using Pretext.
  *
- * Text blocks are measured from their content; composite elements
- * (styled_box, figure, image) are measured structurally from their own
- * attrs (F1.1: plain `image` nodes no longer fall back to one empty
- * text line â€” their stored photo height and caption strip are counted).
- * Inline marks, tables, and lists are NOT accounted for: this remains a
- * deliberate simplification. What matters is that the decision is
- * consistent and does not depend on the browser having laid out the
- * page already.
+ * R-b: styles come from the LIVE cascade (probed node types), the block's
+ * own attrs (`lineHeight`) and its inline `fontSize` marks (dominant size —
+ * exact per-run measurement lands with v2b). Composite elements
+ * (styled_box, figure, image) are measured structurally from their attrs.
+ * Tables and lists keep deliberate simplifications. What matters is that
+ * the decision is consistent, follows the document, and does not depend on
+ * the browser having laid out the page already.
  */
 export function measureBlock(node: PMNode | null | undefined, margins?: PageMargins): BlockMetrics {
   if (!node) {
-    return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lineCount: 1 };
+    return { heightPx: metrics.body.linePx, lineCount: 1 };
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   if (node.type.name === "styled_box") {
@@ -129,7 +272,25 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
   if (node.type.name === "image") {
     return measureImageNode(node, contentWidth);
   }
+  // R-b: a paragraph with hard breaks must be measured run-by-run like the
+  // renderer lays it out (its plain textContent, without the breaks, would
+  // merge runs and undercount lines).
+  if (node.type.name === "paragraph" && hasHardBreak(node)) {
+    const style = textStyleFor(node, baseMetricsFor(node));
+    const n = paragraphLineOffsets(node, contentWidth, style).length;
+    return { heightPx: n * style.linePx, lineCount: n };
+  }
   return measureTextBlock(node, contentWidth);
+}
+
+/** The cascade metrics a node type starts from (before its own attrs/marks). */
+function baseMetricsFor(node: PMNode): TextMetrics {
+  if (node.type.name === "code_block") return metrics.code;
+  if (node.type.name === "heading") {
+    const level = Number(node.attrs.level);
+    return metrics.headings[Number.isFinite(level) ? Math.min(6, Math.max(1, level)) - 1 : 0];
+  }
+  return metrics.body;
 }
 
 /** Measure a text string at an explicit width with an explicit style. */
@@ -154,14 +315,19 @@ function measureTextHeight(
   }
 }
 
-/** Measure a text block at an explicit content width. */
+/**
+ * Measure a text block at an explicit content width. R-b: the style is
+ * resolved from the block itself — node type cascade base (body/heading/
+ * code), its `lineHeight` attr, its dominant inline size — unless an
+ * explicit style is passed (caption strips measure at 12px italic).
+ */
 function measureTextBlock(
   node: PMNode,
   contentWidth: number,
-  font: string = EDITOR_FONT,
-  lineHeight: number = EDITOR_LINE_HEIGHT_PX,
+  explicit?: TextMetrics,
 ): BlockMetrics {
-  return measureTextHeight(node.textContent || "", contentWidth, font, lineHeight);
+  const style = explicit ?? textStyleFor(node, baseMetricsFor(node));
+  return measureTextHeight(node.textContent || "", contentWidth, style.font, style.linePx);
 }
 
 /**
@@ -196,7 +362,7 @@ function measureBoxNode(node: PMNode, contentWidth: number): BlockMetrics {
     lines += m.lineCount;
   });
   if (lines === 0) {
-    height += EMPTY_BLOCK_HEIGHT_PX;
+    height += metrics.body.linePx;
     lines = 1;
   }
   return { heightPx: height, lineCount: lines };
@@ -208,8 +374,8 @@ const FALLBACK_IMAGE_HEIGHT_PX = 220;
  * image (F1.1): the block's vertical footprint is the photo height from the
  * stored attrs (set at insertion and on resize; the NodeView also self-heals
  * missing sizes by persisting the natural ones) plus the legacy caption strip
- * when `caption` carries text. Rotation is a CSS transform: the layout box â€”
- * the space subsequent blocks actually see â€” is always the unrotated one, so
+ * when `caption` carries text. Rotation is a CSS transform: the layout box —
+ * the space subsequent blocks actually see — is always the unrotated one, so
  * rotation does NOT change the measured height.
  */
 function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
@@ -223,10 +389,10 @@ function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
   if (caption.trim()) {
     const pad = captionPaddings(node);
     const captionWidth = Math.max(120, Math.min(imageWidth, contentWidth));
-    const strip = measureTextHeight(caption, captionWidth, CAPTION_FONT, CAPTION_LINE_HEIGHT_PX);
+    const strip = measureTextHeight(caption, captionWidth, metrics.caption.font, metrics.caption.linePx);
     height += pad.top + pad.bottom + strip.heightPx;
   }
-  return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
+  return { heightPx: height, lineCount: Math.ceil(height / metrics.body.linePx) };
 }
 
 /**
@@ -251,42 +417,42 @@ function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
   let captionHeight = 0;
   let captionLines = 0;
   node.forEach((child) => {
-    const m = measureTextBlock(child, captionWidth, CAPTION_FONT, CAPTION_LINE_HEIGHT_PX);
+    const m = measureTextBlock(child, captionWidth, textStyleFor(child, metrics.caption));
     captionHeight += m.heightPx;
     captionLines += m.lineCount;
   });
   if (captionLines === 0) {
-    captionHeight += CAPTION_LINE_HEIGHT_PX;
+    captionHeight += textStyleFor(node, metrics.caption).linePx;
     captionLines = 1;
   }
   const pad = captionPaddings(node);
   captionHeight += pad.top + pad.bottom;
 
   const height = imageHeight + gap + captionHeight;
-  return { heightPx: height, lineCount: Math.ceil(height / EDITOR_LINE_HEIGHT_PX) };
+  return { heightPx: height, lineCount: Math.ceil(height / metrics.body.linePx) };
 }
 
 /**
- * Get per-line information for a block. Used by the optional
- * mid-paragraph split (future work). Each line is a substring of
- * the original text plus the line break that follows it.
+ * Get per-line information for a block. Used by mid-paragraph features.
+ * R-b: line height and font follow the block's own style resolution.
  */
 export function getBlockLines(node: PMNode | null | undefined, margins?: PageMargins): LineInfo {
+  const style = node ? textStyleFor(node, baseMetricsFor(node)) : metrics.body;
   if (!node) {
-    return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lines: [], fullText: "" };
+    return { heightPx: style.linePx, lines: [], fullText: "" };
   }
   const text = node.textContent || "";
   if (!text.trim()) {
-    return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lines: [], fullText: text };
+    return { heightPx: style.linePx, lines: [], fullText: text };
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   try {
-    const prepared = prepareWithSegments(text, EDITOR_FONT, WS_OPTIONS);
-    const result = layoutWithLines(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
+    const prepared = prepareWithSegments(text, style.font, WS_OPTIONS);
+    const result = layoutWithLines(prepared, contentWidth, style.linePx);
     const lines = (result.lines ?? []).map((l: { text: string }) => l.text);
     return { heightPx: result.height, lines, fullText: text };
   } catch {
-    return { heightPx: EMPTY_BLOCK_HEIGHT_PX, lines: [], fullText: text };
+    return { heightPx: style.linePx, lines: [], fullText: text };
   }
 }
 
@@ -303,50 +469,62 @@ export interface PaginationCalculation {
 }
 
 /**
- * F1.2: mid-paragraph splitting.
+ * F1.2 / R-b: mid-paragraph splitting.
  *
- * Only plain top-level `paragraph` nodes whose entire inline content is
- * text (no hard breaks, no inline atoms) are splittable: for them the
- * mapping character-index â†’ ProseMirror position is exact
- * (blockStart + 1 + offset). Anything else keeps the old all-or-nothing
- * behaviour.
+ * Top-level `paragraph` nodes whose inline content is text and/or HARD
+ * BREAKS are splittable. Position mapping is exact: offsets are relative to
+ * the paragraph's content start (blockStart + 1 + offset); a hard break
+ * consumes one position and starts a fresh visual line, so each run between
+ * breaks is laid out independently from the left edge. Anything else keeps
+ * the all-or-nothing placement (still counted for the pages it occupies).
  *
- * Line texts from Pretext are verbatim substrings of the source; the
- * offsets are reconstructed by walking the text and skipping the
- * whitespace the layout consumed between lines. Every line is verified
- * against the source â€” on the first mismatch the paragraph is NOT split
- * (conservative fallback to whole-block placement).
+ * Line starts come from the fragment cursor mapping (see
+ * `lineStartOffsets`): exact, no string guessing, no silent give-up.
  */
 const MIN_LINES_PER_PAGE_FRAGMENT = 2; // widow/orphan guard (Word-style minimum)
 
 interface SplitPlan {
-  /** Character offsets (into node.textContent) where a new page starts. */
+  /** ProseMirror offsets (relative to the paragraph content start) where a new page starts. */
   cuts: number[];
   /** Lines of this paragraph that land on its LAST page. */
   lastPageLines: number;
+  /** Height in px of one line of this paragraph (for page accounting). */
+  linePx: number;
 }
 
-function isPlainSplittableParagraph(node: PMNode): boolean {
+function hasHardBreak(node: PMNode): boolean {
+  let found = false;
+  node.forEach((child) => {
+    if (!child.isText && child.type.name === "hard_break") found = true;
+  });
+  return found;
+}
+
+function isSplittableParagraph(node: PMNode): boolean {
   if (node.type.name !== "paragraph") return false;
   let ok = node.textContent.trim().length > 0;
   node.forEach((child) => {
-    if (!child.isText) ok = false;
+    if (!child.isText && child.type.name !== "hard_break") ok = false;
   });
   return ok;
 }
 
 /**
- * EXACT line-start offsets for a measured paragraph, derived from the
- * prepared fragments themselves (layoutWithLines): fragment k of the source
- * begins at sum(lengths of fragments 0..k-1), so a line starts exactly where
- * its FIRST fragment starts. Whitespace swallowed at a break cannot desync
- * the mapping â€” there is no string guessing and no silent give-up path.
+ * EXACT line-start offsets for a run of text, derived from the prepared
+ * fragments themselves (layoutWithLines): fragment k of the source begins
+ * at sum(lengths of fragments 0..k-1), so a line starts exactly where its
+ * FIRST fragment starts. Whitespace swallowed at a break cannot desync the
+ * mapping — there is no string guessing and no silent give-up path.
  * Returns null only when the text cannot be measured at all.
  */
-export function lineStartOffsets(text: string, contentWidth: number): number[] | null {
+export function lineStartOffsets(
+  text: string,
+  contentWidth: number,
+  style: TextMetrics = metrics.body,
+): number[] | null {
   try {
-    const prepared = prepareWithSegments(text, EDITOR_FONT, WS_OPTIONS);
-    const result = layoutWithLines(prepared, contentWidth, EDITOR_LINE_HEIGHT_PX);
+    const prepared = prepareWithSegments(text, style.font, WS_OPTIONS);
+    const result = layoutWithLines(prepared, contentWidth, style.linePx);
     const lines = result.lines;
     if (!lines || lines.length < 2) return null;
     const segments: string[] | undefined = (prepared as unknown as { segments?: string[] }).segments;
@@ -371,10 +549,12 @@ export function lineStartOffsets(text: string, contentWidth: number): number[] |
         }
       }
       while (off < text.length && /\s/.test(text[off])) off++; // never cut inside whitespace
-      // Word-boundary guarantee: the shaper may break overflow-prone tokens
-      // (URL-like runs) mid-word, where the browser would NOT. Snap such a
-      // start back to the beginning of its word and re-normalise. A cut is
-      // only ever allowed right after a whitespace run.
+      // If a mid-word snap were ever needed (overflow-wrap cases), it must
+      // land on a WORD START: snap back to the word boundary, then forward
+      // to its first visible character. Trailing whitespace HANGS at line
+      // end in the renderer (Chromium lets it overflow without breaking),
+      // so a cut sitting on spaces would misattribute the break: always
+      // advance past spaces. Never snap back onto an end-of-line space run.
       if (off > 0 && off < text.length && !/\s/.test(text[off - 1])) {
         let b = off;
         while (b > 0 && !/\s/.test(text[b - 1])) b--;
@@ -396,17 +576,55 @@ export function lineStartOffsets(text: string, contentWidth: number): number[] |
   }
 }
 
+/**
+ * Line starts (PM offsets relative to the paragraph content start) across
+ * hard-break-separated runs. Each run wraps independently from the left
+ * edge; an empty run still renders one line.
+ */
+function paragraphLineOffsets(node: PMNode, contentWidth: number, style: TextMetrics): number[] {
+  const out: number[] = [];
+  let runText = "";
+  let runPmStart = 0;
+  let pm = 0;
+  const emitRun = () => {
+    const starts = runText ? lineStartOffsets(runText, contentWidth, style) : null;
+    if (starts) {
+      for (const s of starts) out.push(runPmStart + s);
+    } else {
+      out.push(runPmStart); // empty or single-line run = one line
+    }
+    runText = "";
+  };
+  node.forEach((child) => {
+    if (child.isText) {
+      runText += child.text || "";
+      pm += child.nodeSize;
+    } else {
+      emitRun();
+      pm += child.nodeSize; // hard_break: size 1, contributes no text
+      runPmStart = pm;
+    }
+  });
+  emitRun();
+  const clean: number[] = [];
+  for (const o of out) {
+    if (!clean.length || o > clean[clean.length - 1]) clean.push(o);
+  }
+  return clean;
+}
+
 function planMidSplits(
   node: PMNode,
   contentWidth: number,
   remainingOnPage: number,
   fullPageHeight: number,
 ): SplitPlan | null {
-  const offsets = lineStartOffsets(node.textContent || "", contentWidth);
-  if (!offsets || offsets.length < MIN_LINES_PER_PAGE_FRAGMENT * 2) return null;
+  const style = textStyleFor(node, baseMetricsFor(node));
+  const offsets = paragraphLineOffsets(node, contentWidth, style);
+  if (offsets.length < MIN_LINES_PER_PAGE_FRAGMENT * 2) return null;
   const lines = offsets.length;
 
-  const perLine = EDITOR_LINE_HEIGHT_PX;
+  const perLine = style.linePx;
   const cuts: number[] = [];
   let consumed = 0;
   let space = remainingOnPage;
@@ -421,7 +639,7 @@ function planMidSplits(
     space = fullPageHeight;
   }
   if (cuts.length === 0) return null;
-  return { cuts, lastPageLines: lines - consumed };
+  return { cuts, lastPageLines: lines - consumed, linePx: perLine };
 }
 
 /**
@@ -459,7 +677,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
     // Overflow: try a mid-paragraph split first (F1.2), then fall back to
     // moving the whole block to the next page.
     let split: SplitPlan | null = null;
-    if (isPlainSplittableParagraph(node)) {
+    if (isSplittableParagraph(node)) {
       split = planMidSplits(node, contentWidth, remaining, contentHeight);
     }
     if (split) {
@@ -467,7 +685,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         pageNumber++;
         breaks.push({ pos: pos + 1 + offset, pageNumber, midParagraph: true });
       }
-      currentPageHeight = split.lastPageLines * EDITOR_LINE_HEIGHT_PX;
+      currentPageHeight = split.lastPageLines * split.linePx;
     } else {
       // Unbreakable overflow: the block still OWNS the pages it needs, so
       // pagination RESUMES after it with correct numbering. The portion
