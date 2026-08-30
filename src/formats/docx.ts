@@ -1479,6 +1479,10 @@ function nodeContentToRuns(node: any, imageCache?: Map<string, Uint8Array>): Run
       if (!bytes) return new TextRun({ text: "" });
       return buildImageRun(child, bytes);
     }
+    if (child.type.name === "hard_break") {
+      // Shift+Enter break -> Word line break (w:br) at this point of the run sequence
+      return new TextRun({ text: "", break: 1 });
+    }
     if (child.type.name !== "text") {
       return new TextRun({ text: getTextContent(child) });
     }

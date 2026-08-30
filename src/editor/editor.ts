@@ -620,6 +620,29 @@ export function createEditor(element: HTMLElement): EditorViewType {
           return true;
         },
       }),
+      // Shift+Enter = hard line break inside the paragraph (Word's manual
+      // break). baseKeymap binds nothing to Shift-Enter, so without this the
+      // browser inserts an <br> unreliably. Code blocks keep the newline text
+      // instead (they have no hard_break in content).
+      keymap({
+        "Shift-Enter": (state, dispatch) => {
+          const { selection } = state;
+          if (!selection.empty) return false;
+          const { $from } = selection;
+          const parent = $from.parent;
+          if (parent.type.spec.code) {
+            if (dispatch) dispatch(state.tr.insertText("\n").scrollIntoView());
+            return true;
+          }
+          const brType = state.schema.nodes.hard_break;
+          if (!brType) return false;
+          if (!parent.contentMatchAt($from.index()).matchType(brType)) return false;
+          if (dispatch) {
+            dispatch(state.tr.replaceSelectionWith(brType.create()).scrollIntoView());
+          }
+          return true;
+        },
+      }),
       keymap(baseKeymap),
       wordCountPlugin,
       selectionHighlightPlugin,
