@@ -30,7 +30,7 @@
  * That makes them trivial to test in isolation.
  */
 
-import { prepare, layout, prepareWithSegments, layoutWithLines } from "@chenglou/pretext";
+import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLine } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
 
@@ -84,12 +84,17 @@ export interface TextMetrics {
   linePx: number;
 }
 
+interface BlockSpacing { beforePx: number; afterPx: number; }
+
 interface EditorMetrics {
   familyStack: string;
   body: TextMetrics;
   caption: TextMetrics; // .image-caption / .aw-figure__caption base (12px)
   headings: TextMetrics[]; // index 0..5 = level 1..6
   code: TextMetrics;
+  // vertical margins the renderer applies per top-level block type
+  // (adjacent margins collapse, like the browser does)
+  spacing: { paragraph: BlockSpacing; heading: BlockSpacing; image: BlockSpacing; figure: BlockSpacing; code: BlockSpacing; other: BlockSpacing };
 }
 
 function fallbackMetrics(): EditorMetrics {
@@ -107,6 +112,14 @@ function fallbackMetrics(): EditorMetrics {
       linePx: s * headingFactor[i],
     })),
     code: { font: `${12}px JetBrains Mono, monospace`, sizePx: 12, linePx: 12 * 1.5 },
+    spacing: {
+      paragraph: { beforePx: 0, afterPx: size }, // ~1em del corpo
+      heading: { beforePx: 0, afterPx: size / 2 },
+      image: { beforePx: 8, afterPx: 8 },
+      figure: { beforePx: 8, afterPx: 8 },
+      code: { beforePx: 0, afterPx: 0 },
+      other: { beforePx: 0, afterPx: 0 },
+    },
   };
 }
 
@@ -195,10 +208,12 @@ export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
     host.setAttribute("aria-hidden", "true");
     host.style.cssText = "position:absolute;visibility:hidden;left:-9999px;top:0;width:auto;padding:0;margin:0;";
     host.innerHTML =
+      "<p>x</p>" +
       "<h1>x</h1><h2>x</h2><h3>x</h3><h4>x</h4><h5>x</h5><h6>x</h6>" +
       "<pre><code>x</code></pre>" +
       "<div class=\"image-caption\">x</div>" +
-      "<figure class=\"aw-figure\"><figcaption class=\"aw-figure__caption\"><p>x</p></figcaption></figure>";
+      "<div class=\"image-node-wrapper\"><img src=\"x\"></div>" +
+      "<figure class=\"aw-figure\"><img src=\"x\"><figcaption class=\"aw-figure__caption\"><p>x</p></figcaption></figure>";
     const parent = el.parentElement ?? document.body;
     parent.appendChild(host);
     const read = (q: string, sizePx: number): TextMetrics => {
@@ -210,6 +225,17 @@ export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
       const style = s.fontStyle === "italic" || s.fontStyle === "oblique" ? `${s.fontStyle} ` : "";
       return { font: `${style}${sz.toFixed(2)}px ${s.fontFamily}`, sizePx: sz, linePx: lh };
     };
+    const readSpacing = (q: string): BlockSpacing => {
+      const found = host.querySelector(q) as Element | null;
+      if (!found) return { beforePx: 0, afterPx: 0 };
+      const s = window.getComputedStyle(found);
+      const before = parseFloat(s.marginTop);
+      const after = parseFloat(s.marginBottom);
+      return {
+        beforePx: isFinite(before) && before > 0 ? before : 0,
+        afterPx: isFinite(after) && after > 0 ? after : 0,
+      };
+    };
     const next: EditorMetrics = {
       familyStack: cs.fontFamily || metrics.familyStack,
       body: { font: `${bodySizePx.toFixed(2)}px ${cs.fontFamily}`, sizePx: bodySizePx, linePx: bodyLinePx },
@@ -218,6 +244,14 @@ export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
         read(tag, metrics.headings[i]?.sizePx ?? bodySizePx),
       ),
       code: read("pre code", 12),
+      spacing: {
+        paragraph: readSpacing("p"),
+        heading: readSpacing("h1"),
+        image: readSpacing(".image-node-wrapper"),
+        figure: readSpacing(".aw-figure"),
+        code: readSpacing("pre"),
+        other: { beforePx: 0, afterPx: 0 },
+      },
     };
     parent.removeChild(host);
     metrics = next;
@@ -483,14 +517,6 @@ export interface PaginationCalculation {
  */
 const MIN_LINES_PER_PAGE_FRAGMENT = 2; // widow/orphan guard (Word-style minimum)
 
-interface SplitPlan {
-  /** ProseMirror offsets (relative to the paragraph content start) where a new page starts. */
-  cuts: number[];
-  /** Lines of this paragraph that land on its LAST page. */
-  lastPageLines: number;
-  /** Height in px of one line of this paragraph (for page accounting). */
-  linePx: number;
-}
 
 function hasHardBreak(node: PMNode): boolean {
   let found = false;
@@ -613,53 +639,212 @@ function paragraphLineOffsets(node: PMNode, contentWidth: number, style: TextMet
   return clean;
 }
 
-function planMidSplits(
-  node: PMNode,
-  contentWidth: number,
-  remainingOnPage: number,
-  fullPageHeight: number,
-): SplitPlan | null {
-  const style = textStyleFor(node, baseMetricsFor(node));
-  const offsets = paragraphLineOffsets(node, contentWidth, style);
-  if (offsets.length < MIN_LINES_PER_PAGE_FRAGMENT * 2) return null;
-  const lines = offsets.length;
+// ---------------------------------------------------------------------------
+// F1.3: float-aware page accounting.
+//
+// A wrapped image/figure (attrs.wrap + align left/right) renders as a CSS
+// float: it does NOT advance the flow; text lines that overlap its vertical
+// span are shorter by its width. The calculator models exactly that: floats
+// keep absolute spans [y0,y1) on a shared global-y axis and every text line
+// is measured at the width available at ITS height. Without floats the
+// arithmetic reduces to the previous floor(space/line) model by
+// construction, so no-float behaviour is unchanged.
+// ---------------------------------------------------------------------------
 
-  const perLine = style.linePx;
-  const cuts: number[] = [];
-  let consumed = 0;
-  let space = remainingOnPage;
-  for (;;) {
-    const rest = lines - consumed;
-    let fit = Math.floor(space / perLine);
-    if (rest <= fit) break; // the remainder fits on the current page
-    if (rest < fit + MIN_LINES_PER_PAGE_FRAGMENT) fit = rest - MIN_LINES_PER_PAGE_FRAGMENT;
-    if (fit < MIN_LINES_PER_PAGE_FRAGMENT) break;
-    consumed += fit;
-    cuts.push(offsets[consumed]);
-    space = fullPageHeight;
+const FLOAT_MARGIN_PX = 12; // .image-node-wrapper / .aw-figure float margins (styles.css)
+const MIN_LINE_WIDTH_PX = 120;
+
+interface FloatBox { side: "left" | "right"; widthPx: number; y0: number; y1: number; }
+
+function spacingFor(node: PMNode): BlockSpacing {
+  const sp = metrics.spacing;
+  switch (node.type.name) {
+    case "paragraph": return sp.paragraph;
+    case "heading": return sp.heading;
+    case "image": return sp.image;
+    case "figure": return sp.figure;
+    case "code_block": return sp.code;
+    default: return sp.other;
   }
-  if (cuts.length === 0) return null;
-  return { cuts, lastPageLines: lines - consumed, linePx: perLine };
+}
+
+function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } | null {
+  if (node.attrs.wrap !== true) return null;
+  if (node.type.name !== "image" && node.type.name !== "figure") return null;
+  const align = String(node.attrs.align ?? "");
+  if (align !== "left" && align !== "right") return null;
+  const w = Number(node.attrs.width);
+  if (!isFinite(w) || w <= 0) return null;
+  return { side: align, widthPx: Math.round(w) + FLOAT_MARGIN_PX };
+}
+
+/** Normalise a raw line-start to a word start (never inside whitespace). */
+function normalizeCut(text: string, raw: number): number {
+  let off = raw;
+  while (off < text.length && /\s/.test(text[off])) off++;
+  if (off > 0 && off < text.length && !/\s/.test(text[off - 1])) {
+    let b = off;
+    while (b > 0 && !/\s/.test(text[b - 1])) b--;
+    off = b;
+    while (off < text.length && /\s/.test(text[off])) off++;
+  }
+  return off;
+}
+
+function cursorOffsetOf(
+  text: string,
+  segments: string[],
+  segStart: number[],
+  segmentIndex: number,
+  graphemeIndex: number,
+): number {
+  let off = segStart[Math.min(segmentIndex, segments.length)] ?? text.length;
+  if (graphemeIndex > 0 && segments[segmentIndex]) {
+    let g = 0;
+    for (const gr of LINE_START_GRAPHEMES.segment(segments[segmentIndex])) {
+      if (g++ >= graphemeIndex) break;
+      off += gr.segment.length;
+    }
+  }
+  return off;
+}
+
+interface LaidLine { off: number; y: number; }
+
+/**
+ * Lay out one text run line by line (layoutNextLine: width may change per
+ * line), tracking absolute y through float-affected widths.
+ */
+function walkRunLines(
+  text: string,
+  style: TextMetrics,
+  startY: number,
+  widthAt: (y: number) => number,
+): LaidLine[] {
+  const out: LaidLine[] = [];
+  try {
+    const prepared = prepareWithSegments(text, style.font, WS_OPTIONS);
+    const segments = (prepared as unknown as { segments?: string[] }).segments;
+    if (!segments || !text.trim()) return [{ off: 0, y: startY }];
+    const segStart = new Array(segments.length + 1);
+    segStart[0] = 0;
+    for (let i = 0; i < segments.length; i++) {
+      segStart[i + 1] = segStart[i] + (segments[i]?.length ?? 0);
+    }
+    let cursor = { segmentIndex: 0, graphemeIndex: 0 };
+    let y = startY;
+    for (let i = 0; i < 20000; i++) {
+      const ln = layoutNextLine(prepared, cursor, widthAt(y));
+      if (!ln) break;
+      out.push({
+        off: normalizeCut(text, cursorOffsetOf(text, segments, segStart, ln.start.segmentIndex, ln.start.graphemeIndex)),
+        y,
+      });
+      cursor = ln.end;
+      y += style.linePx;
+    }
+  } catch {
+    // whatever was collected stands
+  }
+  if (!out.length) out.push({ off: 0, y: startY });
+  return out;
 }
 
 /**
- * Walk the top-level children of `doc` and decide where to insert
- * page breaks. A break is inserted before a block if adding it to the
- * current page would exceed the page's content height. Plain text
- * paragraphs that overflow are SPLIT at the right line (F1.2), so a
- * paragraph can flow across pages like in Word; every other block keeps
- * the all-or-nothing placement.
+ * All visual lines of a splittable paragraph (runs split at hard breaks),
+ * laid out with float-aware widths from absolute startY. Offsets are
+ * relative to the paragraph content start.
+ */
+function walkParagraphLines(
+  node: PMNode,
+  style: TextMetrics,
+  startY: number,
+  widthAt: (y: number) => number,
+): LaidLine[] {
+  const all: LaidLine[] = [];
+  let runText = "";
+  let runPmStart = 0;
+  let pm = 0;
+  let y = startY;
+  const emitRun = () => {
+    if (!runText.trim()) {
+      all.push({ off: runPmStart, y });
+      y += style.linePx;
+      runText = "";
+      return;
+    }
+    const lines = walkRunLines(runText, style, y, widthAt);
+    for (const l of lines) all.push({ off: runPmStart + l.off, y: l.y });
+    y = lines[lines.length - 1].y + style.linePx;
+    runText = "";
+  };
+  node.forEach((child) => {
+    if (child.isText) {
+      runText += child.text || "";
+      pm += child.nodeSize;
+    } else {
+      emitRun();
+      pm += child.nodeSize;
+      runPmStart = pm;
+    }
+  });
+  emitRun();
+  const clean: LaidLine[] = [];
+  for (const l of all) {
+    if (clean.length && l.off <= clean[clean.length - 1].off) continue;
+    clean.push(l);
+  }
+  return clean;
+}
+
+/**
+ * Walk the top-level children of the document on a global-y axis and
+ * decide where to insert page breaks (F1.2 splits, F1.3 floats, R-b
+ * styles). See the block comment above for the model.
  */
 export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): PaginationCalculation {
   const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   const breaks: PageBreakAt[] = [];
-  let currentPageHeight = 0;
-  let pageNumber = 1;
+  const floats: FloatBox[] = [];
+  const sideBottom = { left: 0, right: 0 };
+  let y = 0; // absolute flow height (bottom of last placed box, no trailing gap)
+  let pendingAfter = 0; // margin-bottom of the previous in-flow block (collapses)
+
+  const widthAt = (yq: number): number => {
+    let used = 0;
+    for (const f of floats) {
+      if (yq >= f.y0 && yq < f.y1) used += f.widthPx;
+    }
+    return Math.max(MIN_LINE_WIDTH_PX, contentWidth - used);
+  };
+  const pageOf = (yq: number): number => Math.floor(yq / contentHeight) + 1;
+  const pageRemainder = (yq: number): number => contentHeight - (yq % contentHeight);
+  const pushBreak = (atPos: number, yTop: number, mid: boolean): void => {
+    breaks.push(mid
+      ? { pos: atPos, pageNumber: pageOf(yTop), midParagraph: true }
+      : { pos: atPos, pageNumber: pageOf(yTop) });
+  };
 
   let pos = 0;
   doc.forEach((node) => {
     if (node.isInline) {
+      pos += node.nodeSize;
+      return;
+    }
+    // F1.3: a wrapped image/figure floats - it does not consume the flow.
+    const fl = floatSpecOf(node);
+    if (fl) {
+      const h = measureBlock(node, margins).heightPx;
+      if (h > 0) {
+        const sp = spacingFor(node);
+        // collapsed gap like any in-flow block; the float box itself then
+        // spans its margin box for line-avoidance purposes
+        const y0 = Math.max(y + Math.max(pendingAfter, sp.beforePx), sideBottom[fl.side]);
+        const y1 = y0 + h + sp.afterPx;
+        floats.push({ side: fl.side, widthPx: fl.widthPx, y0, y1 });
+        sideBottom[fl.side] = y1;
+      }
       pos += node.nodeSize;
       return;
     }
@@ -668,43 +853,97 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       pos += node.nodeSize;
       return;
     }
-    const remaining = contentHeight - currentPageHeight;
-    if (heightPx <= remaining) {
-      currentPageHeight += heightPx;
+    const sp = spacingFor(node);
+    if (isSplittableParagraph(node)) {
+      const style = textStyleFor(node, baseMetricsFor(node));
+      let startY = y + Math.max(pendingAfter, sp.beforePx);
+
+      // FAST PATH (performance): when the paragraph overlaps no active float
+      // span and fits entirely in the current page, its uniform-line height
+      // is exact - skip the per-line walk.
+      const overlapsFloat = (fromY: number, toY: number): boolean => {
+        for (const f of floats) {
+          if (fromY < f.y1 && toY > f.y0) return true;
+        }
+        return false;
+      };
+      const boundaryEnd = pageOf(startY) * contentHeight;
+      if (!overlapsFloat(startY, startY + heightPx) && startY + heightPx <= boundaryEnd) {
+        y = startY + heightPx;
+        pendingAfter = sp.afterPx;
+        pos += node.nodeSize;
+        return;
+      }
+
+      // Line model: with no float overlapping the paragraph, batch layout
+      // (layoutWithLines, the F1.2-proven driver) gives the exact uniform
+      // lines; the per-line walk (layoutNextLine, width per height) is used
+      // only where floats actually shorten lines.
+      const computeLines = (sy: number): LaidLine[] => {
+        if (!overlapsFloat(sy, sy + heightPx)) {
+          const offs = paragraphLineOffsets(node, contentWidth, style);
+          return offs.map((off, i) => ({ off, y: sy + i * style.linePx }));
+        }
+        return walkParagraphLines(node, style, sy, widthAt);
+      };
+
+      let lines = computeLines(startY);
+      // If not even the widow-guard minimum fits left on the page, move the
+      // paragraph down first (matches the old whole-block semantics).
+      if (pageRemainder(startY) < style.linePx * MIN_LINES_PER_PAGE_FRAGMENT) {
+        const moved = pageOf(startY) * contentHeight;
+        pushBreak(pos, moved, false);
+        y = moved;
+        pendingAfter = 0; // the previous block's margin stays on the old page
+        startY = y + sp.beforePx;
+        lines = computeLines(startY);
+      }
+      const n = lines.length;
+      let from = 0;
+      let boundary = (Math.floor(lines[0].y / contentHeight) + 1) * contentHeight;
+      for (;;) {
+        if (from >= n - 1) break;
+        let idx = -1;
+        for (let i = from + 1; i < n; i++) {
+          if (lines[i].y + style.linePx > boundary) { idx = i; break; }
+        }
+        if (idx === -1) break; // the remainder fits before the boundary
+        // orphan guard: never leave fewer than MIN lines on the NEXT page;
+        // cutting EARLIER underfills the current page (Word behaviour) -
+        // cutting later would overflow it, which is the worse failure.
+        if (n - idx < MIN_LINES_PER_PAGE_FRAGMENT) {
+          const maxCut = n - MIN_LINES_PER_PAGE_FRAGMENT;
+          if (maxCut <= from) break;
+          idx = maxCut;
+        }
+        pushBreak(pos + 1 + lines[idx].off, lines[idx].y, true);
+        from = idx;
+        // The cut line straddles the boundary: the NEXT boundary is the end
+        // of the page containing that line's BOTTOM. Deriving it from the
+        // line's TOP (previous bug) kept the same boundary and cascaded
+        // empty pages.
+        boundary = (Math.floor((lines[idx].y + style.linePx) / contentHeight) + 1) * contentHeight;
+      }
+      y = lines[n - 1].y + style.linePx;
+      pendingAfter = sp.afterPx;
       pos += node.nodeSize;
       return;
     }
-    // Overflow: try a mid-paragraph split first (F1.2), then fall back to
-    // moving the whole block to the next page.
-    let split: SplitPlan | null = null;
-    if (isSplittableParagraph(node)) {
-      split = planMidSplits(node, contentWidth, remaining, contentHeight);
+    // Unbreakable block: owns the pages it needs; pagination resumes below
+    // (portion beyond the first page overflows visually - documented).
+    let blockTop = y + Math.max(pendingAfter, sp.beforePx);
+    if (heightPx > pageRemainder(blockTop) && blockTop % contentHeight !== 0) {
+      const moved = pageOf(blockTop) * contentHeight;
+      pushBreak(pos, moved, false);
+      y = moved;
+      blockTop = y + sp.beforePx;
+      pendingAfter = 0;
     }
-    if (split) {
-      for (const offset of split.cuts) {
-        pageNumber++;
-        breaks.push({ pos: pos + 1 + offset, pageNumber, midParagraph: true });
-      }
-      currentPageHeight = split.lastPageLines * split.linePx;
-    } else {
-      // Unbreakable overflow: the block still OWNS the pages it needs, so
-      // pagination RESUMES after it with correct numbering. The portion
-      // beyond its first page overflows visually (rare: boxes/figures/tables
-      // taller than one page) instead of silently killing every page below.
-      const spanned = Math.max(1, Math.ceil(heightPx / contentHeight));
-      if (currentPageHeight > 0) {
-        pageNumber++;
-        breaks.push({ pos, pageNumber });
-        pageNumber += spanned - 1;
-        currentPageHeight = heightPx - (spanned - 1) * contentHeight;
-      } else {
-        pageNumber += spanned - 1;
-        currentPageHeight = heightPx - (spanned - 1) * contentHeight;
-      }
-    }
+    y = blockTop + heightPx;
+    pendingAfter = sp.afterPx;
     pos += node.nodeSize;
   });
 
-  return { breaks, totalPages: Math.max(1, pageNumber) };
+  const totalPages = y <= 0 ? 1 : Math.max(1, Math.ceil((y - 0.0001) / contentHeight));
+  return { breaks, totalPages };
 }
-
