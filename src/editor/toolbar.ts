@@ -257,6 +257,12 @@ function setupTopLevelButtons(): void {
         case "save-project":
           handleSaveProject();
           break;
+        case "print-preview":
+          void handlePrintPreview();
+          break;
+        case "print":
+          void handlePrintNow();
+          break;
         case "index":
           handleIndexDocument();
           break;
@@ -272,7 +278,32 @@ function setupTopLevelButtons(): void {
   });
 
   const btnPrint = document.getElementById("btn-print");
-  btnPrint?.addEventListener("click", () => window.print());
+  btnPrint?.addEventListener("click", () => {
+    void handlePrintNow();
+  });
+}
+
+/**
+ * F1.5: "Print" goes straight to the system print dialog printing OUR
+ * paginated document (never the app UI). Code mode has no paginated doc,
+ * so it keeps the plain browser print.
+ */
+async function handlePrintNow(): Promise<void> {
+  const { isCodeMirrorActive } = await import("./codemirror-editor");
+  if (isCodeMirrorActive()) {
+    window.print();
+    return;
+  }
+  const { printDocumentNow } = await import("./print-preview");
+  await printDocumentNow(editorView);
+}
+
+/** F1.5: opens the sibling print-preview window (view + zoom + print). */
+async function handlePrintPreview(): Promise<void> {
+  const { isCodeMirrorActive } = await import("./codemirror-editor");
+  if (isCodeMirrorActive()) return;
+  const { openPrintPreview } = await import("./print-preview");
+  await openPrintPreview(editorView);
 }
 
 async function handleNew(): Promise<void> {

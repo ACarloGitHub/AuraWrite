@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AuraWrite</title>
+    <script>
+      // F1.5 anti-flicker: when this window is the print-preview surface,
+      // hide the editor shell until the preview has built its own UI
+      // (otherwise the app markup flashes unstyled for a fraction of a
+      // second, which reads as "a second AuraWrite instance").
+      try {
+        var awPvFlag = new URLSearchParams(location.search).get("view") === "print-preview";
+        var awPvMeta = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.metadata
+          && window.__TAURI_INTERNALS__.metadata.currentWindow
+          && window.__TAURI_INTERNALS__.metadata.currentWindow.label === "print-preview";
+        if (awPvFlag || awPvMeta) {
+          document.documentElement.dataset.awPreview = "1";
+        }
+      } catch (e) { /* non-Tauri browser: normal app boot */ }
+    </script>
   </head>
   <body>
     <div id="app">
@@ -32,6 +47,10 @@
             <button class="dropdown-item" data-action="export-ebook">📚 Export Project as Ebook...</button>
             <button class="dropdown-item" data-action="export-audiobook">🎧 Export to Audiobook Generator...</button>
             <button class="dropdown-item" data-action="export">📤 Export...</button>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-section">Print</div>
+            <button class="dropdown-item" data-action="print-preview">🖨️ Print Preview...</button>
+            <button class="dropdown-item" data-action="print">🖨️ Print (Ctrl+P)</button>
             <div class="dropdown-divider"></div>
             <div class="dropdown-section">Project</div>
             <button class="dropdown-item" data-action="save-project">💿 Save Project</button>

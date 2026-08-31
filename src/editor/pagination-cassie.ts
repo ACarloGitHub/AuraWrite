@@ -94,7 +94,15 @@ interface EditorMetrics {
   code: TextMetrics;
   // vertical margins the renderer applies per top-level block type
   // (adjacent margins collapse, like the browser does)
-  spacing: { paragraph: BlockSpacing; heading: BlockSpacing; image: BlockSpacing; figure: BlockSpacing; code: BlockSpacing; other: BlockSpacing };
+  spacing: {
+    paragraph: BlockSpacing;
+    heading: BlockSpacing; // level 1 (probe fallback for heading spacing)
+    headings: BlockSpacing[]; // index 0..5 = level 1..6 (F1.5: per-level)
+    image: BlockSpacing;
+    figure: BlockSpacing;
+    code: BlockSpacing;
+    other: BlockSpacing;
+  };
 }
 
 function fallbackMetrics(): EditorMetrics {
@@ -115,6 +123,7 @@ function fallbackMetrics(): EditorMetrics {
     spacing: {
       paragraph: { beforePx: 0, afterPx: size }, // ~1em del corpo
       heading: { beforePx: 0, afterPx: size / 2 },
+      headings: [1, 1.5, 1.17, 1, 0.83, 0.67].map(() => ({ beforePx: 0, afterPx: size / 2 })),
       image: { beforePx: 8, afterPx: 8 },
       figure: { beforePx: 8, afterPx: 8 },
       code: { beforePx: 0, afterPx: 0 },
@@ -146,6 +155,8 @@ function editorMetricsEq(a: EditorMetrics, b: EditorMetrics): boolean {
     && a.headings.every((h, i) => textMetricsEq(h, b.headings[i]))
     && blockSpacingEq(a.spacing.paragraph, b.spacing.paragraph)
     && blockSpacingEq(a.spacing.heading, b.spacing.heading)
+    && a.spacing.headings.length === b.spacing.headings.length
+    && a.spacing.headings.every((h, i) => blockSpacingEq(h, b.spacing.headings[i]))
     && blockSpacingEq(a.spacing.image, b.spacing.image)
     && blockSpacingEq(a.spacing.figure, b.spacing.figure)
     && blockSpacingEq(a.spacing.code, b.spacing.code)
@@ -442,7 +453,11 @@ export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
       code: read("pre code", 12),
       spacing: {
         paragraph: readSpacing("p"),
+        // F1.5: heading margins are per-level (the renderer uses 0.5em of the
+        // heading's own font-size), so one shared heading spacing drifts on
+        // every level >= 2. Read the real cascade per level.
         heading: readSpacing("h1"),
+        headings: (["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((tag) => readSpacing(tag)),
         image: readSpacing(".image-node-wrapper"),
         figure: readSpacing(".aw-figure"),
         code: readSpacing("pre"),
@@ -860,7 +875,13 @@ function spacingFor(node: PMNode): BlockSpacing {
   const sp = metrics.spacing;
   switch (node.type.name) {
     case "paragraph": return sp.paragraph;
-    case "heading": return sp.heading;
+    case "heading": {
+      const level = Number(node.attrs.level);
+      const per = sp.headings && Number.isFinite(level)
+        ? sp.headings[Math.min(6, Math.max(1, level)) - 1]
+        : undefined;
+      return per ?? sp.heading;
+    }
     case "image": return sp.image;
     case "figure": return sp.figure;
     case "code_block": return sp.code;
@@ -1132,6 +1153,19 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       }
       pos += node.nodeSize;
       return;
+    }
+    // F1.5: manual page break (`pageBreakBefore`, imported from markdown
+    // `---` or set by document conventions): force the block to the TOP of
+    // the next page. The calculator used to ignore it, so the divider lived
+    // only in DOCX/HTML export and the live pages disagreed with print.
+    if (node.attrs?.pageBreakBefore === true && y > 0) {
+      const rem = y % contentHeight;
+      if (rem > 0.01 && rem < contentHeight - 0.01) {
+        const forced = (Math.floor(y / contentHeight) + 1) * contentHeight;
+        pushBreak(pos, forced, false);
+        y = forced;
+        pendingAfter = 0;
+      }
     }
     // F1.4: per-block layout comes from the cache; only untouched nodes
     // (object identity) are trusted, so any edit re-measures exactly its

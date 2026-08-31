@@ -4,6 +4,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
     "dialog:default",
     "dialog:allow-save",
     "dialog:allow-open",
@@ -12,6 +13,17 @@
     "fs:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        { "path": "$APPDATA/aurawrite-print" },
+        { "path": "$APPDATA/aurawrite-print/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPDATA/aurawrite-print/**" }]
+    },
     "shell:default",
     "shell:allow-open",
     "opener:default",

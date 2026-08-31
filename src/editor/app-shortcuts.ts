@@ -31,6 +31,15 @@ export function setupAppShortcuts(deps: AppShortcutsDeps): void {
       ) as HTMLButtonElement | null;
       saveBtn?.click();
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+      e.preventDefault();
+      // Ctrl+P = direct print (system dialog printing the paginated
+      // document), same as every word processor. Preview has its own entry.
+      const printBtn = document.querySelector(
+        '.dropdown-item[data-action="print"]'
+      ) as HTMLButtonElement | null;
+      printBtn?.click();
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === "f") {
       e.preventDefault();
       deps.openFindBar();

@@ -69,7 +69,7 @@ function collectImageSrcs(node: any, out: Set<string>): void {
 }
 
 /** Read an image and return a base64 data URI. Keeps `data:` as-is. */
-async function imageToDataUri(src: string): Promise<string | null> {
+export async function imageToDataUri(src: string): Promise<string | null> {
   try {
     if (src.startsWith("data:")) return src;
     let base64: string | null = null;
@@ -97,6 +97,24 @@ async function imageToDataUri(src: string): Promise<string | null> {
     console.warn("[html export] failed to embed image:", src, e);
     return null;
   }
+}
+
+/** Inline every <img> inside a rendered container as a base64 data URI. */
+export async function embedImagesInDom(container: HTMLElement): Promise<void> {
+  const srcs = new Set<string>();
+  container.querySelectorAll("img").forEach((i) => {
+    const s = i.getAttribute("src");
+    if (s) srcs.add(s);
+  });
+  const map = new Map<string, string>();
+  for (const s of srcs) {
+    const u = await imageToDataUri(s);
+    if (u) map.set(s, u);
+  }
+  container.querySelectorAll("img").forEach((i) => {
+    const s = i.getAttribute("src");
+    if (s && map.has(s)) i.setAttribute("src", map.get(s)!);
+  });
 }
 
 function mimeFromName(name: string): string {

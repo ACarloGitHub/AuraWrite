@@ -189,6 +189,20 @@ function setupDownloadProgressListener(): void {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // F1.5: the print-preview sibling window must NEVER boot the editor.
+  // It recognizes itself by URL flag (first load) or by its window label
+  // (after the print panel reloads the webview), so it always comes back
+  // as a preview and the open document in the real window is never touched.
+  if (
+    new URLSearchParams(window.location.search).get("view") === "print-preview"
+    || (window as unknown as { __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } } })
+      .__TAURI_INTERNALS__?.metadata?.currentWindow?.label === "print-preview"
+  ) {
+    const { startPrintPreviewWindow } = await import("./print-preview-mode");
+    await startPrintPreviewWindow();
+    return;
+  }
+
   initErrorBoundaries();
   initTheme();
   initZoom();

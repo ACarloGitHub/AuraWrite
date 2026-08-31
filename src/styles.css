@@ -1,4 +1,4 @@
-﻿.hidden {
+.hidden {
   display: none !important;
 }
 
@@ -6865,4 +6865,12 @@ kbd {
 .ai-panel__input-row #ai-stop:hover {
   background: var(--color-error, #e74c3c);
   opacity: 0.85;
+}
+
+/* F1.5: hide the editor shell in the print-preview window until the preview UI is ready */
+html[data-aw-preview] {
+  background: #e9e9ec;
+}
+html[data-aw-preview] body {
+  visibility: hidden;
 }

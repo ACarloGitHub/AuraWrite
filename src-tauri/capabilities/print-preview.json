@@ -1,0 +1,18 @@
+{
+  "identifier": "print-preview",
+  "description": "Print preview window: read the prepared document, close itself",
+  "windows": ["print-preview"],
+  "permissions": [
+    "core:default",
+    "fs:default",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$APPDATA/aurawrite-print/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$APPDATA/aurawrite-print" }, { "path": "$APPDATA/aurawrite-print/**" }]
+    },
+    "core:window:allow-close"
+  ]
+}
