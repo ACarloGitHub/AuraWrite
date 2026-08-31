@@ -125,6 +125,33 @@ function fallbackMetrics(): EditorMetrics {
 
 let metrics: EditorMetrics = fallbackMetrics();
 
+// F1.4: bumped ONLY when a DOM sync actually changes the probed styles, so
+// the per-block layout cache (see cachedMeasure) survives ordinary typing.
+let metricsGen = 1;
+
+function textMetricsEq(a: TextMetrics, b: TextMetrics): boolean {
+  return a.font === b.font && a.sizePx === b.sizePx && a.linePx === b.linePx;
+}
+
+function blockSpacingEq(a: BlockSpacing, b: BlockSpacing): boolean {
+  return a.beforePx === b.beforePx && a.afterPx === b.afterPx;
+}
+
+function editorMetricsEq(a: EditorMetrics, b: EditorMetrics): boolean {
+  return a.familyStack === b.familyStack
+    && textMetricsEq(a.body, b.body)
+    && textMetricsEq(a.caption, b.caption)
+    && textMetricsEq(a.code, b.code)
+    && a.headings.length === b.headings.length
+    && a.headings.every((h, i) => textMetricsEq(h, b.headings[i]))
+    && blockSpacingEq(a.spacing.paragraph, b.spacing.paragraph)
+    && blockSpacingEq(a.spacing.heading, b.spacing.heading)
+    && blockSpacingEq(a.spacing.image, b.spacing.image)
+    && blockSpacingEq(a.spacing.figure, b.spacing.figure)
+    && blockSpacingEq(a.spacing.code, b.spacing.code)
+    && blockSpacingEq(a.spacing.other, b.spacing.other);
+}
+
 function lineHeightPxOf(spec: string, sizePx: number): number {
   const v = parseFloat(spec);
   if (!isFinite(v) || v <= 0) return sizePx * 1.2;
@@ -423,7 +450,10 @@ export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
       },
     };
     parent.removeChild(host);
-    metrics = next;
+    if (!editorMetricsEq(metrics, next)) {
+      metrics = next;
+      metricsGen++;
+    }
   } catch {
     // keep the last known metrics
   }
@@ -454,7 +484,7 @@ export interface LineInfo {
  * Measure a single block node's height in CSS pixels using Pretext.
  *
  * R-b: styles come from the LIVE cascade (probed node types), the block's
- * own attrs (`lineHeight`) and its inline `fontSize` marks (dominant size —
+ * own attrs (`lineHeight`) and its inline `fontSize` marks (dominant size â€”
  * exact per-run measurement lands with v2b). Composite elements
  * (styled_box, figure, image) are measured structurally from their attrs.
  * Tables and lists keep deliberate simplifications. What matters is that
@@ -517,8 +547,8 @@ function measureTextHeight(
 
 /**
  * Measure a text block at an explicit content width. R-b: the style is
- * resolved from the block itself — node type cascade base (body/heading/
- * code), its `lineHeight` attr, its dominant inline size — unless an
+ * resolved from the block itself â€” node type cascade base (body/heading/
+ * code), its `lineHeight` attr, its dominant inline size â€” unless an
  * explicit style is passed (caption strips measure at 12px italic).
  */
 function measureTextBlock(
@@ -576,8 +606,8 @@ const FALLBACK_IMAGE_HEIGHT_PX = 220;
  * image (F1.1): the block's vertical footprint is the photo height from the
  * stored attrs (set at insertion and on resize; the NodeView also self-heals
  * missing sizes by persisting the natural ones) plus the legacy caption strip
- * when `caption` carries text. Rotation is a CSS transform: the layout box —
- * the space subsequent blocks actually see — is always the unrotated one, so
+ * when `caption` carries text. Rotation is a CSS transform: the layout box â€”
+ * the space subsequent blocks actually see â€” is always the unrotated one, so
  * rotation does NOT change the measured height.
  */
 function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
@@ -710,7 +740,7 @@ function isSplittableParagraph(node: PMNode): boolean {
  * fragments themselves (layoutWithLines): fragment k of the source begins
  * at sum(lengths of fragments 0..k-1), so a line starts exactly where its
  * FIRST fragment starts. Whitespace swallowed at a break cannot desync the
- * mapping — there is no string guessing and no silent give-up path.
+ * mapping â€” there is no string guessing and no silent give-up path.
  * Returns null only when the text cannot be measured at all.
  */
 export function lineStartOffsets(
@@ -968,10 +998,83 @@ function walkParagraphLines(
   return clean;
 }
 
+// ---------------------------------------------------------------------------
+// F1.4: incremental measurement cache.
+//
+// ProseMirror nodes are persistent: an edit rebuilds only the touched block
+// (and its ancestors), every other top-level block keeps its object identity.
+// So a block's OWN layout (height, uniform line starts, mixed-style lines at
+// full width) can be cached per node and reused as long as the probed styles
+// and the content width are unchanged â€” page arithmetic then re-runs over
+// cheap cached numbers on every keystroke, while text shaping runs ONLY on
+// blocks that actually changed. Float-overlapping lines are NOT cached:
+// their widths depend on absolute float bands, so those blocks keep being
+// measured fresh (translation-invariance would not hold).
+// ---------------------------------------------------------------------------
+
+interface CachedLayout {
+  /** metrics generation + content width the entry was computed with */
+  g: number;
+  w: number;
+  splittable: boolean;
+  heightPx: number;
+  /** resolved style for splittable paragraphs (uniform; first-child fallback) */
+  style: TextMetrics;
+  mixed: boolean;
+  /** uniform line starts relative to content start (full width); lazy */
+  relOffsets: number[] | null;
+  /** mixed-style relative lines (full width); null until computed */
+  relMixed: LaidLine[] | null;
+}
+
+const LAYOUT_CACHE = new WeakMap<PMNode, CachedLayout>();
+
+function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWidth: number): CachedLayout {
+  const base = baseMetricsFor(node);
+  const e: CachedLayout = {
+    g: metricsGen, w: contentWidth, splittable: false,
+    heightPx: 0, style: base, mixed: false, relOffsets: null, relMixed: null,
+  };
+  if (!isSplittableParagraph(node)) {
+    e.heightPx = measureBlock(node, margins).heightPx;
+    return e;
+  }
+  e.splittable = true;
+  const ps = paragraphStyle(node, base);
+  e.style = ps.style;
+  e.mixed = ps.mixed;
+  if (ps.mixed) {
+    const lines = mixedParagraphLines(node, () => contentWidth, base);
+    e.relMixed = lines;
+    const last = lines[lines.length - 1];
+    e.heightPx = last.y + last.h;
+  } else if (hasHardBreak(node)) {
+    e.relOffsets = paragraphLineOffsets(node, contentWidth, ps.style);
+    e.heightPx = Math.max(1, e.relOffsets.length) * ps.style.linePx;
+  } else {
+    e.heightPx = measureTextBlock(node, contentWidth, ps.style).heightPx;
+  }
+  return e;
+}
+
+function cachedMeasure(node: PMNode, margins: PageMargins | undefined, contentWidth: number): CachedLayout {
+  const hit = LAYOUT_CACHE.get(node);
+  if (hit && hit.g === metricsGen && hit.w === contentWidth) return hit;
+  const made = computeLayout(node, margins, contentWidth);
+  LAYOUT_CACHE.set(node, made);
+  return made;
+}
+
+function ensureRelOffsets(e: CachedLayout, node: PMNode, contentWidth: number): number[] {
+  if (!e.relOffsets) e.relOffsets = paragraphLineOffsets(node, contentWidth, e.style);
+  return e.relOffsets;
+}
+
+
 /**
  * Walk the top-level children of the document on a global-y axis and
  * decide where to insert page breaks (F1.2 splits, F1.3 floats, R-b
- * styles). See the block comment above for the model.
+ * styles, F1.4 incremental cache). See the block comment above for the model.
  */
 export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): PaginationCalculation {
   const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
@@ -992,9 +1095,20 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   const pageOf = (yq: number): number => Math.floor(yq / contentHeight) + 1;
   const pageRemainder = (yq: number): number => contentHeight - (yq % contentHeight);
   const pushBreak = (atPos: number, yTop: number, mid: boolean): void => {
-    breaks.push(mid
-      ? { pos: atPos, pageNumber: pageOf(yTop), midParagraph: true }
-      : { pos: atPos, pageNumber: pageOf(yTop) });
+    // UNIFIED LABEL SEMANTICS (F1.4 fix): pageNumber is ALWAYS the page that
+    // STARTS after this divider. Mid-paragraph cuts used to carry the page
+    // they left, which could equal the number already used by a block-level
+    // divider earlier in the list (out-of-order labels, merged-page audits).
+    const bp: PageBreakAt = mid
+      ? { pos: atPos, pageNumber: pageOf(yTop) + 1, midParagraph: true }
+      : { pos: atPos, pageNumber: pageOf(yTop) };
+    // dedup: the same boundary must not be emitted twice (e.g. a gap
+    // divider and a whole-block move computed for one and the same cut).
+    // Two DIFFERENT boundaries may share a block-start position (an empty
+    // page between them is legitimate) and are both kept.
+    const prev = breaks[breaks.length - 1];
+    if (prev && prev.pos === bp.pos && prev.pageNumber === bp.pageNumber && !!prev.midParagraph === !!bp.midParagraph) return;
+    breaks.push(bp);
   };
 
   let pos = 0;
@@ -1006,7 +1120,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
     // F1.3: a wrapped image/figure floats - it does not consume the flow.
     const fl = floatSpecOf(node);
     if (fl) {
-      const h = measureBlock(node, margins).heightPx;
+      const h = cachedMeasure(node, margins, contentWidth).heightPx;
       if (h > 0) {
         const sp = spacingFor(node);
         // collapsed gap like any in-flow block; the float box itself then
@@ -1019,16 +1133,32 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       pos += node.nodeSize;
       return;
     }
-    const { heightPx } = measureBlock(node, margins);
+    // F1.4: per-block layout comes from the cache; only untouched nodes
+    // (object identity) are trusted, so any edit re-measures exactly its
+    // own block and everything downstream reuses cached numbers.
+    const e = cachedMeasure(node, margins, contentWidth);
+    const heightPx = e.heightPx;
     if (heightPx <= 0) {
       pos += node.nodeSize;
       return;
     }
     const sp = spacingFor(node);
-    if (isSplittableParagraph(node)) {
-      const ps = paragraphStyle(node, baseMetricsFor(node));
-      const style = ps.style;
+    // F1.4 boundary-gap fix: the flow can cross a page boundary INSIDE the
+    // collapsed margin between two blocks (previous content ends just before
+    // the cut line, the gap pushes the next block just past it). No block
+    // spans the boundary, so historically no divider was emitted and the
+    // pages silently merged (defect present since the first version).
+    // Any boundary crossed inside the gap gets a divider at this block.
+    const gapFromY = y;
+    const gapBreaksUpTo = (topY: number): void => {
+      for (let k = Math.max(1, Math.floor(gapFromY / contentHeight - 1e-6) + 1); k * contentHeight <= topY + 1e-6; k++) {
+        pushBreak(pos, k * contentHeight, false);
+      }
+    };
+    if (e.splittable) {
+      const style = e.style;
       let startY = y + Math.max(pendingAfter, sp.beforePx);
+      gapBreaksUpTo(startY);
 
       const overlapsFloat = (fromY: number, toY: number): boolean => {
         for (const f of floats) {
@@ -1046,20 +1176,59 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         return;
       }
 
-      // Line model (v2b):
-      //  - uniform + no float  -> batch driver (layoutWithLines, F1.2-proven)
-      //  - uniform + floats    -> per-line walk (layoutNextLine, width/height)
-      //  - mixed styles        -> greedy breaker (word widths in each word's
-      //                           own font, line height = max inline box,
-      //                           trailing spaces hanging, floats aware)
+      // F1.4 ARITHMETIC LANE: uniform paragraph, no float interference ->
+      // cached line offsets + closed-form page-crossing maths. Zero line
+      // objects allocated per keystroke; cost is O(pages the paragraph
+      // spans), not O(its lines).
+      if (!e.mixed && !overlapsFloat(startY, startY + heightPx)) {
+        const offs = ensureRelOffsets(e, node, contentWidth);
+        const lh = style.linePx;
+        const n = offs.length;
+        let y0 = startY;
+        if (contentHeight - (y0 % contentHeight) < lh * MIN_LINES_PER_PAGE_FRAGMENT) {
+          const moved = pageOf(y0) * contentHeight;
+          pushBreak(pos, moved, false);
+          y = moved;
+          pendingAfter = 0; // the previous block's margin stays on the old page
+          y0 = y + sp.beforePx;
+        }
+        let from = 0;
+        let boundary = (Math.floor(y0 / contentHeight) + 1) * contentHeight;
+        for (;;) {
+          if (from >= n - 1) break;
+          const idx0 = Math.max(from + 1, Math.floor((boundary - y0) / lh));
+          if (idx0 >= n || y0 + idx0 * lh + lh <= boundary) break; // the remainder fits
+          let idx = idx0;
+          if (n - idx < MIN_LINES_PER_PAGE_FRAGMENT) {
+            const maxCut = n - MIN_LINES_PER_PAGE_FRAGMENT;
+            // maxCut <= from cannot make a boundary silent: a paragraph that
+            // small near the boundary is moved whole down by the initial
+            // guard above (or the fast path fit it). Keep the historical
+            // break here.
+            if (maxCut <= from) break;
+            idx = maxCut;
+          }
+          pushBreak(pos + 1 + offs[idx], y0 + idx * lh, true);
+          from = idx;
+          // cut line straddles the boundary: next boundary from its BOTTOM
+          boundary = (Math.floor((y0 + idx * lh + lh) / contentHeight) + 1) * contentHeight;
+        }
+        y = y0 + n * lh;
+        pos += node.nodeSize;
+        return;
+      }
+
+      // Line model (v2b) over the F1.4 cache â€” remaining lanes:
+      //  - mixed   + no float  -> cached relative mixed lines (v2b breaker at
+      //                           full width, translation-invariant)
+      //  - floats overlapping  -> fresh per-line walk (widthAt not cacheable)
       const computeLines = (sy: number): LaidLine[] => {
-        if (ps.mixed) {
+        if (e.mixed) {
+          if (e.relMixed && !overlapsFloat(sy, sy + heightPx)) {
+            return e.relMixed.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
+          }
           const rel = mixedParagraphLines(node, (relY) => widthAt(sy + relY), baseMetricsFor(node));
           return rel.map((l) => ({ ...l, y: sy + l.y }));
-        }
-        if (!overlapsFloat(sy, sy + heightPx)) {
-          const offs = paragraphLineOffsets(node, contentWidth, style);
-          return offs.map((off, i) => ({ off, y: sy + i * style.linePx, h: style.linePx }));
         }
         return walkParagraphLines(node, style, sy, widthAt);
       };
@@ -1075,7 +1244,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         startY = y + sp.beforePx;
         lines = computeLines(startY);
       }
-      const n = lines.length;
+      let n = lines.length;
       let from = 0;
       let boundary = (Math.floor(lines[0].y / contentHeight) + 1) * contentHeight;
       for (;;) {
@@ -1090,6 +1259,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         // cutting later would overflow it, which is the worse failure.
         if (n - idx < MIN_LINES_PER_PAGE_FRAGMENT) {
           const maxCut = n - MIN_LINES_PER_PAGE_FRAGMENT;
+          // (same reasoning as the arithmetic lane: never silent here)
           if (maxCut <= from) break;
           idx = maxCut;
         }
@@ -1107,6 +1277,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
     // Unbreakable block: owns the pages it needs; pagination resumes below
     // (portion beyond the first page overflows visually - documented).
     let blockTop = y + Math.max(pendingAfter, sp.beforePx);
+    gapBreaksUpTo(blockTop);
     if (heightPx > pageRemainder(blockTop) && blockTop % contentHeight !== 0) {
       const moved = pageOf(blockTop) * contentHeight;
       pushBreak(pos, moved, false);

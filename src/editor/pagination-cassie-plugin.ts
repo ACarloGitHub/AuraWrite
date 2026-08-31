@@ -14,14 +14,23 @@ function buildDecorations(
 ): DecorationSet {
   if (getPagedMode()) return DecorationSet.empty;
   if (!cassieEnabled && !cassiePaged) return DecorationSet.empty;
-  // R-b: measure with the SAME style the editor renders with (container
-  // family/size/line-height and the cascade per node type, probed).
+  // R-b full style probe kept on EVERY rebuild (Carlo's call 2026-08-31):
+  // it is only ~3 ms and it is the self-healing guarantee — the calculator
+  // always measures with the styles the editor is ACTUALLY rendering, no
+  // matter how or when they changed. The F1.4 cache auto-invalidates when
+  // the probe sees a real change.
   syncEditorMetricsFromDom(editorDom);
-
   const margins = getMargins();
   const { breaks } = calculatePageBreaks(doc, margins);
   if (breaks.length === 0) return DecorationSet.empty;
 
+  // F1.4 stable keys: a break on the SAME line of the SAME page keeps its
+  // identity across keystrokes even though its document position shifts as
+  // text grows (ProseMirror compares widget decorations by spec.key). That
+  // lets the view reuse the existing DOM instead of tearing down every page
+  // marker after every character. The key embeds everything the widget DOM
+  // depends on: visual mode, page number, mid-paragraph flag, margin heights.
+  const modeTag = cassiePaged ? "p" : "l";
   const decorations: Decoration[] = breaks.map((bp) =>
     Decoration.widget(
       bp.pos,
@@ -42,11 +51,11 @@ function buildDecorations(
 
           const footerArea = document.createElement("div");
           footerArea.className = "aw-page-break-footer";
-          footerArea.textContent = String(bp.pageNumber);
+          footerArea.textContent = String(bp.pageNumber - 1);
 
           const headerArea = document.createElement("div");
           headerArea.className = "aw-page-break-header";
-          headerArea.textContent = String(bp.pageNumber + 1);
+          headerArea.textContent = String(bp.pageNumber);
 
           const bottomMargin = document.createElement("div");
           bottomMargin.className = "aw-page-break-margin-bottom";
@@ -84,7 +93,7 @@ function buildDecorations(
       {
         side: -1,
         ignoreSelection: true,
-        key: `cassie-pb-${bp.pos}-${bp.pageNumber}`,
+        key: `cassie-pb-${modeTag}-${bp.pageNumber}-${bp.midParagraph ? 1 : 0}-${margins.top}-${margins.bottom}`,
       },
     ),
   );
@@ -135,15 +144,23 @@ export function createCassiePaginationPlugin(
             dom = view.dom as HTMLElement;
             editorDom = dom;
             syncEditorMetricsFromDom(dom);
-            // One refresh so a doc opened directly in a paged mode uses the
-            // live metrics even before the first keystroke.
-            setTimeout(() => {
+            // Fonts may still be loading at startup: re-probe once when they
+            // are ready, and one refresh so a doc opened directly in a paged
+            // mode uses the live metrics even before the first keystroke.
+            const refreshSoon = () => {
               if (!view.isDestroyed) {
                 view.dispatch(
                   view.state.tr.setMeta("force-cassie-recompute", true).setMeta("addToHistory", false),
                 );
               }
-            }, 0);
+            };
+            setTimeout(refreshSoon, 0);
+            if (document.fonts?.ready) {
+              document.fonts.ready.then(() => {
+                if (dom) syncEditorMetricsFromDom(dom);
+                refreshSoon();
+              }).catch(() => { /* metrics stay as probed */ });
+            }
           }
         },
         destroy() {
