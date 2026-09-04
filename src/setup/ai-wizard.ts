@@ -1,25 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "../ai-panel/model-catalog";
 import { setDownloadRetryHandler } from "../download-toast";
+import { getHardwareInfo, type HardwareInfo } from "../ai-panel/local-llamacpp-provider";
 import { formatBytes } from "../utils/format";
 
 const WIZARD_KEY = "aurawrite-ai-wizard-dismissed";
 
 type WizardStep = "welcome" | "hardware" | "choose" | "download" | "done";
 
-interface HardwareData {
-  os: string;
-  arch: string;
-  ram_total_bytes: number;
-  ram_available_bytes: number;
-  gpus: Array<{ vendor: string; model: string; vram_bytes: number; vram_free_bytes: number; backend: string }>;
-  recommended_llamacpp_variant: string;
-  disk_free_bytes: number;
-  disk_total_bytes: number;
-}
-
 let currentStep: WizardStep = "welcome";
-let hwData: HardwareData | null = null;
+let hwData: HardwareInfo | null = null;
 let selectedModelId: string | null = null;
 let selectedQuantId: string | null = null;
 
@@ -161,8 +151,7 @@ function renderStep(): void {
           <p>Based on your hardware, these models are recommended (★ = best fit):</p>
           <div id="wizard-model-list">
             ${MODEL_CATALOG.map((model) => {
-              const isRec = recommended.some(// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (r: any) => r.id === model.id);
+              const isRec = recommended.some((r) => r.id === model.id);
               const bestQuant = getRecommendedQuantization(model, vram, hd.ram_total_bytes);
               const canFit = model.quantizations.some((q) =>
                 q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= hd.ram_total_bytes)
@@ -312,7 +301,7 @@ function renderStep(): void {
 
 async function detectHardware(): Promise<void> {
   try {
-    hwData = await invoke("resources_detect_hardware") as HardwareData;
+    hwData = await getHardwareInfo();
   } catch (e) {
     console.error("[AI wizard] hardware detection failed:", e);
     hwData = null;

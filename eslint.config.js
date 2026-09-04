@@ -42,13 +42,6 @@ export default [
     },
   },
   {
-    // Model listing handles untyped HTTP responses from 6 different providers.
-    files: ["src/ai-panel/model-listing.ts"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-    },
-  },
-  {
     // ProseMirror plugin internals — plugin/view/DecorationSet types are
     // intricate and using `any` here is the pragmatic choice.
     files: ["src/editor/suggestions-marker-plugin.ts"],

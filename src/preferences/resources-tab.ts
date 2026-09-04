@@ -14,6 +14,12 @@ import { setDownloadRetryHandler } from "../download-toast";
 import { formatBytes } from "../utils/format";
 import { shouldShowWizard, showAIWizard } from "../setup/ai-wizard";
 import { updateLlamacppServerStatusAI } from "./ai-provider-tab";
+import {
+  getHardwareInfo,
+  listChatModels,
+  getLlamaServerStatus,
+  type LlamaServerStatus,
+} from "../ai-panel/local-llamacpp-provider";
 import { MODEL_CATALOG, recommendModelsForHardware, getRecommendedQuantization } from "../ai-panel/model-catalog";
 
 export const EMBED_ONBOARDING_KEY = "aurawrite-embeddings-onboarding-dismissed";
@@ -263,7 +269,7 @@ export async function setupLocalModelsTab(): Promise<void> {
     const select = document.getElementById("local-llamacpp-variant-select") as HTMLSelectElement;
     let variant = select.value;
     if (variant === "auto") {
-      const hw = await invoke("resources_detect_hardware") as any;
+      const hw = await getHardwareInfo();
       variant = hw.recommended_llamacpp_variant || "cpu";
     }
     const btn = document.getElementById("local-llamacpp-download-variant") as HTMLButtonElement;
@@ -288,8 +294,8 @@ async function refreshHardwareInfo(): Promise<void> {
   const el = document.getElementById("local-hardware-info");
   if (!el) return;
   try {
-    const hw = await invoke("resources_detect_hardware") as any;
-    const gpus = hw.gpus.map((g: any) => `${g.vendor} ${g.model} (${formatBytes(g.vram_bytes)} VRAM, ${g.backend})`).join(", ") || "None detected";
+    const hw = await getHardwareInfo();
+    const gpus = hw.gpus.map((g) => `${g.vendor} ${g.model} (${formatBytes(g.vram_bytes)} VRAM, ${g.backend})`).join(", ") || "None detected";
     el.innerHTML = `<strong>OS:</strong> ${hw.os}/${hw.arch} &nbsp;|&nbsp; <strong>RAM:</strong> ${formatBytes(hw.ram_total_bytes)} total, ${formatBytes(hw.ram_available_bytes)} available &nbsp;|&nbsp; <strong>GPU:</strong> ${gpus} &nbsp;|&nbsp; <strong>Disk:</strong> ${formatBytes(hw.disk_free_bytes)} free of ${formatBytes(hw.disk_total_bytes)} &nbsp;|&nbsp; <strong>Recommended:</strong> ${hw.recommended_llamacpp_variant}`;
   } catch (e) {
     el.textContent = "Failed to detect hardware: " + (e instanceof Error ? e.message : String(e));
@@ -300,12 +306,12 @@ async function refreshLocalModelList(): Promise<void> {
   const container = document.getElementById("local-model-list");
   if (!container) return;
   try {
-    const models = await invoke("resources_list_chat_models") as any[];
+    const models = await listChatModels();
     if (models.length === 0) {
       container.innerHTML = '<p class="preference-hint">No models downloaded yet. Choose one from the catalog above or provide a URL.</p>';
       return;
     }
-    container.innerHTML = models.map((m: any) => `
+    container.innerHTML = models.map((m) => `
       <div class="preference-row" style="margin-bottom:8px;padding:8px;border:1px solid var(--border-color);border-radius:4px;">
         <div style="flex:1;">
           <strong>${m.id}</strong> &nbsp; ${m.filename} &nbsp; ${formatBytes(m.size_bytes)}
@@ -335,18 +341,18 @@ async function refreshLocalModelCatalog(): Promise<void> {
   const container = document.getElementById("local-model-catalog");
   if (!container) return;
   try {
-    const hw = await invoke("resources_detect_hardware") as any;
+    const hw = await getHardwareInfo();
     const vram = hw.gpus.length > 0 ? hw.gpus[0].vram_bytes : 0;
-    const ram = hw.ram_total_bytes as number;
+    const ram = hw.ram_total_bytes;
     const recommended = recommendModelsForHardware(vram, ram);
-    const downloaded = await invoke("resources_list_chat_models") as any[];
-    const downloadedIds = new Set(downloaded.map((m: any) => m.id));
+    const downloaded = await listChatModels();
+    const downloadedIds = new Set(downloaded.map((m) => m.id));
 
     container.innerHTML = MODEL_CATALOG.map((model) => {
-      const isRecommended = recommended.some((r: any) => r.id === model.id);
+      const isRecommended = recommended.some((r) => r.id === model.id);
       const isDownloaded = downloadedIds.has(model.id);
       const bestQuant = getRecommendedQuantization(model, vram, ram);
-      const canFit = model.quantizations.some((q: any) =>
+      const canFit = model.quantizations.some((q) =>
         q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= ram)
       );
       if (!canFit && vram > 0) return "";
@@ -364,8 +370,8 @@ async function refreshLocalModelCatalog(): Promise<void> {
           </div>
           <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;" class="catalog-quant-group" data-model-id="${model.id}">
             ${model.quantizations
-              .filter((q: any) => q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= ram))
-              .map((q: any) => `
+              .filter((q) => q.recommended_vram_bytes <= vram || (vram === 0 && q.recommended_ram_bytes <= ram))
+              .map((q) => `
                 <button class="pref-btn catalog-quant-btn${bestQuant && bestQuant.id === q.id ? ' pref-btn-primary' : ''}" data-model-id="${model.id}" data-quant-id="${q.id}" data-url="${q.url}" data-filename="${q.filename}" data-quant-name="${q.name}" data-model-name="${model.name}" data-size="${q.size_bytes}">${q.name}</button>
               `).join("")}
           </div>
@@ -550,7 +556,7 @@ export function setupLlamacppParamsTab(): void {
   // Initial status check
   (async () => {
     try {
-      const status = await invoke("llamacpp_server_status") as any;
+      const status = await getLlamaServerStatus();
       updateLlamacppServerStatus(status);
     } catch {
       // Server not started yet, that's fine
@@ -563,7 +569,7 @@ export function setupLlamacppParamsTab(): void {
   if (!llamacppStatusTimer) {
     llamacppStatusTimer = setInterval(async () => {
       try {
-        const status = await invoke("llamacpp_server_status") as any;
+        const status = await getLlamaServerStatus();
         updateLlamacppServerStatus(status);
       } catch {
         // ignore
@@ -574,7 +580,7 @@ export function setupLlamacppParamsTab(): void {
 
 let llamacppStatusTimer: ReturnType<typeof setInterval> | null = null;
 
-function updateLlamacppServerStatus(status: any): void {
+function updateLlamacppServerStatus(status: LlamaServerStatus): void {
   const el = document.getElementById("llamacpp-server-status");
   const startBtn = document.getElementById("llamacpp-start-server") as HTMLButtonElement | null;
   const stopBtn = document.getElementById("llamacpp-stop-server") as HTMLButtonElement | null;
