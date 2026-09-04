@@ -39,7 +39,7 @@ export function getPreferences(): Preferences {
 export async function persistPreferences(prefs: Preferences): Promise<void> {
   const prefsToStore = { ...prefs, aiApiKey: "" };
   localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefsToStore));
-  const effectiveProvider = getEffectiveProviderName(prefs.aiProvider, prefs.aiOllamaMode);
+  const effectiveProvider = getEffectiveProviderName(prefs.aiProvider, prefs.aiOllamaMode, prefs.aiManualActive);
   if (prefs.aiApiKey !== undefined && prefs.aiApiKey.trim()) {
     setCachedApiKey(effectiveProvider, prefs.aiApiKey);
     try {
@@ -48,4 +48,9 @@ export async function persistPreferences(prefs: Preferences): Promise<void> {
       console.error("[secrets] failed to save API key:", e);
     }
   }
+  // NOTE: an empty key field does NOT delete the stored key here. A global
+  // save happens for many reasons (another field changed, a draft form, the
+  // "New provider" command blanking the screen), and deleting a secret as a
+  // side effect of one of them would lose data. Removing a key is an explicit
+  // action on the key field itself — see the AI Provider tab listener.
 }

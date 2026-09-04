@@ -8,10 +8,20 @@ import {
 import { OllamaProvider, type OllamaMode } from "./ollama-provider";
 import { OpenAIProvider, AnthropicProvider, DeepSeekProvider, OpenRouterProvider, LMStudioProvider, MiniMaxProvider, ZAIProvider } from "./remote-providers";
 import { LocalLlamacppProvider } from "./local-llamacpp-provider";
+import { ManualProvider } from "./manual-provider";
+import {
+  MANUAL_PROVIDER,
+  getManualProfiles,
+  getActiveManualProfile,
+  getActiveManualName,
+  manualSecretName,
+  isManualProvider,
+  type ManualApiType,
+} from "./manual-providers";
 import { buildToolSystemPrompt, type ToolPreferences } from "./tools";
 import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
 import { resolveContextWindowFromAPI, setCachedContextWindow, getCachedContextWindow } from "./context-window";
-import { setContextFooterModel } from "./context-footer";
+import { setContextFooterModel, updateContextFooter } from "./context-footer";
 import { invoke } from "@tauri-apps/api/core";
 
 const PREFERENCES_KEY = "aurawrite-preferences";
@@ -28,8 +38,12 @@ const API_KEY_PROVIDERS = [
   "zai",
 ] as const;
 
-export function getEffectiveProviderName(aiProvider: string, aiOllamaMode: string): string {
+export function getEffectiveProviderName(aiProvider: string, aiOllamaMode: string, manualName?: string): string {
   if (aiProvider === "ollama" && aiOllamaMode === "cloud") return "ollama-cloud";
+  if (aiProvider === MANUAL_PROVIDER) {
+    const name = (manualName !== undefined ? manualName : "").trim() || getActiveManualName();
+    return name ? manualSecretName(name) : MANUAL_PROVIDER;
+  }
   return aiProvider;
 }
 
@@ -38,17 +52,36 @@ let cachedApiKeys: Record<string, string> = {};
 export async function preloadApiKey(): Promise<void> {
   cachedApiKeys = {};
   for (const p of API_KEY_PROVIDERS) {
-    try {
-      const k = await invoke<string | null>("secrets_get", { key: `ai-api-key:${p}` });
-      if (k) {
-        cachedApiKeys[p] = k;
-      }
-    } catch (e) {
-      console.error(`[secrets] failed to load key for ${p}:`, e);
-    }
+    await loadSecretIntoCache(p);
+  }
+  // Manually registered profiles keep their key in the same encrypted store,
+  // under `manual:<profile name>`; they must be reloaded like any provider or
+  // the user would have to type the key again at every start.
+  for (const profile of getManualProfiles()) {
+    await loadSecretIntoCache(manualSecretName(profile.name));
   }
   await migrateOllamaCloudKey();
   await migrateLegacyApiKey();
+}
+
+async function loadSecretIntoCache(namespace: string): Promise<void> {
+  try {
+    const k = await invoke<string | null>("secrets_get", { key: `ai-api-key:${namespace}` });
+    if (k) {
+      cachedApiKeys[namespace] = k;
+    }
+  } catch (e) {
+    console.error(`[secrets] failed to load key for ${namespace}:`, e);
+  }
+}
+
+/** Move an in-memory API key to another namespace (manual profile rename). */
+export function renameCachedApiKey(from: string, to: string): void {
+  const key = cachedApiKeys[from];
+  if (key) {
+    cachedApiKeys[to] = key;
+    delete cachedApiKeys[from];
+  }
 }
 
 async function migrateOllamaCloudKey(): Promise<void> {
@@ -110,7 +143,7 @@ export function setCachedApiKey(provider: string, key: string): void {
   else delete cachedApiKeys[provider];
 }
 
-type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
+type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp" | "manual";
 
 interface PreferencesAI {
   aiProvider: ProviderName;
@@ -118,6 +151,9 @@ interface PreferencesAI {
   aiApiKey: string;
   aiBaseUrl: string;
   aiOllamaMode: OllamaMode;
+  /** Manual profile in use (name and dialect); empty when not manual. */
+  aiManualName: string;
+  aiManualApiType: ManualApiType;
 }
 
 export function loadAIFromPreferences(): PreferencesAI {
@@ -130,6 +166,21 @@ export function loadAIFromPreferences(): PreferencesAI {
       const provider: ProviderName = (storedProvider === "ollama" && ollamaMode === "cloud")
         ? "ollama-cloud"
         : (storedProvider as ProviderName);
+      if (provider === MANUAL_PROVIDER) {
+        // A manual profile owns its model / base URL / key: present them in the
+        // same shape the rest of the app already expects.
+        const profile = getActiveManualProfile();
+        const name = profile?.name || "";
+        return {
+          aiProvider: provider,
+          aiModel: profile?.model || parsed.aiModel || "",
+          aiApiKey: name ? (getCachedApiKey(manualSecretName(name)) || "") : "",
+          aiBaseUrl: profile?.baseUrl || parsed.aiBaseUrl || "",
+          aiOllamaMode: ollamaMode,
+          aiManualName: name,
+          aiManualApiType: profile?.apiType || "openai",
+        };
+      }
       const defaultModel = PROVIDER_DEFAULT_MODELS[provider] || "";
       const apiKey = getCachedApiKey(provider) || "";
       return {
@@ -138,12 +189,14 @@ export function loadAIFromPreferences(): PreferencesAI {
         aiApiKey: apiKey,
         aiBaseUrl: parsed.aiBaseUrl || "",
         aiOllamaMode: ollamaMode,
+        aiManualName: "",
+        aiManualApiType: "openai",
       };
     } catch {
-      return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "", aiOllamaMode: "local" };
+      return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "", aiOllamaMode: "local", aiManualName: "", aiManualApiType: "openai" };
     }
   }
-  return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "", aiOllamaMode: "local" };
+  return { aiProvider: "ollama", aiModel: "kimi-k2.5:cloud", aiApiKey: "", aiBaseUrl: "", aiOllamaMode: "local", aiManualName: "", aiManualApiType: "openai" };
 }
 
 let currentProvider: AIProvider | null = null;
@@ -191,6 +244,14 @@ function createProvider(settings: PreferencesAI): AIProvider {
         threads: parseInt(localStorage.getItem("aurawrite-llamacpp-threads") || "0") || undefined,
         fitTarget: parseInt(localStorage.getItem("aurawrite-llamacpp-fit-target") || "1024") || 1024,
       });
+    case "manual":
+      return new ManualProvider({
+        profileName: settings.aiManualName,
+        apiType: settings.aiManualApiType,
+        baseUrl,
+        apiKey: settings.aiApiKey,
+        model: settings.aiModel,
+      });
     default:
       return new OllamaProvider();
   }
@@ -220,15 +281,29 @@ async function resolveAndCacheContextWindow(provider: string, model: string): Pr
   // purely local with no reliable context endpoint. lmstudio IS resolved here
   // (native REST API /api/v1/models) so the active server setting is cached.
   if (provider === "local-llamacpp" || provider === "ollama") return;
-  const cached = getCachedContextWindow(provider, model);
-  if (cached !== null) return;
   const settings = loadAIFromPreferences();
-  const apiKey = getCachedApiKey(provider) || "";
+  // Manual profiles cache and authenticate per profile, not per provider.
+  const namespace = provider === MANUAL_PROVIDER
+    ? (settings.aiManualName ? manualSecretName(settings.aiManualName) : MANUAL_PROVIDER)
+    : provider;
+  const cached = getCachedContextWindow(namespace, model);
+  if (cached !== null) return;
+  const apiKey = getCachedApiKey(namespace) || "";
   const baseUrl = getProviderBaseUrl(provider, settings.aiBaseUrl);
+  if (!baseUrl) return;
   try {
-    const ctx = await resolveContextWindowFromAPI(provider, model, apiKey, baseUrl);
+    const ctx = await resolveContextWindowFromAPI(
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+      isManualProvider(provider) ? settings.aiManualApiType : undefined,
+    );
     if (ctx !== null && ctx > 0) {
-      setCachedContextWindow(provider, model, ctx);
+      setCachedContextWindow(namespace, model, ctx);
+      // The limit was discovered after the footer was drawn: repaint it, or
+      // the screen would keep showing the guess.
+      updateContextFooter();
     }
   } catch {
     // Silently fall back to hardcoded table
@@ -258,8 +333,17 @@ export async function sendToAI(
     }
     currentProvider = createProvider(settings);
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const providerAny = current as any;
+    // Settings that can be applied to a provider already in place instead of
+    // rebuilding it. Declared as an optional-method shape: the runtime checks
+    // stay (not every provider has every setter) but nothing is untyped here.
+    const settable = current as typeof current & {
+      model?: string;
+      setModel?: (model: string) => void;
+      setApiKey?: (apiKey: string) => void;
+      setBaseUrl?: (baseUrl: string) => void;
+      setApiType?: (apiType: ManualApiType) => void;
+      setProfileName?: (name: string) => void;
+    };
     if (current.name === "local-llamacpp" && settings.aiModel) {
       const llamacppProv = current as LocalLlamacppProvider;
       const newMmproj = localStorage.getItem("aurawrite-llamacpp-mmproj") || undefined;
@@ -267,18 +351,24 @@ export async function sendToAI(
         llamacppProv.setModel(settings.aiModel, newMmproj);
       }
     }
-    if (typeof providerAny.setModel === "function" && settings.aiModel && current.name !== "local-llamacpp") {
-      const previousModel = providerAny.model;
-      providerAny.setModel(settings.aiModel);
+    if (typeof settable.setModel === "function" && settings.aiModel && current.name !== "local-llamacpp") {
+      const previousModel = settable.model;
+      settable.setModel(settings.aiModel);
       if (previousModel && previousModel !== settings.aiModel) {
         resetSessionUsage();
       }
     }
-    if (typeof providerAny.setApiKey === "function") {
-      providerAny.setApiKey(settings.aiApiKey);
+    if (typeof settable.setApiKey === "function") {
+      settable.setApiKey(settings.aiApiKey);
     }
-    if (typeof providerAny.setBaseUrl === "function" && settings.aiBaseUrl) {
-      providerAny.setBaseUrl(settings.aiBaseUrl);
+    if (typeof settable.setBaseUrl === "function" && settings.aiBaseUrl) {
+      settable.setBaseUrl(settings.aiBaseUrl);
+    }
+    if (typeof settable.setApiType === "function" && settings.aiManualApiType) {
+      settable.setApiType(settings.aiManualApiType);
+    }
+    if (typeof settable.setProfileName === "function" && settings.aiManualName) {
+      settable.setProfileName(settings.aiManualName);
     }
   }
   const active = currentProvider!;
@@ -297,8 +387,9 @@ export async function sendToAI(
 
   // Also warn if no model is set
   if (!settings.aiModel.trim()) {
-    const msg =
-      `No AI model selected for ${settings.aiProvider}. Please add a model name in Preferences > AI Provider.`;
+    const msg = settings.aiProvider === MANUAL_PROVIDER
+      ? `No model set for the manual provider "${settings.aiManualName || "unnamed"}". Load the model list (the first model is picked automatically) or type the model name in Preferences > AI Provider.`
+      : `No AI model selected for ${settings.aiProvider}. Please add a model name in Preferences > AI Provider.`;
     console.error("[AI]", msg);
     return {
       content: "",

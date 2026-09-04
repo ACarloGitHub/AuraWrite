@@ -741,6 +741,29 @@
                   <option value="minimax">MiniMax</option>
                   <option value="zai">Z.ai (GLM)</option>
                   <option value="local-llamacpp">Local (llama.cpp)</option>
+                  <option value="manual">Manual</option>
+                </select>
+                <span class="preference-hint">Choose "Manual" to register a service of your own by typing its address and key.</span>
+              </div>
+              <div class="preference-group hidden" id="manual-provider-group">
+                <label for="pref-ai-manual-select">Manual provider</label>
+                <span class="preference-hint">Pick a provider from the list to edit it, or choose “New provider” to register one.</span>
+                <div class="model-picker-row">
+                  <select id="pref-ai-manual-select" class="model-select" aria-label="Select a manual provider">
+                    <option value="">— No manual provider yet —</option>
+                  </select>
+                  <button type="button" id="pref-ai-manual-delete" class="pref-btn pref-btn-danger" title="Delete this manual provider and its API key">Del</button>
+                </div>
+                <label for="pref-ai-manual-name">Provider name</label>
+                <span class="preference-hint">The name identifies the provider. Changing the name of a loaded provider renames it: its address, model and API key follow the new name.</span>
+                <input type="text" id="pref-ai-manual-name" placeholder="e.g. My server, Alibaba, llama-server..." aria-label="Manual provider name" autocomplete="off" />
+              </div>
+              <div class="preference-group hidden" id="manual-type-group">
+                <label for="pref-ai-manual-type">API Type</label>
+                <span class="preference-hint">The language the service speaks. Most services (and llama-server) use "OpenAI-compatible".</span>
+                <select id="pref-ai-manual-type">
+                  <option value="openai">OpenAI-compatible</option>
+                  <option value="anthropic">Anthropic Messages</option>
                 </select>
               </div>
               <div class="preference-group hidden" id="ollama-mode-group">
@@ -784,6 +807,11 @@
                 <label for="pref-ai-lmstudio-ctx">Context size (tokens)</label>
                 <span class="preference-hint">Override LM Studio's context window. Leave empty to auto-detect from the running server.</span>
                 <input type="number" id="pref-ai-lmstudio-ctx" placeholder="auto" min="0" step="1024" aria-label="LM Studio context size override" />
+              </div>
+              <div class="preference-group hidden" id="manual-ctx-group">
+                <label for="pref-ai-manual-ctx">Context size (tokens)</label>
+                <span class="preference-hint">Leave empty to let AuraWrite find out from the service (and fall back to 128K). Set it when you know the real value.</span>
+                <input type="number" id="pref-ai-manual-ctx" placeholder="auto" min="0" step="1024" aria-label="Manual provider context size" />
               </div>
             </div>
             <!-- TAB: AI Behavior -->

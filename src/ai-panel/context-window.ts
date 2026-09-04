@@ -1,6 +1,13 @@
 import { fetchWithTimeout } from "./fetch-retry";
+import {
+  getActiveManualProfile,
+  manualSecretName,
+  isManualProvider,
+  type ManualApiType,
+} from "./manual-providers";
+import { parseModelList } from "./model-listing";
 
-export type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
+export type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp" | "manual";
 
 export interface ContextWindowEntry {
   context: number;
@@ -110,6 +117,19 @@ export function getContextWindow(provider: string, model: string): ContextWindow
     }
   }
 
+  // Manual profiles: the size typed in the profile always wins; otherwise the
+  // value discovered from the service (cached under manual:<profile>).
+  if (isManualProvider(provider)) {
+    const profile = getActiveManualProfile();
+    if (profile && profile.contextSize > 0) {
+      return { context: profile.contextSize, source: "configured" };
+    }
+    const cachedManual = getCachedContextWindow(manualSecretName(profile?.name || ""), model);
+    if (cachedManual) {
+      return { context: cachedManual, source: "api" };
+    }
+  }
+
   const cached = getCachedContextWindow(provider, model);
   if (cached) {
     return { context: cached, source: "api" };
@@ -123,6 +143,13 @@ export function getContextWindow(provider: string, model: string): ContextWindow
 
   if (p === "ollama" || p === "lmstudio") {
     return { context: DEFAULT_LOCAL_CONTEXT, source: "estimated" };
+  }
+
+  if (isManualProvider(provider)) {
+    // Nothing is known about this service: the number below is a guess, and it
+    // must be marked as one so the screen can say so. A profile with a size
+    // typed by the user returned earlier (it always wins).
+    return { context: 128_000, source: "estimated" };
   }
 
   return { context: 128_000, source: "known" };
@@ -172,11 +199,82 @@ export function setCachedContextWindow(provider: string, model: string, contextL
   }
 }
 
-export async function resolveContextWindowFromAPI(provider: string, model: string, apiKey: string, baseUrl: string): Promise<number | null> {
+/** Drop every cached context size of one provider namespace. */
+export function clearContextCacheFor(provider: string): void {
+  const prefix = `${CONTEXT_CACHE_PREFIX}${provider}:`;
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(prefix)) keysToRemove.push(k);
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k!));
+}
+
+export async function resolveContextWindowFromAPI(
+  provider: string,
+  model: string,
+  apiKey: string,
+  baseUrl: string,
+  providerApiType?: ManualApiType,
+): Promise<number | null> {
   const cleanBase = (baseUrl || "").replace(/\/+$/, "");
   const trimmedKey = (apiKey || "").trim();
 
   try {
+    if (isManualProvider(provider)) {
+      // 1) llama-server reports the context it is ACTUALLY running with in its
+      //    own settings endpoint, at the root of the server — the same trick
+      //    LM Studio's detection uses (its native REST API, not the
+      //    OpenAI-compatible path).
+      let origin = "";
+      try {
+        origin = new URL(cleanBase).origin;
+      } catch {
+        origin = "";
+      }
+      if (origin) {
+        const propsHeaders: Record<string, string> = {};
+        if (trimmedKey) propsHeaders["Authorization"] = `Bearer ${trimmedKey}`;
+        try {
+          const propsResp = await fetchWithTimeout(`${origin}/props`, { headers: propsHeaders });
+          if (propsResp.ok) {
+            const props = await propsResp.json().catch(() => null) as
+              { default_generation_settings?: { n_ctx?: number } } | null;
+            const nCtx = props?.default_generation_settings?.n_ctx;
+            if (typeof nCtx === "number" && nCtx > 0) return nCtx;
+          }
+        } catch {
+          // No /props on this service (most cloud APIs have none): go on.
+        }
+      }
+
+      // 2) Ask the service's model list: many of them report the context window
+      //    (vLLM, OpenRouter-style gateways, LM Studio-like servers), and
+      //    llama.cpp reports the model's own size there.
+      const headers: Record<string, string> = {};
+      if (trimmedKey) {
+        if (providerApiType === "anthropic") {
+          headers["x-api-key"] = trimmedKey;
+          headers["anthropic-version"] = "2023-06-01";
+        } else {
+          headers["Authorization"] = `Bearer ${trimmedKey}`;
+        }
+      } else if (providerApiType === "anthropic") {
+        headers["anthropic-version"] = "2023-06-01";
+      }
+      const resp = await fetchWithTimeout(`${cleanBase}/models`, { headers });
+      if (!resp.ok) return null;
+      const body = await resp.json();
+      const models = parseModelList(body);
+      const wanted = model.toLowerCase();
+      const found = models.find((m) => m.id.toLowerCase() === wanted)
+        || models.find((m) => m.id.toLowerCase().includes(wanted))
+        || (models.length === 1 ? models[0] : undefined);
+      if (found && typeof found.contextLength === "number" && found.contextLength > 0) {
+        return found.contextLength;
+      }
+      return null;
+    }
     if (provider === "openrouter") {
       const headers: Record<string, string> = { "HTTP-Referer": "https://aurawrite.app" };
       if (trimmedKey) headers["Authorization"] = `Bearer ${trimmedKey}`;

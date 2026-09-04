@@ -3,6 +3,8 @@
  * Extracted from main.ts (2026-08-21, refactoring plan step 1.2).
  */
 
+import type { ManualProfile } from "../ai-panel/manual-providers";
+
 export type ThemeMode = "light" | "dark" | "custom";
 
 export interface Preferences {
@@ -14,8 +16,12 @@ export interface Preferences {
   customTextButtons: string;
   incrementalEnabled: boolean;
   incrementalMax: number;
-  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
+  aiProvider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp" | "manual";
   aiOllamaMode: "local" | "cloud";
+  /** User-defined provider profiles (see ai-panel/manual-providers.ts). */
+  aiManualProfiles: ManualProfile[];
+  /** Name of the manual profile in use when aiProvider is "manual". */
+  aiManualActive: string;
   aiModel: string;
   aiApiKey: string;
   aiBaseUrl: string;
@@ -130,6 +136,8 @@ export const defaultPreferences: Preferences = {
   incrementalMax: 10,
   aiProvider: "ollama",
   aiOllamaMode: "local",
+  aiManualProfiles: [],
+  aiManualActive: "",
   aiModel: "kimi-k2.5:cloud",
   aiApiKey: "",
   aiBaseUrl: "",

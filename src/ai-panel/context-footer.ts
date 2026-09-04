@@ -32,5 +32,9 @@ export function updateContextFooter(): void {
   const used = formatContextNumber(usage.totalTokens);
   const cap = formatContextNumber(window.context);
   const pctStr = `${pct.toFixed(1)}%`;
-  textEl.textContent = `Context ${used} / ${cap} (${pctStr})${usage.source === "estimated" ? " ~est." : ""}`;
+  // The marker must cover both halves of the fraction: the measured usage AND
+  // the limit itself (a manually registered service may report nothing, and
+  // then the limit is only a guess).
+  const estimated = usage.source === "estimated" || window.source === "estimated";
+  textEl.textContent = `Context ${used} / ${cap} (${pctStr})${estimated ? " ~est." : ""}`;
 }

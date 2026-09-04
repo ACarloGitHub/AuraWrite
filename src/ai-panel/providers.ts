@@ -1,3 +1,5 @@
+import { MANUAL_PROVIDER } from "./manual-providers";
+
 export interface AIProvider {
   name: string;
   displayName: string;
@@ -94,7 +96,7 @@ export interface AIResponse {
 }
 
 export interface AIProviderConfig {
-  provider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp";
+  provider: "ollama" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp" | "manual";
   model: string;
   apiKey?: string;
   baseUrl?: string;
@@ -111,6 +113,8 @@ export const PROVIDER_BASE_URLS: Record<string, string> = {
   minimax: "https://api.minimax.io/v1",
   zai: "https://api.z.ai/api/paas/v4",
   "local-llamacpp": "http://127.0.0.1:11435",
+  // Manual profiles have no default: the user types the whole base URL.
+  manual: "",
 };
 
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
@@ -124,11 +128,15 @@ export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
   minimax: "MiniMax-M3",
   zai: "glm-5.1",
   "local-llamacpp": "",
+  manual: "",
 };
 
 export function getProviderBaseUrl(provider: string, customBaseUrl?: string): string {
-  const url = (customBaseUrl && customBaseUrl.trim() !== "")
-    ? customBaseUrl.trim()
-    : (PROVIDER_BASE_URLS[provider] || PROVIDER_BASE_URLS.ollama);
+  const custom = (customBaseUrl || "").trim();
+  const known = PROVIDER_BASE_URLS[provider];
+  // The manual provider has no default endpoint: an empty URL must stay empty
+  // so callers can report "missing base URL" instead of silently hitting the
+  // Ollama port.
+  const url = custom !== "" ? custom : (known !== undefined ? known : (provider === MANUAL_PROVIDER ? "" : PROVIDER_BASE_URLS.ollama));
   return url.replace(/\/+$/, "");
 }

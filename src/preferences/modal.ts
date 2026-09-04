@@ -13,6 +13,13 @@ import { populateUserFontsInToolbar, setupFontsReloadListener } from "../editor/
 import { getEffectiveProviderName, getCachedApiKey, preloadApiKey } from "../ai-panel/ai-manager";
 import { PROVIDER_BASE_URLS } from "../ai-panel/providers";
 import {
+  MANUAL_PROVIDER,
+  foldDraftIntoProfiles,
+  getManualProfiles,
+  getActiveManualName,
+  manualSecretName,
+} from "../ai-panel/manual-providers";
+import {
   type Preferences,
   type ThemeMode,
   defaultSuggestionsPrompt,
@@ -22,7 +29,7 @@ import {
   getPreferences,
   persistPreferences,
 } from "./store";
-import { updateApiKeyGroupVisibility, refreshModelList } from "./ai-provider-tab";
+import { updateApiKeyGroupVisibility, refreshModelList, renderManualProfiles, loadManualProfileIntoForm } from "./ai-provider-tab";
 import { loadPermissionsList } from "./agent-tab";
 
 /** DOM application of preferences (theme, highlight, fonts) stays in main.ts. */
@@ -77,6 +84,26 @@ export function openPreferencesModal(): void {
   const lmstudioCtxInput = document.getElementById("pref-ai-lmstudio-ctx") as HTMLInputElement | null;
   if (lmstudioCtxInput) {
     lmstudioCtxInput.value = localStorage.getItem("aurawrite-lmstudio-ctx-size") || "";
+  }
+  // Manual provider profiles: the dropdown of names, the profile in use and
+  // its own fields.
+  const manualActiveName = prefs.aiProvider === MANUAL_PROVIDER
+    ? (prefs.aiManualActive || getActiveManualName())
+    : "";
+  const manualProfile = getManualProfiles().find(
+    (p) => p.name.toLowerCase() === manualActiveName.toLowerCase(),
+  ) || null;
+  // The dropdown shows the profile in use only if it is really registered;
+  // an unregistered name (a profile being typed) leaves the dropdown on the
+  // placeholder while the name field keeps the text.
+  renderManualProfiles(manualProfile ? manualProfile.name : "");
+  if (manualProfile) {
+    // The profile is the authority for its own fields (address, model, key,
+    // dialect, context): show exactly what is stored, never a stale mirror.
+    loadManualProfileIntoForm(manualProfile);
+  } else {
+    const manualNameInput = document.getElementById("pref-ai-manual-name") as HTMLInputElement | null;
+    if (manualNameInput) manualNameInput.value = manualActiveName;
   }
   (
     document.getElementById("pref-ai-interface-language") as HTMLSelectElement
@@ -326,6 +353,8 @@ export function savePreferencesFromModal(deps: PreferencesModalDeps): void {
     aiModel: inp("pref-ai-model"),
     aiApiKey: inp("pref-ai-api-key"),
     aiBaseUrl: inp("pref-ai-base-url"),
+    aiManualProfiles: getManualProfiles(),
+    aiManualActive: getActiveManualName(),
     aiSuggestionsInterval: parseInt(inp("pref-ai-suggestions-interval"), 10) || 30,
     aiContextInterval: parseInt(inp("pref-ai-context-interval"), 10) || 30,
     aiInterfaceLanguage: sel("pref-ai-interface-language") || "English",
@@ -351,6 +380,21 @@ export function savePreferencesFromModal(deps: PreferencesModalDeps): void {
     shellExecEnabled: chk("pref-agent-shell-exec"),
     ragEnabled: chk("pref-agent-rag"),
   };
+
+  // Manual provider: the form holds the fields of the profile in use, so the
+  // save folds them back into the stored profile list. When another provider
+  // is selected the list is preserved untouched.
+  if (prefs.aiProvider === MANUAL_PROVIDER) {
+    const folded = foldDraftIntoProfiles({
+      name: inp("pref-ai-manual-name"),
+      apiType: (sel("pref-ai-manual-type") as "openai" | "anthropic") || "openai",
+      baseUrl: prefs.aiBaseUrl,
+      model: prefs.aiModel,
+      contextSize: parseInt(inp("pref-ai-manual-ctx"), 10) || 0,
+    });
+    prefs.aiManualProfiles = folded.profiles;
+    prefs.aiManualActive = folded.activeName;
+  }
 
   void savePreferences(prefs, deps);
   deps.updateThemeIcon(prefs.theme);
@@ -457,6 +501,10 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
       for (const p of apiProviders) {
         await invoke("secrets_delete", { key: `ai-api-key:${p}` }).catch(() => {});
       }
+      // Manual profiles keep their keys under `manual:<name>`.
+      for (const profile of getManualProfiles()) {
+        await invoke("secrets_delete", { key: `ai-api-key:${manualSecretName(profile.name)}` }).catch(() => {});
+      }
       await invoke("secrets_delete", { key: "ai-api-key" }).catch(() => {});
       await preloadApiKey();
       localStorage.clear();
@@ -474,7 +522,7 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-manual-type, #pref-ai-manual-ctx, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
     )
     .forEach((el) => {
       el.addEventListener("change", () => savePreferencesFromModal(deps));

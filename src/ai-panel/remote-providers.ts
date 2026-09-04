@@ -2,7 +2,7 @@ import type { AIProvider, AIContext, AIResponse, ContentPart, Attachment } from 
 import { buildContentParts } from "./providers";
 import { withRetry, isValidHttpUrl, fetchWithTimeout } from "./fetch-retry";
 
-function extractOpenAIStyleReasoning(data: unknown): string | undefined {
+export function extractOpenAIStyleReasoning(data: unknown): string | undefined {
   const message = (data as { choices?: Array<{ message?: { reasoning?: string; reasoning_content?: string } }> })?.choices?.[0]?.message;
   if (!message || typeof message !== "object") return undefined;
   const candidates = [message.reasoning, message.reasoning_content];
@@ -12,7 +12,7 @@ function extractOpenAIStyleReasoning(data: unknown): string | undefined {
   return undefined;
 }
 
-function extractAnthropicThinking(data: unknown): string | undefined {
+export function extractAnthropicThinking(data: unknown): string | undefined {
   const blocks = (data as { content?: Array<{ type?: string; thinking?: string }> })?.content;
   if (!Array.isArray(blocks)) return undefined;
   const parts: string[] = [];
@@ -24,7 +24,7 @@ function extractAnthropicThinking(data: unknown): string | undefined {
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
-function extractOpenAICompatibleUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
+export function extractOpenAICompatibleUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
   const usage = (data as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
   if (!usage) return undefined;
   const input = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : 0;
@@ -33,7 +33,7 @@ function extractOpenAICompatibleUsage(data: unknown): { inputTokens: number; out
   return { inputTokens: input, outputTokens: output };
 }
 
-function extractAnthropicUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
+export function extractAnthropicUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
   const usage = (data as { usage?: { input_tokens?: number; output_tokens?: number } })?.usage;
   if (!usage) return undefined;
   const input = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
@@ -42,7 +42,7 @@ function extractAnthropicUsage(data: unknown): { inputTokens: number; outputToke
   return { inputTokens: input, outputTokens: output };
 }
 
-function buildOpenAICompatibleMessages(
+export function buildOpenAICompatibleMessages(
   prompt: string,
   context?: AIContext,
 ): Array<{ role: string; content: string | ContentPart[] }> {
@@ -60,7 +60,7 @@ function buildOpenAICompatibleMessages(
   return messages;
 }
 
-function buildOpenAICompatibleSystemPrompt(context?: AIContext): string {
+export function buildOpenAICompatibleSystemPrompt(context?: AIContext): string {
   const parts: string[] = [];
 
   if (context?.customAssistantPrompt) {
@@ -259,8 +259,8 @@ export class AnthropicProvider implements AIProvider {
     const signal = this.abortController.signal;
 
     try {
-      const systemPrompt = this.buildSystemPrompt(context);
-      const userMessages = this.buildUserMessages(prompt, context);
+      const systemPrompt = buildAnthropicSystemPrompt(context);
+      const userMessages = buildAnthropicMessages(prompt, context);
 
       const response = await withRetry(
         () => fetchWithTimeout(`${this.baseUrl}/messages`, {
@@ -324,116 +324,116 @@ export class AnthropicProvider implements AIProvider {
       this.abortController = null;
     }
   }
+}
 
-  private buildSystemPrompt(context?: AIContext): string {
-    const parts: string[] = [];
+export function buildAnthropicSystemPrompt(context?: AIContext): string {
+  const parts: string[] = [];
 
-    if (context?.customAssistantPrompt) {
-      parts.push(context.customAssistantPrompt);
-    } else {
-      parts.push("You are an AI assistant for AuraWrite, a writing application.");
-      parts.push("Help the user with writing, editing, and organizing their documents.");
-    }
+  if (context?.customAssistantPrompt) {
+    parts.push(context.customAssistantPrompt);
+  } else {
+    parts.push("You are an AI assistant for AuraWrite, a writing application.");
+    parts.push("Help the user with writing, editing, and organizing their documents.");
+  }
 
-    if (context?.assistantName) {
-      parts.push(`Your name is ${context.assistantName}.`);
-    }
-    if (context?.userName) {
-      parts.push(`The user's name is ${context.userName}.`);
-    }
-    if (context?.interfaceLanguage) {
-      parts.push(`Respond to the user in ${context.interfaceLanguage}.`);
-    }
-    if (context?.writingLanguage && context.writingLanguage !== context.interfaceLanguage) {
-      parts.push(`When writing or suggesting text for the document, write in ${context.writingLanguage}.`);
-    }
+  if (context?.assistantName) {
+    parts.push(`Your name is ${context.assistantName}.`);
+  }
+  if (context?.userName) {
+    parts.push(`The user's name is ${context.userName}.`);
+  }
+  if (context?.interfaceLanguage) {
+    parts.push(`Respond to the user in ${context.interfaceLanguage}.`);
+  }
+  if (context?.writingLanguage && context.writingLanguage !== context.interfaceLanguage) {
+    parts.push(`When writing or suggesting text for the document, write in ${context.writingLanguage}.`);
+  }
 
-    if (context?.toolInstructions) {
-      parts.push(context.toolInstructions);
-    }
+  if (context?.toolInstructions) {
+    parts.push(context.toolInstructions);
+  }
 
-    if (context?.projectType) {
-      parts.push(`The current project is of type: ${context.projectType}`);
-    }
+  if (context?.projectType) {
+    parts.push(`The current project is of type: ${context.projectType}`);
+  }
 
-    if (context?.documentTitle) {
-      parts.push(`The current document is titled: ${context.documentTitle}`);
-    }
+  if (context?.documentTitle) {
+    parts.push(`The current document is titled: ${context.documentTitle}`);
+  }
 
-    if (context?.writingStyleFragment) {
-      parts.push(`WRITING STYLE:\n${context.writingStyleFragment}`);
-    }
+  if (context?.writingStyleFragment) {
+    parts.push(`WRITING STYLE:\n${context.writingStyleFragment}`);
+  }
 
-    if (context?.documentText) {
-      parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
-    }
+  if (context?.documentText) {
+    parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
+  }
 
-    if (context?.selectedText) {
-      parts.push(
-        `\nSELECTED TEXT (you may ONLY modify this):\n"""\n${context.selectedText}\n"""`,
-      );
-    }
+  if (context?.selectedText) {
+    parts.push(
+      `\nSELECTED TEXT (you may ONLY modify this):\n"""\n${context.selectedText}\n"""`,
+    );
+  }
 
-    parts.push(`
+  parts.push(`
 When the user explicitly asks you to modify, replace, or change text in the document, respond with the AURA_EDIT format:
 <<<AURA_EDIT>>>
 {"aura_edit": {"message": "Brief explanation", "operations": [{"op": "replace", "find": "exact text", "content": [{"type": "text", "text": "new text"}]}]}}
 <<<END_AURA_EDIT>>>
 Do NOT use AURA_EDIT for normal conversation - only for document edits.`);
 
-    return parts.join("\n");
-  }
+  return parts.join("\n");
+}
 
-  private buildUserMessages(
-    prompt: string,
-    context?: AIContext,
-  ): Array<{ role: string; content: unknown }> {
-    const messages: Array<{ role: string; content: unknown }> = [];
+export function buildAnthropicMessages(
+  prompt: string,
+  context?: AIContext,
+): Array<{ role: string; content: unknown }> {
+  const messages: Array<{ role: string; content: unknown }> = [];
 
-    if (context?.messageHistory && context.messageHistory.length > 0) {
-      for (const msg of context.messageHistory) {
-        if (msg.role === "user" || msg.role === "assistant") {
-          messages.push({ role: msg.role, content: this.toAnthropicContent(msg.content, msg.attachments) });
-        }
+  if (context?.messageHistory && context.messageHistory.length > 0) {
+    for (const msg of context.messageHistory) {
+      if (msg.role === "user" || msg.role === "assistant") {
+        messages.push({ role: msg.role, content: toAnthropicContent(msg.content, msg.attachments) });
       }
     }
-
-    messages.push({ role: "user", content: this.toAnthropicContent(prompt, context?.attachments) });
-
-    return messages;
   }
 
-  private toAnthropicContent(
-    text: string,
-    attachments?: Attachment[],
-  ): string | Array<Record<string, unknown>> {
-    if (!attachments || attachments.length === 0) return text;
+  messages.push({ role: "user", content: toAnthropicContent(prompt, context?.attachments) });
 
-    const blocks: Array<Record<string, unknown>> = [];
-    const imageAttachments = attachments.filter((a) => a.kind === "image");
-    const docAttachments = attachments.filter((a) => a.kind === "document");
+  return messages;
+}
 
-    for (const img of imageAttachments) {
-      blocks.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: img.mimeType,
-          data: img.data,
-        },
-      });
-    }
+export function toAnthropicContent(
+  text: string,
+  attachments?: Attachment[],
+): string | Array<Record<string, unknown>> {
+  if (!attachments || attachments.length === 0) return text;
 
-    let textContent = text;
-    for (const doc of docAttachments) {
-      textContent += `\n\n[Attached document: ${doc.filename}]\n"""\n${doc.data}\n"""`;
-    }
-    if (textContent.trim()) {
-      blocks.push({ type: "text", text: textContent });
-    }
+  const blocks: Array<Record<string, unknown>> = [];
+  const imageAttachments = attachments.filter((a) => a.kind === "image");
+  const docAttachments = attachments.filter((a) => a.kind === "document");
 
-    return blocks.length > 0 ? blocks : text;
+  for (const img of imageAttachments) {
+    blocks.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: img.mimeType,
+        data: img.data,
+      },
+    });
   }
+
+  let textContent = text;
+  for (const doc of docAttachments) {
+    textContent += `\n\n[Attached document: ${doc.filename}]\n"""\n${doc.data}\n"""`;
+  }
+  if (textContent.trim()) {
+    blocks.push({ type: "text", text: textContent });
+  }
+
+  return blocks.length > 0 ? blocks : text;
 }
 
 export class DeepSeekProvider implements AIProvider {

@@ -2594,6 +2594,18 @@ body.reader-mode .toolbar {
   flex: 1 1 auto;
 }
 
+/* Buttons that live in a picker row must be the same height as the field next
+ * to them (the fields are ~36px here) and must never wrap to a second line:
+ * a two-line button overflows above and below the field. */
+.model-picker-row .pref-btn {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .model-refresh-btn {
   flex: 0 0 auto;
   width: 36px;

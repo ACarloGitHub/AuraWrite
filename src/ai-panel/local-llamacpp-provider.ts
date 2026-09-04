@@ -20,7 +20,9 @@ interface LlamaServerConfig {
   fitTarget?: number;
 }
 
-interface LlamaServerStatus {
+/** Status of the llama-server process, shared with the preferences tabs.
+ * Mirrors `LlamaServerStatus` in src-tauri/src/resources.rs. */
+export interface LlamaServerStatus {
   running: boolean;
   pid: number | null;
   port: number | null;
@@ -318,16 +320,43 @@ function extractLlamaCppThinking(data: unknown): string | undefined {
   return undefined;
 }
 
-export async function getHardwareInfo(): Promise<{
+/** Shapes of the data the Rust engine returns. Declared ONCE here and shared
+ * by every consumer (preferences tabs, wizards), so a field renamed on one
+ * side stops the build instead of showing an empty line on screen.
+ * Verified against src-tauri/src/resources.rs (GpuInfo, HardwareInfo,
+ * ModelInfo, LlamaServerStatus). */
+export interface GpuInfo {
+  vendor: string;
+  model: string;
+  vram_bytes: number;
+  vram_free_bytes: number;
+  /** "cuda" | "vulkan" | "metal" | "none" */
+  backend: string;
+}
+
+export interface HardwareInfo {
   os: string;
   arch: string;
   ram_total_bytes: number;
   ram_available_bytes: number;
-  gpus: Array<{ vendor: string; model: string; vram_bytes: number; vram_free_bytes: number; backend: string }>;
+  gpus: GpuInfo[];
+  /** "cpu" | "cuda" | "vulkan" | "metal" */
   recommended_llamacpp_variant: string;
   disk_free_bytes: number;
   disk_total_bytes: number;
-}> {
+}
+
+export interface DownloadedChatModel {
+  id: string;
+  filename: string;
+  path: string;
+  size_bytes: number;
+  mmproj_present: boolean;
+  mmproj_path: string | null;
+  mmproj_size_bytes: number | null;
+}
+
+export async function getHardwareInfo(): Promise<HardwareInfo> {
   return invoke("resources_detect_hardware");
 }
 
@@ -337,15 +366,7 @@ export async function downloadChatModel(
   filename: string,
   mmprojUrl?: string,
   mmprojFilename?: string,
-): Promise<{
-  id: string;
-  filename: string;
-  path: string;
-  size_bytes: number;
-  mmproj_present: boolean;
-  mmproj_path: string | null;
-  mmproj_size_bytes: number | null;
-}> {
+): Promise<DownloadedChatModel> {
   return invoke("resources_download_chat_model", {
     modelId,
     url,
@@ -355,18 +376,13 @@ export async function downloadChatModel(
   });
 }
 
-export async function listChatModels(): Promise<
-  Array<{
-    id: string;
-    filename: string;
-    path: string;
-    size_bytes: number;
-    mmproj_present: boolean;
-    mmproj_path: string | null;
-    mmproj_size_bytes: number | null;
-  }>
-> {
+export async function listChatModels(): Promise<DownloadedChatModel[]> {
   return invoke("resources_list_chat_models");
+}
+
+/** Status of the llama-server process managed by AuraWrite. */
+export async function getLlamaServerStatus(): Promise<LlamaServerStatus> {
+  return invoke("llamacpp_server_status");
 }
 
 export async function removeChatModel(modelId: string): Promise<void> {
