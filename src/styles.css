@@ -758,6 +758,14 @@ body.reader-mode .toolbar {
   margin: 0 auto;
   background: transparent;
   padding: var(--spacing-xl) 0;
+  /* F3.a: the containing block of the free elements. They are painted with
+     distances from their anchoring paragraph, so the text column itself must
+     be the reference box (free-style.ts). */
+  position: relative;
+  /* F3: and a stacking context. Without this, an element sent BEHIND the words
+     (negative depth) would keep sinking behind the page background and vanish,
+     because the paper colour is painted by this very box in paged mode. */
+  z-index: 0;
   font-family: var(--font-editor);
   font-size: 11pt;
   line-height: 1.7;
@@ -2264,6 +2272,14 @@ body.reader-mode .toolbar {
   background: var(--color-background);
   border-color: var(--color-primary);
   color: var(--color-text);
+}
+
+/* F3: the Layers command stands apart in the status bar - not with the panel
+   switches (it opens a window over the page, not a side panel) and with breathing
+   room before the zoom controls. The bar already separates its direct children
+   by 24px; this adds the little extra Carlo asked for. */
+.footer-btn--layers {
+  margin-right: var(--spacing-sm);
 }
 
 .status-bar {
@@ -6885,4 +6901,240 @@ html[data-aw-preview] {
 }
 html[data-aw-preview] body {
   visibility: hidden;
+}
+
+/* ============================================================================
+   F3 LAYERS PANEL — floating, non-modal window (contract §2.12, §7).
+   Everything here is painted with the theme's own variables, so the window
+   reads correctly in clear and in night like every other surface: the first
+   version used colours of its own and came out white on white.
+   ============================================================================ */
+.aw-layers {
+  position: fixed;
+  right: var(--spacing-md);
+  bottom: calc(var(--statusbar-height) + var(--spacing-md));
+  width: 320px;
+  height: 380px;
+  min-width: 240px;
+  min-height: 160px;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.aw-layers.hidden {
+  display: none;
+}
+
+.aw-layers__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-toolbar);
+  color: var(--color-text);
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  user-select: none;
+}
+
+.aw-layers__title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.aw-layers__close {
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  padding: 0;
+  flex: none;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.aw-layers__close:hover {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.aw-layers__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.aw-layers__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.aw-layers__row--name span {
+  flex: 0 0 84px;
+  color: var(--color-text-muted);
+}
+
+.aw-layers__select,
+.aw-layers__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 2px 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.aw-layers__groups {
+  flex: 1;
+}
+
+.aw-layers__stack {
+  margin: var(--spacing-sm) 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--spacing-xs);
+}
+
+/* The two halves of the stack. Each keeps a minimum height even when empty,
+   because a zero-height container cannot receive a dropped row: that is what
+   made "put this picture behind the words" impossible on a page whose back
+   half had nothing in it yet. */
+.aw-layers__zone {
+  min-height: 44px;
+}
+
+.aw-layers__zone:empty::after {
+  content: attr(aria-label);
+  display: block;
+  padding: 6px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.aw-layers__row--item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  margin-bottom: 4px;
+  cursor: grab;
+  color: var(--color-text);
+}
+
+.aw-layers__row--item:hover {
+  background: var(--color-background);
+}
+
+/* The row's grip is the drag handle: the rest of the row selects the element,
+   so clicking and dragging cannot mean the same gesture (project-dnd.ts uses
+   the same split, and it is the only configuration WebView2 accepts). */
+.aw-layers__grip {
+  cursor: grab;
+}
+
+.aw-layers__row--item:active .aw-layers__grip {
+  cursor: grabbing;
+}
+
+/* SortableJS states, painted with the theme's own colours: the ghost is the
+   hole the row will land in, the dragging copy is the one under the pointer. */
+.aw-layers__ghost {
+  opacity: 0.35;
+  background: var(--color-background);
+}
+
+.aw-layers__chosen {
+  border-color: var(--color-primary);
+}
+
+.aw-layers__dragging {
+  opacity: 0.8;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  background: var(--color-surface);
+  cursor: grabbing;
+}
+
+.aw-layers__grip {
+  flex: none;
+  color: var(--color-text-muted);
+  letter-spacing: -1px;
+}
+
+/* Fixed reference row: it cannot be dragged and says so (contract §3.4). */
+.aw-layers__row--text {
+  justify-content: center;
+  padding: 3px 6px;
+  margin: 4px 0;
+  border-top: 1px dashed var(--color-border);
+  border-bottom: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.aw-layers__hint {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.aw-layers__hint[hidden] {
+  display: none;
+}
+
+/* Corner grip: two visible lines, because an invisible handle is no handle. */
+.aw-layers__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 0 45%,
+    var(--color-border) 45% 55%,
+    transparent 55% 70%,
+    var(--color-border) 70% 80%,
+    transparent 80%
+  );
+}
+
+/* ============================================================================
+   F3 FREE DRAG — the two visuals of the gesture (contract §4).
+   The copy in flight is a clone of the element's own DOM, so it shows the real
+   frame/shadow/caption instead of a rectangle; the guide is the thin line that
+   marks which paragraph is about to become the anchor.
+   ============================================================================ */
+.aw-free-ghost {
+  /* Fixed to the viewport: it must follow the pointer even when the pointer
+     leaves the editor area. */
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  background: var(--color-paper);
+}
+
+.aw-free-guide {
+  position: fixed;
+  height: 0;
+  border-top: 1px solid var(--color-primary);
+  pointer-events: none;
+  z-index: 1190;
+  display: none;
 }

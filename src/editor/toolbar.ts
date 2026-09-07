@@ -1142,6 +1142,9 @@ function setupFormattingButtons(): void {
   setupImageToolbar(editorView);
   void import("./box-style-toolbar").then((m) => m.setupBoxToolbar(editorView));
   void import("./figure-toolbar").then((m) => m.setupFigureToolbar(editorView));
+  // F3: the layers window belongs with the other floating surfaces, and it is
+  // opened from the status bar - not from the main toolbar (contract §2.12).
+  void import("./layers-panel").then((m) => m.setupLayersPanel(editorView));
 
   document.addEventListener("click", (e: MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -2269,6 +2272,12 @@ function setupImageToolbar(view: EditorView): void {
     const { setImageWrap } = await import("./image-commands");
     void setImageWrap(view, !info.node.attrs.wrap);
   });
+  // F3.a: take the element out of the flow / put it back. The label is synced
+  // with the state in updateImageToolbar, so it always reads as the action.
+  document.getElementById("img-free")?.addEventListener("click", async () => {
+    const { toggleElementFree } = await import("./free-commands");
+    if (toggleElementFree(view)) void import("./layers-panel").then((m) => m.syncLayersPanel(view));
+  });
   btnRotateLeft?.addEventListener("click", async () => {
     const info = await getSelectedImage(view);
     if (!info) return;
@@ -2330,6 +2339,9 @@ export function updateImageToolbar(view: EditorView): void {
     // selection change too.
     void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
     void import("./figure-toolbar").then((m) => m.syncFigureControls(view));
+    // F3.a: the layers window tracks the caret (it must also repaint when the
+    // selection LEAVES an element, so this runs before any early return).
+    void import("./layers-panel").then((m) => m.syncLayersPanel(view));
     const info = await getSelectedImage(view);
     if (!info) {
       toolbar.classList.remove("image-toolbar--visible");
@@ -2351,8 +2363,18 @@ export function updateImageToolbar(view: EditorView): void {
     btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
     btnAlignRight?.classList.toggle("image-toolbar__btn--active", align === "right");
     btnToggleWrap?.classList.toggle("image-toolbar__btn--active", !!attrs.wrap);
-    if (btnToggleWrap instanceof HTMLButtonElement) {
-      btnToggleWrap.disabled = align === "center";
+    // F3.a: wrapping is the born-default (contract §2.10) and is a property of
+    // the element, not of its alignment: centring must never silently turn it
+    // off, so the control stays available and shows the stored state.
+
+    const btnFree = document.getElementById("img-free");
+    if (btnFree instanceof HTMLButtonElement) {
+      const free = !!attrs.free;
+      btnFree.textContent = free ? "In flow" : "Free";
+      btnFree.title = free
+        ? "Put this element back between the paragraphs"
+        : "Take this element out of the text flow";
+      btnFree.classList.toggle("image-toolbar__btn--active", free);
     }
     btnFlipH?.classList.toggle("image-toolbar__btn--active", !!attrs.flipH);
     btnFlipV?.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);

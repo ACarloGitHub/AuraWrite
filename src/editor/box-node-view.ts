@@ -24,6 +24,7 @@ import {
   isLightBgColor,
   normalizeBoxStyle,
 } from "./box-style";
+import { parseFreeSpec } from "./free-layout";
 
 const DRAG_THRESHOLD_PX = 6;
 
@@ -210,12 +211,28 @@ export class StyledBoxNodeView implements NodeView {
         this.startResize(e.clientX);
         return;
       }
-      // Only the box surface (grip, frame padding) selects/drags the box;
-      // clicks on inner paragraphs fall through to normal text editing.
-      if (target !== this.grip && target !== this.dom) return;
+      // F3: the grip is the "take this where I want" handle - it starts the
+      // free drag whether or not the box is already out of the flow.
+      if (target === this.grip) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.selectBox();
+        void import("./free-drag").then((m) =>
+          m.startFreeDrag(this.view, this.getPos, this.dom, e),
+        );
+        return;
+      }
+      // Only the box surface selects/drags the box; clicks on inner paragraphs
+      // fall through to normal text editing.
+      if (target !== this.dom) return;
       e.preventDefault();
       e.stopPropagation();
       this.selectBox();
+      // A free box must not be reordered by the flow drag: moving it in the
+      // tree would move its anchor and teleport it (contract §5).
+      const pos = this.getPos();
+      const node = pos === undefined ? null : this.view.state.doc.nodeAt(pos);
+      if (node && parseFreeSpec(node.attrs?.free)) return;
       this.startFlowDrag(e.clientY, e.clientX);
     });
   }

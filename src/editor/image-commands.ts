@@ -19,7 +19,9 @@ export function createImageNode(
     width: uploaded.width,
     height: uploaded.height,
     align: "center",
-    wrap: false,
+    // wrap is NOT set here on purpose: contract §2.10 makes wrapping the born
+    // state, and the single source of that truth is the schema default.
+    // Listing it again here is what let the two drift apart before.
     rotation: 0,
     flipH: false,
     flipV: false,
@@ -118,7 +120,6 @@ export function insertImageFromSrc(
     width: null,
     height: null,
     align: "center",
-    wrap: false,
     rotation: 0,
     flipH: false,
     flipV: false,
@@ -180,9 +181,10 @@ export async function setImageAlignment(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  const currentWrap = !!info.node.attrs.wrap;
-  const wrap = align === "center" ? false : currentWrap;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, align, wrap });
+  // Contract §2.10-§2.11: wrapping belongs to the element, not to its
+  // alignment. Centring used to switch wrapping off behind the user's back,
+  // which silently destroyed a choice they had made on purpose.
+  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, align });
 }
 
 export async function setImageWrap(

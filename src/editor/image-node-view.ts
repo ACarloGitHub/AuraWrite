@@ -275,6 +275,11 @@ export class ImageNodeView implements NodeView {
       if (target.classList.contains("image-rotate-handle")) return;
       e.preventDefault();
       this.selectNodeInEditor();
+      // F3: pressing the photo and moving starts the free drag (contract §4).
+      // A press without movement stays a plain selection, as it always was.
+      void import("./free-drag").then((m) =>
+        m.startFreeDrag(this.view, this.getPos, this.wrapper, e),
+      );
     });
   }
 

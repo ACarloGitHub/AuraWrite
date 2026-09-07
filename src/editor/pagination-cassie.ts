@@ -33,6 +33,7 @@
 import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLine } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
+import { isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf } from "./free-layout";
 
 export const PAGE_WIDTH_PX = 794;
 export const PAGE_HEIGHT_PX = 1123;
@@ -712,9 +713,29 @@ export interface PageBreakAt {
   midParagraph?: boolean;
 }
 
+/**
+ * Where a free element is DRAWN, in the same flow-y axis the calculator uses
+ * internally (contract §6: one source for screen, print and the bench).
+ * `page` is the page holding the element's middle, not the page of the block
+ * it hangs from: a picture dropped into the white space below the last line of
+ * page 2 belongs to page 3, because that is where it covers and is covered.
+ */
+export interface FreeGeometry {
+  pos: number;
+  page: number;
+  /** Flow y of the element's top edge. */
+  top: number;
+  /** Flow y of the block the element is anchored to. */
+  anchorTop: number;
+  /** Measured height of the element itself (0 when it cannot be measured). */
+  heightPx: number;
+  level: number;
+}
+
 export interface PaginationCalculation {
   breaks: PageBreakAt[];
   totalPages: number;
+  freeGeometry: FreeGeometry[];
 }
 
 /**
@@ -1101,10 +1122,23 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   const breaks: PageBreakAt[] = [];
+  const freeGeometry: FreeGeometry[] = [];
   const floats: FloatBox[] = [];
   const sideBottom = { left: 0, right: 0 };
   let y = 0; // absolute flow height (bottom of last placed box, no trailing gap)
   let pendingAfter = 0; // margin-bottom of the previous in-flow block (collapses)
+  // Height of the last block that consumed the flow. The anchor's top edge is
+  // `y - lastBlockHeight`: exact for whole blocks and for paragraphs split
+  // across pages, because the engine never adds space inside a block. Deriving
+  // it here instead of tracking a "top" variable avoids going stale at the
+  // three places where a block is moved to the next page.
+  let lastBlockHeight = 0;
+  // Top of the last ANCHOR block (text only, free-layout.ts) settled one step
+  // late, at the start of the next block, so a block moved to the following
+  // page reports the position it really ended up with.
+  let lastBlockWasAnchor = false;
+  let anchorTopY = 0;
+  let hasAnchor = false;
 
   const widthAt = (yq: number): number => {
     let used = 0;
@@ -1135,6 +1169,37 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   let pos = 0;
   doc.forEach((node) => {
     if (node.isInline) {
+      pos += node.nodeSize;
+      return;
+    }
+    // The previous block is over: if it was text, its top is now final.
+    if (lastBlockWasAnchor) {
+      anchorTopY = y - lastBlockHeight;
+      hasAnchor = true;
+      lastBlockWasAnchor = false;
+    }
+    // F3.a: a free element consumes NO flow (contract §6). It is painted
+    // outside the text column by free-style.ts, so nothing about the page
+    // count may change when an element becomes free. Wrap bands for free
+    // elements land with F3.c; until then a free element never shortens a
+    // line - exactly what the contract describes for wrap-off.
+    if (isFreeNode(node)) {
+      // Its place on the page is the anchor's top plus the stored distance, so
+      // the same number paints it on screen and files it under a page group.
+      const spec = parseFreeSpec(node.attrs?.free);
+      if (spec) {
+        const h = cachedMeasure(node, margins, contentWidth).heightPx;
+        const anchorTop = hasAnchor ? anchorTopY : 0;
+        const top = anchorTop + spec.yOff;
+        freeGeometry.push({
+          pos,
+          page: pageOf(top + (h > 0 ? h / 2 : 0)),
+          top,
+          anchorTop,
+          heightPx: h,
+          level: zLevelOf(node),
+        });
+      }
       pos += node.nodeSize;
       return;
     }
@@ -1176,6 +1241,9 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       pos += node.nodeSize;
       return;
     }
+    // A text block that consumes the flow becomes somebody's anchor.
+    lastBlockHeight = heightPx;
+    lastBlockWasAnchor = isAnchorBlock(node);
     const sp = spacingFor(node);
     // F1.4 boundary-gap fix: the flow can cross a page boundary INSIDE the
     // collapsed margin between two blocks (previous content ends just before
@@ -1325,5 +1393,5 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   });
 
   const totalPages = y <= 0 ? 1 : Math.max(1, Math.ceil((y - 0.0001) / contentHeight));
-  return { breaks, totalPages };
+  return { breaks, totalPages, freeGeometry };
 }

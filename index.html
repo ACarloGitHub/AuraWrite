@@ -369,6 +369,9 @@
           <button id="img-remove-caption" class="image-toolbar__btn" title="Remove the caption">Remove Caption</button>
         </span>
         <div class="image-toolbar__separator"></div>
+        <!-- F3.a: free distribution (image and figure share this bar) -->
+        <button id="img-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
+        <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
       </div>
       <!-- BOX TOOLBAR (Phase 1 enrichment G2): contextual panel for the styled box -->
@@ -395,6 +398,9 @@
         <input id="box-border-color" type="color" class="image-toolbar__color" title="Border color" value="#999999" />
         <label class="image-toolbar__field" title="Corner rounding in pixels">R <input id="box-radius" type="number" min="0" max="100" step="2" value="" placeholder="px" /></label>
         <label class="image-toolbar__field" title="Box width in pixels; empty = full column">Width <input id="box-width" type="number" min="60" max="4000" step="10" value="" placeholder="full" /></label>
+        <div class="image-toolbar__separator"></div>
+        <!-- F3.a: free distribution -->
+        <button id="box-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
         <div class="image-toolbar__separator"></div>
         <button id="box-delete" class="image-toolbar__btn" title="Delete Box">Delete</button>
       </div>
@@ -484,6 +490,41 @@
           <div id="editor"></div>
           <div id="reader-viewer" class="reader-viewer hidden"></div>
         <div id="paginated-container" style="display: none"></div>
+        <!-- F3 LAYERS PANEL: floating, resizable, non-modal window over the editor.
+             It lists the GROUPS (the elements outside the text flow on one page),
+             lets the writer name the current group and reorder its rows by
+             dragging them. It closes only with its × button (contract §2.12). -->
+        <div id="layers-panel" class="aw-layers hidden" role="dialog" aria-label="Layers">
+          <div class="aw-layers__header" id="layers-drag-handle">
+            <span class="aw-layers__title">Layers</span>
+            <select id="layers-group-select" class="aw-layers__select aw-layers__groups" title="Group: the free elements of one page"></select>
+            <button id="layers-close" class="aw-layers__close" title="Close layers" aria-label="Close layers">×</button>
+          </div>
+          <div class="aw-layers__body">
+            <label class="aw-layers__row aw-layers__row--name">
+              <span class="aw-layers__field-label">Group name</span>
+              <input id="layers-group-name" class="aw-layers__text" type="text" maxlength="120" placeholder="Unnamed group" />
+            </label>
+            <p class="aw-layers__hint" id="layers-empty" hidden>
+              No element outside the text flow on this page. Drag an image, figure or
+              box where you want it and it will appear here.
+            </p>
+            <!-- Two separate lists with the Text row OUTSIDE both: a fixed row
+                 inside a draggable list is not a separator, it is a wall - the
+                 library has nowhere to drop a row that must cross it. -->
+            <div class="aw-layers__stack" id="layers-stack">
+              <div class="aw-layers__zone" id="layers-front" aria-label="In front of the text"></div>
+              <div class="aw-layers__row aw-layers__row--text">Text</div>
+              <div class="aw-layers__zone" id="layers-behind" aria-label="Behind the text"></div>
+            </div>
+            <p class="aw-layers__hint">
+              Drag a row to change what covers what. Rows above the Text line cover
+              the words; rows below it are covered by them.
+            </p>
+          </div>
+          <div class="aw-layers__resize" id="layers-resize" title="Drag to resize"></div>
+        </div>
+
         <aside id="mcp-panel" class="mcp-panel hidden">
           <div class="panel-resize-handle panel-resize-handle--mcp" data-resize="mcp" title="Drag to resize, double-click to reset"></div>
           <div class="mcp-panel__header">
@@ -645,6 +686,10 @@
         <span id="word-count">Words: 0</span>
         <span id="char-count">Characters: 0</span>
         <div class="status-bar-spacer"></div>
+        <!-- F3: the Layers command is NOT one of the panel switches, so it does not
+             sit with them (Carlo, 2026-09-07). It opens a window over the page, like
+             the zoom controls it is placed next to, and is spaced from both groups. -->
+        <button id="btn-layers" class="footer-btn footer-btn--layers" title="Layers of the page: what covers what">Layers</button>
         <div class="zoom-controls">
           <button id="btn-zoom-out" title="Zoom Out">−</button>
           <span id="zoom-level">100%</span>

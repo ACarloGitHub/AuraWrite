@@ -1236,7 +1236,13 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   const flipV: boolean = !!node.attrs?.flipV;
   const align: string = node.attrs?.align || "center";
 
-  const needsFloating = wrap;
+  // F3.a: wrapping became the born-default (contract §2.10), so it can no
+  // longer be the only trigger for a floating Word object - that would turn
+  // every centred image into a floating one on export. This mirrors the rule
+  // the editor and the page calculator already use (floatSpecOf): a band
+  // needs a SIDE. Free-positioned elements join this decision at F3.d, when
+  // the output channels are defined.
+  const needsFloating = wrap && (align === "left" || align === "right");
   const needsTransform = rotation !== 0 || flipH || flipV;
 
   const transformation: any = { width: imgWidth, height: imgHeight };

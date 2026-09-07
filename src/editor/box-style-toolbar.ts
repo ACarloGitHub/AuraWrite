@@ -129,6 +129,13 @@ export function setupBoxToolbar(view: EditorView): void {
   deleteBtn?.addEventListener("click", () => {
     removeSelectedBox(view);
   });
+
+  // F3.a: free / back into the flow. The same command the image bar uses, so
+  // every free-capable element behaves identically.
+  el("box-free")?.addEventListener("click", async () => {
+    const { toggleElementFree } = await import("./free-commands");
+    toggleElementFree(view);
+  });
 }
 
 /** Show/hide the box panel and refresh its values for the current selection. */
@@ -174,4 +181,15 @@ export function syncBoxToolbar(view: EditorView): void {
 
   const width = el<HTMLInputElement>("box-width");
   if (width) width.value = a.widthPx != null ? String(a.widthPx) : "";
+
+  // F3.a: the free button always reads as the action it performs.
+  const freeBtn = el<HTMLButtonElement>("box-free");
+  if (freeBtn) {
+    const free = !!info.node.attrs.free;
+    freeBtn.textContent = free ? "In flow" : "Free";
+    freeBtn.title = free
+      ? "Put this box back between the paragraphs"
+      : "Take this box out of the text flow";
+    freeBtn.classList.toggle("image-toolbar__btn--active", free);
+  }
 }

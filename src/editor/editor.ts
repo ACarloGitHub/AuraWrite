@@ -27,8 +27,10 @@ import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
 import { FigureNodeView, createFigureTypeGuardPlugin } from "./figure-node-view";
-import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM } from "./enriched-schema";
+import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
+import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView, createBoxTypeGuardPlugin } from "./box-node-view";
+import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -43,6 +45,10 @@ const paragraphWithPageBreak: NodeSpec = {
     align: { default: "left" },
     lineHeight: { default: "1.5" },
     pageBreakBefore: { default: false },
+    // No depth attribute here: the text sits on ONE fixed level for the whole
+    // document (contract §3.1, revised 2026-09-07). A per-paragraph number was
+    // the design that failed the review - it put a new attribute on the most
+    // used node in the program to drive a control nobody could use.
   },
   parseDOM: [
     {
@@ -242,7 +248,8 @@ const imageSpec: NodeSpec = {
     width: { default: null },
     height: { default: null },
     align: { default: "center" },
-    wrap: { default: false },
+    // Contract §2.10: wrapping is the born-default; the user turns it OFF.
+    wrap: { default: true },
     rotation: { default: 0 },
     flipH: { default: false },
     flipV: { default: false },
@@ -253,6 +260,8 @@ const imageSpec: NodeSpec = {
     captionPadBottom: { default: 0 },
     // Phase 1 (enrichment) style attrs — dialect + logic in enriched-schema.ts
     ...IMAGE_STYLE_ATTRS,
+    // F3.a: depth + free position (dialect + rules in free-layout.ts).
+    ...FREE_LAYOUT_ATTRS,
   },
   parseDOM: [
     {
@@ -278,6 +287,7 @@ const imageSpec: NodeSpec = {
           captionPadTop: parseInt(dom.getAttribute("data-caption-pad-top") || "", 10) || 0,
           captionPadBottom: parseInt(dom.getAttribute("data-caption-pad-bottom") || "", 10) || 0,
           ...imageStyleGetDOM(dom),
+          ...freeLayoutGetDOM(dom),
         };
       },
     },
@@ -292,6 +302,8 @@ const imageSpec: NodeSpec = {
     if (node.attrs.height) attrs.height = String(node.attrs.height);
     attrs["data-align"] = node.attrs.align as string;
     if (node.attrs.wrap) attrs["data-wrap"] = "";
+    // Free-layout markers (F3.a).
+    Object.assign(attrs, freeLayoutToDOM(node));
     if (node.attrs.rotation) attrs["data-rotation"] = String(node.attrs.rotation);
     if (node.attrs.flipH) attrs["data-flip-h"] = "";
     if (node.attrs.flipV) attrs["data-flip-v"] = "";
@@ -659,6 +671,13 @@ export function createEditor(element: HTMLElement): EditorViewType {
       createTableMonitorPlugin(),
       createBoxTypeGuardPlugin(),
       createFigureTypeGuardPlugin(),
+      // F3: paints the free elements and enforces the anchoring rule.
+      createFreeLayoutPlugin(),
+      // F3: typing with an image or a figure selected writes next to it
+      // instead of destroying it (bug 9). Separate from the layout plugin
+      // because it guards the ELEMENTS, free or not: it must work before any
+      // element is taken out of the flow.
+      createElementTypeGuardPlugin(),
       new Plugin({
         key: new PluginKey("imageToolbarSync"),
         view() {

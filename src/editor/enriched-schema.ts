@@ -27,6 +27,13 @@ import {
   type BoxBorderStyle,
   type BoxVariant,
 } from "./box-style";
+import {
+  freeLayoutGetDOM,
+  freeLayoutToDOM,
+  LEVEL_DEFAULT,
+  parseFreeSpec,
+  type FreeSpec,
+} from "./free-layout";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
 export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
@@ -42,6 +49,22 @@ export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
   borderStyle: { default: DEFAULT_IMAGE_STYLE.borderStyle },
   frameEffect: { default: DEFAULT_IMAGE_STYLE.frameEffect },
 };
+
+/**
+ * Free-layout attr specs (F3.a) to spread into every free-capable node spec:
+ * `free` = null while in flow, otherwise the position RELATIVE TO THE ANCHOR
+ * block (never a page coordinate); `zLevel` = depth in the shared numeric
+ * scale, also carried by text blocks. See free-layout.ts and contract §5.
+ */
+export const FREE_LAYOUT_ATTRS: Record<string, { default: unknown }> = {
+  free: { default: null },
+  zLevel: { default: LEVEL_DEFAULT },
+};
+
+/** Normalise the `free` attribute of a node (defensive: bad data = in flow). */
+export function readFreeAttr(value: unknown): FreeSpec | null {
+  return parseFreeSpec(value);
+}
 
 /** Read a numeric data-* attribute; fallback when missing or malformed. */
 function numAttr(dom: HTMLElement, name: string, fallback: number): number {
@@ -119,13 +142,18 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     borderStyle: { default: DEFAULT_BOX_STYLE.borderStyle },
     cornerRadius: { default: DEFAULT_BOX_STYLE.cornerRadius },
     widthPx: { default: DEFAULT_BOX_STYLE.widthPx },
+    // F3.a: a box participates in wrapping and depth like the other elements.
+    // The wrap STATE is stored from now on; honouring it for a box (float
+    // bands in the calculator and on screen) lands with F3.c.
+    wrap: { default: true },
+    ...FREE_LAYOUT_ATTRS,
   },
   parseDOM: [
     {
       tag: "div[data-aw-box]",
       getAttrs: (dom: HTMLElement | string) => {
         if (typeof dom === "string") return false;
-        return boxStyleGetDOM(dom);
+        return { ...boxStyleGetDOM(dom), ...boxLayoutGetDOM(dom) };
       },
     },
   ],
@@ -144,6 +172,9 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     if (s.cornerRadius !== DEFAULT_BOX_STYLE.cornerRadius) attrs["data-radius"] = String(s.cornerRadius);
     if (s.widthPx != null) attrs["data-width"] = String(s.widthPx);
     if (s.align !== DEFAULT_BOX_STYLE.align) attrs["data-align"] = s.align;
+    // Free-layout markers (F3.a): only what differs from the default.
+    Object.assign(attrs, freeLayoutToDOM(node));
+    if (node.attrs.wrap !== false) attrs["data-wrap"] = "";
     // D10 rule 1: emit BOTH the stable markers and the inline style, so the
     // markup renders universally outside AuraWrite and re-imports exactly.
     const css = computeBoxCss(s);
@@ -215,6 +246,13 @@ export function readImageAttrsFromDOM(dom: HTMLElement): Record<string, unknown>
   };
 }
 
+/** Re-import side of the box free-layout markers (wrap + depth + position). */
+function boxLayoutGetDOM(dom: HTMLElement): Record<string, unknown> {
+  const layout = freeLayoutGetDOM(dom);
+  // Same marker convention as image/figure: `data-wrap` present = wrapping on.
+  return { wrap: dom.hasAttribute("data-wrap"), free: layout.free, zLevel: layout.zLevel };
+}
+
 /** Node spec appended to the schema in editor.ts (single hook point). */
 export const FIGURE_NODE_SPEC: NodeSpec = {
   content: "paragraph+",
@@ -229,7 +267,7 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     width: { default: null },
     height: { default: null },
     align: { default: "center" },
-    wrap: { default: false },
+    wrap: { default: true },
     rotation: { default: 0 },
     flipH: { default: false },
     flipV: { default: false },
@@ -242,6 +280,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     captionPadBottom: { default: 0 },
     // Phase 1 (enrichment) style attrs — same dialect/logic as the image node.
     ...IMAGE_STYLE_ATTRS,
+    // F3.a: depth and free position (shared spec with image and styled_box).
+    ...FREE_LAYOUT_ATTRS,
   },
   parseDOM: [
     {
@@ -262,6 +302,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
           captionBg: dom.getAttribute("data-caption-bg") || "",
           captionPadTop: numAttr(dom, "data-caption-pad-top", 4),
           captionPadBottom: numAttr(dom, "data-caption-pad-bottom", 0),
+          // Free-layout markers (figure carries them on <figure>).
+          ...freeLayoutGetDOM(dom),
         };
       },
     },
@@ -285,6 +327,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     };
     if (gap !== DEFAULT_CAPTION_GAP_PX) figAttrs["data-caption-gap"] = String(gap);
     if (bg) figAttrs["data-caption-bg"] = bg;
+    // Free-layout markers (F3.a) live on the <figure>, the element's own box.
+    Object.assign(figAttrs, freeLayoutToDOM(node));
     const padTop = Number(node.attrs.captionPadTop);
     const padBottom = Number(node.attrs.captionPadBottom);
     if (isFinite(padTop) && padTop > 0) figAttrs["data-caption-pad-top"] = String(Math.round(padTop));

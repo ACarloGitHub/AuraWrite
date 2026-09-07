@@ -326,6 +326,11 @@ export class FigureNodeView implements NodeView {
       if (target === this.img) {
         e.preventDefault();
         this.selectNodeInEditor();
+        // F3: moving from the photo drags the whole figure out of the flow;
+        // the caption stays normal text, exactly as the contract wants (§2.6).
+        void import("./free-drag").then((m) =>
+          m.startFreeDrag(this.view, this.getPos, this.dom, e),
+        );
       }
     });
   }
