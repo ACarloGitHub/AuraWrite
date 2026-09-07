@@ -24,13 +24,17 @@ import {
   PAGE_WIDTH_PX,
   PAGE_HEIGHT_PX,
   PAGE_HEADER_PX,
+  type FreeGeometry,
   type PageMargins,
 } from "./pagination-cassie";
+import { freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, type FreeSpec } from "./free-layout";
 
 export interface PrintSheet {
   html: string;
   pageNumber: number;
   continued: boolean;
+  /** Free elements drawn on this sheet (overlay), serialized WITHOUT flow. */
+  freeHtml: string;
 }
 
 export interface PrintDoc {
@@ -42,7 +46,7 @@ export interface PrintDoc {
 }
 
 export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
-  const { breaks, totalPages } = calculatePageBreaks(doc, margins);
+  const { breaks, totalPages, freeGeometry } = calculatePageBreaks(doc, margins);
   const cuts: number[] = [0];
   for (const b of breaks) {
     const last = cuts[cuts.length - 1];
@@ -55,14 +59,70 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
   const contentHeight = getContentHeight(margins);
   const sheets: PrintSheet[] = [];
 
+  // Free elements must NOT print in the line they live in: they are placed on
+  // the sheet they are DRAWN on, with the same rectangle the editor paints
+  // (contract §7, one source: the calculator). `inFlow` keeps them out of the
+  // slice, `free` collects their overlay markup per page.
+  const inFlow = (node: PMNode): boolean => !isFreeNode(node);
+  const freeByPage = new Map<number, FreeGeometry[]>();
+  for (const geo of freeGeometry) {
+    const list = freeByPage.get(geo.page) ?? [];
+    list.push(geo);
+    freeByPage.set(geo.page, list);
+  }
+
   for (let i = 0; i < cuts.length - 1; i++) {
     const slice = doc.slice(cuts[i], cuts[i + 1], true);
-    const frag = serializer.serializeFragment(slice.content);
     const host = document.createElement("div");
-    host.appendChild(frag);
-    sheets.push({ html: host.innerHTML, pageNumber: i + 1, continued: slice.openStart > 0 });
+    slice.content.forEach((node) => {
+      if (!inFlow(node)) return;
+      host.appendChild(serializer.serializeNode(node, {}));
+    });
+    sheets.push({
+      html: host.innerHTML,
+      pageNumber: i + 1,
+      continued: slice.openStart > 0,
+      freeHtml: freeOverlayHtml(freeByPage.get(i + 1) ?? [], doc, serializer, contentHeight, contentWidth),
+    });
   }
   return { sheets, margins, contentWidth, contentHeight, totalPages: Math.max(sheets.length, totalPages) };
+}
+
+/**
+ * Overlay markup for one sheet. Coordinates come from the engine's own
+ * `freeGeometry`: `top` minus the page's first flow position, `left` from the
+ * same `freeLeftPx` the editor uses. A free element that hangs over the sheet
+ * edge is clipped by the sheet, which is what the contract promises (§4:
+ * intero a schermo, tagliato in stampa).
+ */
+function freeOverlayHtml(
+  list: FreeGeometry[],
+  doc: PMNode,
+  serializer: DOMSerializer,
+  contentHeight: number,
+  contentWidth: number,
+): string {
+  if (list.length === 0) return "";
+  const parts: string[] = [];
+  for (const geo of list) {
+    const node = doc.nodeAt(geo.pos);
+    const spec: FreeSpec | null = node ? parseFreeSpec(node.attrs?.free) : null;
+    if (!node || !spec) continue;
+    // Serialize a copy WITHOUT the free state: the wrapper carries the
+    // position, and an element that still thought it was wrapped/absolute
+    // would offset itself a second time.
+    const plain = node.type.create({ ...node.attrs, free: null, wrap: false, zLevel: 1 }, node.content, node.marks);
+    const holder = document.createElement("div");
+    holder.appendChild(serializer.serializeNode(plain, {}));
+    const width = Math.round(node.attrs?.width ?? node.attrs?.widthPx ?? 0) || contentWidth;
+    const left = Math.round(freeLeftPx({ left: 0, width: contentWidth }, spec, width));
+    const top = Math.round(geo.top - (geo.page - 1) * contentHeight);
+    parts.push(
+      `<div class="aw-print-free" style="left:${left}px;top:${top}px;` +
+        `z-index:${stackDepthOf(geo.level)}">${holder.innerHTML}</div>`,
+    );
+  }
+  return parts.join("");
 }
 
 /** Sheet markup (screen-dressed and print-safe; see file header). */
@@ -75,6 +135,7 @@ export function renderPrintBody(printDoc: PrintDoc): string {
         `<section class="aw-print-sheet" data-page="${s.pageNumber}"` +
         ` style="--sheet-w:${PAGE_WIDTH_PX - 1}px;--sheet-h:${PAGE_HEIGHT_PX - 1}px;--bl:${m.left}px;--bt:${bodyTop}px;--cw:${printDoc.contentWidth}px;--ch:${printDoc.contentHeight}px;--foot:${Math.round(m.bottom / 2)}px;">` +
         `<div class="ProseMirror aw-print-body${s.continued ? " aw-print-cont" : ""}">${s.html}</div>` +
+        (s.freeHtml ? `<div class="aw-print-free-layer">${s.freeHtml}</div>` : "") +
         `<div class="aw-print-pagenum">${s.pageNumber}</div>` +
         `</section>`,
     )
@@ -90,7 +151,7 @@ export function renderPrintBody(printDoc: PrintDoc): string {
 export const PRINT_BASE_CSS = `
 @page { size: A4; margin: 12mm; }
 #aw-print-doc { display: none; color: #111; background: #fff; }
-.aw-print-sheet { position: relative; box-sizing: border-box; }
+.aw-print-sheet { position: relative; box-sizing: border-box; z-index: 0; }
 .ProseMirror.aw-print-body {
   position: static;
   margin: 0 auto; padding: 0;
@@ -103,6 +164,16 @@ export const PRINT_BASE_CSS = `
   position: absolute; left: 0; right: 0; bottom: var(--foot);
   text-align: center; font: 11px Georgia, serif; color: #666;
 }
+
+/* Free elements (F3.2). Layer above the flow, coordinates already resolved by
+   the engine. In paper mode the sheet must stay height:auto (fixed-height boxes
+   are what exploded print into page grids on 2026-08-31), so the layer is
+   anchored to the sheet with a zero-size anchor: an absolutely positioned box
+   inside a position:relative sheet would otherwise stretch the sheet and
+   generate extra pages. */
+.aw-print-free-layer { position: absolute; left: var(--bl); top: var(--bt); width: 0; height: 0; }
+.aw-print-free { position: absolute; }
+.aw-print-free img, .aw-print-free figure { margin: 0; }
 `;
 
 /** Screen dressing used ONLY by the preview window (paper look). */
@@ -132,7 +203,11 @@ export const PRINT_PRINT_CSS = `
   .aw-print-sheet {
     width: auto !important; height: auto !important; overflow: visible !important;
     margin: 0 !important; padding: 0 !important; box-shadow: none !important;
-    background: transparent !important; position: static !important;
+    background: transparent !important;
+    /* relative + its own stacking context: the free-layer anchors here, and a
+       free element sent BEHIND the words (negative depth) still paints above
+       the paper. Page expansion is avoided because the height stays auto. */
+    position: relative !important; z-index: 0;
     break-after: page; page-break-after: always; break-inside: avoid; page-break-inside: avoid;
   }
   .aw-print-sheet:last-child { break-after: auto; page-break-after: auto; }

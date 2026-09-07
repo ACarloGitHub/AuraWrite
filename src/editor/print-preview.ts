@@ -36,6 +36,15 @@ async function buildPrintDoc(view: EditorView): Promise<PrintDoc> {
     host.innerHTML = sheet.html;
     await embedImagesInDom(host);
     sheet.html = host.innerHTML;
+    // The free overlay carries the same images: without this pass, a free
+    // element would print with broken sources while the same picture on the
+    // page shows fine (F3.2).
+    if (sheet.freeHtml) {
+      const freeHost = document.createElement("div");
+      freeHost.innerHTML = sheet.freeHtml;
+      await embedImagesInDom(freeHost);
+      sheet.freeHtml = freeHost.innerHTML;
+    }
   }
   return doc;
 }
