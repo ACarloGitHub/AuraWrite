@@ -355,14 +355,17 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
       ...(imgCss.border ? { border: imgCss.border } : {}),
       ...(imgCss.boxShadow ? { "box-shadow": imgCss.boxShadow } : {}),
     };
-    // T1.4: the air the floating figure keeps from the text includes the frame
-    // and the shadow, so the print sheet needs the same gap.
+    // T1.4: a floating figure carries its float and air inline, so the exported
+    // HTML (no stylesheet) and the print sheet keep the frame and shadow clear.
     const figAlign = String(node.attrs.align ?? "center");
     if (isWrapping(textConditionOf(node)) && (figAlign === "left" || figAlign === "right") && !node.attrs.free) {
       const gap = Math.round(
         OBSTACLE_MARGIN_PX + elementDecorationExtent(node.attrs as Record<string, unknown>, "figure").x,
       );
-      cssMap["--aw-float-gap"] = `${gap}px`;
+      cssMap["float"] = figAlign;
+      cssMap[figAlign === "left" ? "margin-right" : "margin-left"] = `${gap}px`;
+      cssMap["margin-top"] = "0";
+      cssMap["margin-bottom"] = "0";
     }
     const styleText = Object.entries(cssMap)
       .map(([prop, value]) => `${prop}: ${value}`)

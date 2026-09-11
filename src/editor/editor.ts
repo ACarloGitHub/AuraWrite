@@ -332,10 +332,15 @@ const imageSpec: NodeSpec = {
     if (css.boxShadow) styleParts.push(`box-shadow: ${css.boxShadow}`);
     const align = String(node.attrs.align ?? "center");
     if (isWrapping(textConditionOf(node)) && (align === "left" || align === "right") && !node.attrs.free) {
+      // Self-contained float: the exported HTML has no stylesheet, so the
+      // float and its air (frame and shadow included) travel inline.
       const gap = Math.round(
         OBSTACLE_MARGIN_PX + elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name).x,
       );
-      styleParts.push(`--aw-float-gap: ${gap}px`);
+      styleParts.push(`float: ${align}`);
+      styleParts.push(`${align === "left" ? "margin-right" : "margin-left"}: ${gap}px`);
+      styleParts.push("margin-top: 0");
+      styleParts.push("margin-bottom: 0");
     }
     if (styleParts.length) attrs.style = styleParts.join("; ");
     return ["img", attrs];

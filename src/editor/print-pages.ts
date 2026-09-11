@@ -295,10 +295,10 @@ export const PRINT_BASE_CSS = `
    a bare <img> (no wrapper), so it needs its own rule here; the figure keeps
    class aw-figure and would match the editor rules, mirrored here for the
    preview window. */
-.aw-print-body > img[data-wrap][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
-.aw-print-body > img[data-wrap][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
-.aw-print-body .aw-figure[data-wrap][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
-.aw-print-body .aw-figure[data-wrap][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
+.aw-print-body > img[data-wrap=""][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
+.aw-print-body > img[data-wrap=""][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
+.aw-print-body .aw-figure[data-wrap=""][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
+.aw-print-body .aw-figure[data-wrap=""][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
 `;
 
 /** Screen dressing used ONLY by the preview window (paper look). */
