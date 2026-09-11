@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from "prosemirror-view";
 import type { EditorView } from "prosemirror-view";
 import { freeWrapBand, freeLayoutMap, parseFreeSpec } from "./free-layout";
 import { isOverlap, textConditionOf } from "./element-condition";
+import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
@@ -91,6 +92,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const widthCss = box.width / scale;
     const heightCss = (box.bottom - box.top) / scale;
 
+    const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
     let side: "left" | "right";
     let widthPx: number;
     if (condition === "unwrapped") {
@@ -105,6 +107,8 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
         elementHeightPx: heightCss,
         drawnTop: 0,
         wrapOn: true,
+        extraClaimPx: extent.x,
+        extraHeightPx: extent.y,
       });
       if (!band) continue;
       side = band.side;
@@ -159,7 +163,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
       marginTop,
       side,
       widthPx,
-      heightPx: Math.max(1, Math.round(height / scale)),
+      heightPx: Math.max(1, Math.round(height / scale) + Math.round(extent.y)),
       full: condition === "unwrapped",
     });
   }

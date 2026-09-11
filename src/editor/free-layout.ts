@@ -273,13 +273,17 @@ export function freeWrapBand(input: {
   /** Flow y where the element is DRAWN, anchor top + yOff, sign included. */
   drawnTop: number;
   wrapOn: boolean;
+  /** Extra room the frame/shadow need on the text side (T1.4), px. */
+  extraClaimPx?: number;
+  /** Extra room below, for a bottom shadow, px. */
+  extraHeightPx?: number;
 }): FreeWrapBand | null {
   const { column, spec, elementWidthPx: w, elementHeightPx: h, drawnTop, wrapOn } = input;
   if (!wrapOn) return null;
   // `freeLeftPx` already resolves the `xFrom` edge and the offset, so the left
   // edge is handed over as an absolute column position with no edge of its own.
   const leftPx = freeLeftPx(column, spec, w) - column.left;
-  return bandOfRect({
+  const band = bandOfRect({
     columnWidth: column.width,
     xFrom: "left",
     xOff: leftPx,
@@ -287,6 +291,16 @@ export function freeWrapBand(input: {
     elementHeightPx: h,
     drawnTop,
   });
+  if (!band) return null;
+  const extraX = input.extraClaimPx ?? 0;
+  const extraY = input.extraHeightPx ?? 0;
+  if (extraX === 0 && extraY === 0) return band;
+  return {
+    side: band.side,
+    widthPx: Math.round(Math.min(column.width, band.widthPx + extraX)),
+    y0: band.y0,
+    y1: band.y1 + extraY,
+  };
 }
 
 /** A box with a top and a bottom, in whatever ruler the caller measured it with. */

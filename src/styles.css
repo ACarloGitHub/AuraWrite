@@ -6168,7 +6168,7 @@ kbd {
 
 .image-node-wrapper[data-wrap][data-align="left"] {
   float: left;
-  margin-right: 12px;
+  margin-right: var(--aw-float-gap, 12px);
   margin-left: 0;
   margin-top: 0;
   margin-bottom: 0;
@@ -6176,7 +6176,7 @@ kbd {
 
 .image-node-wrapper[data-wrap][data-align="right"] {
   float: right;
-  margin-left: 12px;
+  margin-left: var(--aw-float-gap, 12px);
   margin-right: 0;
   margin-top: 0;
   margin-bottom: 0;
@@ -6559,7 +6559,7 @@ kbd {
 
 .ProseMirror .aw-figure[data-wrap][data-align="left"] {
   float: left;
-  margin-right: 12px;
+  margin-right: var(--aw-float-gap, 12px);
   margin-left: 0;
   margin-top: 0;
   margin-bottom: 0;
@@ -6567,7 +6567,7 @@ kbd {
 
 .ProseMirror .aw-figure[data-wrap][data-align="right"] {
   float: right;
-  margin-left: 12px;
+  margin-left: var(--aw-float-gap, 12px);
   margin-right: 0;
   margin-top: 0;
   margin-bottom: 0;

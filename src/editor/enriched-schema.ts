@@ -35,10 +35,13 @@ import {
   type FreeSpec,
 } from "./free-layout";
 import {
+  isWrapping,
   textConditionFromMarker,
   textConditionMarker,
   textConditionOf,
 } from "./element-condition";
+import { elementDecorationExtent } from "./element-decoration";
+import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
 export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
@@ -352,6 +355,15 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
       ...(imgCss.border ? { border: imgCss.border } : {}),
       ...(imgCss.boxShadow ? { "box-shadow": imgCss.boxShadow } : {}),
     };
+    // T1.4: the air the floating figure keeps from the text includes the frame
+    // and the shadow, so the print sheet needs the same gap.
+    const figAlign = String(node.attrs.align ?? "center");
+    if (isWrapping(textConditionOf(node)) && (figAlign === "left" || figAlign === "right") && !node.attrs.free) {
+      const gap = Math.round(
+        OBSTACLE_MARGIN_PX + elementDecorationExtent(node.attrs as Record<string, unknown>, "figure").x,
+      );
+      cssMap["--aw-float-gap"] = `${gap}px`;
+    }
     const styleText = Object.entries(cssMap)
       .map(([prop, value]) => `${prop}: ${value}`)
       .join("; ");

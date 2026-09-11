@@ -29,6 +29,9 @@ import {
   transformStyleOf,
   transformWithRotation,
 } from "./element-view";
+import { isWrapping, parseTextCondition } from "./element-condition";
+import { elementDecorationExtent } from "./element-decoration";
+import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -150,6 +153,15 @@ export class FigureNodeView implements NodeView {
   /** Frame + shadow wrap the WHOLE figure (photo + caption), one shared rule. */
   private applyStyle(attrs: Record<string, unknown>): void {
     applyFrameAndShadow(this.applied, this.dom, this.appliedImg, this.img, attrs);
+    // T1.4: when the figure floats in the flow, the air it keeps from the text
+    // must include the frame and the shadow.
+    const align = String(attrs.align ?? "center");
+    const floating =
+      !attrs.free && isWrapping(parseTextCondition(attrs.wrap)) && (align === "left" || align === "right");
+    const gap = floating
+      ? `${OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(attrs, "figure").x)}px`
+      : null;
+    setStyleCached(this.applied, this.dom, "--aw-float-gap", gap);
   }
 
   /** Caption look: background fills the strip, vertical whitespace via padding. */

@@ -32,7 +32,10 @@ import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { createAtomicElementGuardPlugin } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
-import { textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
+import { isWrapping, textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
+import { computeImageCss, normalizeImageStyle } from "./image-style";
+import { elementDecorationExtent } from "./element-decoration";
+import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -316,6 +319,25 @@ const imageSpec: NodeSpec = {
     if (node.attrs.captionPadTop) attrs["data-caption-pad-top"] = String(node.attrs.captionPadTop);
     if (node.attrs.captionPadBottom) attrs["data-caption-pad-bottom"] = String(node.attrs.captionPadBottom);
     Object.assign(attrs, imageStyleToDOM(node));
+    // T1.4, D10 rule 1: the frame and the shadow must travel with the image,
+    // or print and the exported HTML would lose them. The editor draws the
+    // frame as an `outline` (it takes no room), so the export does too.
+    const css = computeImageCss(normalizeImageStyle(node.attrs as Record<string, unknown>));
+    const styleParts: string[] = [];
+    if (css.borderRadius) styleParts.push(`border-radius: ${css.borderRadius}`);
+    if (css.border) {
+      styleParts.push(`outline: ${css.border}`);
+      styleParts.push("outline-offset: 0px");
+    }
+    if (css.boxShadow) styleParts.push(`box-shadow: ${css.boxShadow}`);
+    const align = String(node.attrs.align ?? "center");
+    if (isWrapping(textConditionOf(node)) && (align === "left" || align === "right") && !node.attrs.free) {
+      const gap = Math.round(
+        OBSTACLE_MARGIN_PX + elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name).x,
+      );
+      styleParts.push(`--aw-float-gap: ${gap}px`);
+    }
+    if (styleParts.length) attrs.style = styleParts.join("; ");
     return ["img", attrs];
   },
 };

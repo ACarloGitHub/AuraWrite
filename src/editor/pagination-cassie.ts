@@ -38,6 +38,7 @@ import {
   type FreeWrapBand,
 } from "./free-layout";
 import { isOverlap, isUnwrapped, isWrapping, textConditionOf } from "./element-condition";
+import { elementDecorationExtent } from "./element-decoration";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -698,7 +699,10 @@ function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } 
   // ONE definition of the element's own width, shared with the free bands.
   const w = freeElementWidth(node);
   if (w === null) return null;
-  return { side: align, widthPx: w + OBSTACLE_MARGIN_PX };
+  // Frame and shadow reach beyond the photo: the text must keep clear of them
+  // too (T1.4).
+  const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
+  return { side: align, widthPx: w + OBSTACLE_MARGIN_PX + Math.round(extent.x) };
 }
 
 /** Normalise a raw line-start to a word start (never inside whitespace). */
@@ -1171,6 +1175,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         // The band the NEXT pass will use: same rectangle, but the anchor top
         // is now the one this pass settled on.
         const cond = textConditionOf(node);
+        const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
         let next: FreeWrapBand | null = null;
         let full = false;
         if (isWrapping(cond)) {
@@ -1181,11 +1186,13 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
             elementHeightPx: h,
             drawnTop: top,
             wrapOn: true,
+            extraClaimPx: extent.x,
+            extraHeightPx: extent.y,
           });
         } else if (isUnwrapped(cond) && h > 0) {
           // Unwrapped claims the WHOLE width over its drawn rectangle: the text
           // above stays, the text below resumes under the element.
-          next = { side: "left", widthPx: contentWidth, y0: top, y1: top + h };
+          next = { side: "left", widthPx: contentWidth, y0: top, y1: top + h + extent.y };
           full = true;
         }
         if (next) outBands.push({ ...next, pos, insertPos: null, lineTop: next.y0, full });
