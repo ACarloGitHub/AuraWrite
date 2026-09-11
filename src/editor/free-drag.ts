@@ -108,6 +108,8 @@ export function startFreeDrag(
   };
   let anchorTopClient = rect.top;
   let anchorIndex = -1;
+  /** Spot INSIDE a paragraph where an in-flow element lands (between lines). */
+  let lastTextPos: number | null = null;
 
   const ensureGhost = (): HTMLElement => {
     if (flight.ghost) return flight.ghost;
@@ -162,15 +164,24 @@ export function startFreeDrag(
     if (found) {
       anchorIndex = found.index;
       anchorTopClient = found.top;
+    } else {
+      anchorIndex = -1;
+    }
+    // An element IN THE FLOW can land BETWEEN TWO LINES of a paragraph; a free
+    // element keeps its free placement. The exact spot is the character under
+    // the pointer, mapped by the editor itself (cross-engine safe).
+    const precise = wasFreeAtPress ? null : preciseDropPos(view, ev.clientX, ev.clientY);
+    lastTextPos = precise?.pos ?? null;
+    const guideTop = precise ? precise.lineTop : found ? found.top : null;
+    if (guideTop !== null) {
       const line = ensureGuide();
       const col = columnOf(view);
       line.style.left = `${col.viewportLeft}px`;
       line.style.width = `${col.width}px`;
-      line.style.top = `${found.top - 1}px`;
+      line.style.top = `${guideTop - 1}px`;
       line.style.display = "block";
-    } else {
-      anchorIndex = -1;
-      if (flight.guide) flight.guide.style.display = "none";
+    } else if (flight.guide) {
+      flight.guide.style.display = "none";
     }
     if (wasFreeAtPress) moveLiveBand(ev.clientX - grabOffsetX, ev.clientY - grabOffsetY);
     // Remember where the copy is, so the release can turn it into distances.
@@ -245,6 +256,7 @@ export function startFreeDrag(
       pressTopClient: rect.top,
       anchorTopClient,
       anchorIndex,
+      textPos: lastTextPos,
     });
     hooks.onDone?.();
   };
@@ -321,6 +333,44 @@ function topLevelAnchors(view: EditorView): { index: number; el: HTMLElement }[]
   return out;
 }
 
+/**
+ * The exact document spot BETWEEN TWO LINES an in-flow element can land on:
+ * the character under the pointer, when that character is inside a top-level
+ * paragraph. Returns null when the pointer is on a non-paragraph block (image,
+ * figure, box, table), on a heading, or between blocks: the drop then falls
+ * back to changing which block the element follows.
+ *
+ * Headings are excluded on purpose: splitting one would produce two headings.
+ */
+function preciseDropPos(
+  view: EditorView,
+  clientX: number,
+  clientY: number,
+): { pos: number; lineTop: number } | null {
+  const coords = view.posAtCoords({ left: clientX, top: clientY });
+  if (!coords) return null;
+  const { doc } = view.state;
+  let $pos;
+  try {
+    $pos = doc.resolve(coords.pos);
+  } catch {
+    return null;
+  }
+  if ($pos.depth < 1) return null;
+  const block = $pos.node(1);
+  if (!block.isTextblock || block.type.name !== "paragraph") return null;
+  const blockStart = $pos.before(1);
+  const offset = coords.pos - (blockStart + 1);
+  if (offset < 0 || offset > block.content.size) return null;
+  let lineTop = clientY;
+  try {
+    lineTop = view.coordsAtPos(coords.pos).top;
+  } catch {
+    /* keep the pointer's own height */
+  }
+  return { pos: coords.pos, lineTop };
+}
+
 /** Decoration widgets the pagination plugin inserts between blocks. */
 const FREE_DRAG_SKIP_SELECTOR = ".aw-page-break, .page-break-widget, [data-page]";
 
@@ -351,6 +401,9 @@ interface DropInfo {
   anchorTopClient: number;
   /** -1 when the pointer sits above every text block (no anchor exists). */
   anchorIndex: number;
+  /** Inside a paragraph, the exact spot for a between-lines drop; null for a
+   *  block-level move. */
+  textPos: number | null;
 }
 
 /**
@@ -387,6 +440,13 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   // horizontal is the business of Left/Center/Right, not of the pointer. Only
   // an explicit command takes an element out of the flow.
   if (!wasFree) {
+    // Between two lines of a paragraph: split it and land the element in
+    // between, in one transaction.
+    if (drop.textPos !== null) {
+      dropInFlowBetweenLines(view, pos, oldEnd, node, drop.textPos);
+      return;
+    }
+    // Otherwise only the block it follows changes.
     const targetIndex = anchorless ? 0 : anchorIndex + 1;
     if (targetIndex !== currentIndex) {
       try {
@@ -469,6 +529,56 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   // The caret goes to the anchor's text: the writer keeps typing where the
   // element now hangs, instead of losing the selection on a moving node.
   focusAnchor(view, caretAnchorIndex);
+}
+
+/**
+ * Land an in-flow element BETWEEN TWO LINES: split the paragraph at `textPos`
+ * and put the element between the two halves, in ONE transaction (one undo).
+ * At the very start or end of the paragraph the element simply goes before or
+ * after it, so no empty paragraph is ever invented.
+ */
+function dropInFlowBetweenLines(
+  view: EditorView,
+  pos: number,
+  oldEnd: number,
+  node: PMNode,
+  textPos: number,
+): void {
+  const { state } = view;
+  try {
+    // Remove the element first; the split target is mapped through the
+    // deletion so it is right whether the element travelled up or down.
+    let tr = state.tr.delete(pos, oldEnd);
+    const mapped = tr.mapping.map(textPos);
+    const $t = tr.doc.resolve(mapped);
+    if ($t.depth < 1) return;
+    const blockStart = $t.before(1);
+    const block = $t.node(1);
+    if (!block.isTextblock || block.type.name !== "paragraph") return;
+    const offset = mapped - (blockStart + 1);
+
+    let newPos: number;
+    if (offset <= 0) {
+      newPos = blockStart;
+      tr = tr.insert(blockStart, node);
+    } else if (offset >= block.content.size) {
+      newPos = blockStart + block.nodeSize;
+      tr = tr.insert(newPos, node);
+    } else {
+      const before = block.type.create(block.attrs, block.content.cut(0, offset), block.marks);
+      const after = block.type.create(block.attrs, block.content.cut(offset), block.marks);
+      newPos = blockStart + before.nodeSize;
+      tr = tr.replaceWith(blockStart, blockStart + block.nodeSize, [before, node, after]);
+    }
+    try {
+      tr = tr.setSelection(NodeSelection.create(tr.doc, newPos));
+    } catch {
+      /* keep the caret wherever the transaction left it */
+    }
+    view.dispatch(tr);
+  } catch {
+    /* the document stays exactly as it was */
+  }
 }
 
 /** Top-level index whose start equals `pos`. */
