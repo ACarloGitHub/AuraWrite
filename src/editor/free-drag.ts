@@ -1,6 +1,10 @@
 // ============================================================================
-// Free drag (F3) — the gesture that takes an element out of the flow, and the
-// one that moves it once it is free.
+// Free drag (F3) — the gesture that MOVES an element. It never changes the
+// element's nature (T1.1, 2026-09-11): an element in the flow is only
+// reordered among the blocks; a free element follows the pointer. Only an
+// explicit command (the Free button) takes an element out of the flow or puts
+// it back, exactly as the contract rule wants: "un gesto non cambia la natura
+// di un elemento".
 //
 // Contract §4 ("Trascinare", "Rilasciare", "Dopo"), revised 2026-09-07: the
 // first delivery of this feature had no gesture at all, and Carlo stopped the
@@ -371,19 +375,49 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   const currentIndex = indexOfPos(view, pos);
   const wasFree = parseFreeSpec(node.attrs?.free) !== null;
 
+  // The anchor is a TEXT block (contract §2.3). When the pointer sits above
+  // every line there is none: -1 (the caller answers by opening a line, and
+  // only for an element that is leaving the flow).
+  const anchorless = drop.anchorIndex < 0;
+  const anchorIndex = anchorless ? -1 : Math.max(0, Math.min(drop.anchorIndex, state.doc.childCount - 1));
+
+  // T1.1: a gesture MOVES an element, it never changes its nature. An element
+  // that was in the flow STAYS in the flow: the drop only changes which block
+  // it follows, because in flow the order in the document IS the position. The
+  // horizontal is the business of Left/Center/Right, not of the pointer. Only
+  // an explicit command takes an element out of the flow.
+  if (!wasFree) {
+    const targetIndex = anchorless ? 0 : anchorIndex + 1;
+    if (targetIndex !== currentIndex) {
+      try {
+        const insertPosBefore =
+          targetIndex >= state.doc.childCount
+            ? state.doc.content.size
+            : blockStartPos(view, targetIndex);
+        let tr = state.tr.delete(pos, oldEnd);
+        // Mapping makes the target right whether the element travelled down or
+        // up the document.
+        tr = tr.insert(tr.mapping.map(insertPosBefore), node);
+        view.dispatch(tr);
+      } catch {
+        /* the document stays exactly as it was */
+      }
+    }
+    // The caret follows the element's new place, as it does after a free drop.
+    focusAnchor(view, anchorless ? 0 : anchorIndex);
+    return;
+  }
+
   const host = view.dom as HTMLElement;
   const hostRect = host.getBoundingClientRect();
   const column = textColumn(host);
   const leftInHost = drop.startLeft - hostRect.left;
   const topInHost = drop.startTop - hostRect.top;
 
-  // The anchor is a TEXT block (contract §2.3). When the pointer sits above
-  // every line there is none, and Carlo's rule applies: an empty paragraph is
-  // opened at the element's own slot and becomes the anchor, in this very
-  // transaction - so one undo removes the picture and the line together, and
-  // ordinary insertions are never touched.
-  const anchorless = drop.anchorIndex < 0;
-  const anchorIndex = anchorless ? -1 : Math.max(0, Math.min(drop.anchorIndex, state.doc.childCount - 1));
+  // Carlo's rule for an element leaving the flow with no text block above it:
+  // an empty paragraph is opened at the element's own slot and becomes the
+  // anchor, in this very transaction - so one undo removes the picture and the
+  // line together, and ordinary insertions are never touched.
   const anchorTopInHost = anchorless
     ? drop.pressTopClient - hostRect.top // the new line takes the element's old slot
     : drop.anchorTopClient - hostRect.top;
