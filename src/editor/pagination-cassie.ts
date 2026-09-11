@@ -26,7 +26,7 @@
  *   (footer) = 859px (matches the constant below).
  *
  * The functions in this module are pure: given a node, return
- * metrics. They have no side effects, no DOM access, and no state.
+ * measurements. They have no side effects, no DOM access, and no state.
  * That makes them trivial to test in isolation.
  */
 
@@ -37,6 +37,38 @@ import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth,
   type FreeWrapBand,
 } from "./free-layout";
+// The rule "how wide is a text line at this height" lives in its own module:
+// the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
+// to that one question, and they must be written once for screen, paper and
+// page count alike.
+import {
+  ObstacleSet,
+  OBSTACLE_MARGIN_PX,
+  type Obstacle,
+  type ObstacleSide,
+} from "./text-obstacles";
+// Text metrics (fonts, line heights, block spacing) live in their own module:
+// this file answers "where do the pages break", that one answers "how tall is a
+// line and how wide is a word". The generation counter is what invalidates the
+// per-block cache when a probe finds different styles.
+import {
+  baseMetricsFor,
+  fontOfChild,
+  getEditorMetrics,
+  getMetricsGeneration,
+  lineHeightFactor,
+  paragraphStyle,
+  textStyleFor,
+  type BlockSpacing,
+  type EditorMetrics,
+  type TextMetrics,
+} from "./text-metrics";
+
+// The probed metrics, read through the module so every call sees the latest
+// probe without this file having to hold a second copy of the state.
+function metrics(): EditorMetrics {
+  return getEditorMetrics();
+}
 
 export const PAGE_WIDTH_PX = 794;
 export const PAGE_HEIGHT_PX = 1123;
@@ -72,162 +104,6 @@ export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - DEFAULT_MARGIN_LEFT - DEFAULT_MA
 export const CONTENT_HEIGHT_PX =
   PAGE_HEIGHT_PX - DEFAULT_MARGIN_TOP - DEFAULT_MARGIN_BOTTOM - PAGE_HEADER_PX - PAGE_FOOTER_PX;
 
-// ---- Live editor metrics (R-b) ---------------------------------------------
-// Pagination must measure the CSS the editor ACTUALLY renders with:
-//  - the container computed style (.ProseMirror: family, size, line-height);
-//  - the DOCUMENT itself: every paragraph carries its own `lineHeight` attr
-//    (toolbar "Line Height": 1.0/1.15/1.5/2.0) and inline `fontSize` marks;
-//  - the cascade per node type (h1..h6, pre/code, caption strips), PROBED
-//    once per sync from a hidden sample so no CSS value is ever duplicated
-//    as a constant here.
-// Before the first DOM sync (non-browser use) a static fallback matching the
-// current styles.css applies.
-export interface TextMetrics {
-  font: string;
-  sizePx: number;
-  linePx: number;
-}
-
-interface BlockSpacing { beforePx: number; afterPx: number; }
-
-interface EditorMetrics {
-  familyStack: string;
-  body: TextMetrics;
-  caption: TextMetrics; // .image-caption / .aw-figure__caption base (12px)
-  headings: TextMetrics[]; // index 0..5 = level 1..6
-  code: TextMetrics;
-  // vertical margins the renderer applies per top-level block type
-  // (adjacent margins collapse, like the browser does)
-  spacing: {
-    paragraph: BlockSpacing;
-    heading: BlockSpacing; // level 1 (probe fallback for heading spacing)
-    headings: BlockSpacing[]; // index 0..5 = level 1..6 (F1.5: per-level)
-    image: BlockSpacing;
-    figure: BlockSpacing;
-    code: BlockSpacing;
-    other: BlockSpacing;
-  };
-}
-
-function fallbackMetrics(): EditorMetrics {
-  const size = 11 * 96 / 72; // 11pt at 96 DPI
-  const body: TextMetrics = { font: `${size.toFixed(2)}px Lora, Georgia, serif`, sizePx: size, linePx: size * 1.5 };
-  const headingSize = [2, 1.5, 1.17, 1, 0.83, 0.67].map((em) => size * em);
-  const headingFactor = [1.2, 1.3, 1.4, 1.4, 1.4, 1.4];
-  return {
-    familyStack: "Lora, Georgia, serif",
-    body,
-    caption: { font: `${12}px Lora, Georgia, serif`, sizePx: 12, linePx: 12 * 1.5 },
-    headings: headingSize.map((s, i) => ({
-      font: `${s.toFixed(2)}px Inter, system-ui, sans-serif`,
-      sizePx: s,
-      linePx: s * headingFactor[i],
-    })),
-    code: { font: `${12}px JetBrains Mono, monospace`, sizePx: 12, linePx: 12 * 1.5 },
-    spacing: {
-      paragraph: { beforePx: 0, afterPx: size }, // ~1em del corpo
-      heading: { beforePx: 0, afterPx: size / 2 },
-      headings: [1, 1.5, 1.17, 1, 0.83, 0.67].map(() => ({ beforePx: 0, afterPx: size / 2 })),
-      image: { beforePx: 8, afterPx: 8 },
-      figure: { beforePx: 8, afterPx: 8 },
-      code: { beforePx: 0, afterPx: 0 },
-      other: { beforePx: 0, afterPx: 0 },
-    },
-  };
-}
-
-let metrics: EditorMetrics = fallbackMetrics();
-
-// F1.4: bumped ONLY when a DOM sync actually changes the probed styles, so
-// the per-block layout cache (see cachedMeasure) survives ordinary typing.
-let metricsGen = 1;
-
-function textMetricsEq(a: TextMetrics, b: TextMetrics): boolean {
-  return a.font === b.font && a.sizePx === b.sizePx && a.linePx === b.linePx;
-}
-
-function blockSpacingEq(a: BlockSpacing, b: BlockSpacing): boolean {
-  return a.beforePx === b.beforePx && a.afterPx === b.afterPx;
-}
-
-function editorMetricsEq(a: EditorMetrics, b: EditorMetrics): boolean {
-  return a.familyStack === b.familyStack
-    && textMetricsEq(a.body, b.body)
-    && textMetricsEq(a.caption, b.caption)
-    && textMetricsEq(a.code, b.code)
-    && a.headings.length === b.headings.length
-    && a.headings.every((h, i) => textMetricsEq(h, b.headings[i]))
-    && blockSpacingEq(a.spacing.paragraph, b.spacing.paragraph)
-    && blockSpacingEq(a.spacing.heading, b.spacing.heading)
-    && a.spacing.headings.length === b.spacing.headings.length
-    && a.spacing.headings.every((h, i) => blockSpacingEq(h, b.spacing.headings[i]))
-    && blockSpacingEq(a.spacing.image, b.spacing.image)
-    && blockSpacingEq(a.spacing.figure, b.spacing.figure)
-    && blockSpacingEq(a.spacing.code, b.spacing.code)
-    && blockSpacingEq(a.spacing.other, b.spacing.other);
-}
-
-function lineHeightPxOf(spec: string, sizePx: number): number {
-  const v = parseFloat(spec);
-  if (!isFinite(v) || v <= 0) return sizePx * 1.2;
-  return v < 6 ? v * sizePx : v; // a bare number is a factor, otherwise px
-}
-
-function lineHeightFactor(raw: unknown, sizePx: number, fallbackFactor: number): number {
-  const s = String(raw ?? "").trim();
-  if (!s) return fallbackFactor;
-  if (s.endsWith("px")) {
-    const px = parseFloat(s);
-    return isFinite(px) && px > 0 && sizePx > 0 ? px / sizePx : fallbackFactor;
-  }
-  const n = parseFloat(s);
-  return isFinite(n) && n > 0 ? n : fallbackFactor;
-}
-
-
-/** Family portion of a base font string (e.g. 'Lora, Georgia, serif'). */
-function baseFamilyOf(base: TextMetrics): string {
-  const i = base.font.lastIndexOf("px ");
-  return i >= 0 ? base.font.slice(i + 3) : metrics.familyStack;
-}
-
-/** Italic prefix of a base font string (caption bases are italic). */
-function baseStylePrefixOf(base: TextMetrics): string {
-  const m = /^(italic |oblique )/.exec(base.font);
-  return m ? m[0] : "";
-}
-
-/**
- * v2b: the CSS font a text child actually renders with, from its marks
- * (fontSize, fontFamily, em, strong, code) layered on the block's base.
- */
-function fontOfChild(child: PMNode, base: TextMetrics): { font: string; sizePx: number } {
-  if (child.marks.length === 0) return { font: base.font, sizePx: base.sizePx };
-  let sizePx = base.sizePx;
-  let family = baseFamilyOf(base);
-  let stylePrefix = baseStylePrefixOf(base);
-  let weightPrefix = "";
-  for (const m of child.marks) {
-    switch (m.type.name) {
-      case "fontSize": {
-        const px = parseFloat(String(m.attrs.size));
-        if (isFinite(px) && px > 0) sizePx = px;
-        break;
-      }
-      case "fontFamily": {
-        const fam = String(m.attrs.font || "").trim();
-        if (fam) family = fam + ", " + baseFamilyOf(base);
-        break;
-      }
-      case "em": stylePrefix = "italic "; weightPrefix = ""; break;
-      case "strong": weightPrefix = "700 "; break;
-      case "code": family = '"Courier New", Courier, monospace'; break;
-      default: break;
-    }
-  }
-  return { font: stylePrefix + weightPrefix + sizePx.toFixed(2) + "px " + family, sizePx };
-}
-
 const WORD_TOKENIZER = new Intl.Segmenter(undefined, { granularity: "word" });
 
 const WORD_WIDTH_CACHE = new Map<string, number>();
@@ -250,38 +126,6 @@ function measureWord(word: string, font: string): number {
   return w;
 }
 
-interface ParagraphStyle {
-  mixed: boolean;
-  /** Uniform style when !mixed; first-child style otherwise (fallback metrics). */
-  style: TextMetrics;
-}
-
-/** v2b: does every text child render with the same font? */
-function paragraphStyle(node: PMNode, base: TextMetrics): ParagraphStyle {
-  const baseFactor = base.linePx / base.sizePx;
-  let only: { font: string; sizePx: number } | null = null;
-  let mixed = false;
-  node.forEach((c) => {
-    if (!c.isText || !(c.text || "").length) return;
-    const f = fontOfChild(c, base);
-    if (!only) only = f;
-    else if (only.font !== f.font) mixed = true;
-  });
-  const first = only as { font: string; sizePx: number } | null;
-  const sizePx = first ? first.sizePx : base.sizePx;
-  const factor = lineHeightFactor((node.attrs as Record<string, unknown> | undefined)?.lineHeight, sizePx, baseFactor);
-  const style: TextMetrics = {
-    font: first ? first.font : base.font,
-    sizePx,
-    linePx: sizePx * factor,
-  };
-  return { mixed, style };
-}
-
-/** v2a-compatible single-style resolution (kept for call sites that need one). */
-function textStyleFor(node: PMNode, base: TextMetrics): TextMetrics {
-  return paragraphStyle(node, base).style;
-}
 
 /**
  * v2b greedy line breaker for MIXED-style paragraphs: each word measured in
@@ -396,87 +240,6 @@ function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics)
   return { heightPx: last.y + last.h, lineCount: lines.length };
 }
 
-export function getEditorMetrics(): EditorMetrics {
-  return metrics;
-}
-
-/**
- * Refresh metrics by probing the real cascade. Attach a hidden sample to the
- * editor's own parent so descendant selectors (`.ProseMirror h1`,
- * `.aw-figure__caption`...) match exactly as in the live editor.
- */
-export function syncEditorMetricsFromDom(el: Element | null | undefined): void {
-  if (!el || typeof window === "undefined" || typeof document === "undefined") return;
-  try {
-    const cs = window.getComputedStyle(el);
-    const bodySizePx = parseFloat(cs.fontSize);
-    if (!isFinite(bodySizePx) || bodySizePx <= 0) return;
-    const bodyLinePx = cs.lineHeight && cs.lineHeight !== "normal"
-      ? lineHeightPxOf(cs.lineHeight, bodySizePx)
-      : bodySizePx * 1.5;
-    const host = document.createElement("div");
-    host.className = "ProseMirror";
-    host.setAttribute("aria-hidden", "true");
-    host.style.cssText = "position:absolute;visibility:hidden;left:-9999px;top:0;width:auto;padding:0;margin:0;";
-    host.innerHTML =
-      "<p>x</p>" +
-      "<h1>x</h1><h2>x</h2><h3>x</h3><h4>x</h4><h5>x</h5><h6>x</h6>" +
-      "<pre><code>x</code></pre>" +
-      "<div class=\"image-caption\">x</div>" +
-      "<div class=\"image-node-wrapper\"><img src=\"x\"></div>" +
-      "<figure class=\"aw-figure\"><img src=\"x\"><figcaption class=\"aw-figure__caption\"><p>x</p></figcaption></figure>";
-    const parent = el.parentElement ?? document.body;
-    parent.appendChild(host);
-    const read = (q: string, sizePx: number): TextMetrics => {
-      const found = host.querySelector(q) as Element | null;
-      if (!found) return { font: `${sizePx.toFixed(2)}px ${metrics.familyStack}`, sizePx, linePx: sizePx * 1.5 };
-      const s = window.getComputedStyle(found);
-      const sz = parseFloat(s.fontSize) || sizePx;
-      const lh = s.lineHeight && s.lineHeight !== "normal" ? lineHeightPxOf(s.lineHeight, sz) : sz * 1.5;
-      const style = s.fontStyle === "italic" || s.fontStyle === "oblique" ? `${s.fontStyle} ` : "";
-      return { font: `${style}${sz.toFixed(2)}px ${s.fontFamily}`, sizePx: sz, linePx: lh };
-    };
-    const readSpacing = (q: string): BlockSpacing => {
-      const found = host.querySelector(q) as Element | null;
-      if (!found) return { beforePx: 0, afterPx: 0 };
-      const s = window.getComputedStyle(found);
-      const before = parseFloat(s.marginTop);
-      const after = parseFloat(s.marginBottom);
-      return {
-        beforePx: isFinite(before) && before > 0 ? before : 0,
-        afterPx: isFinite(after) && after > 0 ? after : 0,
-      };
-    };
-    const next: EditorMetrics = {
-      familyStack: cs.fontFamily || metrics.familyStack,
-      body: { font: `${bodySizePx.toFixed(2)}px ${cs.fontFamily}`, sizePx: bodySizePx, linePx: bodyLinePx },
-      caption: read(".image-caption", 12),
-      headings: (["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((tag, i) =>
-        read(tag, metrics.headings[i]?.sizePx ?? bodySizePx),
-      ),
-      code: read("pre code", 12),
-      spacing: {
-        paragraph: readSpacing("p"),
-        // F1.5: heading margins are per-level (the renderer uses 0.5em of the
-        // heading's own font-size), so one shared heading spacing drifts on
-        // every level >= 2. Read the real cascade per level.
-        heading: readSpacing("h1"),
-        headings: (["h1", "h2", "h3", "h4", "h5", "h6"] as const).map((tag) => readSpacing(tag)),
-        image: readSpacing(".image-node-wrapper"),
-        figure: readSpacing(".aw-figure"),
-        code: readSpacing("pre"),
-        other: { beforePx: 0, afterPx: 0 },
-      },
-    };
-    parent.removeChild(host);
-    if (!editorMetricsEq(metrics, next)) {
-      metrics = next;
-      metricsGen++;
-    }
-  } catch {
-    // keep the last known metrics
-  }
-}
 
 // Grapheme splitter used to resolve line-start cursors that fall inside a
 // fragment (same segmentation the layout engine works with).
@@ -512,7 +275,7 @@ export interface LineInfo {
  */
 export function measureBlock(node: PMNode | null | undefined, margins?: PageMargins): BlockMetrics {
   if (!node) {
-    return { heightPx: metrics.body.linePx, lineCount: 1 };
+    return { heightPx: metrics().body.linePx, lineCount: 1 };
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   if (node.type.name === "styled_box") {
@@ -551,15 +314,6 @@ export function blockLineStartOffsets(
   return paragraphLineOffsets(node, contentWidth, baseMetricsFor(node));
 }
 
-/** The cascade metrics a node type starts from (before its own attrs/marks). */
-function baseMetricsFor(node: PMNode): TextMetrics {
-  if (node.type.name === "code_block") return metrics.code;
-  if (node.type.name === "heading") {
-    const level = Number(node.attrs.level);
-    return metrics.headings[Number.isFinite(level) ? Math.min(6, Math.max(1, level)) - 1 : 0];
-  }
-  return metrics.body;
-}
 
 /** Measure a text string at an explicit width with an explicit style. */
 function measureTextHeight(
@@ -626,13 +380,13 @@ function measureBoxNode(node: PMNode, contentWidth: number): BlockMetrics {
   let lines = 0;
   node.forEach((child) => {
     const m = child.type.name === "paragraph"
-      ? measureParagraph(child, innerWidth, metrics.body)
+      ? measureParagraph(child, innerWidth, metrics().body)
       : measureTextBlock(child, innerWidth);
     height += m.heightPx;
     lines += m.lineCount;
   });
   if (lines === 0) {
-    height += metrics.body.linePx;
+    height += metrics().body.linePx;
     lines = 1;
   }
   return { heightPx: height, lineCount: lines };
@@ -659,10 +413,10 @@ function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
   if (caption.trim()) {
     const pad = captionPaddings(node);
     const captionWidth = Math.max(120, Math.min(imageWidth, contentWidth));
-    const strip = measureTextHeight(caption, captionWidth, metrics.caption.font, metrics.caption.linePx);
+    const strip = measureTextHeight(caption, captionWidth, metrics().caption.font, metrics().caption.linePx);
     height += pad.top + pad.bottom + strip.heightPx;
   }
-  return { heightPx: height, lineCount: Math.ceil(height / metrics.body.linePx) };
+  return { heightPx: height, lineCount: Math.ceil(height / metrics().body.linePx) };
 }
 
 /**
@@ -688,20 +442,20 @@ function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
   let captionLines = 0;
   node.forEach((child) => {
     const m = child.type.name === "paragraph"
-      ? measureParagraph(child, captionWidth, metrics.caption)
-      : measureTextBlock(child, captionWidth, textStyleFor(child, metrics.caption));
+      ? measureParagraph(child, captionWidth, metrics().caption)
+      : measureTextBlock(child, captionWidth, textStyleFor(child, metrics().caption));
     captionHeight += m.heightPx;
     captionLines += m.lineCount;
   });
   if (captionLines === 0) {
-    captionHeight += textStyleFor(node, metrics.caption).linePx;
+    captionHeight += textStyleFor(node, metrics().caption).linePx;
     captionLines = 1;
   }
   const pad = captionPaddings(node);
   captionHeight += pad.top + pad.bottom;
 
   const height = imageHeight + gap + captionHeight;
-  return { heightPx: height, lineCount: Math.ceil(height / metrics.body.linePx) };
+  return { heightPx: height, lineCount: Math.ceil(height / metrics().body.linePx) };
 }
 
 /**
@@ -709,7 +463,7 @@ function measureFigureNode(node: PMNode, contentWidth: number): BlockMetrics {
  * R-b: line height and font follow the block's own style resolution.
  */
 export function getBlockLines(node: PMNode | null | undefined, margins?: PageMargins): LineInfo {
-  const style = node ? textStyleFor(node, baseMetricsFor(node)) : metrics.body;
+  const style = node ? textStyleFor(node, baseMetricsFor(node)) : metrics().body;
   if (!node) {
     return { heightPx: style.linePx, lines: [], fullText: "" };
   }
@@ -811,7 +565,7 @@ function isSplittableParagraph(node: PMNode): boolean {
 export function lineStartOffsets(
   text: string,
   contentWidth: number,
-  style: TextMetrics = metrics.body,
+  style: TextMetrics = metrics().body,
 ): number[] | null {
   try {
     const prepared = prepareWithSegments(text, style.font, WS_OPTIONS);
@@ -916,13 +670,8 @@ function paragraphLineOffsets(node: PMNode, contentWidth: number, style: TextMet
 // construction, so no-float behaviour is unchanged.
 // ---------------------------------------------------------------------------
 
-const FLOAT_MARGIN_PX = 12; // .image-node-wrapper / .aw-figure float margins (styles.css)
-const MIN_LINE_WIDTH_PX = 120;
-
-interface FloatBox { side: "left" | "right"; widthPx: number; y0: number; y1: number; }
-
 function spacingFor(node: PMNode): BlockSpacing {
-  const sp = metrics.spacing;
+  const sp = metrics().spacing;
   switch (node.type.name) {
     case "paragraph": return sp.paragraph;
     case "heading": {
@@ -946,7 +695,7 @@ function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } 
   if (align !== "left" && align !== "right") return null;
   const w = Number(node.attrs.width);
   if (!isFinite(w) || w <= 0) return null;
-  return { side: align, widthPx: Math.round(w) + FLOAT_MARGIN_PX };
+  return { side: align, widthPx: Math.round(w) + OBSTACLE_MARGIN_PX };
 }
 
 /** Normalise a raw line-start to a word start (never inside whitespace). */
@@ -1103,7 +852,7 @@ const LAYOUT_CACHE = new WeakMap<PMNode, CachedLayout>();
 function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWidth: number): CachedLayout {
   const base = baseMetricsFor(node);
   const e: CachedLayout = {
-    g: metricsGen, w: contentWidth, splittable: false,
+    g: getMetricsGeneration(), w: contentWidth, splittable: false,
     heightPx: 0, style: base, mixed: false, relOffsets: null, relMixed: null,
   };
   if (!isSplittableParagraph(node)) {
@@ -1130,7 +879,7 @@ function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWi
 
 function cachedMeasure(node: PMNode, margins: PageMargins | undefined, contentWidth: number): CachedLayout {
   const hit = LAYOUT_CACHE.get(node);
-  if (hit && hit.g === metricsGen && hit.w === contentWidth) return hit;
+  if (hit && hit.g === getMetricsGeneration() && hit.w === contentWidth) return hit;
   const made = computeLayout(node, margins, contentWidth);
   LAYOUT_CACHE.set(node, made);
   return made;
@@ -1173,7 +922,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   if (
     memo &&
     memo.doc === doc &&
-    memo.gen === metricsGen &&
+    memo.gen === getMetricsGeneration() &&
     memo.width === contentWidth &&
     memo.height === contentHeight &&
     memo.marginKey === marginKey
@@ -1183,7 +932,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   const first = computePageBreaks(doc, margins, []);
   const finish = (run: CalcRun): PaginationCalculation => {
     const { bands: _bands, ...publicResult } = run;
-    calcMemo = { doc, gen: metricsGen, width: contentWidth, height: contentHeight, marginKey, result: publicResult };
+    calcMemo = { doc, gen: getMetricsGeneration(), width: contentWidth, height: contentHeight, marginKey, result: publicResult };
     return publicResult;
   };
   if (first.bands.length === 0) return finish(first); // no wrapping free element: one walk
@@ -1250,8 +999,17 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   const breaks: PageBreakAt[] = [];
   const freeGeometry: FreeGeometry[] = [];
-  const floats: FloatBox[] = [];
-  const sideBottom = { left: 0, right: 0 };
+  // Every claim on the column, in one set: floats already in the flow and the
+  // bands the free elements claim. The width of a line at a height, the
+  // unwritable strips and the queueing of a new float all come from here.
+  const obstacles: Obstacle[] = [];
+  // The bands claimed by the free elements, kept as their own list: they are
+  // the only claims that may pair up into an unwritable strip (see
+  // `ObstacleSet`). The wrapped images of the flow shorten lines but never
+  // make a height unwritable, which is how the page count has always worked.
+  const bandObstacles: Obstacle[] = [];
+  let obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles);
+  const sideBottom: Record<ObstacleSide, number> = { left: 0, right: 0 };
   let y = 0; // absolute flow height (bottom of last placed box, no trailing gap)
   let pendingAfter = 0; // margin-bottom of the previous in-flow block (collapses)
   // Top of the last ANCHOR block (free-layout.ts), settled one step late, at
@@ -1263,13 +1021,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   let anchorTopY = 0;
   let hasAnchor = false;
 
-  const widthAt = (yq: number): number => {
-    let used = 0;
-    for (const f of floats) {
-      if (yq >= f.y0 && yq < f.y1) used += f.widthPx;
-    }
-    return Math.max(MIN_LINE_WIDTH_PX, contentWidth - used);
-  };
+  const widthAt = (yq: number): number => obstacleSet.widthAt(yq);
   const pageOf = (yq: number): number => Math.floor(yq / contentHeight) + 1;
   const pageRemainder = (yq: number): number => contentHeight - (yq % contentHeight);
   const pushBreak = (atPos: number, yTop: number, mid: boolean): void => {
@@ -1298,11 +1050,18 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   const outBands: FreeBandInput[] = [];
   const bandByPos = new Map<number, FreeBandInput>();
   for (const b of bands) bandByPos.set(b.pos, b);
+  // The bands arrive ALREADY POSITIONED on the flow axis: they are the drawn
+  // rectangles of the free elements, and the width they claim, the unwritable
+  // strips and the vertical queueing all come from `ObstacleSet`.
   for (const b of bands) {
-    floats.push({ side: b.side, widthPx: b.widthPx, y0: b.y0, y1: b.y1 });
+    const box: Obstacle = { side: b.side, widthPx: b.widthPx, y0: b.y0, y1: b.y1 };
+    bandObstacles.push(box);
+    obstacles.push(box);
   }
+  obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles);
+
   /** Bottom of the same-side bands overlapping [y, y+h): a float queues below. */
-  const bandQueue = (side: "left" | "right", y: number, h: number): number => {
+  const bandQueue = (side: ObstacleSide, y: number, h: number): number => {
     let bottom = 0;
     for (const b of bands) {
       if (b.side === side && b.y0 < y + h && b.y1 > y) bottom = Math.max(bottom, b.y1);
@@ -1310,46 +1069,17 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
     return bottom;
   };
 
-  // What a browser does with two floats facing each other over a gap too narrow
-  // for a line: it does NOT write a two-pixel line between them, it moves the
-  // line BELOW both floats. That is not a rule this program invented, it is CSS,
-  // and the page count has to say what the screen shows or the sheet overflows.
-  // So the overlap of two facing bands is booked as solid: no line lives there.
-  //
-  // This is NOT the refusal that Carlo rejected (and that must never come back):
-  // here no element loses its band, both images keep their own, both shorten the
-  // text. Only the strip where the two claims would meet is un-writable, and the
-  // text resumes under it - which is exactly what the user sees and can fix by
-  // moving an image or turning its wrap off.
-  const solid: { y0: number; y1: number }[] = [];
-  for (let i = 0; i < bands.length; i++) {
-    for (let j = i + 1; j < bands.length; j++) {
-      const a = bands[i];
-      const b = bands[j];
-      if (a.side === b.side) continue;
-      const y0 = Math.max(a.y0, b.y0);
-      const y1 = Math.min(a.y1, b.y1);
-      if (y1 <= y0) continue;
-      if (contentWidth - a.widthPx - b.widthPx >= MIN_LINE_WIDTH_PX) continue;
-      solid.push({ y0, y1 });
-    }
-  }
-  const pushPastSolid = (y: number, lineH: number): number => {
-    let out = y;
-    for (let guard = 0; guard <= solid.length; guard++) {
-      let moved = false;
-      for (const z of solid) {
-        if (out < z.y1 && out + lineH > z.y0) {
-          out = z.y1;
-          moved = true;
-        }
-      }
-      if (!moved) break;
-    }
-    return out;
-  };
-  const crossesSolid = (from: number, to: number): boolean =>
-    solid.some((z) => from < z.y1 && to > z.y0);
+  /**
+   * Does any obstacle overlap the height range [from, to)?
+   *
+   * Every obstacle, bands of the free elements included: that is what the page
+   * walk has always asked here, and narrowing it to the flow floats alone
+   * changed which lane the walk took - and silently dropped a page divider
+   * (caught by the bench's I5 invariant, not by reading the code).
+   */
+  const overlapsFloat = (from: number, to: number): boolean => obstacleSet.overlaps(from, to);
+  const pushPastSolid = (y: number, lineH: number): number => obstacleSet.pushPastSolid(y, lineH);
+  const crossesSolid = (from: number, to: number): boolean => obstacleSet.crossesSolid(from, to);
   // Bands still needing a spacer, and the blocks they will shorten.
   const pendingSpacers = new Map<number, FreeBandInput>();
   for (const b of bands) pendingSpacers.set(b.pos, b);
@@ -1448,7 +1178,8 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         const natural = y + Math.max(pendingAfter, sp.beforePx);
         const y0 = Math.max(natural, sideBottom[fl.side], bandQueue(fl.side, natural, h));
         const y1 = y0 + h + sp.afterPx;
-        floats.push({ side: fl.side, widthPx: fl.widthPx, y0, y1 });
+        obstacles.push({ side: fl.side, widthPx: fl.widthPx, y0, y1 });
+        obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles);
         sideBottom[fl.side] = y1;
       }
       pos += node.nodeSize;
@@ -1509,19 +1240,13 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
       // Lines that would land inside a solid strip are moved below it, in order,
       // and the paragraph grows by exactly the space the browser keeps empty.
       const pushPastSolidLines = (laid: LaidLine[], fromY: number): LaidLine[] => {
-        if (solid.length === 0) return laid;
+        if (obstacleSet.solid.length === 0) return laid;
         let bottom = fromY;
         return laid.map((l) => {
           const y = pushPastSolid(Math.max(l.y, bottom), l.h);
           bottom = y + l.h;
           return { ...l, y };
         });
-      };
-      const overlapsFloat = (fromY: number, toY: number): boolean => {
-        for (const f of floats) {
-          if (fromY < f.y1 && toY > f.y0) return true;
-        }
-        return false;
       };
       // FAST PATH: no float overlap and the paragraph fits the current page
       // whole -> the batch height from measureBlock is exact; skip the walk.

@@ -27,6 +27,7 @@
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
+import { bandOfRect } from "./text-obstacles";
 
 /** Which edge of the text column the horizontal offset is measured from. */
 export type FreeXFrom = "left" | "center" | "right";
@@ -241,9 +242,6 @@ export function freeElementWidth(node: PMNode): number | null {
 //   is the deferred point in the todo (F3.2d), not a refusal.
 // ---------------------------------------------------------------------------
 
-/** Air left between a free element and the text passing it. */
-export const FREE_WRAP_MARGIN_PX = 12;
-
 /** The horizontal claim of one free element, on the flow axis. */
 export interface FreeWrapBand {
   /** Column side the element occupies; the text keeps the other one. */
@@ -256,6 +254,17 @@ export interface FreeWrapBand {
   y1: number;
 }
 
+/**
+ * The band a free element claims from the text, from its own `free` spec.
+ *
+ * The geometry lives in `text-obstacles.ts` (`bandOfRect`) so there is ONE
+ * definition of "how wide is the claim" for the screen, the paper and the
+ * page count. This function only resolves the spec against the column, which
+ * is what callers holding a document node need.
+ *
+ * The text keeps the WIDER side: a browser cannot split one line into a left
+ * and a right half, so a centred element shortens lines from one side only.
+ */
 export function freeWrapBand(input: {
   column: { left: number; width: number };
   spec: FreeSpec;
@@ -267,27 +276,17 @@ export function freeWrapBand(input: {
 }): FreeWrapBand | null {
   const { column, spec, elementWidthPx: w, elementHeightPx: h, drawnTop, wrapOn } = input;
   if (!wrapOn) return null;
-  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return null;
-  const cw = column.width;
-  if (!Number.isFinite(cw) || cw <= 0 || !Number.isFinite(drawnTop)) return null;
-
-  const left = freeLeftPx(column, spec, w) - column.left;
-  const right = left + w;
-  const roomLeft = Math.max(0, left);
-  const roomRight = Math.max(0, cw - right);
-  // Nothing of the box is inside the column, or it covers the whole column:
-  // in both cases there is no side for the text, so there is no band.
-  if (roomLeft <= 0 && roomRight <= 0) return null;
-
-  const side: "left" | "right" = roomLeft >= roomRight ? "right" : "left";
-  const claimed = (side === "right" ? cw - roomLeft : cw - roomRight) + FREE_WRAP_MARGIN_PX;
-  if (claimed <= 0) return null;
-  return {
-    side,
-    widthPx: Math.round(Math.min(claimed, cw)),
-    y0: Math.round(drawnTop),
-    y1: Math.round(drawnTop + h),
-  };
+  // `freeLeftPx` already resolves the `xFrom` edge and the offset, so the left
+  // edge is handed over as an absolute column position with no edge of its own.
+  const leftPx = freeLeftPx(column, spec, w) - column.left;
+  return bandOfRect({
+    columnWidth: column.width,
+    xFrom: "left",
+    xOff: leftPx,
+    elementWidthPx: w,
+    elementHeightPx: h,
+    drawnTop,
+  });
 }
 
 /** A box with a top and a bottom, in whatever ruler the caller measured it with. */
