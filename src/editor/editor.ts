@@ -26,10 +26,11 @@ import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
-import { FigureNodeView, createFigureTypeGuardPlugin } from "./figure-node-view";
+import { FigureNodeView } from "./figure-node-view";
 import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
-import { StyledBoxNodeView, createBoxTypeGuardPlugin } from "./box-node-view";
+import { StyledBoxNodeView } from "./box-node-view";
+import { createAtomicElementGuardPlugin } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
@@ -669,8 +670,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
       tableEditing(),
       createTableMonitorPlugin(),
-      createBoxTypeGuardPlugin(),
-      createFigureTypeGuardPlugin(),
+      createAtomicElementGuardPlugin("styled_box"),
+      createAtomicElementGuardPlugin("figure"),
       // F3: paints the free elements and enforces the anchoring rule.
       createFreeLayoutPlugin(),
       // F3: typing with an image or a figure selected writes next to it

@@ -1,10 +1,15 @@
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView } from "prosemirror-view";
-import { NodeSelection } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import { resolveImageSrc, uploadImageFile } from "./image-uploader";
-import { computeImageCss, normalizeImageStyle } from "./image-style";
-import { isLightBgColor } from "./box-style";
+import {
+  applyCaptionStripStyle,
+  applyFrameAndShadow,
+  selectNodeAt,
+  setStyleCached,
+  transformStyleOf,
+  transformWithRotation,
+} from "./element-view";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -55,21 +60,6 @@ export class ImageNodeView implements NodeView {
     // Resolve the asset URL first, THEN probe natural dimensions: probing the
     // raw internal path fails silently and skips sizing/self-heal entirely.
     void this.resolveAndProbe((attrs.src as string) || "");
-  }
-
-  /** Write an inline style property only when its value actually changes.
-   *  A value of null/undefined removes the property (falls back to CSS). */
-  private setStyleCached(
-    cache: Record<string, string | undefined>,
-    el: HTMLElement,
-    prop: string,
-    value: string | null | undefined
-  ): void {
-    const v = value ?? undefined;
-    if (cache[prop] === v) return;
-    cache[prop] = v;
-    if (v === undefined) el.style.removeProperty(prop);
-    else el.style.setProperty(prop, v);
   }
 
   private async resolveAndProbe(rawSrc: string): Promise<void> {
@@ -159,43 +149,12 @@ export class ImageNodeView implements NodeView {
   }
 
   private applyTransform(attrs: Record<string, unknown>): void {
-    const rotation = (attrs.rotation as number) || 0;
-    const flipH = attrs.flipH as boolean;
-    const flipV = attrs.flipV as boolean;
-    const parts: string[] = [];
-    if (rotation) parts.push(`rotate(${rotation}deg)`);
-    if (flipH && flipV) parts.push("scale(-1, -1)");
-    else if (flipH) parts.push("scaleX(-1)");
-    else if (flipV) parts.push("scaleY(-1)");
-    this.setStyleCached(this.appliedWrapper, this.wrapper, "transform", parts.length ? parts.join(" ") : undefined);
+    setStyleCached(this.appliedWrapper, this.wrapper, "transform", transformStyleOf(attrs));
   }
 
-  /**
-   * Frame (cornice) and shadow are DECORATIVE and wrap the whole unit (photo +
-   * caption): the photo keeps only its corner radius; the frame is drawn as an
-   * `outline` on the wrapper and the shadow as a `box-shadow` on the wrapper.
-   * Neither participates in layout, so the photo/caption are NEVER reduced and
-   * there is NO gap between them or between frame and content (the frame hugs
-   * the unit's outer edge, offset 0).
-   */
+  /** Frame + shadow wrap the WHOLE unit (photo + caption), one shared rule. */
   private applyStyle(attrs: Record<string, unknown>): void {
-    const css = computeImageCss(normalizeImageStyle(attrs));
-    const radius = css.borderRadius ?? null;
-    const frame = css.border ?? null; // e.g. "2px solid #333" → used as outline
-    const shadow = css.boxShadow ?? null;
-
-    // Wrapper = the whole unit: rounded outline (frame) + drop shadow.
-    this.setStyleCached(this.appliedWrapper, this.wrapper, "border-radius", radius);
-    this.setStyleCached(this.appliedWrapper, this.wrapper, "outline", frame);
-    this.setStyleCached(this.appliedWrapper, this.wrapper, "outline-offset", frame ? "0px" : null);
-    this.setStyleCached(this.appliedWrapper, this.wrapper, "box-shadow", shadow);
-
-    // Photo: rounded corners only (matches the wrapper), no frame/shadow of its
-    // own — a border on the <img> would shrink it (border-box) and split the
-    // frame away from the caption.
-    this.setStyleCached(this.appliedImg, this.img, "border-radius", radius);
-    this.setStyleCached(this.appliedImg, this.img, "border", null);
-    this.setStyleCached(this.appliedImg, this.img, "box-shadow", null);
+    applyFrameAndShadow(this.appliedWrapper, this.wrapper, this.appliedImg, this.img, attrs);
   }
 
   private applyCaption(attrs: Record<string, unknown>): void {
@@ -209,23 +168,7 @@ export class ImageNodeView implements NodeView {
       if (this.captionEl.textContent !== caption) {
         this.captionEl.textContent = caption;
       }
-      // Background fills the whole caption strip; dark backgrounds get light
-      // text so it stays readable.
-      const bg = (attrs.captionBg as string) || "";
-      if (this.captionEl.style.background !== bg) {
-        this.captionEl.style.background = bg;
-      }
-      // Vertical whitespace around the text (side padding stays fixed at 8px).
-      const padTop = Number(attrs.captionPadTop);
-      const padBottom = Number(attrs.captionPadBottom);
-      const top = isFinite(padTop) ? Math.max(0, Math.min(60, padTop)) : 0;
-      const bottom = isFinite(padBottom) ? Math.max(0, Math.min(60, padBottom)) : 0;
-      const padding = `${top}px 8px ${bottom}px`;
-      if (this.captionEl.style.padding !== padding) {
-        this.captionEl.style.padding = padding;
-      }
-      const dark = !!bg && !isLightBgColor(bg);
-      this.captionEl.classList.toggle("image-caption--dark-bg", dark);
+      applyCaptionStripStyle(this.captionEl, attrs);
     } else if (this.captionEl) {
       this.captionEl.remove();
       this.captionEl = null;
@@ -235,8 +178,8 @@ export class ImageNodeView implements NodeView {
   private applySize(attrs: Record<string, unknown>): void {
     const w = attrs.width as number | null;
     const h = attrs.height as number | null;
-    this.setStyleCached(this.appliedImg, this.img, "width", w ? `${w}px` : null);
-    this.setStyleCached(this.appliedImg, this.img, "height", h ? `${h}px` : null);
+    setStyleCached(this.appliedImg, this.img, "width", w ? `${w}px` : null);
+    setStyleCached(this.appliedImg, this.img, "height", h ? `${h}px` : null);
   }
 
   private createHandles(): void {
@@ -286,11 +229,7 @@ export class ImageNodeView implements NodeView {
   private selectNodeInEditor(): void {
     const pos = this.getPos();
     if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    const sel = NodeSelection.create(this.view.state.doc, pos);
-    this.view.dispatch(this.view.state.tr.setSelection(sel));
-    this.view.focus();
+    selectNodeAt(this.view, pos);
   }
 
   private onHandleMouseDown(e: MouseEvent, corner: Corner): void {
@@ -382,14 +321,11 @@ export class ImageNodeView implements NodeView {
 
     const onMove = (ev: MouseEvent) => {
       const deg = computeRotation(ev);
-      const parts: string[] = [];
-      parts.push(`rotate(${deg}deg)`);
-      const flipH = node.attrs.flipH as boolean;
-      const flipV = node.attrs.flipV as boolean;
-      if (flipH && flipV) parts.push("scale(-1, -1)");
-      else if (flipH) parts.push("scaleX(-1)");
-      else if (flipV) parts.push("scaleY(-1)");
-      this.wrapper.style.transform = parts.join(" ");
+      this.wrapper.style.transform = transformWithRotation(
+        deg,
+        node.attrs.flipH as boolean,
+        node.attrs.flipV as boolean,
+      );
     };
 
     const onUp = (ev: MouseEvent) => {

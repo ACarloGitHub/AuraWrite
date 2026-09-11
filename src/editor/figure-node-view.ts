@@ -19,10 +19,15 @@
 
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView, type ViewMutationRecord } from "prosemirror-view";
-import { NodeSelection, Plugin, TextSelection } from "prosemirror-state";
 import { resolveImageSrc } from "./image-uploader";
-import { computeImageCss, normalizeImageStyle } from "./image-style";
-import { isLightBgColor } from "./box-style";
+import {
+  applyCaptionStripStyle,
+  applyFrameAndShadow,
+  selectNodeAt,
+  setStyleCached,
+  transformStyleOf,
+  transformWithRotation,
+} from "./element-view";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -32,97 +37,8 @@ interface HandleEl extends HTMLElement {
 
 const FIGURE_NODE = "figure";
 
-/**
- * Figure typing guard:
- *  - printable key over a surface-selected figure ENTERS the caption instead
- *    of replacing the whole figure (the "typing deletes the image" bug this
- *    refactor removes at the root);
- *  - Backspace/Delete at the seams or at the first/last caption position
- *    removes the figure ATOMICALLY (photo + caption, like images/boxes).
- */
-export function createFigureTypeGuardPlugin(): Plugin {
-  return new Plugin({
-    props: {
-      handleDOMEvents: {
-        keydown: (view, event) => {
-          const sel = view.state.selection;
-
-          // Atomic deletion (whole figure: photo + caption).
-          if ((event.key === "Backspace" || event.key === "Delete") && sel.empty) {
-            const goingBack = event.key === "Backspace";
-            const $pos = view.state.doc.resolve(sel.from);
-            let atomicFigure: { pos: number; node: PMNode } | null = null;
-
-            // Direct seam neighbour.
-            const seamNeighbour = goingBack ? $pos.nodeBefore : $pos.nodeAfter;
-            if (seamNeighbour && seamNeighbour.type.name === FIGURE_NODE) {
-              const pos = goingBack ? sel.from - seamNeighbour.nodeSize : sel.from;
-              atomicFigure = { pos, node: seamNeighbour };
-            }
-
-            // Caret at the boundary of an adjacent textblock.
-            if (!atomicFigure) {
-              const atBlockEdge = goingBack
-                ? $pos.parentOffset === 0
-                : $pos.parentOffset === $pos.parent.content.size;
-              if (atBlockEdge && $pos.depth >= 1) {
-                const blockStart = $pos.before($pos.depth);
-                const blockEnd = $pos.after($pos.depth);
-                const sibling = goingBack
-                  ? view.state.doc.resolve(blockStart).nodeBefore
-                  : view.state.doc.resolve(blockEnd).nodeAfter;
-                if (sibling && sibling.type.name === FIGURE_NODE) {
-                  const pos = goingBack ? blockStart - sibling.nodeSize : blockEnd;
-                  atomicFigure = { pos, node: sibling };
-                }
-              }
-            }
-
-            // Caret inside the caption at its first/last text position.
-            if (!atomicFigure) {
-              for (let d = $pos.depth; d >= 1; d--) {
-                const n = $pos.node(d);
-                if (n.type.name !== FIGURE_NODE) continue;
-                const figPos = $pos.before(d);
-                const figStart = figPos + 1;
-                const figEnd = figPos + n.nodeSize - 1;
-                const atEdge = goingBack ? sel.from === figStart : sel.from === figEnd;
-                if (atEdge) atomicFigure = { pos: figPos, node: n };
-                break;
-              }
-            }
-
-            if (atomicFigure) {
-              const size = atomicFigure.node.nodeSize;
-              let tr = view.state.tr.delete(atomicFigure.pos, atomicFigure.pos + size);
-              if (tr.doc.childCount === 0) {
-                const paragraph = view.state.schema.nodes.paragraph;
-                if (paragraph) tr = tr.insert(0, paragraph.create());
-              }
-              view.dispatch(tr);
-              view.focus();
-              return true;
-            }
-            return false;
-          }
-
-          // Printable keys over a surface-selected figure: enter the caption.
-          if (!(sel instanceof NodeSelection) || sel.node.type.name !== FIGURE_NODE) {
-            return false;
-          }
-          const key = event.key;
-          if (event.ctrlKey || event.metaKey || event.altKey) return false;
-          if (key.length !== 1) return false;
-          const $inside = view.state.doc.resolve(sel.from + 1);
-          const caret = TextSelection.near($inside, 1);
-          if (caret.from >= sel.to) return false;
-          view.dispatch(view.state.tr.setSelection(caret));
-          return false;
-        },
-      },
-    },
-  });
-}
+// The figure keyboard guard is the shared one (element-view.ts); editor.ts
+// registers `createAtomicElementGuardPlugin("figure")`.
 
 export class FigureNodeView implements NodeView {
   dom: HTMLElement;
@@ -183,20 +99,6 @@ export class FigureNodeView implements NodeView {
     });
   }
 
-  /** Write a style property only when its value actually changes. */
-  private setStyle(
-    cache: Record<string, string | undefined>,
-    el: HTMLElement,
-    prop: string,
-    value: string | null | undefined
-  ): void {
-    const v = value ?? undefined;
-    if (cache[prop] === v) return;
-    cache[prop] = v;
-    if (v === undefined) el.style.removeProperty(prop);
-    else el.style.setProperty(prop, v);
-  }
-
   /** Mirror node attrs onto the DOM (cached idempotent writes). */
   private syncAttrs(attrs: Record<string, unknown>): void {
     const align = (attrs.align as string) || "center";
@@ -216,7 +118,7 @@ export class FigureNodeView implements NodeView {
     if (this.dom.getAttribute("data-caption-gap") !== String(gap)) {
       this.dom.setAttribute("data-caption-gap", String(gap));
     }
-    this.setStyle(this.applied, this.dom, "--aw-figure-gap", `${gap}px`);
+    setStyleCached(this.applied, this.dom, "--aw-figure-gap", `${gap}px`);
 
     const bg = String(attrs.captionBg ?? "");
     if (this.dom.getAttribute("data-caption-bg") !== bg) {
@@ -242,46 +144,17 @@ export class FigureNodeView implements NodeView {
 
   /** Rotation + flips transform the whole figure unit. */
   private applyTransform(attrs: Record<string, unknown>): void {
-    const rotation = (attrs.rotation as number) || 0;
-    const flipH = attrs.flipH as boolean;
-    const flipV = attrs.flipV as boolean;
-    const parts: string[] = [];
-    if (rotation) parts.push(`rotate(${rotation}deg)`);
-    if (flipH && flipV) parts.push("scale(-1, -1)");
-    else if (flipH) parts.push("scaleX(-1)");
-    else if (flipV) parts.push("scaleY(-1)");
-    this.setStyle(this.applied, this.dom, "transform", parts.length ? parts.join(" ") : undefined);
+    setStyleCached(this.applied, this.dom, "transform", transformStyleOf(attrs));
   }
 
-  /** Frame (outline, decorative) + shadow wrap the WHOLE figure (photo + caption)
-   *  without reducing anything; the photo keeps only its corner radius. */
+  /** Frame + shadow wrap the WHOLE figure (photo + caption), one shared rule. */
   private applyStyle(attrs: Record<string, unknown>): void {
-    const css = computeImageCss(normalizeImageStyle(attrs));
-    this.setStyle(this.applied, this.dom, "border-radius", css.borderRadius ?? null);
-    this.setStyle(this.applied, this.dom, "outline", css.border ?? null);
-    this.setStyle(this.applied, this.dom, "outline-offset", css.border ? "0px" : null);
-    this.setStyle(this.applied, this.dom, "box-shadow", css.boxShadow ?? null);
-    this.setStyle(this.appliedImg, this.img, "border-radius", css.borderRadius ?? null);
-    this.setStyle(this.appliedImg, this.img, "border", null);
-    this.setStyle(this.appliedImg, this.img, "box-shadow", null);
+    applyFrameAndShadow(this.applied, this.dom, this.appliedImg, this.img, attrs);
   }
 
   /** Caption look: background fills the strip, vertical whitespace via padding. */
   private applyCaptionStyle(attrs: Record<string, unknown>): void {
-    const bg = String(attrs.captionBg ?? "");
-    if (this.contentDOM.style.background !== bg) {
-      this.contentDOM.style.background = bg;
-    }
-    const padTop = Number(attrs.captionPadTop);
-    const padBottom = Number(attrs.captionPadBottom);
-    const top = isFinite(padTop) ? Math.max(0, Math.min(60, padTop)) : 0;
-    const bottom = isFinite(padBottom) ? Math.max(0, Math.min(60, padBottom)) : 0;
-    const padding = `${top}px 8px ${bottom}px`;
-    if (this.contentDOM.style.padding !== padding) {
-      this.contentDOM.style.padding = padding;
-    }
-    const dark = !!bg && !isLightBgColor(bg);
-    this.contentDOM.classList.toggle("image-caption--dark-bg", dark);
+    applyCaptionStripStyle(this.contentDOM, attrs);
   }
 
   /**
@@ -293,8 +166,8 @@ export class FigureNodeView implements NodeView {
     const w = attrs.width as number | null;
     const h = attrs.height as number | null;
     const locked = attrs.aspectLocked !== false;
-    this.setStyle(this.appliedImg, this.img, "width", w ? `${w}px` : null);
-    this.setStyle(this.appliedImg, this.img, "height", locked ? null : h ? `${h}px` : null);
+    setStyleCached(this.appliedImg, this.img, "width", w ? `${w}px` : null);
+    setStyleCached(this.appliedImg, this.img, "height", locked ? null : h ? `${h}px` : null);
   }
 
   private createHandles(): void {
@@ -347,11 +220,7 @@ export class FigureNodeView implements NodeView {
   private selectNodeInEditor(): void {
     const pos = this.getPos();
     if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node || node.type.name !== FIGURE_NODE) return;
-    const sel = NodeSelection.create(this.view.state.doc, pos);
-    this.view.dispatch(this.view.state.tr.setSelection(sel));
-    this.view.focus();
+    selectNodeAt(this.view, pos, FIGURE_NODE);
   }
 
   private onHandleMouseDown(e: MouseEvent, corner: Corner): void {
@@ -435,13 +304,11 @@ export class FigureNodeView implements NodeView {
 
     const onMove = (ev: MouseEvent) => {
       const deg = computeRotation(ev);
-      const parts: string[] = [`rotate(${deg}deg)`];
-      const flipH = node.attrs.flipH as boolean;
-      const flipV = node.attrs.flipV as boolean;
-      if (flipH && flipV) parts.push("scale(-1, -1)");
-      else if (flipH) parts.push("scaleX(-1)");
-      else if (flipV) parts.push("scaleY(-1)");
-      this.dom.style.transform = parts.join(" ");
+      this.dom.style.transform = transformWithRotation(
+        deg,
+        node.attrs.flipH as boolean,
+        node.attrs.flipV as boolean,
+      );
     };
 
     const onUp = (ev: MouseEvent) => {

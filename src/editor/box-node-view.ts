@@ -16,7 +16,7 @@
 
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView, type ViewMutationRecord } from "prosemirror-view";
-import { NodeSelection, Plugin, TextSelection } from "prosemirror-state";
+import { NodeSelection } from "prosemirror-state";
 import {
   BOX_WIDTH_MAX,
   BOX_WIDTH_MIN,
@@ -25,107 +25,12 @@ import {
   normalizeBoxStyle,
 } from "./box-style";
 import { parseFreeSpec } from "./free-layout";
+import { setStyleCached } from "./element-view";
 
 const DRAG_THRESHOLD_PX = 6;
 
-/**
- * Box interaction guards:
- *  - Typing while the box is merely surface-selected must ENTER the box, not
- *    overwrite it (NodeSelection + printable key would otherwise replace the
- *    whole node — observed as "the note deletes itself").
- *  - Backspace/Delete at the seam removes the box ATOMICALLY (frame + text,
- *    like images): unwrapping left orphan text behind (Carlo, 2026-08-26).
- */
-export function createBoxTypeGuardPlugin(): Plugin {
-  return new Plugin({
-    props: {
-      handleDOMEvents: {
-        keydown: (view, event) => {
-          const sel = view.state.selection;
-
-          // Atomic deletion (empty caret). Real gestures covered (Carlo,
-          // 2026-08-26): Canc/forward-Delete at the END of the paragraph
-          // BEFORE the note, Backspace at the START of the paragraph AFTER
-          // it, the direct seams, and the first/last position INSIDE the box.
-          // In every case the box goes as ONE unit (frame + text).
-          if ((event.key === "Backspace" || event.key === "Delete") && sel.empty) {
-            const goingBack = event.key === "Backspace";
-            const $pos = view.state.doc.resolve(sel.from);
-            let atomicBox: { pos: number; node: PMNode } | null = null;
-
-            // Direct seam neighbour.
-            const seamNeighbour = goingBack ? $pos.nodeBefore : $pos.nodeAfter;
-            if (seamNeighbour && seamNeighbour.type.name === "styled_box") {
-              const pos = goingBack ? sel.from - seamNeighbour.nodeSize : sel.from;
-              atomicBox = { pos, node: seamNeighbour };
-            }
-
-            // Caret at the boundary of an adjacent textblock: the box sits on
-            // the OTHER side of that block (sibling), not inline before/after
-            // the caret. This is the "cursor in the paragraph before/after the
-            // note" gesture.
-            if (!atomicBox) {
-              const atBlockEdge = goingBack
-                ? $pos.parentOffset === 0
-                : $pos.parentOffset === $pos.parent.content.size;
-              if (atBlockEdge && $pos.depth >= 1) {
-                const blockStart = $pos.before($pos.depth);
-                const blockEnd = $pos.after($pos.depth);
-                const sibling = goingBack
-                  ? view.state.doc.resolve(blockStart).nodeBefore
-                  : view.state.doc.resolve(blockEnd).nodeAfter;
-                if (sibling && sibling.type.name === "styled_box") {
-                  const pos = goingBack ? blockStart - sibling.nodeSize : blockEnd;
-                  atomicBox = { pos, node: sibling };
-                }
-              }
-            }
-
-            // Caret inside the box at its first/last text position.
-            if (!atomicBox) {
-              for (let d = $pos.depth; d >= 1; d--) {
-                const n = $pos.node(d);
-                if (n.type.name !== "styled_box") continue;
-                const boxPos = $pos.before(d);
-                const boxStart = boxPos + 1;
-                const boxEnd = boxPos + n.nodeSize - 1;
-                const atEdge = goingBack ? sel.from === boxStart : sel.from === boxEnd;
-                if (atEdge) atomicBox = { pos: boxPos, node: n };
-                break;
-              }
-            }
-
-            if (atomicBox) {
-              const size = atomicBox.node.nodeSize;
-              let tr = view.state.tr.delete(atomicBox.pos, atomicBox.pos + size);
-              if (tr.doc.childCount === 0) {
-                const paragraph = view.state.schema.nodes.paragraph;
-                if (paragraph) tr = tr.insert(0, paragraph.create());
-              }
-              view.dispatch(tr);
-              view.focus();
-              return true;
-            }
-            return false;
-          }
-
-          // Printable keys over a surface-selected box: enter instead of replace.
-          if (!(sel instanceof NodeSelection) || sel.node.type.name !== "styled_box") {
-            return false;
-          }
-          const key = event.key;
-          if (event.ctrlKey || event.metaKey || event.altKey) return false;
-          if (key.length !== 1) return false;
-          const $inside = view.state.doc.resolve(sel.from + 1);
-          const caret = TextSelection.near($inside, 1);
-          if (caret.from >= sel.to) return false;
-          view.dispatch(view.state.tr.setSelection(caret));
-          return false;
-        },
-      },
-    },
-  });
-}
+// The box keyboard guard is the shared one (element-view.ts); editor.ts
+// registers `createAtomicElementGuardPlugin("styled_box")`.
 
 export class StyledBoxNodeView implements NodeView {
   dom: HTMLElement;
@@ -162,16 +67,6 @@ export class StyledBoxNodeView implements NodeView {
 
   // ------------------------------------------------------------- styling
 
-  /** Write an inline style property only when its value actually changes.
-   *  A value of null removes the property (falls back to CSS). */
-  private setStyle(prop: string, value: string | null): void {
-    const v = value ?? undefined;
-    if (this.applied[prop] === v) return;
-    this.applied[prop] = v;
-    if (v === undefined) this.dom.style.removeProperty(prop);
-    else this.dom.style.setProperty(prop, v);
-  }
-
   private syncVariant(node: PMNode): void {
     const attrs = node.attrs as Record<string, unknown>;
     const variant = String(attrs.variant ?? "text");
@@ -192,10 +87,10 @@ export class StyledBoxNodeView implements NodeView {
 
   private applyStyle(raw: Record<string, unknown>): void {
     const css = computeBoxCss(normalizeBoxStyle(raw));
-    this.setStyle("background", css.background ?? null);
-    this.setStyle("border", css.border ?? null);
-    this.setStyle("border-radius", css.borderRadius ?? null);
-    this.setStyle("width", css.width ?? null);
+    setStyleCached(this.applied, this.dom, "background", css.background ?? null);
+    setStyleCached(this.applied, this.dom, "border", css.border ?? null);
+    setStyleCached(this.applied, this.dom, "border-radius", css.borderRadius ?? null);
+    setStyleCached(this.applied, this.dom, "width", css.width ?? null);
   }
 
   // -------------------------------------------------------------- events
@@ -443,7 +338,7 @@ export class StyledBoxNodeView implements NodeView {
       const width = Math.round(
         Math.min(BOX_WIDTH_MAX, Math.max(BOX_WIDTH_MIN, startWidth + ev.clientX - originX))
       );
-      this.setStyle("width", `${width}px`);
+      setStyleCached(this.applied, this.dom, "width", `${width}px`);
     };
     const onUp = (): void => {
       document.removeEventListener("mousemove", onMove);
