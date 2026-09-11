@@ -19,7 +19,7 @@
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
-import { freeElementWidth, freeLeftPx, freeTopPx, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec } from "./free-layout";
+import { freeElementWidth, freeLeftPx, freeTopPx, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeXFrom } from "./free-layout";
 
 /** The style keys this module owns; clearing must not touch anything else. */
 const OWNED_STYLE_KEYS = [
@@ -91,6 +91,44 @@ export function applyFreeLayout(
   dom.style.zIndex = String(stackDepthOf(zLevelOf(node)));
   dom.style.float = "none";
   dom.dataset.awFree = "1";
+}
+
+/**
+ * Paint an element in the flow whose condition is Overlap (T1.2): it leaves the
+ * page flow but keeps the place it already had, so the text that follows moves
+ * up and passes over or under it according to the depth. `top: auto` is the
+ * whole trick: for an absolutely positioned box it means "the static position",
+ * i.e. exactly where the box sat before it was taken out of the flow.
+ */
+export function applyOverlapLayout(dom: HTMLElement, node: PMNode): void {
+  const host = dom.parentElement;
+  if (!host) return;
+  const width = freeElementWidth(node) ?? Math.round(dom.offsetWidth);
+  if (width <= 0) return;
+  const column = textColumn(host);
+  const align = String(node.attrs?.align ?? "center");
+  const xFrom: FreeXFrom = align === "left" || align === "right" ? align : "center";
+  const left = freeLeftPx({ left: column.left, width: column.width }, { xFrom, xOff: 0, yOff: 0, g: "" }, width);
+
+  dom.style.position = "absolute";
+  dom.style.top = "auto"; // static position: the place it already occupied
+  dom.style.left = `${Math.round(left)}px`;
+  dom.style.right = "auto";
+  dom.style.bottom = "auto";
+  dom.style.width = `${width}px`;
+  dom.style.margin = "0";
+  dom.style.zIndex = String(stackDepthOf(zLevelOf(node)));
+  dom.style.float = "none";
+  dom.dataset.awOverlap = "1";
+}
+
+/** Remove every style `applyOverlapLayout` has ever applied. */
+export function clearOverlapLayout(dom: HTMLElement): void {
+  if (dom.dataset.awOverlap !== "1") return;
+  delete dom.dataset.awOverlap;
+  for (const key of OWNED_STYLE_KEYS) {
+    dom.style.removeProperty(key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`));
+  }
 }
 
 /** The text column of the editor: content box of the scrollable host. */

@@ -36,7 +36,8 @@ import { Plugin, PluginKey, EditorState, type Transaction } from "prosemirror-st
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
 import { freeLayoutMap, isFreeCapable, isFreeNode } from "./free-layout";
-import { applyFreeLayout, clearFreeLayout } from "./free-style";
+import { applyFreeLayout, applyOverlapLayout, clearFreeLayout, clearOverlapLayout } from "./free-style";
+import { isOverlap, textConditionOf } from "./element-condition";
 
 export const freeLayoutPluginKey = new PluginKey("awFreeLayout");
 
@@ -234,8 +235,17 @@ export function createFreeLayoutPlugin(): Plugin {
         view.state.doc.forEach((node, offset) => {
           const dom = view.nodeDOM(offset);
           if (!(dom instanceof HTMLElement)) return;
-          if (isFreeNode(node)) applyFreeLayout(dom, node, domAt(anchors.get(offset) ?? null));
-          else clearFreeLayout(dom);
+          if (isFreeNode(node)) {
+            clearOverlapLayout(dom);
+            applyFreeLayout(dom, node, domAt(anchors.get(offset) ?? null));
+          } else if (isFreeCapable(node) && isOverlap(textConditionOf(node))) {
+            // Overlap in the flow: leaves the page flow but keeps its place.
+            clearFreeLayout(dom);
+            applyOverlapLayout(dom, node);
+          } else {
+            clearFreeLayout(dom);
+            clearOverlapLayout(dom);
+          }
         });
       };
 

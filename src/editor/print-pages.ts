@@ -217,7 +217,7 @@ function freeOverlayHtml(
     // Serialize a copy WITHOUT the free state: the wrapper carries the
     // position, and an element that still thought it was wrapped/absolute
     // would offset itself a second time.
-    const plain = node.type.create({ ...node.attrs, free: null, wrap: false, zLevel: 1 }, node.content, node.marks);
+    const plain = node.type.create({ ...node.attrs, free: null, wrap: "overlap", zLevel: 1 }, node.content, node.marks);
     const holder = document.createElement("div");
     holder.appendChild(serializer.serializeNode(plain, {}));
     const width = freeElementWidth(node) ?? contentWidth;

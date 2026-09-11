@@ -37,7 +37,7 @@ import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth,
   type FreeWrapBand,
 } from "./free-layout";
-import { isWrapping, textConditionOf } from "./element-condition";
+import { isOverlap, isWrapping, textConditionOf } from "./element-condition";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -1187,9 +1187,16 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
       pos += node.nodeSize;
       return;
     }
+    // T1.2: Overlap takes the element out of the page flow. The text flows as
+    // if it were not there; on screen the element is painted absolutely at the
+    // place it already had (free-style.applyOverlapLayout).
+    if (isOverlap(textConditionOf(node))) {
+      pos += node.nodeSize;
+      return;
+    }
     // F1.5: manual page break (`pageBreakBefore`, imported from markdown
-    // `---` or set by document conventions): force the block to the TOP of
-    // the next page. The calculator used to ignore it, so the divider lived
+    // `---` or set by document conventions): force the block to the TOP of the
+    // next page. The calculator used to ignore it, so the divider lived
     // only in DOCX/HTML export and the live pages disagreed with print.
     if (node.attrs?.pageBreakBefore === true && y > 0) {
       const rem = y % contentHeight;

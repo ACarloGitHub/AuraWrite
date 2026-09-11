@@ -4,6 +4,7 @@ import { NodeSelection } from "prosemirror-state";
 import { uploadImageFile, resolveImageSrc, type UploadedImage } from "./image-uploader";
 import { showErrorToast } from "../error-boundary";
 import { ensureParagraphAfter, getSelectedElement, setNodeAttrs } from "./element-commands";
+import type { TextCondition } from "./element-condition";
 
 export function createImageNode(
   view: EditorView,
@@ -153,13 +154,14 @@ export async function setImageAlignment(
   return setNodeAttrs(view, info.pos, { ...info.node.attrs, align });
 }
 
-export async function setImageWrap(
+/** Set the text condition (wrapped / unwrapped / overlap) of the element. */
+export async function setImageCondition(
   view: EditorView,
-  wrap: boolean
+  condition: TextCondition
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return setNodeAttrs(view, info.pos, { ...info.node.attrs, wrap });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, wrap: condition });
 }
 
 export async function setImageRotation(

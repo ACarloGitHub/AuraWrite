@@ -32,7 +32,7 @@ import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { createAtomicElementGuardPlugin } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
-import { isWrapping, textConditionOf } from "./element-condition";
+import { textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -250,8 +250,8 @@ const imageSpec: NodeSpec = {
     width: { default: null },
     height: { default: null },
     align: { default: "center" },
-    // Contract §2.10: wrapping is the born-default; the user turns it OFF.
-    wrap: { default: true },
+    // Contract §2.10: wrapping is the born-default; the user changes it.
+    wrap: { default: "wrapped" },
     rotation: { default: 0 },
     flipH: { default: false },
     flipV: { default: false },
@@ -279,7 +279,7 @@ const imageSpec: NodeSpec = {
           width: w ? parseInt(w, 10) || null : null,
           height: h ? parseInt(h, 10) || null : null,
           align: dom.getAttribute("data-align") || "center",
-          wrap: dom.hasAttribute("data-wrap"),
+          wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
           rotation: parseFloat(dom.getAttribute("data-rotation") || "0") || 0,
           flipH: dom.hasAttribute("data-flip-h"),
           flipV: dom.hasAttribute("data-flip-v"),
@@ -303,7 +303,8 @@ const imageSpec: NodeSpec = {
     if (node.attrs.width) attrs.width = String(node.attrs.width);
     if (node.attrs.height) attrs.height = String(node.attrs.height);
     attrs["data-align"] = node.attrs.align as string;
-    if (isWrapping(textConditionOf(node))) attrs["data-wrap"] = "";
+    const wrapMarker = textConditionMarker(textConditionOf(node));
+    if (wrapMarker !== null) attrs["data-wrap"] = wrapMarker;
     // Free-layout markers (F3.a).
     Object.assign(attrs, freeLayoutToDOM(node));
     if (node.attrs.rotation) attrs["data-rotation"] = String(node.attrs.rotation);

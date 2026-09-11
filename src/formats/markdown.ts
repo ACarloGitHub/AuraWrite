@@ -650,7 +650,7 @@ function parseInlineMarkdown(text: string): any[] {
           width: null,
           height: null,
           align: "center",
-          wrap: false,
+          wrap: "overlap",
           rotation: 0,
           flipH: false,
           flipV: false,

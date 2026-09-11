@@ -34,7 +34,11 @@ import {
   parseFreeSpec,
   type FreeSpec,
 } from "./free-layout";
-import { isWrapping, textConditionOf } from "./element-condition";
+import {
+  textConditionFromMarker,
+  textConditionMarker,
+  textConditionOf,
+} from "./element-condition";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
 export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
@@ -146,7 +150,7 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     // F3.a: a box participates in wrapping and depth like the other elements.
     // The wrap STATE is stored from now on; honouring it for a box (float
     // bands in the calculator and on screen) lands with F3.c.
-    wrap: { default: true },
+    wrap: { default: "wrapped" },
     ...FREE_LAYOUT_ATTRS,
   },
   parseDOM: [
@@ -175,7 +179,8 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     if (s.align !== DEFAULT_BOX_STYLE.align) attrs["data-align"] = s.align;
     // Free-layout markers (F3.a): only what differs from the default.
     Object.assign(attrs, freeLayoutToDOM(node));
-    if (isWrapping(textConditionOf(node))) attrs["data-wrap"] = "";
+    const boxWrapMarker = textConditionMarker(textConditionOf(node));
+    if (boxWrapMarker !== null) attrs["data-wrap"] = boxWrapMarker;
     // D10 rule 1: emit BOTH the stable markers and the inline style, so the
     // markup renders universally outside AuraWrite and re-imports exactly.
     const css = computeBoxCss(s);
@@ -237,7 +242,7 @@ export function readImageAttrsFromDOM(dom: HTMLElement): Record<string, unknown>
     width: w ? parseInt(w, 10) || null : null,
     height: h ? parseInt(h, 10) || null : null,
     align: dom.getAttribute("data-align") || "center",
-    wrap: dom.hasAttribute("data-wrap"),
+    wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
     rotation: parseFloat(dom.getAttribute("data-rotation") || "0") || 0,
     flipH: dom.hasAttribute("data-flip-h"),
     flipV: dom.hasAttribute("data-flip-v"),
@@ -250,8 +255,12 @@ export function readImageAttrsFromDOM(dom: HTMLElement): Record<string, unknown>
 /** Re-import side of the box free-layout markers (wrap + depth + position). */
 function boxLayoutGetDOM(dom: HTMLElement): Record<string, unknown> {
   const layout = freeLayoutGetDOM(dom);
-  // Same marker convention as image/figure: `data-wrap` present = wrapping on.
-  return { wrap: dom.hasAttribute("data-wrap"), free: layout.free, zLevel: layout.zLevel };
+  // Same marker convention as image/figure.
+  return {
+    wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
+    free: layout.free,
+    zLevel: layout.zLevel,
+  };
 }
 
 /** Node spec appended to the schema in editor.ts (single hook point). */
@@ -357,7 +366,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     if (node.attrs.width) imgAttrs.width = String(node.attrs.width);
     if (node.attrs.height) imgAttrs.height = String(node.attrs.height);
     imgAttrs["data-align"] = String(node.attrs.align ?? "center");
-    if (isWrapping(textConditionOf(node))) imgAttrs["data-wrap"] = "";
+    const figureWrapMarker = textConditionMarker(textConditionOf(node));
+    if (figureWrapMarker !== null) imgAttrs["data-wrap"] = figureWrapMarker;
     if (node.attrs.rotation) imgAttrs["data-rotation"] = String(node.attrs.rotation);
     if (node.attrs.flipH) imgAttrs["data-flip-h"] = "";
     if (node.attrs.flipV) imgAttrs["data-flip-v"] = "";

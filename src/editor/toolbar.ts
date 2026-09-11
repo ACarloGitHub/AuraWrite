@@ -16,7 +16,7 @@ import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
-import { isWrapping, textConditionOf } from "./element-condition";
+import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -2227,6 +2227,18 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/** The one button cycles through the three text conditions, in this order. */
+const CONDITION_ORDER: TextCondition[] = ["wrapped", "unwrapped", "overlap"];
+const CONDITION_LABEL: Record<TextCondition, string> = {
+  wrapped: "Wrapped",
+  unwrapped: "Unwrapped",
+  overlap: "Overlap",
+};
+
+function nextCondition(condition: TextCondition): TextCondition {
+  return CONDITION_ORDER[(CONDITION_ORDER.indexOf(condition) + 1) % CONDITION_ORDER.length];
+}
+
 function setupImageToolbar(view: EditorView): void {
   const toolbar = document.getElementById("image-toolbar");
   if (!toolbar) return;
@@ -2270,8 +2282,8 @@ function setupImageToolbar(view: EditorView): void {
   btnToggleWrap?.addEventListener("click", async () => {
     const info = await getSelectedImage(view);
     if (!info) return;
-    const { setImageWrap } = await import("./image-commands");
-    void setImageWrap(view, !isWrapping(textConditionOf(info.node)));
+    const { setImageCondition } = await import("./image-commands");
+    void setImageCondition(view, nextCondition(textConditionOf(info.node)));
   });
   // F3.a: take the element out of the flow / put it back. The label is synced
   // with the state in updateImageToolbar, so it always reads as the action.
@@ -2363,7 +2375,12 @@ export function updateImageToolbar(view: EditorView): void {
     btnAlignLeft?.classList.toggle("image-toolbar__btn--active", align === "left");
     btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
     btnAlignRight?.classList.toggle("image-toolbar__btn--active", align === "right");
-    btnToggleWrap?.classList.toggle("image-toolbar__btn--active", isWrapping(textConditionOf(info.node)));
+    const condition = textConditionOf(info.node);
+    if (btnToggleWrap instanceof HTMLButtonElement) {
+      btnToggleWrap.textContent = CONDITION_LABEL[condition];
+      btnToggleWrap.title = `Text around this element: ${CONDITION_LABEL[condition]}`;
+      btnToggleWrap.classList.toggle("image-toolbar__btn--active", isWrapping(condition));
+    }
     // F3.a: wrapping is the born-default (contract §2.10) and is a property of
     // the element, not of its alignment: centring must never silently turn it
     // off, so the control stays available and shows the stored state.

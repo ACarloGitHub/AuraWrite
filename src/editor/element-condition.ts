@@ -6,21 +6,29 @@
 //   - unwrapped: the element occupies whole lines, text above and below;
 //   - overlap:   the text ignores the element; depth decides who covers whom.
 //
-// Today the state is still stored as the `wrap` boolean. This is the ONE place
-// that reads it into a named condition, so the screen, the page calculator, the
-// print sheets and the exporters stop asking the raw attribute and a future
-// tri-state change is a change here alone. Structural extraction: the mapping
-// is exactly the old truthiness test.
+// This is the ONE place the stored state is read and written. The stored value
+// is now the condition itself; old documents that still carry the boolean are
+// still understood (`true` -> wrapped, `false` -> overlap), so nothing that was
+// already on disk needs a migration pass.
+//
+// The D10 HTML marker keeps the historical `data-wrap` name:
+//   present and empty = wrapped; "unwrapped" = unwrapped; absent = overlap.
+// An old file with `data-wrap` (no value) therefore re-imports as wrapped,
+// exactly as it did before.
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
 
 export type TextCondition = "wrapped" | "unwrapped" | "overlap";
 
+const CONDITIONS: readonly TextCondition[] = ["wrapped", "unwrapped", "overlap"];
+
 /** Normalise a stored value into a condition (defensive: unknown = wrapped). */
 export function parseTextCondition(value: unknown): TextCondition {
-  if (value === "wrapped" || value === "unwrapped" || value === "overlap") return value;
-  // Back-compat with the stored boolean: only `false` meant "no wrap" = overlap.
+  if (typeof value === "string" && (CONDITIONS as readonly string[]).includes(value)) {
+    return value as TextCondition;
+  }
+  // Back-compat with the stored boolean: only `false` meant "no wrap".
   return value === false ? "overlap" : "wrapped";
 }
 
@@ -35,7 +43,25 @@ export function isWrapping(condition: TextCondition): boolean {
   return condition === "wrapped";
 }
 
+/** True when the element occupies whole lines (text above and below). */
+export function isUnwrapped(condition: TextCondition): boolean {
+  return condition === "unwrapped";
+}
+
 /** True when the element ignores the text: depth alone decides who covers whom. */
 export function isOverlap(condition: TextCondition): boolean {
   return condition === "overlap";
+}
+
+/** The `data-wrap` marker value for export: null means "do not emit". */
+export function textConditionMarker(condition: TextCondition): string | null {
+  if (condition === "wrapped") return "";
+  if (condition === "unwrapped") return "unwrapped";
+  return null;
+}
+
+/** Read the condition from a `data-wrap` marker value (re-import side). */
+export function textConditionFromMarker(value: string | null | undefined): TextCondition {
+  if (value === null || value === undefined) return "overlap";
+  return value === "unwrapped" ? "unwrapped" : "wrapped";
 }
