@@ -27,7 +27,8 @@ import {
   type FreeGeometry,
   type PageMargins,
 } from "./pagination-cassie";
-import { freeElementWidth, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
+import { freeElementWidth, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
+import { isOverlap, textConditionOf } from "./element-condition";
 
 export interface PrintSheet {
   html: string;
@@ -100,6 +101,14 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
     slice.content.forEach((node) => {
       if (!inFlow(node)) return;
       const el = serializer.serializeNode(node, {}) as HTMLElement;
+      if (isOverlap(textConditionOf(node))) {
+        // Overlap in the flow: out of the page flow but keeping the place it
+        // already had, exactly as on screen (free-style.applyOverlapLayout).
+        el.style.position = "absolute";
+        el.style.top = "auto";
+        el.style.left = "auto";
+        el.style.zIndex = String(stackDepthOf(zLevelOf(node)));
+      }
       // The float goes INSIDE the block's text, at the line the picture touches.
       // In front of the block with a margin it would narrow the lines from its
       // margin box, i.e. from the block's first line: a column of narrowed text
@@ -281,6 +290,15 @@ export const PRINT_BASE_CSS = `
 .aw-print-free { position: absolute; }
 .aw-print-free img, .aw-print-free figure { margin: 0; }
 .aw-print-free-wrap { background: transparent; border: 0; padding: 0; margin-left: 0; margin-right: 0; }
+/* T1.4/T1.6: a wrapped element in the flow floats on the sheet too, with the
+   same gap the editor uses (frame and shadow included). The image serializes as
+   a bare <img> (no wrapper), so it needs its own rule here; the figure keeps
+   class aw-figure and would match the editor rules, mirrored here for the
+   preview window. */
+.aw-print-body > img[data-wrap][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
+.aw-print-body > img[data-wrap][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
+.aw-print-body .aw-figure[data-wrap][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
+.aw-print-body .aw-figure[data-wrap][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
 `;
 
 /** Screen dressing used ONLY by the preview window (paper look). */
