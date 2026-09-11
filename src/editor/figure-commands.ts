@@ -11,6 +11,7 @@
 import type { EditorView } from "prosemirror-view";
 import { Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
+import { ensureParagraphAfter, getSelectedElement, setNodeAttrs } from "./element-commands";
 
 const FIGURE_NODE = "figure";
 
@@ -24,33 +25,14 @@ export interface SelectedFigureInfo {
  * image, or the figure enclosing the caret (caption editing).
  */
 export function getSelectedFigure(view: EditorView): SelectedFigureInfo | null {
-  const { selection } = view.state;
-  const $from = selection.$from;
-
-  if (selection instanceof NodeSelection && selection.node.type.name === FIGURE_NODE) {
-    return { pos: selection.from, node: selection.node };
-  }
-  // Covers: caret in the caption AND NodeSelection on the inner image (the
-  // resolved position sits inside the figure).
-  for (let d = $from.depth; d >= 1; d--) {
-    const node = $from.node(d);
-    if (node.type.name === FIGURE_NODE) {
-      return { pos: $from.before(d), node };
-    }
-  }
-  return null;
+  return getSelectedElement(view, [FIGURE_NODE]);
 }
 
 /** Patch figure attrs (captionLayout / captionGap / photo style, etc.). */
 export function setFigureAttrs(view: EditorView, patch: Record<string, unknown>): boolean {
   const info = getSelectedFigure(view);
   if (!info) return false;
-  try {
-    view.dispatch(view.state.tr.setNodeMarkup(info.pos, undefined, { ...info.node.attrs, ...patch }));
-    return true;
-  } catch {
-    return false;
-  }
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, ...patch });
 }
 
 /**
@@ -78,11 +60,7 @@ export function addCaptionToImage(view: EditorView): boolean {
 
   const pos = selection.from;
   let tr = view.state.tr.replaceWith(pos, pos + image.nodeSize, figure);
-  const figureEnd = pos + figure.nodeSize;
-  const nodeAfter = tr.doc.nodeAt(figureEnd);
-  if (!nodeAfter || nodeAfter.type !== paragraph) {
-    tr = tr.insert(figureEnd, paragraph.create());
-  }
+  tr = ensureParagraphAfter(tr, pos + figure.nodeSize, schema);
   // Caret inside the caption (first text position), ready to type.
   const $caret = tr.doc.resolve(pos + 1);
   tr = tr.setSelection(TextSelection.near($caret, 1));
@@ -115,11 +93,7 @@ export function removeFigureCaption(view: EditorView): boolean {
   const bareImage = imageType.create(imageAttrs);
 
   let tr = view.state.tr.replaceWith(pos, pos + figure.nodeSize, bareImage);
-  const imageEnd = pos + bareImage.nodeSize;
-  const nodeAfter = tr.doc.nodeAt(imageEnd);
-  if (!nodeAfter || nodeAfter.type !== paragraph) {
-    tr = tr.insert(imageEnd, paragraph.create());
-  }
+  tr = ensureParagraphAfter(tr, pos + bareImage.nodeSize, schema);
   tr = tr.setSelection(NodeSelection.create(tr.doc, pos));
   view.dispatch(tr);
   view.focus();

@@ -3,6 +3,7 @@ import { Node as PMNode } from "prosemirror-model";
 import { NodeSelection } from "prosemirror-state";
 import { uploadImageFile, resolveImageSrc, type UploadedImage } from "./image-uploader";
 import { showErrorToast } from "../error-boundary";
+import { ensureParagraphAfter, getSelectedElement, setNodeAttrs } from "./element-commands";
 
 export function createImageNode(
   view: EditorView,
@@ -67,15 +68,8 @@ function insertImageBlock(view: EditorView, imageNode: PMNode): boolean {
   }
 
   // Ensure a paragraph follows the image so the cursor has a place to land
-  // below it. Without this, an image inserted as the last node of the
-  // document would leave the cursor stranded on the image with no way to
-  // continue writing. Behaviour matches Google Docs and Word: every image
-  // is hosted by a paragraph that follows it.
-  const imageEnd = insertedPos + imageNode.nodeSize;
-  const nodeAfter = tr.doc.nodeAt(imageEnd);
-  if (!nodeAfter || nodeAfter.type !== paragraph) {
-    tr = tr.insert(imageEnd, paragraph.create());
-  }
+  // below it (same shared rule as figure/box).
+  tr = ensureParagraphAfter(tr, insertedPos + imageNode.nodeSize, view.state.schema);
 
   view.dispatch(tr);
   view.focus();
@@ -138,41 +132,13 @@ export interface SelectedImageInfo {
 /** A node that behaves like a photo for the image toolbar: a plain image OR a
  *  figure (which carries the photo as attrs). Commands patch the node attrs in
  *  both cases, so the toolbar controls work on the figure as a unit. */
-function isPhotoLike(name: string): boolean {
-  return name === "image" || name === "figure";
-}
+const PHOTO_LIKE_NODES = ["image", "figure"] as const;
 
 export async function getSelectedImage(view: EditorView): Promise<SelectedImageInfo | null> {
-  const { selection } = view.state;
-  if (selection instanceof NodeSelection && isPhotoLike(selection.node.type.name)) {
-    const pos = selection.from;
-    const node = selection.node;
-    const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
-    return { pos, node, resolvedSrc };
-  }
-  const { $from } = selection;
-  for (let d = $from.depth; d > 0; d--) {
-    const node = $from.node(d);
-    if (isPhotoLike(node.type.name)) {
-      const pos = $from.before(d);
-      const resolvedSrc = await resolveImageSrc(node.attrs.src as string);
-      return { pos, node, resolvedSrc };
-    }
-  }
-  return null;
-}
-
-function safeSetNodeMarkup(
-  view: EditorView,
-  pos: number,
-  attrs: Record<string, unknown>
-): boolean {
-  try {
-    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, attrs));
-    return true;
-  } catch {
-    return false;
-  }
+  const info = getSelectedElement(view, PHOTO_LIKE_NODES);
+  if (!info) return null;
+  const resolvedSrc = await resolveImageSrc(info.node.attrs.src as string);
+  return { pos: info.pos, node: info.node, resolvedSrc };
 }
 
 export async function setImageAlignment(
@@ -184,7 +150,7 @@ export async function setImageAlignment(
   // Contract §2.10-§2.11: wrapping belongs to the element, not to its
   // alignment. Centring used to switch wrapping off behind the user's back,
   // which silently destroyed a choice they had made on purpose.
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, align });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, align });
 }
 
 export async function setImageWrap(
@@ -193,7 +159,7 @@ export async function setImageWrap(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, wrap });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, wrap });
 }
 
 export async function setImageRotation(
@@ -202,7 +168,7 @@ export async function setImageRotation(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, rotation });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, rotation });
 }
 
 export async function setImageFlipH(
@@ -211,7 +177,7 @@ export async function setImageFlipH(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, flipH });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, flipH });
 }
 
 export async function setImageFlipV(
@@ -220,7 +186,7 @@ export async function setImageFlipV(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, flipV });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, flipV });
 }
 
 export async function setImageAspectLocked(
@@ -229,7 +195,7 @@ export async function setImageAspectLocked(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, aspectLocked });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, aspectLocked });
 }
 
 export async function setImageSize(
@@ -239,7 +205,7 @@ export async function setImageSize(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, width, height });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, width, height });
 }
 
 export async function setImageWidth(
@@ -254,7 +220,7 @@ export async function setImageWidth(
     const currentH = (info.node.attrs.height as number) || 1;
     attrs.height = Math.round((width / currentW) * currentH);
   }
-  return safeSetNodeMarkup(view, info.pos, attrs);
+  return setNodeAttrs(view, info.pos, attrs);
 }
 
 export async function setImageHeight(
@@ -269,7 +235,7 @@ export async function setImageHeight(
     const currentH = (info.node.attrs.height as number) || 1;
     attrs.width = Math.round((height / currentH) * currentW);
   }
-  return safeSetNodeMarkup(view, info.pos, attrs);
+  return setNodeAttrs(view, info.pos, attrs);
 }
 
 /**
@@ -283,7 +249,7 @@ export async function setImageStyleAttrs(
 ): Promise<boolean> {
   const info = await getSelectedImage(view);
   if (!info) return false;
-  return safeSetNodeMarkup(view, info.pos, { ...info.node.attrs, ...patch });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, ...patch });
 }
 
 export async function removeImage(view: EditorView): Promise<boolean> {

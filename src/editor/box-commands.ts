@@ -7,7 +7,7 @@
 
 import type { EditorView } from "prosemirror-view";
 import { Node as PMNode } from "prosemirror-model";
-import { NodeSelection, TextSelection } from "prosemirror-state";
+import { TextSelection } from "prosemirror-state";
 import {
   DEFAULT_BOX_STYLE,
   NOTE_PRESET,
@@ -15,6 +15,7 @@ import {
   normalizeBoxStyle,
   type BoxVariant,
 } from "./box-style";
+import { ensureParagraphAfter, getSelectedElement, setNodeAttrs } from "./element-commands";
 
 const BOX_NODE = "styled_box";
 
@@ -25,18 +26,7 @@ export interface SelectedBoxInfo {
 
 /** The box under a NodeSelection, or the box enclosing the caret, if any. */
 export function getSelectedBox(view: EditorView): SelectedBoxInfo | null {
-  const { selection } = view.state;
-  if (selection instanceof NodeSelection && selection.node.type.name === BOX_NODE) {
-    return { pos: selection.from, node: selection.node };
-  }
-  const { $from } = selection;
-  for (let d = $from.depth; d > 0; d--) {
-    const node = $from.node(d);
-    if (node.type.name === BOX_NODE) {
-      return { pos: $from.before(d), node };
-    }
-  }
-  return null;
+  return getSelectedElement(view, [BOX_NODE]);
 }
 
 /**
@@ -80,37 +70,19 @@ export function insertStyledBox(view: EditorView, variant: BoxVariant): boolean 
   // Caret goes INSIDE the box's first paragraph so typing starts immediately.
   tr = tr.setSelection(TextSelection.near(tr.doc.resolve(insertedPos + 1), 1));
 
-  // Host paragraph after the box: without it a box as last document node
-  // would leave nowhere to continue writing below (same rationale as images).
-  const boxEnd = insertedPos + boxNode.nodeSize;
-  const nodeAfter = tr.doc.nodeAt(boxEnd);
-  if (!nodeAfter || nodeAfter.type !== paragraph) {
-    tr = tr.insert(boxEnd, paragraph.create());
-  }
+  // Host paragraph after the box: same shared rule as images (element-commands).
+  tr = ensureParagraphAfter(tr, insertedPos + boxNode.nodeSize, state.schema);
 
   view.dispatch(tr);
   view.focus();
   return true;
 }
 
-function safeSetBoxMarkup(
-  view: EditorView,
-  pos: number,
-  attrs: Record<string, unknown>
-): boolean {
-  try {
-    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, attrs));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** Patch any subset of the box style attrs on the selected/enclosing box. */
 export function setBoxAttrs(view: EditorView, patch: Record<string, unknown>): boolean {
   const info = getSelectedBox(view);
   if (!info) return false;
-  return safeSetBoxMarkup(view, info.pos, { ...info.node.attrs, ...patch });
+  return setNodeAttrs(view, info.pos, { ...info.node.attrs, ...patch });
 }
 
 /** Remove the selected/enclosing box; keep the caret where it was. */
