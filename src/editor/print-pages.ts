@@ -27,7 +27,7 @@ import {
   type FreeGeometry,
   type PageMargins,
 } from "./pagination-cassie";
-import { freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
+import { freeElementWidth, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
 
 export interface PrintSheet {
   html: string;
@@ -220,7 +220,7 @@ function freeOverlayHtml(
     const plain = node.type.create({ ...node.attrs, free: null, wrap: false, zLevel: 1 }, node.content, node.marks);
     const holder = document.createElement("div");
     holder.appendChild(serializer.serializeNode(plain, {}));
-    const width = Math.round(node.attrs?.width ?? node.attrs?.widthPx ?? 0) || contentWidth;
+    const width = freeElementWidth(node) ?? contentWidth;
     const left = Math.round(freeLeftPx({ left: 0, width: contentWidth }, spec, width));
     const top = Math.round(geo.top - (geo.page - 1) * contentHeight);
     parts.push(
