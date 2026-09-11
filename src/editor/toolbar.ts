@@ -2421,7 +2421,8 @@ export function updateImageToolbar(view: EditorView): void {
     const btnFree = document.getElementById("img-free");
     if (btnFree instanceof HTMLButtonElement) {
       const free = !!attrs.free;
-      btnFree.textContent = free ? "In flow" : "Free";
+      // The button shows the element's CURRENT state, not the action.
+      btnFree.textContent = free ? "Free" : "In flow";
       btnFree.title = free
         ? "Put this element back between the paragraphs"
         : "Take this element out of the text flow";

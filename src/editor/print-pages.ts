@@ -24,6 +24,7 @@ import {
   PAGE_WIDTH_PX,
   PAGE_HEIGHT_PX,
   PAGE_HEADER_PX,
+  type FreeBandInput,
   type FreeGeometry,
   type PageMargins,
 } from "./pagination-cassie";
@@ -104,9 +105,19 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
       if (isOverlap(textConditionOf(node))) {
         // Overlap in the flow: out of the page flow but keeping the place it
         // already had, exactly as on screen (free-style.applyOverlapLayout).
+        // The horizontal comes from the alignment, not from the natural left.
+        const width = freeElementWidth(node) ?? 0;
+        const align = String(node.attrs.align ?? "center");
+        const xFrom = align === "left" || align === "right" ? align : "center";
+        const left =
+          width > 0
+            ? freeLeftPx({ left: 0, width: contentWidth }, { xFrom, xOff: 0, yOff: 0, g: "" }, width)
+            : 0;
         el.style.position = "absolute";
         el.style.top = "auto";
-        el.style.left = "auto";
+        el.style.left = `${Math.round(left)}px`;
+        if (width > 0) el.style.width = `${width}px`;
+        el.style.margin = "0";
         el.style.zIndex = String(stackDepthOf(zLevelOf(node)));
       }
       // The float goes INSIDE the block's text, at the line the picture touches.
@@ -169,7 +180,7 @@ function blockStartOf(doc: PMNode, pos: number): { node: PMNode; start: number }
  * calculator booked (contract §7: one source, no second geometry) and no margin,
  * because it is placed at the line it must shorten.
  */
-function wrapSpacerDom(band: FreeWrapBand, height: number): HTMLElement {
+function wrapSpacerDom(band: FreeWrapBand, height: number, marginTop = 0): HTMLElement {
   // A span, not a div: this markup is re-read by the browser's HTML parser when
   // the sheet is injected, and a div inside a paragraph would close the
   // paragraph. A floated span stays inside the text and floats the same way.
@@ -178,6 +189,13 @@ function wrapSpacerDom(band: FreeWrapBand, height: number): HTMLElement {
   el.style.cssFloat = band.side;
   el.style.width = `${band.widthPx}px`;
   el.style.height = `${Math.max(1, Math.round(height))}px`;
+  if (marginTop > 0) {
+    // The reserved area must begin where the picture is DRAWN, not at the top
+    // of the line: same trick the editor uses (margin + shape-outside), or the
+    // text reserves a band higher than the image and does not hug it.
+    el.style.marginTop = `${marginTop}px`;
+    el.style.shapeOutside = `inset(${marginTop}px 0 0 0)`;
+  }
   return el;
 }
 
@@ -186,8 +204,9 @@ function wrapSpacerDom(band: FreeWrapBand, height: number): HTMLElement {
  * nodes, split the one that holds the offset, and insert before the rest. That
  * is the paper equivalent of the editor's widget inside the paragraph.
  */
-function insertFloatAtOffset(root: HTMLElement, band: FreeWrapBand, offset: number, height: number): void {
-  const float = wrapSpacerDom(band, height);
+function insertFloatAtOffset(root: HTMLElement, band: FreeBandInput, offset: number, height: number): void {
+  const marginTop = Math.max(0, Math.round(band.y0 - band.lineTop));
+  const float = wrapSpacerDom(band, height, marginTop);
   let left = Math.max(0, Math.round(offset));
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {

@@ -193,7 +193,8 @@ export function syncBoxToolbar(view: EditorView): void {
   const freeBtn = el<HTMLButtonElement>("box-free");
   if (freeBtn) {
     const free = !!info.node.attrs.free;
-    freeBtn.textContent = free ? "In flow" : "Free";
+    // The button shows the element's CURRENT state, not the action.
+    freeBtn.textContent = free ? "Free" : "In flow";
     freeBtn.title = free
       ? "Put this box back between the paragraphs"
       : "Take this box out of the text flow";

@@ -322,9 +322,16 @@ const imageSpec: NodeSpec = {
     // T1.4, D10 rule 1: the frame and the shadow must travel with the image,
     // or print and the exported HTML would lose them. The editor draws the
     // frame as an `outline` (it takes no room), so the export does too.
-    const css = computeImageCss(normalizeImageStyle(node.attrs as Record<string, unknown>));
-    const styleParts: string[] = [];
-    if (css.borderRadius) styleParts.push(`border-radius: ${css.borderRadius}`);
+    const style = normalizeImageStyle(node.attrs as Record<string, unknown>);
+    const css = computeImageCss(style);
+    // Exempt from the generic `.ProseMirror img` decoration (4px radius, 1px
+    // transparent border) and from its max-height cap, exactly like the
+    // editor's own wrapper does; the chosen radius is written even when 0.
+    const styleParts: string[] = [
+      `border-radius: ${style.cornerRadius}px`,
+      "border: 0",
+      "max-height: none",
+    ];
     if (css.border) {
       styleParts.push(`outline: ${css.border}`);
       styleParts.push("outline-offset: 0px");
