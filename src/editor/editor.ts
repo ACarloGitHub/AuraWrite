@@ -32,6 +32,7 @@ import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { createAtomicElementGuardPlugin } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
+import { isWrapping, textConditionOf } from "./element-condition";
 import { updateImageToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -302,7 +303,7 @@ const imageSpec: NodeSpec = {
     if (node.attrs.width) attrs.width = String(node.attrs.width);
     if (node.attrs.height) attrs.height = String(node.attrs.height);
     attrs["data-align"] = node.attrs.align as string;
-    if (node.attrs.wrap) attrs["data-wrap"] = "";
+    if (isWrapping(textConditionOf(node))) attrs["data-wrap"] = "";
     // Free-layout markers (F3.a).
     Object.assign(attrs, freeLayoutToDOM(node));
     if (node.attrs.rotation) attrs["data-rotation"] = String(node.attrs.rotation);

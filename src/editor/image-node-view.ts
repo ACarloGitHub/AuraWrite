@@ -5,6 +5,7 @@ import { resolveImageSrc, uploadImageFile } from "./image-uploader";
 import {
   applyCaptionStripStyle,
   applyFrameAndShadow,
+  applyWrapMarker,
   selectNodeAt,
   setStyleCached,
   transformStyleOf,
@@ -39,7 +40,7 @@ export class ImageNodeView implements NodeView {
     this.wrapper.className = "image-node-wrapper";
     const attrs = node.attrs;
     this.wrapper.setAttribute("data-align", (attrs.align as string) || "center");
-    if (attrs.wrap) this.wrapper.setAttribute("data-wrap", "");
+    applyWrapMarker(this.wrapper, attrs);
     this.applyTransform(attrs);
 
     this.img = document.createElement("img");
@@ -423,11 +424,7 @@ export class ImageNodeView implements NodeView {
     if (this.wrapper.getAttribute("data-align") !== newAlign) {
       this.wrapper.setAttribute("data-align", newAlign);
     }
-    if (attrs.wrap) {
-      this.wrapper.setAttribute("data-wrap", "");
-    } else {
-      this.wrapper.removeAttribute("data-wrap");
-    }
+    applyWrapMarker(this.wrapper, attrs);
     this.applyTransform(attrs);
     this.applyStyle(attrs);
     this.applyCaption(attrs);

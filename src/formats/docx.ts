@@ -23,6 +23,7 @@ import {
   VerticalPositionAlign,
 } from "docx";
 import { PAGE_WIDTH_PX, PAGE_HEIGHT_PX, PAGE_HEADER_PX, PAGE_FOOTER_PX } from "../editor/pagination-cassie";
+import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 
@@ -1230,7 +1231,7 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   else if (src.endsWith(".bmp")) type = "bmp";
   else if (src.endsWith(".webp")) type = "webp";
 
-  const wrap: boolean = !!node.attrs?.wrap;
+  const wrap = isWrapping(textConditionOf(node));
   const rotation: number = node.attrs?.rotation || 0;
   const flipH: boolean = !!node.attrs?.flipH;
   const flipV: boolean = !!node.attrs?.flipV;

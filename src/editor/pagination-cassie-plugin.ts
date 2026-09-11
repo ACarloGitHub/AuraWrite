@@ -2,6 +2,7 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { EditorView } from "prosemirror-view";
 import { freeWrapBand, freeLayoutMap, parseFreeSpec } from "./free-layout";
+import { isWrapping, textConditionOf } from "./element-condition";
 import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
@@ -75,7 +76,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
   for (const [pos, pic] of freeEls) {
     const node = view.state.doc.nodeAt(pos);
     const spec = node ? parseFreeSpec(node.attrs?.free) : null;
-    if (!node || !spec || node.attrs?.wrap !== true) continue;
+    if (!node || !spec || !isWrapping(textConditionOf(node))) continue;
 
     const r = pic.getBoundingClientRect();
     // While the element flies, the box that matters is the copy under the

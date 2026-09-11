@@ -37,6 +37,7 @@ import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth,
   type FreeWrapBand,
 } from "./free-layout";
+import { isWrapping, textConditionOf } from "./element-condition";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -689,13 +690,14 @@ function spacingFor(node: PMNode): BlockSpacing {
 }
 
 function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } | null {
-  if (node.attrs.wrap !== true) return null;
+  if (!isWrapping(textConditionOf(node))) return null;
   if (node.type.name !== "image" && node.type.name !== "figure") return null;
   const align = String(node.attrs.align ?? "");
   if (align !== "left" && align !== "right") return null;
-  const w = Number(node.attrs.width);
-  if (!isFinite(w) || w <= 0) return null;
-  return { side: align, widthPx: Math.round(w) + OBSTACLE_MARGIN_PX };
+  // ONE definition of the element's own width, shared with the free bands.
+  const w = freeElementWidth(node);
+  if (w === null) return null;
+  return { side: align, widthPx: w + OBSTACLE_MARGIN_PX };
 }
 
 /** Normalise a raw line-start to a word start (never inside whitespace). */
@@ -1160,7 +1162,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
           elementWidthPx: w,
           elementHeightPx: h,
           drawnTop: top,
-          wrapOn: node.attrs.wrap === true,
+          wrapOn: isWrapping(textConditionOf(node)),
         });
         if (next) outBands.push({ ...next, pos, insertPos: null, lineTop: next.y0 });
       }

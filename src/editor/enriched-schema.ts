@@ -34,6 +34,7 @@ import {
   parseFreeSpec,
   type FreeSpec,
 } from "./free-layout";
+import { isWrapping, textConditionOf } from "./element-condition";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
 export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
@@ -174,7 +175,7 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     if (s.align !== DEFAULT_BOX_STYLE.align) attrs["data-align"] = s.align;
     // Free-layout markers (F3.a): only what differs from the default.
     Object.assign(attrs, freeLayoutToDOM(node));
-    if (node.attrs.wrap !== false) attrs["data-wrap"] = "";
+    if (isWrapping(textConditionOf(node))) attrs["data-wrap"] = "";
     // D10 rule 1: emit BOTH the stable markers and the inline style, so the
     // markup renders universally outside AuraWrite and re-imports exactly.
     const css = computeBoxCss(s);
@@ -356,7 +357,7 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     if (node.attrs.width) imgAttrs.width = String(node.attrs.width);
     if (node.attrs.height) imgAttrs.height = String(node.attrs.height);
     imgAttrs["data-align"] = String(node.attrs.align ?? "center");
-    if (node.attrs.wrap) imgAttrs["data-wrap"] = "";
+    if (isWrapping(textConditionOf(node))) imgAttrs["data-wrap"] = "";
     if (node.attrs.rotation) imgAttrs["data-rotation"] = String(node.attrs.rotation);
     if (node.attrs.flipH) imgAttrs["data-flip-h"] = "";
     if (node.attrs.flipV) imgAttrs["data-flip-v"] = "";

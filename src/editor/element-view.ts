@@ -15,6 +15,7 @@ import { NodeSelection, Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { computeImageCss, normalizeImageStyle } from "./image-style";
 import { isLightBgColor } from "./box-style";
+import { isWrapping, parseTextCondition } from "./element-condition";
 
 /** Per-element cache of the inline style values this code has written. */
 export type StyleCache = Record<string, string | undefined>;
@@ -89,6 +90,12 @@ export function applyFrameAndShadow(
   setStyleCached(imgCache, img, "border-radius", radius);
   setStyleCached(imgCache, img, "border", null);
   setStyleCached(imgCache, img, "box-shadow", null);
+}
+
+/** Mirror the element's text condition onto the visual `data-wrap` marker. */
+export function applyWrapMarker(el: HTMLElement, attrs: Record<string, unknown>): void {
+  if (isWrapping(parseTextCondition(attrs.wrap))) el.setAttribute("data-wrap", "");
+  else el.removeAttribute("data-wrap");
 }
 
 /** Background, vertical padding and dark-background legibility of a caption. */

@@ -23,6 +23,7 @@ import { resolveImageSrc } from "./image-uploader";
 import {
   applyCaptionStripStyle,
   applyFrameAndShadow,
+  applyWrapMarker,
   selectNodeAt,
   setStyleCached,
   transformStyleOf,
@@ -105,8 +106,7 @@ export class FigureNodeView implements NodeView {
     if (this.dom.getAttribute("data-align") !== align) {
       this.dom.setAttribute("data-align", align);
     }
-    if (attrs.wrap) this.dom.setAttribute("data-wrap", "");
-    else this.dom.removeAttribute("data-wrap");
+    applyWrapMarker(this.dom, attrs);
 
     const layout = String(attrs.captionLayout ?? "below");
     if (this.dom.getAttribute("data-caption-layout") !== layout) {

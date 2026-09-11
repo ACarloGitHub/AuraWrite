@@ -16,6 +16,7 @@ import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
+import { isWrapping, textConditionOf } from "./element-condition";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -2270,7 +2271,7 @@ function setupImageToolbar(view: EditorView): void {
     const info = await getSelectedImage(view);
     if (!info) return;
     const { setImageWrap } = await import("./image-commands");
-    void setImageWrap(view, !info.node.attrs.wrap);
+    void setImageWrap(view, !isWrapping(textConditionOf(info.node)));
   });
   // F3.a: take the element out of the flow / put it back. The label is synced
   // with the state in updateImageToolbar, so it always reads as the action.
@@ -2362,7 +2363,7 @@ export function updateImageToolbar(view: EditorView): void {
     btnAlignLeft?.classList.toggle("image-toolbar__btn--active", align === "left");
     btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
     btnAlignRight?.classList.toggle("image-toolbar__btn--active", align === "right");
-    btnToggleWrap?.classList.toggle("image-toolbar__btn--active", !!attrs.wrap);
+    btnToggleWrap?.classList.toggle("image-toolbar__btn--active", isWrapping(textConditionOf(info.node)));
     // F3.a: wrapping is the born-default (contract §2.10) and is a property of
     // the element, not of its alignment: centring must never silently turn it
     // off, so the control stays available and shows the stored state.
