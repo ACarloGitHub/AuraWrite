@@ -412,8 +412,13 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
  * Defensive migration of legacy document JSON before parsing with the current
  * schema (document load / open JSON). Handles:
  *  - old `figure` nodes (content: image + styled_box) → the new figure that
- *    carries the photo as attrs and the caption text as content;
- *  - bare `image` nodes → wrapped in a paragraph (as the rest of the app does).
+ *    carries the photo as attrs and the caption text as content.
+ *
+ * Block-level images are deliberately LEFT ALONE: an image is a top-level
+ * block, and wrapping it in a paragraph (as this function did while images
+ * were inline) moves it out of the top level. That broke the free layout, the
+ * Layers window and every attribute command after a reload (observed by Carlo
+ * 2026-09-11: after reopening, images were "stuck" and missing from Layers).
  */
 export function migrateLegacyDocumentJson(node: unknown): unknown {
   if (!node || typeof node !== "object") return node;
@@ -434,9 +439,6 @@ export function migrateLegacyDocumentJson(node: unknown): unknown {
     const content: unknown[] =
       Array.isArray(boxContent) && boxContent.length > 0 ? boxContent : [{ type: "paragraph" }];
     return { ...n, attrs, content };
-  }
-  if (n.type === "image") {
-    return { type: "paragraph", content: [node] };
   }
   if (Array.isArray(n.content)) {
     return { ...n, content: n.content.map((child) => migrateLegacyDocumentJson(child)) };
