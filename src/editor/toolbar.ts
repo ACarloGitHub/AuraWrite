@@ -17,6 +17,8 @@ import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdo
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
 import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
+import { freeElementWidth, freeLeftPx, parseFreeSpec } from "./free-layout";
+import { textColumn } from "./free-style";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { showErrorToast, showInfoToast } from "../error-boundary";
@@ -2269,6 +2271,8 @@ function setupImageToolbar(view: EditorView): void {
   const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
   const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;
   const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
+  const inputX = document.getElementById("img-x") as HTMLInputElement | null;
+  const inputY = document.getElementById("img-y") as HTMLInputElement | null;
 
   btnAlignLeft?.addEventListener("click", () => {
     void setImageAlignment(view, "left");
@@ -2337,6 +2341,28 @@ function setupImageToolbar(view: EditorView): void {
     if (isNaN(val)) return;
     val = ((val % 360) + 360) % 360;
     void setImageRotation(view, val);
+  });
+
+  // T1.5: X/Y position a FREE element by hand. X is the left edge measured
+  // from the column's left; Y is the distance below the anchor block.
+  inputX?.addEventListener("change", async () => {
+    const v = parseFloat(inputX.value);
+    if (!isFinite(v)) return;
+    const { setFreePosition } = await import("./free-commands");
+    setFreePosition(view, { xFrom: "left", xOff: v });
+  });
+  inputY?.addEventListener("change", async () => {
+    const v = parseFloat(inputY.value);
+    if (!isFinite(v)) return;
+    const { setFreePosition } = await import("./free-commands");
+    setFreePosition(view, { yOff: v });
+  });
+  // Live values while a free element is dragged on the canvas.
+  window.addEventListener("aurawrite:free-position-preview", (e) => {
+    const d = (e as CustomEvent).detail as { x: number; y: number } | undefined;
+    if (!d) return;
+    if (inputX) inputX.value = String(d.x);
+    if (inputY) inputY.value = String(d.y);
   });
 
   // Phase 1 (enrichment): wire the "Style" section (dynamic, anti-bloat hook)
@@ -2420,6 +2446,24 @@ export function updateImageToolbar(view: EditorView): void {
     if (inputRotation) {
       const r = (attrs.rotation as number) || 0;
       inputRotation.value = r ? String(r) : "";
+    }
+
+    // T1.5: X/Y fields exist only in Free; they show the element's own position.
+    const xField = document.getElementById("img-x-field");
+    const yField = document.getElementById("img-y-field");
+    const freeSpec = isFree ? parseFreeSpec(attrs.free) : null;
+    if (xField instanceof HTMLElement) xField.hidden = !isFree;
+    if (yField instanceof HTMLElement) yField.hidden = !isFree;
+    const inputX = document.getElementById("img-x") as HTMLInputElement | null;
+    const inputY = document.getElementById("img-y") as HTMLInputElement | null;
+    if (isFree && freeSpec && inputX && inputY) {
+      const nodeDom = view.nodeDOM(info.pos);
+      const width =
+        freeElementWidth(info.node) ??
+        (nodeDom instanceof HTMLElement ? Math.round(nodeDom.offsetWidth) : 0);
+      const column = textColumn(view.dom as HTMLElement);
+      inputX.value = String(Math.round(freeLeftPx(column, freeSpec, width) - column.left));
+      inputY.value = String(Math.round(freeSpec.yOff));
     }
 
     // Phase 1 (enrichment): sync the "Style" section (thin hook)

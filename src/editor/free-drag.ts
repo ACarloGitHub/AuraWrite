@@ -183,7 +183,22 @@ export function startFreeDrag(
     } else if (flight.guide) {
       flight.guide.style.display = "none";
     }
-    if (wasFreeAtPress) moveLiveBand(ev.clientX - grabOffsetX, ev.clientY - grabOffsetY);
+    if (wasFreeAtPress) {
+      moveLiveBand(ev.clientX - grabOffsetX, ev.clientY - grabOffsetY);
+      // Live X/Y for the toolbar: the exact position the release will book.
+      const host = view.dom as HTMLElement;
+      const hostRect = host.getBoundingClientRect();
+      const padLeft = parseFloat(getComputedStyle(host).paddingLeft) || 0;
+      window.dispatchEvent(
+        new CustomEvent("aurawrite:free-position-preview", {
+          detail: {
+            pos,
+            x: Math.round(ev.clientX - grabOffsetX - hostRect.left - padLeft),
+            y: Math.round(ev.clientY - grabOffsetY - anchorTopClient),
+          },
+        }),
+      );
+    }
     // Remember where the copy is, so the release can turn it into distances.
     lastPointerX = ev.clientX;
     lastPointerY = ev.clientY;
@@ -550,7 +565,7 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   }
 
   let tr = state.tr;
-  let caretAnchorIndex = anchorIndex;
+  let newElemPos = pos;
   try {
     if (anchorless) {
       // The same single rule the menu command uses, imported instead of written
@@ -561,7 +576,7 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
       const anchored = ensureAnchorParagraph(state, tr, pos);
       if (!anchored.created) return;
       tr = anchored.tr.setNodeMarkup(anchored.pos, undefined, attrs);
-      caretAnchorIndex = currentIndex; // the new line took the element's old slot
+      newElemPos = anchored.pos;
     } else if (anchorIndex + 1 !== currentIndex) {
       const anchor = state.doc.child(anchorIndex);
       const anchorEndPos = blockStartPos(view, anchorIndex) + anchor.nodeSize;
@@ -569,17 +584,20 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
       tr = tr.delete(pos, oldEnd);
       // Mapping makes the target right whether the element travelled down or
       // up the document.
-      tr = tr.insert(tr.mapping.map(anchorEndPos), newNode);
+      const insertAt = tr.mapping.map(anchorEndPos);
+      tr = tr.insert(insertAt, newNode);
+      newElemPos = insertAt;
     } else {
       tr = tr.setNodeMarkup(pos, undefined, attrs);
+      newElemPos = pos;
     }
   } catch {
     return;
   }
   view.dispatch(tr);
-  // The caret goes to the anchor's text: the writer keeps typing where the
-  // element now hangs, instead of losing the selection on a moving node.
-  focusAnchor(view, caretAnchorIndex);
+  // Keep the element selected: its toolbar (the X/Y fields included) stays on
+  // the thing the user just positioned.
+  selectElement(view, newElemPos);
 }
 
 /**
