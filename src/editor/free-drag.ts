@@ -334,13 +334,18 @@ function topLevelAnchors(view: EditorView): { index: number; el: HTMLElement }[]
 }
 
 /**
- * The exact document spot BETWEEN TWO LINES an in-flow element can land on:
- * the character under the pointer, when that character is inside a top-level
- * paragraph. Returns null when the pointer is on a non-paragraph block (image,
- * figure, box, table), on a heading, or between blocks: the drop then falls
- * back to changing which block the element follows.
+ * The exact document spot BETWEEN TWO LINES an in-flow element can land on.
  *
- * Headings are excluded on purpose: splitting one would produce two headings.
+ * The pointer chooses a BOUNDARY, never a character: the visual line under the
+ * pointer decides, its top half means "before this line" and its bottom half
+ * means "after it". The returned `lineTop` is the SAME boundary the insertion
+ * uses, so the guide and the landing can never disagree (Carlo's report: with
+ * the guide above line 1 the element used to land above line 2).
+ *
+ * Returns null when the pointer is on a non-paragraph block (image, figure,
+ * box, table), on a heading, or between blocks: the drop then falls back to
+ * changing which block the element follows. Headings are excluded on purpose:
+ * splitting one would produce two headings.
  */
 function preciseDropPos(
   view: EditorView,
@@ -360,15 +365,61 @@ function preciseDropPos(
   const block = $pos.node(1);
   if (!block.isTextblock || block.type.name !== "paragraph") return null;
   const blockStart = $pos.before(1);
-  const offset = coords.pos - (blockStart + 1);
-  if (offset < 0 || offset > block.content.size) return null;
-  let lineTop = clientY;
-  try {
-    lineTop = view.coordsAtPos(coords.pos).top;
-  } catch {
-    /* keep the pointer's own height */
+  const contentStart = blockStart + 1;
+  const contentEnd = contentStart + block.content.size;
+
+  const el = view.nodeDOM(blockStart);
+  if (!(el instanceof HTMLElement)) return null;
+  const rects = lineRects(el);
+  if (rects.length === 0) return null;
+
+  const first = rects[0];
+  const last = rects[rects.length - 1];
+  // Above every line: before the paragraph. Below every line: after it.
+  if (clientY < first.top) return { pos: contentStart, lineTop: first.top };
+  if (clientY >= last.bottom) return { pos: contentEnd, lineTop: last.bottom };
+
+  for (let i = 0; i < rects.length; i++) {
+    const r = rects[i];
+    if (clientY < r.top || clientY >= r.bottom) continue;
+    if (clientY < r.top + r.height / 2) {
+      // Top half: before this line.
+      return { pos: lineStartPos(view, rects, i, contentStart, contentEnd), lineTop: r.top };
+    }
+    // Bottom half: after this line (the boundary is the next line's top).
+    const nextTop = i + 1 < rects.length ? rects[i + 1].top : r.bottom;
+    return { pos: lineStartPos(view, rects, i + 1, contentStart, contentEnd), lineTop: nextTop };
   }
-  return { pos: coords.pos, lineTop };
+  return null;
+}
+
+/** The visual lines of a block, one rectangle each (for inline content). */
+function lineRects(el: HTMLElement): DOMRect[] {
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return Array.from(range.getClientRects()).filter((r) => r.height > 0.5);
+  } catch {
+    return [];
+  }
+}
+
+/** Document position where visual line `index` of a paragraph starts. */
+function lineStartPos(
+  view: EditorView,
+  rects: DOMRect[],
+  index: number,
+  contentStart: number,
+  contentEnd: number,
+): number {
+  if (index <= 0) return contentStart;
+  if (index >= rects.length) return contentEnd;
+  const r = rects[index];
+  // Ask the editor for the position just inside the line's own left edge, at
+  // its vertical middle: the honest way to name a line start from a rectangle.
+  const probe = view.posAtCoords({ left: r.left + 1, top: r.top + r.height / 2 });
+  if (!probe) return contentStart;
+  return Math.max(contentStart, Math.min(contentEnd, probe.pos));
 }
 
 /** Decoration widgets the pagination plugin inserts between blocks. */
