@@ -212,6 +212,137 @@ export function freeTopPx(anchorTop: number, spec: FreeSpec): number {
   return anchorTop + spec.yOff;
 }
 
+/** Width a free element must keep, from its own attrs (image/figure/box). */
+export function freeElementWidth(node: PMNode): number | null {
+  const attrs = node.attrs as Record<string, unknown>;
+  const raw = node.type.name === "styled_box" ? attrs.widthPx : attrs.width;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+  return isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
+// ---------------------------------------------------------------------------
+// F3.2c: the band a free element claims from the text.
+//
+// ONE function computes it and the screen, the calculator and the paper all
+// call it, because a one-pixel difference between them is a visible misprint.
+//
+// What the rules are NOT, after Carlo's collaudo of F3.2b (rev. 2026-09-07):
+// no minimum text width, no refused second element, no clamping to the anchor.
+// An element with wrap ON always claims its own rectangle, wherever that
+// rectangle lands - even two letters of text still pass beside it. A band is
+// only ever absent when the GEOMETRY says so: no size, or the box lies outside
+// the column, or it covers the column (there is then no side left to claim).
+//
+// What the rules ARE:
+// - the band IS the drawn rectangle: `y0`/`y1` come from where the element
+//   paints, not from its anchor's paragraph;
+// - text keeps the WIDER side. A browser cannot split one line into a left and
+//   a right half, so a centred element shortens lines from one side only. This
+//   is the deferred point in the todo (F3.2d), not a refusal.
+// ---------------------------------------------------------------------------
+
+/** Air left between a free element and the text passing it. */
+export const FREE_WRAP_MARGIN_PX = 12;
+
+/** The horizontal claim of one free element, on the flow axis. */
+export interface FreeWrapBand {
+  /** Column side the element occupies; the text keeps the other one. */
+  side: "left" | "right";
+  /** Column width it claims, air gap included. */
+  widthPx: number;
+  /** Flow y of the band's top edge: the element's drawn top edge. */
+  y0: number;
+  /** Flow y of its bottom edge. */
+  y1: number;
+}
+
+export function freeWrapBand(input: {
+  column: { left: number; width: number };
+  spec: FreeSpec;
+  elementWidthPx: number;
+  elementHeightPx: number;
+  /** Flow y where the element is DRAWN, anchor top + yOff, sign included. */
+  drawnTop: number;
+  wrapOn: boolean;
+}): FreeWrapBand | null {
+  const { column, spec, elementWidthPx: w, elementHeightPx: h, drawnTop, wrapOn } = input;
+  if (!wrapOn) return null;
+  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return null;
+  const cw = column.width;
+  if (!Number.isFinite(cw) || cw <= 0 || !Number.isFinite(drawnTop)) return null;
+
+  const left = freeLeftPx(column, spec, w) - column.left;
+  const right = left + w;
+  const roomLeft = Math.max(0, left);
+  const roomRight = Math.max(0, cw - right);
+  // Nothing of the box is inside the column, or it covers the whole column:
+  // in both cases there is no side for the text, so there is no band.
+  if (roomLeft <= 0 && roomRight <= 0) return null;
+
+  const side: "left" | "right" = roomLeft >= roomRight ? "right" : "left";
+  const claimed = (side === "right" ? cw - roomLeft : cw - roomRight) + FREE_WRAP_MARGIN_PX;
+  if (claimed <= 0) return null;
+  return {
+    side,
+    widthPx: Math.round(Math.min(claimed, cw)),
+    y0: Math.round(drawnTop),
+    y1: Math.round(drawnTop + h),
+  };
+}
+
+/** A box with a top and a bottom, in whatever ruler the caller measured it with. */
+export interface FlatRect {
+  top: number;
+  bottom: number;
+}
+
+/**
+ * Where the screen's band goes, measured with the SAME ruler as the picture.
+ *
+ * This is the fix for the F3.2c rejection. The picture is painted from the
+ * anchor's DOM offset (`free-style.ts`), so on screen its vertical position
+ * includes the page-divider widgets; the calculator's flow coordinates do not.
+ * Placing the band from flow numbers put it below the picture by exactly the
+ * height of those widgets: text next to the image did not shorten, and text
+ * further down shortened for nothing. So the band is now derived from the two
+ * rectangles the browser already has - the painted element, and the text blocks -
+ * and never converted between rulers.
+ *
+ * @param picture the element's painted box, in the editor's own axis
+ * @param blocks  the top-level text blocks, same axis, in document order
+ * @returns       which block to place the spacer in front of, its offset inside
+ *                that block, and the band's height
+ */
+/** A top-level text block: its document position plus its box on the screen. */
+export type PlacedBlock = FlatRect & { pos: number };
+
+export function freeWrapPlacement(
+  picture: FlatRect,
+  blocks: PlacedBlock[],
+): { blockPos: number; marginTop: number; height: number } | null {
+  if (blocks.length === 0 || picture.bottom <= picture.top) return null;
+
+  // The LAST block that starts at or above the picture's top edge - not the
+  // first one the picture overlaps. The difference is the bug this rule fixes:
+  // a picture dropped in the space BETWEEN two paragraphs overlaps the second
+  // one, but a spacer in front of the second cannot begin above it, because a
+  // float never moves up. Picking the overlapped block and clamping its offset
+  // to zero narrowed the text from that block's first line, leaving a column of
+  // empty paper above the picture - as if the picture were a head taller.
+  // Starting from the block before the gap puts the band's top exactly on the
+  // picture's top, which is the only placement that can ever line up with it.
+  let host = blocks[0]; // the picture sits above every block: shorten from the first
+  for (const block of blocks) {
+    if (block.top <= picture.top) host = block;
+    else break;
+  }
+
+  const marginTop = Math.max(0, picture.top - host.top);
+  const height = picture.bottom - (host.top + marginTop);
+  if (height <= 0) return null; // the picture ends above the text: nothing to shorten
+  return { blockPos: host.pos, marginTop: Math.round(marginTop), height: Math.round(height) };
+}
+
 // ---------------------------------------------------------------------------
 // Group numbering (contract §3.2-§3.5 rev. 2026-09-07).
 //

@@ -18,9 +18,12 @@
 //  - the move of the node AND its new distances are ONE transaction, so one
 //    undo gives back exactly what the user had.
 //
-// The text does not re-flow while the copy flies: free elements start shortening
-// lines in the next step (contract §9.2), and dispatching a transaction per
-// pointer move would flood the undo history for a movement nobody can read.
+// The text re-flows while the copy flies, for an element that was already free:
+// the band it claims from the lines is rewritten live, without a single
+// transaction (free-drag.ts, moveLiveBand). An element that is LEAVING the flow
+// in this gesture re-flows when it lands, because until the drop the document
+// still believes it is in the line - and a transaction per pointer move would
+// flood the undo history for a movement nobody can read.
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
@@ -36,9 +39,16 @@ import {
 } from "./free-layout";
 import { ensureAnchorParagraph } from "./free-commands";
 import { freeElementWidth, textColumn } from "./free-style";
+import { refreshFreeWrapBands, setFreeWrapFlightBox } from "./pagination-cassie-plugin";
 
 /** Distance the pointer must travel before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 4;
+
+/** Minimum gap between two live band rewrites, in milliseconds. */
+const LIVE_BAND_MIN_INTERVAL_MS = 90;
+
+/** Class marking the original of a flying element (see styles.css). */
+const FLIGHT_CLASS = "aw-free--flight";
 
 export interface FreeDragHooks {
   /** Called after the drop so the panel and the toolbar can refresh. */
@@ -61,6 +71,12 @@ export function startFreeDrag(
   const node = view.state.doc.nodeAt(pos);
   if (!node) return false;
 
+  // Sweep whatever a previous interrupted flight left behind, BEFORE reading
+  // any geometry: a stale copy would keep floating over the page, and an
+  // original still marked as flying would look like a missing image.
+  document.querySelectorAll(`.${FLIGHT_CLASS}`).forEach((stale) => stale.classList.remove(FLIGHT_CLASS));
+  document.querySelectorAll(".aw-free-ghost, .aw-free-guide").forEach((stale) => stale.remove());
+
   const originX = event.clientX;
   const originY = event.clientY;
   // Where inside the element the user grabbed: the copy must keep that offset
@@ -70,6 +86,13 @@ export function startFreeDrag(
   const grabOffsetY = originY - rect.top;
   const width = Math.round(rect.width);
   const height = Math.round(rect.height);
+
+  // F3.2b: an element that is ALREADY free follows the pointer with its text
+  // band while it flies. The press records what the band hangs from - the
+  // anchor's top, in the editor's own space - so the live rewrite can be
+  // derived the same way the drop derives it.
+  const wasFreeAtPress = parseFreeSpec(node.attrs?.free) !== null;
+  let lastLiveBandAt = 0;
 
   let dragging = false;
   // Held in an object on purpose: the elements are created inside the pointer
@@ -98,8 +121,10 @@ export function startFreeDrag(
     g.style.opacity = "0.75";
     document.body.appendChild(g);
     // The original hides during the flight, so the words show the space the
-    // element is about to leave.
-    dom.style.visibility = "hidden";
+    // element is about to leave. A class rather than an inline style: a flight
+    // interrupted by a release outside the window must be sweepable by the next
+    // drag, or the picture stays invisible until the document is re-opened.
+    dom.classList.add(FLIGHT_CLASS);
     flight.ghost = g;
     return g;
   };
@@ -143,20 +168,64 @@ export function startFreeDrag(
       anchorIndex = -1;
       if (flight.guide) flight.guide.style.display = "none";
     }
+    if (wasFreeAtPress) moveLiveBand(ev.clientX - grabOffsetX, ev.clientY - grabOffsetY);
     // Remember where the copy is, so the release can turn it into distances.
     lastPointerX = ev.clientX;
     lastPointerY = ev.clientY;
   };
 
+  /**
+   * Follow the pointer with the text band WITHOUT touching the document.
+   *
+   * The numbers are not computed here: the plugin that paints the bands is
+   * asked to re-measure with the flying box as its input (refreshFreeWrapBands).
+   * One measurement, two callers, so the band under the user's hand and the band
+   * that lands can never be two different calculations - which is what the
+   * rejected delivery got wrong.
+   */
+  const moveLiveBand = (flyingLeftClient: number, flyingTopClient: number): void => {
+    const now = Date.now();
+    if (now - lastLiveBandAt < LIVE_BAND_MIN_INTERVAL_MS) return;
+    lastLiveBandAt = now;
+    // Viewport coordinates on both sides, on purpose: `getBoundingClientRect`
+    // (what the band is measured from) and the flying copy live in this space,
+    // and the placement uses only the DIFFERENCE between them, so the scroll of
+    // `#editor` cancels out. Converting through host offsets plus scrollTop is
+    // the trap three coordinate systems set in figure-resize.ts.
+    setFreeWrapFlightBox(pos, {
+      top: flyingTopClient,
+      bottom: flyingTopClient + height,
+      left: flyingLeftClient,
+      width,
+    });
+    refreshFreeWrapBands(view);
+  };
+
   let lastPointerX = originX;
   let lastPointerY = originY;
 
-  const onUp = (ev: MouseEvent): void => {
+  /** Put the original back and drop the flying copy, once and only once. */
+  const endFlight = (): void => {
+    setFreeWrapFlightBox(pos, null);
     document.removeEventListener("mousemove", onMove);
     document.removeEventListener("mouseup", onUp);
+    window.removeEventListener("blur", onBlur);
     flight.ghost?.remove();
     flight.guide?.remove();
-    dom.style.visibility = "";
+    flight.ghost = null;
+    flight.guide = null;
+    dom.classList.remove(FLIGHT_CLASS);
+  };
+
+  /**
+   * The pointer went somewhere we will never hear about (another window, a
+   * menu, Alt+Tab): cancel the flight without writing anything, so the element
+   * keeps the place it had instead of hiding behind a copy nobody released.
+   */
+  const onBlur = (): void => endFlight();
+
+  const onUp = (ev: MouseEvent): void => {
+    endFlight();
     if (!dragging) return;
 
     lastPointerX = ev.clientX;
@@ -178,6 +247,7 @@ export function startFreeDrag(
 
   document.addEventListener("mousemove", onMove);
   document.addEventListener("mouseup", onUp);
+  window.addEventListener("blur", onBlur);
   // The press is consumed: the browser must not start a native image drag.
   return true;
 }

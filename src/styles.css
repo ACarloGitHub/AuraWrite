@@ -7027,13 +7027,38 @@ html[data-aw-preview] body {
   font-size: 11px;
 }
 
+/* F3.2b: the invisible float that shortens the lines a free element crosses.
+   It carries no content and takes no flow height; its size, offset and side are
+   written inline by the pagination plugin, from the same band numbers the page
+   counter uses. pointer-events off: it must never steal a click from the text. */
+/* The element that is flying: the original hides while the transparent copy
+   follows the pointer. A class, not an inline style, so an interrupted flight
+   (mouse released outside the window) can be swept by the next drag instead of
+   leaving a picture invisible forever. */
+.aw-free--flight {
+  visibility: hidden;
+}
+
+.aw-free-wrap {
+  pointer-events: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-left: 0;
+  margin-right: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
 .aw-layers__row--item {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 3px 6px;
   margin-bottom: 4px;
-  cursor: grab;
+  /* The row selects, the grip drags: the hand appears on the grip only, or the
+     whole row looks draggable and the click that does nothing reads as broken. */
+  cursor: pointer;
   color: var(--color-text);
 }
 
@@ -7041,14 +7066,24 @@ html[data-aw-preview] body {
   background: var(--color-background);
 }
 
-/* The row's grip is the drag handle: the rest of the row selects the element,
-   so clicking and dragging cannot mean the same gesture (project-dnd.ts uses
-   the same split, and it is the only configuration WebView2 accepts). */
+/* Dragging starts on the grip only; a click anywhere else on the row selects the
+   element, so the two gestures stay distinct (project-dnd.ts uses the same split,
+   and it is the only configuration WebView2 accepts). The grip is padded to the
+   full height of the row and twice as wide as the dots themselves, because a
+   14-pixel target in a 23-pixel row proved impossible to hit deliberately. */
 .aw-layers__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 28px;
+  margin-right: 4px;
   cursor: grab;
 }
 
-.aw-layers__row--item:active .aw-layers__grip {
+/* Only while the grip itself is held: pressing the name is a selection, not a
+   drag, and must not borrow the dragging cursor. */
+.aw-layers__grip:active {
   cursor: grabbing;
 }
 

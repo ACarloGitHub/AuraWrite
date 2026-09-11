@@ -33,7 +33,10 @@
 import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLine } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
-import { isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf } from "./free-layout";
+import {
+  isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth,
+  type FreeWrapBand,
+} from "./free-layout";
 
 export const PAGE_WIDTH_PX = 794;
 export const PAGE_HEIGHT_PX = 1123;
@@ -529,6 +532,25 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
   return measureTextBlock(node, contentWidth);
 }
 
+/**
+ * Line-start offsets of a text block, for the callers that need to know WHICH
+ * CHARACTER a line begins at without measuring the live page.
+ *
+ * The screen's wrap band cannot ask the browser which line a picture sits on:
+ * once a float is published the paragraph reports merged rectangles instead of
+ * lines, and reading them back feeds the previous pass into the next
+ * measurement. The font metrics here are the same ones the `R-b` probe keeps in
+ * step with the DOM (`syncEditorMetricsFromDom`), so the line the screen picks
+ * is the line the paper picks.
+ */
+export function blockLineStartOffsets(
+  node: PMNode,
+  contentWidth: number,
+): number[] | null {
+  if (node.type.name !== "paragraph" && node.type.name !== "heading") return null;
+  return paragraphLineOffsets(node, contentWidth, baseMetricsFor(node));
+}
+
 /** The cascade metrics a node type starts from (before its own attrs/marks). */
 function baseMetricsFor(node: PMNode): TextMetrics {
   if (node.type.name === "code_block") return metrics.code;
@@ -730,6 +752,13 @@ export interface FreeGeometry {
   /** Measured height of the element itself (0 when it cannot be measured). */
   heightPx: number;
   level: number;
+  /**
+   * F3.2b: the band it claims from the text, or null when it wraps nothing
+   * (wrap off, no measured size, or it covers the column). `top` above and
+   * `topPx` here are different numbers: `topPx` is measured from the anchor and
+   * is the one a screen spacer and a print spacer both position themselves by.
+   */
+  band: FreeBandInput | null;
 }
 
 export interface PaginationCalculation {
@@ -1117,8 +1146,106 @@ function ensureRelOffsets(e: CachedLayout, node: PMNode, contentWidth: number): 
  * Walk the top-level children of the document on a global-y axis and
  * decide where to insert page breaks (F1.2 splits, F1.3 floats, R-b
  * styles, F1.4 incremental cache). See the block comment above for the model.
+ *
+ * MEMOISED (F3.2b): more than one plugin needs the same calculation on the same
+ * keystroke - the page dividers, the free-element wrap bands, the layers window
+ * and, on demand, the print sheets. The result is shared read-only, and the key
+ * is everything the walk depends on: the document object identity (the F1.4
+ * cache already invalidates per node), the metrics generation the DOM probe
+ * bumps on a style change, and the four margin numbers.
  */
+let calcMemo: {
+  doc: PMNode;
+  gen: number;
+  width: number;
+  height: number;
+  marginKey: string;
+  result: PaginationCalculation;
+} | null = null;
+
 export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): PaginationCalculation {
+  const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
+  const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
+  const marginKey = margins
+    ? `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}`
+    : "default";
+  const memo = calcMemo;
+  if (
+    memo &&
+    memo.doc === doc &&
+    memo.gen === metricsGen &&
+    memo.width === contentWidth &&
+    memo.height === contentHeight &&
+    memo.marginKey === marginKey
+  ) {
+    return memo.result;
+  }
+  const first = computePageBreaks(doc, margins, []);
+  const finish = (run: CalcRun): PaginationCalculation => {
+    const { bands: _bands, ...publicResult } = run;
+    calcMemo = { doc, gen: metricsGen, width: contentWidth, height: contentHeight, marginKey, result: publicResult };
+    return publicResult;
+  };
+  if (first.bands.length === 0) return finish(first); // no wrapping free element: one walk
+
+  // The rectangles depend on where the anchors ended up, and the anchors ended
+  // up where the text broke around those rectangles. The first pass answered
+  // "where is the text without any band"; feed its rectangles back in and the
+  // second pass answers the real question. A third pass confirms: if the
+  // rectangles stop moving, the answer is stable, and the last run is the one
+  // whose page breaks and bands agree with each other.
+  let bands = first.bands;
+  let run = first;
+  for (let pass = 0; pass < 3; pass++) {
+    run = computePageBreaks(doc, margins, bands);
+    if (sameBands(run.bands, bands)) return finish(run);
+    bands = run.bands;
+  }
+  return finish(run);
+}
+
+/** Did any band move, between one pass and the next? */
+function sameBands(a: FreeBandInput[], b: FreeBandInput[]): boolean {
+  if (a.length !== b.length) return false;
+  const byPos = new Map(a.map((x) => [x.pos, x]));
+  for (const x of b) {
+    const y = byPos.get(x.pos);
+    if (!y) return false;
+    if (y.side !== x.side || y.widthPx !== x.widthPx) return false;
+    if (Math.abs(y.y0 - x.y0) > 0.5 || Math.abs(y.y1 - x.y1) > 0.5) return false;
+  }
+  return true;
+}
+
+/**
+ * F3.2c: one free element's band, positioned on the flow axis by the PREVIOUS
+ * pass, plus where its spacer must go.
+ *
+ * `spacerPos` is the top-level block whose lines the band starts shortening -
+ * the first block its rectangle crosses, which is NOT necessarily the element's
+ * anchor (contract §13 rev. 2026-09-07: the anchor gives coordinates, nothing
+ * else). `spacerTop` is where the invisible float begins, and the screen and
+ * the print sheets position themselves by it.
+ */
+export interface FreeBandInput extends FreeWrapBand {
+  pos: number;
+  /**
+   * Document position INSIDE the text, at the start of the first line the band
+   * touches, and the flow y of that line. Print puts its float there - never in
+   * front of the block with a `margin-top`, because a float narrows the lines
+   * from its margin box and that leaves a column of narrowed text above the
+   * picture (the defect of the rejected F3.2c delivery, on paper as on screen).
+   */
+  insertPos: number | null;
+  lineTop: number;
+}
+
+/** A pass of the walk: the public result plus the bands the NEXT pass should use. */
+interface CalcRun extends PaginationCalculation {
+  bands: FreeBandInput[];
+}
+
+function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands: FreeBandInput[]): CalcRun {
   const contentHeight = margins ? getContentHeight(margins) : CONTENT_HEIGHT_PX;
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
   const breaks: PageBreakAt[] = [];
@@ -1127,15 +1254,11 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   const sideBottom = { left: 0, right: 0 };
   let y = 0; // absolute flow height (bottom of last placed box, no trailing gap)
   let pendingAfter = 0; // margin-bottom of the previous in-flow block (collapses)
-  // Height of the last block that consumed the flow. The anchor's top edge is
-  // `y - lastBlockHeight`: exact for whole blocks and for paragraphs split
-  // across pages, because the engine never adds space inside a block. Deriving
-  // it here instead of tracking a "top" variable avoids going stale at the
-  // three places where a block is moved to the next page.
+  // Top of the last ANCHOR block (free-layout.ts), settled one step late, at
+  // the start of the next block, so a block moved to the following page reports
+  // the position it really ended up with. It is only used to say WHERE the free
+  // element is drawn - the wrap itself ignores it (contract §13 rev. 2026-09-07).
   let lastBlockHeight = 0;
-  // Top of the last ANCHOR block (text only, free-layout.ts) settled one step
-  // late, at the start of the next block, so a block moved to the following
-  // page reports the position it really ended up with.
   let lastBlockWasAnchor = false;
   let anchorTopY = 0;
   let hasAnchor = false;
@@ -1166,6 +1289,107 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
     breaks.push(bp);
   };
 
+  // F3.2c: bands arrive ALREADY POSITIONED on the flow axis. They are the
+  // drawn rectangles of the free elements, and they are positioned by the
+  // caller's previous pass (see the memo loop in `calculatePageBreaks`): the
+  // rectangle of an element depends on where its anchor paragraph ended up,
+  // and that depends on how the text broke, which depends on the rectangles.
+  // Two passes settle it, and a third only confirms.
+  const outBands: FreeBandInput[] = [];
+  const bandByPos = new Map<number, FreeBandInput>();
+  for (const b of bands) bandByPos.set(b.pos, b);
+  for (const b of bands) {
+    floats.push({ side: b.side, widthPx: b.widthPx, y0: b.y0, y1: b.y1 });
+  }
+  /** Bottom of the same-side bands overlapping [y, y+h): a float queues below. */
+  const bandQueue = (side: "left" | "right", y: number, h: number): number => {
+    let bottom = 0;
+    for (const b of bands) {
+      if (b.side === side && b.y0 < y + h && b.y1 > y) bottom = Math.max(bottom, b.y1);
+    }
+    return bottom;
+  };
+
+  // What a browser does with two floats facing each other over a gap too narrow
+  // for a line: it does NOT write a two-pixel line between them, it moves the
+  // line BELOW both floats. That is not a rule this program invented, it is CSS,
+  // and the page count has to say what the screen shows or the sheet overflows.
+  // So the overlap of two facing bands is booked as solid: no line lives there.
+  //
+  // This is NOT the refusal that Carlo rejected (and that must never come back):
+  // here no element loses its band, both images keep their own, both shorten the
+  // text. Only the strip where the two claims would meet is un-writable, and the
+  // text resumes under it - which is exactly what the user sees and can fix by
+  // moving an image or turning its wrap off.
+  const solid: { y0: number; y1: number }[] = [];
+  for (let i = 0; i < bands.length; i++) {
+    for (let j = i + 1; j < bands.length; j++) {
+      const a = bands[i];
+      const b = bands[j];
+      if (a.side === b.side) continue;
+      const y0 = Math.max(a.y0, b.y0);
+      const y1 = Math.min(a.y1, b.y1);
+      if (y1 <= y0) continue;
+      if (contentWidth - a.widthPx - b.widthPx >= MIN_LINE_WIDTH_PX) continue;
+      solid.push({ y0, y1 });
+    }
+  }
+  const pushPastSolid = (y: number, lineH: number): number => {
+    let out = y;
+    for (let guard = 0; guard <= solid.length; guard++) {
+      let moved = false;
+      for (const z of solid) {
+        if (out < z.y1 && out + lineH > z.y0) {
+          out = z.y1;
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    return out;
+  };
+  const crossesSolid = (from: number, to: number): boolean =>
+    solid.some((z) => from < z.y1 && to > z.y0);
+  // Bands still needing a spacer, and the blocks they will shorten.
+  const pendingSpacers = new Map<number, FreeBandInput>();
+  for (const b of bands) pendingSpacers.set(b.pos, b);
+  /**
+   * File a band where it belongs: the first line of the first block it touches.
+   * The line comes from the same cached layout the page cuts use, so the float
+   * on paper sits at exactly the line the calculator shortened.
+   */
+  const placeSpacers = (node: PMNode, e: CachedLayout, topOfBlock: number, bottomOfBlock: number, atPos: number): void => {
+    for (const b of pendingSpacers.values()) {
+      if (b.y1 <= topOfBlock || b.y0 >= bottomOfBlock) continue;
+      const spot = bandLineSpot(node, e, b.y0, topOfBlock, atPos);
+      b.insertPos = spot.pos;
+      b.lineTop = spot.lineTop;
+      pendingSpacers.delete(b.pos);
+    }
+  };
+
+  /** Where the band's first line is, inside this block. */
+  const bandLineSpot = (
+    node: PMNode, e: CachedLayout, bandTop: number, topOfBlock: number, atPos: number,
+  ): { pos: number; lineTop: number } => {
+    const fallback = { pos: atPos + 1, lineTop: topOfBlock };
+    if (!e.splittable) return fallback;
+    if (e.mixed) {
+      const rel = e.relMixed ?? mixedParagraphLines(node, () => widthAt(topOfBlock), baseMetricsFor(node));
+      let hit = rel[0];
+      for (const l of rel) {
+        if (topOfBlock + l.y + l.h <= bandTop) hit = l;
+        else break;
+      }
+      return hit ? { pos: atPos + 1 + hit.off, lineTop: topOfBlock + hit.y } : fallback;
+    }
+    const offs = ensureRelOffsets(e, node, contentWidth);
+    const lh = e.style.linePx;
+    if (lh <= 0 || offs.length === 0) return fallback;
+    const idx = Math.max(0, Math.min(offs.length - 1, Math.floor((bandTop - topOfBlock) / lh)));
+    return { pos: atPos + 1 + offs[idx], lineTop: topOfBlock + idx * lh };
+  };
+
   let pos = 0;
   doc.forEach((node) => {
     if (node.isInline) {
@@ -1178,19 +1402,17 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       hasAnchor = true;
       lastBlockWasAnchor = false;
     }
-    // F3.a: a free element consumes NO flow (contract §6). It is painted
-    // outside the text column by free-style.ts, so nothing about the page
-    // count may change when an element becomes free. Wrap bands for free
-    // elements land with F3.c; until then a free element never shortens a
-    // line - exactly what the contract describes for wrap-off.
+    // F3: a free element consumes NO flow (contract §6): it never moves a page
+    // boundary by itself. With wrap on it shortens the lines its DRAWN rectangle
+    // crosses - the band it was given for this pass - and that is all.
     if (isFreeNode(node)) {
-      // Its place on the page is the anchor's top plus the stored distance, so
-      // the same number paints it on screen and files it under a page group.
       const spec = parseFreeSpec(node.attrs?.free);
       if (spec) {
         const h = cachedMeasure(node, margins, contentWidth).heightPx;
+        const w = freeElementWidth(node) ?? 0;
         const anchorTop = hasAnchor ? anchorTopY : 0;
         const top = anchorTop + spec.yOff;
+        const given = bandByPos.get(pos) ?? null;
         freeGeometry.push({
           pos,
           page: pageOf(top + (h > 0 ? h / 2 : 0)),
@@ -1198,7 +1420,19 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
           anchorTop,
           heightPx: h,
           level: zLevelOf(node),
+          band: given,
         });
+        // The band the NEXT pass will use: same rectangle, but the anchor top
+        // is now the one this pass settled on.
+        const next = freeWrapBand({
+          column: { left: 0, width: contentWidth },
+          spec,
+          elementWidthPx: w,
+          elementHeightPx: h,
+          drawnTop: top,
+          wrapOn: node.attrs.wrap === true,
+        });
+        if (next) outBands.push({ ...next, pos, insertPos: null, lineTop: next.y0 });
       }
       pos += node.nodeSize;
       return;
@@ -1211,7 +1445,8 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         const sp = spacingFor(node);
         // collapsed gap like any in-flow block; the float box itself then
         // spans its margin box for line-avoidance purposes
-        const y0 = Math.max(y + Math.max(pendingAfter, sp.beforePx), sideBottom[fl.side]);
+        const natural = y + Math.max(pendingAfter, sp.beforePx);
+        const y0 = Math.max(natural, sideBottom[fl.side], bandQueue(fl.side, natural, h));
         const y1 = y0 + h + sp.afterPx;
         floats.push({ side: fl.side, widthPx: fl.widthPx, y0, y1 });
         sideBottom[fl.side] = y1;
@@ -1241,7 +1476,16 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       pos += node.nodeSize;
       return;
     }
-    // A text block that consumes the flow becomes somebody's anchor.
+    // F3.2c: this block is the first one some band crosses? Then the band's
+    // spacer goes here, both on screen and on paper. Recorded for every block,
+    // splittable or not, before any of the layout lanes decides where to go.
+    {
+      const bsp = spacingFor(node);
+      const btop = y + Math.max(pendingAfter, bsp.beforePx);
+      placeSpacers(node, e, btop, btop + heightPx, pos);
+    }
+    // A text block that consumes the flow is somebody's anchor: the number that
+    // matters is its top, settled at the start of the NEXT block.
     lastBlockHeight = heightPx;
     lastBlockWasAnchor = isAnchorBlock(node);
     const sp = spacingFor(node);
@@ -1262,6 +1506,17 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       let startY = y + Math.max(pendingAfter, sp.beforePx);
       gapBreaksUpTo(startY);
 
+      // Lines that would land inside a solid strip are moved below it, in order,
+      // and the paragraph grows by exactly the space the browser keeps empty.
+      const pushPastSolidLines = (laid: LaidLine[], fromY: number): LaidLine[] => {
+        if (solid.length === 0) return laid;
+        let bottom = fromY;
+        return laid.map((l) => {
+          const y = pushPastSolid(Math.max(l.y, bottom), l.h);
+          bottom = y + l.h;
+          return { ...l, y };
+        });
+      };
       const overlapsFloat = (fromY: number, toY: number): boolean => {
         for (const f of floats) {
           if (fromY < f.y1 && toY > f.y0) return true;
@@ -1271,7 +1526,11 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       // FAST PATH: no float overlap and the paragraph fits the current page
       // whole -> the batch height from measureBlock is exact; skip the walk.
       const boundaryEnd = pageOf(startY) * contentHeight;
-      if (!overlapsFloat(startY, startY + heightPx) && startY + heightPx <= boundaryEnd) {
+      if (
+        !overlapsFloat(startY, startY + heightPx) &&
+        !crossesSolid(startY, startY + heightPx) &&
+        startY + heightPx <= boundaryEnd
+      ) {
         y = startY + heightPx;
         pendingAfter = sp.afterPx;
         pos += node.nodeSize;
@@ -1282,7 +1541,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
       // cached line offsets + closed-form page-crossing maths. Zero line
       // objects allocated per keystroke; cost is O(pages the paragraph
       // spans), not O(its lines).
-      if (!e.mixed && !overlapsFloat(startY, startY + heightPx)) {
+      if (!e.mixed && !overlapsFloat(startY, startY + heightPx) && !crossesSolid(startY, startY + heightPx)) {
         const offs = ensureRelOffsets(e, node, contentWidth);
         const lh = style.linePx;
         const n = offs.length;
@@ -1335,7 +1594,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         return walkParagraphLines(node, style, sy, widthAt);
       };
 
-      let lines = computeLines(startY);
+      let lines = pushPastSolidLines(computeLines(startY), startY);
       // If not even the widow-guard minimum fits left on the page, move the
       // paragraph down first (matches the old whole-block semantics).
       if (pageRemainder(startY) < lines[0].h * MIN_LINES_PER_PAGE_FRAGMENT) {
@@ -1344,7 +1603,7 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
         y = moved;
         pendingAfter = 0; // the previous block's margin stays on the old page
         startY = y + sp.beforePx;
-        lines = computeLines(startY);
+        lines = pushPastSolidLines(computeLines(startY), startY);
       }
       let n = lines.length;
       let from = 0;
@@ -1393,5 +1652,5 @@ export function calculatePageBreaks(doc: PMNode, margins?: PageMargins): Paginat
   });
 
   const totalPages = y <= 0 ? 1 : Math.max(1, Math.ceil((y - 0.0001) / contentHeight));
-  return { breaks, totalPages, freeGeometry };
+  return { breaks, totalPages, freeGeometry, bands: outBands };
 }

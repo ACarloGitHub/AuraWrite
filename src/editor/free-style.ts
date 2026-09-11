@@ -19,7 +19,7 @@
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
-import { freeLeftPx, freeTopPx, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec } from "./free-layout";
+import { freeElementWidth, freeLeftPx, freeTopPx, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec } from "./free-layout";
 
 /** The style keys this module owns; clearing must not touch anything else. */
 const OWNED_STYLE_KEYS = [
@@ -36,13 +36,8 @@ const OWNED_STYLE_KEYS = [
   "float",
 ] as const;
 
-/** Width a free element must keep, from its own attrs (image/figure/box). */
-export function freeElementWidth(node: PMNode): number | null {
-  const attrs = node.attrs as Record<string, unknown>;
-  const raw = node.type.name === "styled_box" ? attrs.widthPx : attrs.width;
-  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
-  return isFinite(n) && n > 0 ? Math.round(n) : null;
-}
+/** Kept here for the importers that already used it (free-commands, free-drag). */
+export { freeElementWidth } from "./free-layout";
 
 /** Remove every style this module has ever applied. */
 export function clearFreeLayout(dom: HTMLElement): void {

@@ -265,6 +265,7 @@ function makeRow(entry: { pos: number; label: string; level: number }): HTMLElem
   const grip = document.createElement("span");
   grip.className = "aw-layers__grip";
   grip.textContent = "⋮⋮";
+  grip.title = "Drag to change depth";
   const name = document.createElement("span");
   name.className = "aw-layers__row-name";
   name.textContent = entry.label;

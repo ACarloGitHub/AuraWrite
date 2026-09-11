@@ -27,7 +27,7 @@ import {
   type FreeGeometry,
   type PageMargins,
 } from "./pagination-cassie";
-import { freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, type FreeSpec } from "./free-layout";
+import { freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
 
 export interface PrintSheet {
   html: string;
@@ -74,10 +74,63 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
   for (let i = 0; i < cuts.length - 1; i++) {
     const slice = doc.slice(cuts[i], cuts[i + 1], true);
     const host = document.createElement("div");
+    // F3.2c: the bands whose rectangle touches this sheet. The band says which
+    // block it starts shortening (`spacerPos`), so the spacer goes in front of
+    // that block; a band that merely CONTINUES from a previous sheet is inserted
+    // at the top of this one, clipped, which is what the one continuous flow
+    // does on screen.
+    const sheetTop = i * contentHeight;
+    const sheetBottom = sheetTop + contentHeight;
+    const affecting = freeGeometry.filter(
+      (g) => g.band && g.band.y1 > sheetTop + 0.5 && g.band.y0 < sheetBottom - 0.5,
+    );
+    const bySpacerBlock = new Map<PMNode, FreeGeometry[]>();
+    const startOfNode = new Map<PMNode, number>();
+    for (const geo of affecting) {
+      const insertPos = geo.band?.insertPos ?? null;
+      if (insertPos === null) continue;
+      const owner = blockStartOf(doc, insertPos);
+      if (!owner) continue;
+      startOfNode.set(owner.node, owner.start);
+      const list = bySpacerBlock.get(owner.node);
+      if (list) list.push(geo);
+      else bySpacerBlock.set(owner.node, [geo]);
+    }
+    const placed = new Set<FreeGeometry>();
     slice.content.forEach((node) => {
       if (!inFlow(node)) return;
-      host.appendChild(serializer.serializeNode(node, {}));
+      const el = serializer.serializeNode(node, {}) as HTMLElement;
+      // The float goes INSIDE the block's text, at the line the picture touches.
+      // In front of the block with a margin it would narrow the lines from its
+      // margin box, i.e. from the block's first line: a column of narrowed text
+      // above the picture, on paper as on screen.
+      for (const geo of bySpacerBlock.get(node) ?? []) {
+        placed.add(geo);
+        const band = geo.band!;
+        const start = startOfNode.get(node) ?? 0;
+        // The float starts at the line it must shorten, so no margin is needed;
+        // it is clipped at the sheet's own bottom edge, because a reserved area
+        // taller than the paper would push the rest of the text off the sheet.
+        const top = Math.max(band.y0, sheetTop);
+        const height = Math.min(band.y1, sheetBottom) - top;
+        insertFloatAtOffset(
+          el,
+          band,
+          band.insertPos === null ? 0 : band.insertPos - start - 1,
+          height,
+        );
+      }
+      host.appendChild(el);
     });
+    // Bands that came over from a previous sheet: they begin at the top of this
+    // one, clipped, in document order.
+    const carried = affecting.filter((g) => !placed.has(g));
+    for (let k = carried.length - 1; k >= 0; k--) {
+      const band = carried[k].band!;
+      const el = wrapSpacerDom(band, Math.min(band.y1, sheetBottom) - sheetTop);
+      if (host.firstChild) host.insertBefore(el, host.firstChild);
+      else host.appendChild(el);
+    }
     sheets.push({
       html: host.innerHTML,
       pageNumber: i + 1,
@@ -86,6 +139,59 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
     });
   }
   return { sheets, margins, contentWidth, contentHeight, totalPages: Math.max(sheets.length, totalPages) };
+}
+
+/** The top-level block containing `pos`, with its start position. */
+function blockStartOf(doc: PMNode, pos: number): { node: PMNode; start: number } | null {
+  let found: { node: PMNode; start: number } | null = null;
+  doc.forEach((node, offset) => {
+    if (offset > pos) return false;
+    if (offset + node.nodeSize > pos) {
+      found = { node, start: offset };
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+/**
+ * The sheet's own spacer: the same float the editor paints, with the numbers the
+ * calculator booked (contract §7: one source, no second geometry) and no margin,
+ * because it is placed at the line it must shorten.
+ */
+function wrapSpacerDom(band: FreeWrapBand, height: number): HTMLElement {
+  // A span, not a div: this markup is re-read by the browser's HTML parser when
+  // the sheet is injected, and a div inside a paragraph would close the
+  // paragraph. A floated span stays inside the text and floats the same way.
+  const el = document.createElement("span");
+  el.className = "aw-print-free-wrap";
+  el.style.cssFloat = band.side;
+  el.style.width = `${band.widthPx}px`;
+  el.style.height = `${Math.max(1, Math.round(height))}px`;
+  return el;
+}
+
+/**
+ * Put the float at a character offset inside a serialized block: walk the text
+ * nodes, split the one that holds the offset, and insert before the rest. That
+ * is the paper equivalent of the editor's widget inside the paragraph.
+ */
+function insertFloatAtOffset(root: HTMLElement, band: FreeWrapBand, offset: number, height: number): void {
+  const float = wrapSpacerDom(band, height);
+  let left = Math.max(0, Math.round(offset));
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const text = n as Text;
+    const len = text.data.length;
+    if (left <= len) {
+      if (left < len) text.splitText(left);
+      text.parentElement?.insertBefore(float, text);
+      return;
+    }
+    left -= len;
+  }
+  root.insertBefore(float, root.firstChild); // no text at that offset: start the block
 }
 
 /**
@@ -174,6 +280,7 @@ export const PRINT_BASE_CSS = `
 .aw-print-free-layer { position: absolute; left: var(--bl); top: var(--bt); width: 0; height: 0; }
 .aw-print-free { position: absolute; }
 .aw-print-free img, .aw-print-free figure { margin: 0; }
+.aw-print-free-wrap { background: transparent; border: 0; padding: 0; margin-left: 0; margin-right: 0; }
 `;
 
 /** Screen dressing used ONLY by the preview window (paper look). */

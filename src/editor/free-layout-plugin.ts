@@ -244,6 +244,11 @@ export function createFreeLayoutPlugin(): Plugin {
         frame = requestAnimationFrame(() => {
           frame = 0;
           paint();
+          // The bands live on the painted page: whoever paints the pictures has
+          // to say so, or the bands keep the numbers of the previous layout.
+          // An event, not a transaction: a paint that dispatched a transaction
+          // would schedule the next paint, and that loop has no end.
+          window.dispatchEvent(new CustomEvent("aurawrite:free-painted"));
         });
       };
 
