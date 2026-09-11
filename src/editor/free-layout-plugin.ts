@@ -35,8 +35,15 @@
 import { Plugin, PluginKey, EditorState, type Transaction } from "prosemirror-state";
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
-import { freeLayoutMap, isFreeCapable, isFreeNode } from "./free-layout";
-import { applyFreeLayout, applyOverlapLayout, clearFreeLayout, clearOverlapLayout } from "./free-style";
+import { freeLayoutMap, isFreeCapable, isFreeNode, layerLevelOf } from "./free-layout";
+import {
+  applyFlowDepth,
+  applyFreeLayout,
+  applyOverlapLayout,
+  clearFlowDepth,
+  clearFreeLayout,
+  clearOverlapLayout,
+} from "./free-style";
 import { isOverlap, textConditionOf } from "./element-condition";
 
 export const freeLayoutPluginKey = new PluginKey("awFreeLayout");
@@ -237,14 +244,23 @@ export function createFreeLayoutPlugin(): Plugin {
           if (!(dom instanceof HTMLElement)) return;
           if (isFreeNode(node)) {
             clearOverlapLayout(dom);
+            clearFlowDepth(dom);
             applyFreeLayout(dom, node, domAt(anchors.get(offset) ?? null));
           } else if (isFreeCapable(node) && isOverlap(textConditionOf(node))) {
             // Overlap in the flow: leaves the page flow but keeps its place.
             clearFreeLayout(dom);
+            clearFlowDepth(dom);
             applyOverlapLayout(dom, node);
+          } else if (isFreeCapable(node)) {
+            // In-flow image/figure/box: paint its depth so the Layers order is
+            // effective here too (no layout move, only the stacking).
+            clearFreeLayout(dom);
+            clearOverlapLayout(dom);
+            applyFlowDepth(dom, layerLevelOf(node));
           } else {
             clearFreeLayout(dom);
             clearOverlapLayout(dom);
+            clearFlowDepth(dom);
           }
         });
       };

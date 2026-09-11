@@ -28,6 +28,7 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 import { bandOfRect } from "./text-obstacles";
+import { isOverlap, textConditionOf } from "./element-condition";
 
 /** Which edge of the text column the horizontal offset is measured from. */
 export type FreeXFrom = "left" | "center" | "right";
@@ -180,12 +181,35 @@ export function freeLevelAboveText(): number {
 }
 
 /**
+ * The depth an element shows in the Layers window and that is painted on
+ * screen. Every element has a depth, not only the free ones (Carlo, 2026-09-11).
+ *
+ * A free element and an in-flow Overlap element use their stored level (Overlap
+ * defaults BEHIND the words). An in-flow element that claims space (Wrapped,
+ * Unwrapped) is ordinary content: it sits IN FRONT of the words until the user
+ * orders it in the Layers window. Painting it `position: relative` with that
+ * z-index is what makes the ordering effective for it too.
+ */
+export function layerLevelOf(node: PMNode | null | undefined): number {
+  if (!node) return LEVEL_DEFAULT;
+  const z = zLevelOf(node);
+  if (!isFreeNode(node) && !isOverlap(textConditionOf(node)) && z <= LEVEL_DEFAULT) {
+    return freeLevelAboveText();
+  }
+  return z;
+}
+
+/**
  * The name of a group = the name carried by its FIRST member in document
  * order. Deriving it instead of storing it separately is what makes an element
  * that flows onto another page correct with no write and no migration.
  */
 export function groupNameOf(members: { name: string }[]): string {
-  return members.length > 0 ? members[0].name : "";
+  // The first member that CARRIES a name wins: a group now mixes free elements
+  // (which store the name on their own spec) with in-flow ones (which have no
+  // place to store it yet), so looking only at the first member would lose a
+  // name written on any of the others.
+  return members.find((m) => m.name)?.name ?? "";
 }
 
 // ---------------------------------------------------------------------------

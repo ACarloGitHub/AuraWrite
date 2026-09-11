@@ -27,6 +27,7 @@ import {
   isAnchorBlock,
   isFreeCapable,
   isFreeNode,
+  layerLevelOf,
   parseFreeSpec,
   planGroupLevels,
   zLevelOf,
@@ -207,7 +208,8 @@ export function documentLayout(view: EditorView): DocumentLayout {
   const { doc } = view.state;
   const margins = getMargins() as PageMargins;
   const { breaks, freeGeometry } = calculatePageBreaks(doc, margins);
-  return { ranges: rangesFrom(breaks, doc.content.size), groups: groupsFrom(freeGeometry, doc) };
+  const ranges = rangesFrom(breaks, doc.content.size);
+  return { ranges, groups: groupsFrom(ranges, freeGeometry, doc) };
 }
 
 /** Page ranges out of the engine's cut positions. */
@@ -224,21 +226,35 @@ function rangesFrom(breaks: { pos: number }[], size: number): { from: number; to
   return ranges;
 }
 
-/** Groups bucketed by the page each element is DRAWN on (engine geometry). */
-function groupsFrom(freeGeometry: FreeGeometry[], doc: PMNode): FreeGroup[] {
+/**
+ * Groups bucketed by page, for EVERY free-capable element (Carlo, 2026-09-11):
+ * the Layers window serves all images/figures/boxes, not only the free ones.
+ * A free element uses the page it is DRAWN on (engine geometry); an in-flow one
+ * uses the page of its position.
+ */
+function groupsFrom(
+  ranges: { from: number; to: number }[],
+  freeGeometry: FreeGeometry[],
+  doc: PMNode,
+): FreeGroup[] {
+  const drawnPage = new Map<number, number>();
+  for (const geo of freeGeometry) drawnPage.set(geo.pos, geo.page);
   const byPage = new Map<number, FreeEntry[]>();
-  for (const geo of freeGeometry) {
-    const node = doc.nodeAt(geo.pos);
-    if (!node || !isFreeNode(node)) continue;
-    const list = byPage.get(geo.page) ?? [];
-    list.push({
-      pos: geo.pos,
-      label: elementLabel(node),
-      level: geo.level,
-      name: parseFreeSpec(node.attrs?.free)?.g ?? "",
-    });
-    byPage.set(geo.page, list);
-  }
+  let cursor = 0;
+  doc.forEach((node) => {
+    if (isFreeCapable(node)) {
+      const page = drawnPage.get(cursor) ?? pageFor(cursor, ranges);
+      const list = byPage.get(page) ?? [];
+      list.push({
+        pos: cursor,
+        label: elementLabel(node),
+        level: layerLevelOf(node),
+        name: parseFreeSpec(node.attrs?.free)?.g ?? "",
+      });
+      byPage.set(page, list);
+    }
+    cursor += node.nodeSize;
+  });
   return [...byPage.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([page, entries]) => {
@@ -412,7 +428,7 @@ export function setGroupOrder(
   for (let i = 0; i < orderedPositions.length; i++) {
     const pos = orderedPositions[i];
     const node = view.state.doc.nodeAt(pos);
-    if (!node || !isFreeNode(node)) continue;
+    if (!node || !isFreeCapable(node)) continue;
     if (zLevelOf(node) === levels[i]) continue;
     tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, zLevel: levels[i] });
     applied++;

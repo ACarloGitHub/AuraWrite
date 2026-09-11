@@ -131,6 +131,27 @@ export function clearOverlapLayout(dom: HTMLElement): void {
   }
 }
 
+/**
+ * Depth of an in-flow element that claims space (Wrapped / Unwrapped) — Carlo,
+ * 2026-09-11: every element has a depth, not only the free ones. It stays in
+ * the flow, but `position: relative` makes z-index apply without moving it (no
+ * offset is set), so the Layers order decides who covers whom even between
+ * in-flow elements.
+ */
+export function applyFlowDepth(dom: HTMLElement, level: number): void {
+  dom.style.position = "relative";
+  dom.style.zIndex = String(stackDepthOf(level));
+  dom.dataset.awFlowDepth = "1";
+}
+
+/** Remove the depth styles `applyFlowDepth` has applied. */
+export function clearFlowDepth(dom: HTMLElement): void {
+  if (dom.dataset.awFlowDepth !== "1") return;
+  delete dom.dataset.awFlowDepth;
+  dom.style.removeProperty("position");
+  dom.style.removeProperty("z-index");
+}
+
 /** The text column of the editor: content box of the scrollable host. */
 export function textColumn(host: HTMLElement): { left: number; width: number } {
   const cs = getComputedStyle(host);
