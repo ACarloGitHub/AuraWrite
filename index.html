@@ -310,6 +310,9 @@
         <button id="find-close" class="find-bar__btn" title="Close (Escape)">✕</button>
       </div>
       <div id="image-toolbar" class="image-toolbar">
+        <!-- F3.a: free distribution first, then the horizontal alignment -->
+        <button id="img-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
+        <div id="img-free-separator" class="image-toolbar__separator"></div>
         <button id="img-align-left" class="image-toolbar__btn" title="Align Left">Left</button>
         <button id="img-align-center" class="image-toolbar__btn image-toolbar__btn--active" title="Align Center">Center</button>
         <button id="img-align-right" class="image-toolbar__btn" title="Align Right">Right</button>
@@ -369,13 +372,12 @@
           <button id="img-remove-caption" class="image-toolbar__btn" title="Remove the caption">Remove Caption</button>
         </span>
         <div class="image-toolbar__separator"></div>
-        <!-- F3.a: free distribution (image and figure share this bar) -->
-        <button id="img-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
-        <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
       </div>
       <!-- BOX TOOLBAR (Phase 1 enrichment G2): contextual panel for the styled box -->
       <div id="box-toolbar" class="image-toolbar">
+        <button id="box-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
+        <div class="image-toolbar__separator"></div>
         <select id="box-variant" class="image-toolbar__select" title="Box kind">
           <option value="text">Text Box</option>
           <option value="note">Note</option>
@@ -383,7 +385,7 @@
         <button id="box-align-left" class="image-toolbar__btn" title="Align Box Left">Left</button>
         <button id="box-align-center" class="image-toolbar__btn" title="Center Box">Center</button>
         <button id="box-align-right" class="image-toolbar__btn" title="Align Box Right">Right</button>
-        <div class="image-toolbar__separator"></div>
+        <div id="box-align-separator" class="image-toolbar__separator"></div>
         <label class="image-toolbar__field" title="Background fill">BG <input id="box-bg" type="color" class="image-toolbar__color" value="#fef6d8" /></label>
         <button id="box-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No background (transparent)">×</button>
         <div class="image-toolbar__separator"></div>
@@ -398,9 +400,6 @@
         <input id="box-border-color" type="color" class="image-toolbar__color" title="Border color" value="#999999" />
         <label class="image-toolbar__field" title="Corner rounding in pixels">R <input id="box-radius" type="number" min="0" max="100" step="2" value="" placeholder="px" /></label>
         <label class="image-toolbar__field" title="Box width in pixels; empty = full column">Width <input id="box-width" type="number" min="60" max="4000" step="10" value="" placeholder="full" /></label>
-        <div class="image-toolbar__separator"></div>
-        <!-- F3.a: free distribution -->
-        <button id="box-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
         <div class="image-toolbar__separator"></div>
         <button id="box-delete" class="image-toolbar__btn" title="Delete Box">Delete</button>
       </div>

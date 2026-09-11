@@ -2375,6 +2375,13 @@ export function updateImageToolbar(view: EditorView): void {
     btnAlignLeft?.classList.toggle("image-toolbar__btn--active", align === "left");
     btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
     btnAlignRight?.classList.toggle("image-toolbar__btn--active", align === "right");
+    // In Free the horizontal is decided by the mouse: hide Left/Center/Right.
+    const isFree = !!attrs.free;
+    for (const btn of [btnAlignLeft, btnAlignCenter, btnAlignRight]) {
+      if (btn instanceof HTMLElement) btn.hidden = isFree;
+    }
+    const freeSeparator = document.getElementById("img-free-separator");
+    if (freeSeparator instanceof HTMLElement) freeSeparator.hidden = isFree;
     const condition = textConditionOf(info.node);
     if (btnToggleWrap instanceof HTMLButtonElement) {
       btnToggleWrap.textContent = CONDITION_LABEL[condition];

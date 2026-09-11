@@ -37,7 +37,7 @@ import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth,
   type FreeWrapBand,
 } from "./free-layout";
-import { isOverlap, isWrapping, textConditionOf } from "./element-condition";
+import { isOverlap, isUnwrapped, isWrapping, textConditionOf } from "./element-condition";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -47,6 +47,7 @@ import {
   OBSTACLE_MARGIN_PX,
   type Obstacle,
   type ObstacleSide,
+  type SolidStrip,
 } from "./text-obstacles";
 // Text metrics (fonts, line heights, block spacing) live in their own module:
 // this file answers "where do the pages break", that one answers "how tall is a
@@ -962,7 +963,7 @@ function sameBands(a: FreeBandInput[], b: FreeBandInput[]): boolean {
   for (const x of b) {
     const y = byPos.get(x.pos);
     if (!y) return false;
-    if (y.side !== x.side || y.widthPx !== x.widthPx) return false;
+    if (y.side !== x.side || y.widthPx !== x.widthPx || y.full !== x.full) return false;
     if (Math.abs(y.y0 - x.y0) > 0.5 || Math.abs(y.y1 - x.y1) > 0.5) return false;
   }
   return true;
@@ -989,6 +990,12 @@ export interface FreeBandInput extends FreeWrapBand {
    */
   insertPos: number | null;
   lineTop: number;
+  /**
+   * True for an Unwrapped free element: the band claims the WHOLE width, so no
+   * line lives beside it (the text resumes under it). It is booked as a solid
+   * strip, not as a sided obstacle.
+   */
+  full: boolean;
 }
 
 /** A pass of the walk: the public result plus the bands the NEXT pass should use. */
@@ -1010,7 +1017,9 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   // `ObstacleSet`). The wrapped images of the flow shorten lines but never
   // make a height unwritable, which is how the page count has always worked.
   const bandObstacles: Obstacle[] = [];
-  let obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles);
+  // Unwrapped free elements: strips where no line fits at all, stated directly.
+  const fullStrips: SolidStrip[] = [];
+  let obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles, fullStrips);
   const sideBottom: Record<ObstacleSide, number> = { left: 0, right: 0 };
   let y = 0; // absolute flow height (bottom of last placed box, no trailing gap)
   let pendingAfter = 0; // margin-bottom of the previous in-flow block (collapses)
@@ -1056,11 +1065,16 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   // rectangles of the free elements, and the width they claim, the unwritable
   // strips and the vertical queueing all come from `ObstacleSet`.
   for (const b of bands) {
-    const box: Obstacle = { side: b.side, widthPx: b.widthPx, y0: b.y0, y1: b.y1 };
-    bandObstacles.push(box);
-    obstacles.push(box);
+    if (b.full) {
+      // Unwrapped: no line beside it, the text resumes under it.
+      fullStrips.push({ y0: b.y0, y1: b.y1 });
+    } else {
+      const box: Obstacle = { side: b.side, widthPx: b.widthPx, y0: b.y0, y1: b.y1 };
+      bandObstacles.push(box);
+      obstacles.push(box);
+    }
   }
-  obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles);
+  obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles, fullStrips);
 
   /** Bottom of the same-side bands overlapping [y, y+h): a float queues below. */
   const bandQueue = (side: ObstacleSide, y: number, h: number): number => {
@@ -1156,15 +1170,25 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         });
         // The band the NEXT pass will use: same rectangle, but the anchor top
         // is now the one this pass settled on.
-        const next = freeWrapBand({
-          column: { left: 0, width: contentWidth },
-          spec,
-          elementWidthPx: w,
-          elementHeightPx: h,
-          drawnTop: top,
-          wrapOn: isWrapping(textConditionOf(node)),
-        });
-        if (next) outBands.push({ ...next, pos, insertPos: null, lineTop: next.y0 });
+        const cond = textConditionOf(node);
+        let next: FreeWrapBand | null = null;
+        let full = false;
+        if (isWrapping(cond)) {
+          next = freeWrapBand({
+            column: { left: 0, width: contentWidth },
+            spec,
+            elementWidthPx: w,
+            elementHeightPx: h,
+            drawnTop: top,
+            wrapOn: true,
+          });
+        } else if (isUnwrapped(cond) && h > 0) {
+          // Unwrapped claims the WHOLE width over its drawn rectangle: the text
+          // above stays, the text below resumes under the element.
+          next = { side: "left", widthPx: contentWidth, y0: top, y1: top + h };
+          full = true;
+        }
+        if (next) outBands.push({ ...next, pos, insertPos: null, lineTop: next.y0, full });
       }
       pos += node.nodeSize;
       return;
@@ -1181,7 +1205,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         const y0 = Math.max(natural, sideBottom[fl.side], bandQueue(fl.side, natural, h));
         const y1 = y0 + h + sp.afterPx;
         obstacles.push({ side: fl.side, widthPx: fl.widthPx, y0, y1 });
-        obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles);
+        obstacleSet = new ObstacleSet(contentWidth, obstacles, bandObstacles, fullStrips);
         sideBottom[fl.side] = y1;
       }
       pos += node.nodeSize;

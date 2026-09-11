@@ -75,6 +75,9 @@ export class ObstacleSet {
    * @param columnWidth the text column
    * @param obstacles   every claim on the column (flow floats AND free bands)
    * @param solidFrom   the claims that may pair up into an unwritable strip.
+   * @param extraSolid  strips where no line fits at all, stated directly (an
+   *                    Unwrapped element claims the whole width, so no pair of
+   *                    facing obstacles is involved).
    *
    * `solidFrom` is a separate argument on purpose, and it is not cosmetic: the
    * page count has always built the unwritable strips from the FREE BANDS
@@ -84,10 +87,16 @@ export class ObstacleSet {
    * pairs up into "no line fits here" is a property of the bands, not of the
    * column in general.
    */
-  constructor(columnWidth: number, obstacles: Obstacle[], solidFrom: Obstacle[] = obstacles) {
+  constructor(
+    columnWidth: number,
+    obstacles: Obstacle[],
+    solidFrom: Obstacle[] = obstacles,
+    extraSolid: SolidStrip[] = [],
+  ) {
     this.columnWidth = columnWidth;
     this.items = obstacles;
-    this.solidStrips = buildSolidStrips(columnWidth, solidFrom);
+    const strips = buildSolidStrips(columnWidth, solidFrom);
+    this.solidStrips = extraSolid.length ? strips.concat(extraSolid) : strips;
   }
 
   /** Every obstacle, in the order given. */

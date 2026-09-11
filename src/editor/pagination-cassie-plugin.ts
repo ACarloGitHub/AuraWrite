@@ -2,7 +2,7 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { EditorView } from "prosemirror-view";
 import { freeWrapBand, freeLayoutMap, parseFreeSpec } from "./free-layout";
-import { isWrapping, textConditionOf } from "./element-condition";
+import { isOverlap, textConditionOf } from "./element-condition";
 import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
@@ -32,6 +32,8 @@ interface DomBand {
   side: "left" | "right";
   widthPx: number;
   heightPx: number;
+  /** Unwrapped: the spacer claims the whole column, so no line sits beside it. */
+  full: boolean;
 }
 
 /**
@@ -76,7 +78,9 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
   for (const [pos, pic] of freeEls) {
     const node = view.state.doc.nodeAt(pos);
     const spec = node ? parseFreeSpec(node.attrs?.free) : null;
-    if (!node || !spec || !isWrapping(textConditionOf(node))) continue;
+    if (!node || !spec) continue;
+    const condition = textConditionOf(node);
+    if (isOverlap(condition)) continue;
 
     const r = pic.getBoundingClientRect();
     // While the element flies, the box that matters is the copy under the
@@ -87,15 +91,25 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const widthCss = box.width / scale;
     const heightCss = (box.bottom - box.top) / scale;
 
-    const band = freeWrapBand({
-      column: { left: 0, width: column.width },
-      spec,
-      elementWidthPx: widthCss,
-      elementHeightPx: heightCss,
-      drawnTop: 0,
-      wrapOn: true,
-    });
-    if (!band) continue;
+    let side: "left" | "right";
+    let widthPx: number;
+    if (condition === "unwrapped") {
+      // Unwrapped: the whole column, so the text goes above and below.
+      side = "left";
+      widthPx = column.width;
+    } else {
+      const band = freeWrapBand({
+        column: { left: 0, width: column.width },
+        spec,
+        elementWidthPx: widthCss,
+        elementHeightPx: heightCss,
+        drawnTop: 0,
+        wrapOn: true,
+      });
+      if (!band) continue;
+      side = band.side;
+      widthPx = band.widthPx;
+    }
 
     // WHICH LINE the band starts on.
     //
@@ -143,9 +157,10 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
       pos,
       insertPos: anchorPos + 1,
       marginTop,
-      side: band.side,
-      widthPx: band.widthPx,
+      side,
+      widthPx,
       heightPx: Math.max(1, Math.round(height / scale)),
+      full: condition === "unwrapped",
     });
   }
   return out;
@@ -185,7 +200,8 @@ function sameDomBands(a: DomBand[], b: DomBand[]): boolean {
   return a.every((x, i) => {
     const y = b[i];
     return x.pos === y.pos && x.insertPos === y.insertPos && x.marginTop === y.marginTop
-      && x.side === y.side && x.widthPx === y.widthPx && x.heightPx === y.heightPx;
+      && x.side === y.side && x.widthPx === y.widthPx && x.heightPx === y.heightPx
+      && x.full === y.full;
   });
 }
 
@@ -229,7 +245,7 @@ function freeWrapDecorations(bands: DomBand[]): Decoration[] {
       // The drag rewrites this box's numbers live (free-drag.ts): the widget is
       // not document content, so its own mutations must not be read back.
       ignoreMutation: () => true,
-      key: `aw-free-wrap-${band.pos}-${band.side}-${band.widthPx}-${band.insertPos}-${band.heightPx}-${band.marginTop}`,
+      key: `aw-free-wrap-${band.pos}-${band.side}-${band.widthPx}-${band.insertPos}-${band.heightPx}-${band.marginTop}-${band.full ? 1 : 0}`,
     }),
   );
 }

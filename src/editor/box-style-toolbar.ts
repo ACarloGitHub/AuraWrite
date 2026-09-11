@@ -163,6 +163,13 @@ export function syncBoxToolbar(view: EditorView): void {
   for (const [value, btn] of Object.entries(alignButtons)) {
     btn?.classList.toggle("image-toolbar__btn--active", a.align === value);
   }
+  // In Free the horizontal is decided by the mouse: hide Left/Center/Right.
+  const isFree = !!info.node.attrs.free;
+  for (const btn of Object.values(alignButtons)) {
+    if (btn) btn.hidden = isFree;
+  }
+  const alignSeparator = el("box-align-separator");
+  if (alignSeparator) alignSeparator.hidden = isFree;
 
   const bg = el<HTMLInputElement>("box-bg");
   if (bg) bg.value = a.bgColor || "#ffffff";
