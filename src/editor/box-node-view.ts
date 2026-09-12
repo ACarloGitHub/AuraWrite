@@ -81,6 +81,18 @@ export class StyledBoxNodeView implements NodeView {
     // U3: the box shows the same text condition (wrapped / unwrapped / overlap)
     // as the image and the figure.
     applyWrapMarker(this.dom, attrs);
+    // U3: the float rule keys on the width being explicit. Without this marker
+    // the box stayed a full-line block: it LOOKED narrow but kept the whole
+    // line, so the text could never wrap around it.
+    const boxWidth = normalizeBoxStyle(attrs).widthPx;
+    if (boxWidth != null) {
+      const marker = String(boxWidth);
+      if (this.dom.getAttribute("data-width") !== marker) {
+        this.dom.setAttribute("data-width", marker);
+      }
+    } else if (this.dom.hasAttribute("data-width")) {
+      this.dom.removeAttribute("data-width");
+    }
     // Screen-only legibility: dark text over light backgrounds. Exports and
     // print are untouched (they read the doc, not the editor DOM).
     const light = isLightBgColor(normalizeBoxStyle(attrs).bgColor) ? "true" : "false";
