@@ -325,6 +325,8 @@ export const PRINT_BASE_CSS = `
 .aw-print-body > img[data-wrap=""][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
 .aw-print-body .aw-figure[data-wrap=""][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
 .aw-print-body .aw-figure[data-wrap=""][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
+.aw-print-body .aw-box[data-wrap=""][data-width][data-align="left"] { float: left; margin: 0 var(--aw-float-gap, 12px) 0 0; }
+.aw-print-body .aw-box[data-wrap=""][data-width][data-align="right"] { float: right; margin: 0 0 0 var(--aw-float-gap, 12px); }
 `;
 
 /** Screen dressing used ONLY by the preview window (paper look). */

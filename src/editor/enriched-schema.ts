@@ -235,7 +235,9 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
       attrs["data-border-color"] = s.borderColor;
     if (s.cornerRadius !== DEFAULT_BOX_STYLE.cornerRadius) attrs["data-radius"] = String(s.cornerRadius);
     if (s.widthPx != null) attrs["data-width"] = String(s.widthPx);
-    if (s.align !== DEFAULT_BOX_STYLE.align) attrs["data-align"] = s.align;
+    // Always explicit: the box's default is "left", and the float rules key on
+    // the align attribute (U3).
+    attrs["data-align"] = s.align;
     // Free-layout markers (F3.a): only what differs from the default.
     Object.assign(attrs, freeLayoutToDOM(node));
     const boxWrapMarker = textConditionMarker(textConditionOf(node));
@@ -250,6 +252,21 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     if (shadow) styleMap.boxShadow = shadow;
     const opacity = Number(node.attrs.opacity);
     if (isFinite(opacity) && opacity < 100) styleMap.opacity = String(Math.max(0, opacity) / 100);
+    // U3: a wrapped box floats in the flow, carrying its air inline so the
+    // exported HTML stands on its own (same as image and figure). Only a box
+    // with an explicit width floats: a full-width box would collapse.
+    if (
+      s.widthPx != null &&
+      isWrapping(textConditionOf(node)) &&
+      (s.align === "left" || s.align === "right") &&
+      !node.attrs.free
+    ) {
+      const gap =
+        OBSTACLE_MARGIN_PX +
+        Math.round(elementDecorationExtent(node.attrs as Record<string, unknown>, "styled_box").x);
+      styleMap.float = s.align;
+      styleMap.margin = s.align === "left" ? `0 ${gap}px 0 0` : `0 0 0 ${gap}px`;
+    }
     const styleText = Object.entries(styleMap)
       .map(([prop, value]) => `${prop.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}: ${value}`)
       .join("; ");

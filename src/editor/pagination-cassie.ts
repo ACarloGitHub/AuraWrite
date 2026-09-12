@@ -693,7 +693,10 @@ function spacingFor(node: PMNode): BlockSpacing {
 
 function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } | null {
   if (!isWrapping(textConditionOf(node))) return null;
-  if (node.type.name !== "image" && node.type.name !== "figure") return null;
+  // U3: the box joins the same float rule as the image and the figure.
+  if (node.type.name !== "image" && node.type.name !== "figure" && node.type.name !== "styled_box") {
+    return null;
+  }
   const align = String(node.attrs.align ?? "");
   if (align !== "left" && align !== "right") return null;
   // ONE definition of the element's own width, shared with the free bands.

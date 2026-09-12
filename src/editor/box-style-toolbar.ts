@@ -14,6 +14,7 @@
 
 import type { EditorView } from "prosemirror-view";
 import { getSelectedBox, setBoxAttrs, removeSelectedBox } from "./box-commands";
+import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
 import {
   DEFAULT_BOX_STYLE,
   NOTE_PRESET,
@@ -27,6 +28,19 @@ function el<T extends HTMLElement>(id: string): T | null {
 
 function parseIntOrNaN(v: string): number {
   return parseInt(v, 10);
+}
+
+// U3: the one button cycles through the three text conditions, exactly as the
+// image bar does (same order, same labels).
+const CONDITION_ORDER: TextCondition[] = ["wrapped", "unwrapped", "overlap"];
+const CONDITION_LABEL: Record<TextCondition, string> = {
+  wrapped: "Wrapped",
+  unwrapped: "Unwrapped",
+  overlap: "Overlap",
+};
+
+function nextCondition(condition: TextCondition): TextCondition {
+  return CONDITION_ORDER[(CONDITION_ORDER.indexOf(condition) + 1) % CONDITION_ORDER.length];
 }
 
 /** Bind the box panel controls once. */
@@ -77,6 +91,13 @@ export function setupBoxToolbar(view: EditorView): void {
   alignLeft?.addEventListener("click", () => void setBoxAttrs(view, { align: "left" }));
   alignCenter?.addEventListener("click", () => void setBoxAttrs(view, { align: "center" }));
   alignRight?.addEventListener("click", () => void setBoxAttrs(view, { align: "right" }));
+
+  // U3: same condition command as the image bar, via the shared element state.
+  el("box-condition")?.addEventListener("click", () => {
+    const info = getSelectedBox(view);
+    if (!info) return;
+    void setBoxAttrs(view, { wrap: nextCondition(textConditionOf(info.node)) });
+  });
 
   bg?.addEventListener("input", () => {
     if (!bg.value) return;
@@ -170,6 +191,15 @@ export function syncBoxToolbar(view: EditorView): void {
   }
   const alignSeparator = el("box-align-separator");
   if (alignSeparator) alignSeparator.hidden = isFree;
+
+  // U3: show the current text condition (same wording as the image bar).
+  const condition = textConditionOf(info.node);
+  const conditionBtn = el<HTMLButtonElement>("box-condition");
+  if (conditionBtn) {
+    conditionBtn.textContent = CONDITION_LABEL[condition];
+    conditionBtn.title = `Text around this element: ${CONDITION_LABEL[condition]}`;
+    conditionBtn.classList.toggle("image-toolbar__btn--active", isWrapping(condition));
+  }
 
   const bg = el<HTMLInputElement>("box-bg");
   if (bg) bg.value = a.bgColor || "#ffffff";

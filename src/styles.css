@@ -6516,6 +6516,19 @@ kbd {
   margin-right: 0;
 }
 
+/* U3: a wrapped box floats in the flow, with the SAME rule and air as an image
+   (--aw-float-gap is set by the node view; a free box is absolute, so the float
+   does not apply to it). */
+.aw-box[data-wrap][data-width][data-align="left"] {
+  float: left;
+  margin: 0 var(--aw-float-gap, 12px) 0 0;
+}
+
+.aw-box[data-wrap][data-width][data-align="right"] {
+  float: right;
+  margin: 0 0 0 var(--aw-float-gap, 12px);
+}
+
 /* ============================================================================
    FIGURE NODE (Phase 1 enrichment G3, refactor 2026-08-29) — a single unit:
    photo <img> (built from the node attrs) + editable <figcaption>. The

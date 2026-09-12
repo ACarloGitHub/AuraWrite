@@ -24,7 +24,10 @@ import {
   isLightBgColor,
   normalizeBoxStyle,
 } from "./box-style";
-import { setStyleCached } from "./element-view";
+import { applyWrapMarker, setStyleCached } from "./element-view";
+import { isWrapping, parseTextCondition } from "./element-condition";
+import { elementDecorationExtent } from "./element-decoration";
+import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 import { computeImageBoxShadow, normalizeImageStyle } from "./image-style";
 
 // The box keyboard guard is the shared one (element-view.ts); editor.ts
@@ -75,6 +78,9 @@ export class StyledBoxNodeView implements NodeView {
     if (this.dom.getAttribute("data-align") !== align) {
       this.dom.setAttribute("data-align", align);
     }
+    // U3: the box shows the same text condition (wrapped / unwrapped / overlap)
+    // as the image and the figure.
+    applyWrapMarker(this.dom, attrs);
     // Screen-only legibility: dark text over light backgrounds. Exports and
     // print are untouched (they read the doc, not the editor DOM).
     const light = isLightBgColor(normalizeBoxStyle(attrs).bgColor) ? "true" : "false";
@@ -99,6 +105,15 @@ export class StyledBoxNodeView implements NodeView {
       "opacity",
       isFinite(opacity) && opacity < 100 ? String(Math.max(0, opacity) / 100) : null,
     );
+    // U3: air the box keeps from the text when it floats in the flow, shadow
+    // included - the same rule as image and figure.
+    const align = String(raw.align ?? "left");
+    const floating =
+      !raw.free && isWrapping(parseTextCondition(raw.wrap)) && (align === "left" || align === "right");
+    const gap = floating
+      ? `${OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(raw, "styled_box").x)}px`
+      : null;
+    setStyleCached(this.applied, this.dom, "--aw-float-gap", gap);
   }
 
   // -------------------------------------------------------------- events
