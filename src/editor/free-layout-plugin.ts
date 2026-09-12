@@ -127,7 +127,7 @@ function pruneOrphanedFree(state: EditorState, records: AnchorRecord[]): Transac
 }
 
 /**
- * Keyboard guard (bug 9 in [[concepts/todo/_bug-aperti]]): with an image or a
+ * Keyboard guard (bug 9 in [[todo/_bug-aperti]]): with an image or a
  * figure selected, typing a letter used to REPLACE the element - the writer
  * lost the picture and the caret never moved past it. Word's behaviour is the
  * opposite: the element stays where it is and the text starts after it. The

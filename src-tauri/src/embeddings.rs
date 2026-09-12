@@ -654,7 +654,7 @@ pub fn search_similar_chat_messages_cross_session(
 ///      (upstream issues #96, #143, #116 are all still open as of
 ///       2026-06 — when closed, this entire workaround can be deleted)
 ///
-/// This trade-off is also tracked in `AuraWrite-Wiki/concepts/todo-list.md`
+/// This trade-off is also tracked in `wiki/concepts/todo-list.md`
 /// under "Cose rimandate" so it does not get lost across sessions.
 fn knn_candidates_chat(
     conn: &Connection,

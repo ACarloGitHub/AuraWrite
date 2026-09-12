@@ -5,7 +5,7 @@
 // Strategia A (2026-06-27): the tool surface was consolidated from 43 granular
 // tools into 14 domain tools with an `action` parameter. The text-tag protocol
 // (<tool name="x">{...}</tool>) is unchanged, so every provider/model keeps
-// working. See AuraWrite-Wiki/concepts/tools-consolidation.md.
+// working. See wiki/concepts/tools-consolidation.md.
 // ============================================================================
 
 import { invoke } from "@tauri-apps/api/core";
@@ -1294,7 +1294,7 @@ export function buildToolSystemPrompt(projectId?: string, prefs: ToolPreferences
   const hasProject = !!projectId;
 
   // NOTE: the full, verbose version of the original (per-tool) prompt is
-  // preserved in documentation/tool-prompt-backup-full-2026-06-25.md. The
+  // preserved in raw/tool-prompt-backup-full-2026-06-25.md. The
   // surface was consolidated 43 → 14 (see concepts/tools-consolidation.md).
   return `You are AuraWrite AI, an intelligent writing assistant with access to tools.
 ${projectInfo}
