@@ -2344,6 +2344,17 @@ function setupImageToolbar(view: EditorView): void {
     void setImageRotation(view, val);
   });
 
+  // U5: the single Opacity command, on the whole element (image/figure).
+  const inputOpacity = document.getElementById("img-opacity") as HTMLInputElement | null;
+  inputOpacity?.addEventListener("change", async () => {
+    const info = await getSelectedImage(view);
+    if (!info) return;
+    const v = parseInt(inputOpacity.value, 10);
+    if (isNaN(v)) return;
+    const { setNodeAttrs } = await import("./element-commands");
+    setNodeAttrs(view, info.pos, { ...info.node.attrs, opacity: Math.max(0, Math.min(100, v)) });
+  });
+
   // T1.5: X/Y position a FREE element by hand. X is the left edge measured
   // from the column's left; Y is the distance below the anchor block.
   inputX?.addEventListener("change", async () => {
@@ -2414,6 +2425,7 @@ export function updateImageToolbar(view: EditorView): void {
     const btnFlipH = document.getElementById("img-flip-h");
     const btnFlipV = document.getElementById("img-flip-v");
     const btnAspectLock = document.getElementById("img-aspect-lock");
+    const inputOpacity = document.getElementById("img-opacity") as HTMLInputElement | null;
 
     btnAlignLeft?.classList.toggle("image-toolbar__btn--active", align === "left");
     btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
@@ -2448,6 +2460,7 @@ export function updateImageToolbar(view: EditorView): void {
     btnFlipH?.classList.toggle("image-toolbar__btn--active", !!attrs.flipH);
     btnFlipV?.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);
     btnAspectLock?.classList.toggle("image-toolbar__btn--active", attrs.aspectLocked !== false);
+    if (inputOpacity) inputOpacity.value = String(attrs.opacity ?? 100);
 
     const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
     const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;

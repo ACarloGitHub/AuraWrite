@@ -333,6 +333,7 @@
         <button id="img-flip-v" class="image-toolbar__btn" title="Flip Vertical">↕</button>
         <div class="image-toolbar__separator"></div>
         <button id="img-aspect-lock" class="image-toolbar__btn image-toolbar__btn--active" title="Lock Aspect Ratio">🔒</button>
+        <label class="image-toolbar__field" title="Opacity percent (whole element)">Opa <input id="img-opacity" type="number" min="0" max="100" step="5" value="" placeholder="100" /></label>
         <div class="image-toolbar__separator"></div>
         <!-- Phase 1 enrichment: image style (radius / border / frame effect / shadow) -->
         <span class="image-toolbar__label">Style</span>
@@ -390,6 +391,13 @@
         <button id="box-align-right" class="image-toolbar__btn" title="Align Box Right">Right</button>
         <div id="box-align-separator" class="image-toolbar__separator"></div>
         <button id="box-condition" class="image-toolbar__btn" title="Text around this element">Wrapped</button>
+        <div class="image-toolbar__separator"></div>
+        <label class="image-toolbar__field" title="Rotation in degrees">Rot <input id="box-rotation" type="number" min="0" max="360" step="15" value="" placeholder="deg" /></label>
+        <button id="box-rotate-left" class="image-toolbar__btn" title="Rotate Left 90°">↺90</button>
+        <button id="box-rotate-right" class="image-toolbar__btn" title="Rotate Right 90°">↻90</button>
+        <button id="box-flip-h" class="image-toolbar__btn" title="Flip Horizontal">↔</button>
+        <button id="box-flip-v" class="image-toolbar__btn" title="Flip Vertical">↕</button>
+        <label class="image-toolbar__field" title="Opacity percent (whole element, text included)">Opa <input id="box-opacity" type="number" min="0" max="100" step="5" value="" placeholder="100" /></label>
         <div class="image-toolbar__separator"></div>
         <label class="image-toolbar__field" title="Background fill">BG <input id="box-bg" type="color" class="image-toolbar__color" value="#fef6d8" /></label>
         <button id="box-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No background (transparent)">×</button>

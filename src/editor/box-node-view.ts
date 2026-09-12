@@ -24,7 +24,7 @@ import {
   isLightBgColor,
   normalizeBoxStyle,
 } from "./box-style";
-import { applyWrapMarker, setStyleCached } from "./element-view";
+import { applyWrapMarker, setStyleCached, transformStyleOf } from "./element-view";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
@@ -110,6 +110,8 @@ export class StyledBoxNodeView implements NodeView {
     // U1: same effects as the image (shadow, frame effect) plus transparency.
     const shadow = computeImageBoxShadow(normalizeImageStyle(raw));
     setStyleCached(this.applied, this.dom, "box-shadow", shadow || null);
+    // U5: rotation and mirroring, like every other element.
+    setStyleCached(this.applied, this.dom, "transform", transformStyleOf(raw));
     const opacity = Number(raw.opacity);
     setStyleCached(
       this.applied,

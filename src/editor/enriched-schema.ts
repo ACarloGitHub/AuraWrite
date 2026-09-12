@@ -42,6 +42,7 @@ import {
   textConditionOf,
 } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
+import { transformStyleOf } from "./element-view";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
@@ -129,6 +130,32 @@ export function imageStyleToDOM(node: PMNode): Record<string, string> {
 /** Opacity is shared by every element (contract U1). */
 export const OPACITY_ATTR: Record<string, { default: unknown }> = { opacity: { default: 100 } };
 
+/** Rotation and mirroring, shared by every element (contract U5). */
+export const ROTATION_FLIP_ATTRS: Record<string, { default: unknown }> = {
+  rotation: { default: 0 },
+  flipH: { default: false },
+  flipV: { default: false },
+};
+
+/** Read the rotation/mirror markers off an element (re-import side). */
+export function rotationFlipGetDOM(dom: HTMLElement): Record<string, unknown> {
+  return {
+    rotation: parseFloat(dom.getAttribute("data-rotation") || "0") || 0,
+    flipH: dom.hasAttribute("data-flip-h"),
+    flipV: dom.hasAttribute("data-flip-v"),
+  };
+}
+
+/** Emit the rotation/mirror markers for a node (export side). */
+export function rotationFlipToDOM(node: PMNode): Record<string, string> {
+  const out: Record<string, string> = {};
+  const rotation = Number(node.attrs.rotation) || 0;
+  if (rotation) out["data-rotation"] = String(rotation);
+  if (node.attrs.flipH) out["data-flip-h"] = "";
+  if (node.attrs.flipV) out["data-flip-v"] = "";
+  return out;
+}
+
 /**
  * Shadow, frame effect and opacity for an element that keeps its OWN border
  * model (the styled box). The image and the figure already carry the shadow and
@@ -211,13 +238,20 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     ...FREE_LAYOUT_ATTRS,
     // U1: same effects as the image (shadow, frame effect, opacity).
     ...SHARED_EFFECT_ATTRS,
+    // U5: rotation and mirroring, like every other element.
+    ...ROTATION_FLIP_ATTRS,
   },
   parseDOM: [
     {
       tag: "div[data-aw-box]",
       getAttrs: (dom: HTMLElement | string) => {
         if (typeof dom === "string") return false;
-        return { ...boxStyleGetDOM(dom), ...boxLayoutGetDOM(dom), ...sharedEffectGetDOM(dom) };
+        return {
+          ...boxStyleGetDOM(dom),
+          ...boxLayoutGetDOM(dom),
+          ...sharedEffectGetDOM(dom),
+          ...rotationFlipGetDOM(dom),
+        };
       },
     },
   ],
@@ -244,6 +278,8 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     if (boxWrapMarker !== null) attrs["data-wrap"] = boxWrapMarker;
     // U1: shadow, frame effect and opacity markers (D10).
     Object.assign(attrs, sharedEffectToDOM(node));
+    // U5: rotation and mirroring markers.
+    Object.assign(attrs, rotationFlipToDOM(node));
     // D10 rule 1: emit BOTH the stable markers and the inline style, so the
     // markup renders universally outside AuraWrite and re-imports exactly.
     const css = computeBoxCss(s);
@@ -252,6 +288,9 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     if (shadow) styleMap.boxShadow = shadow;
     const opacity = Number(node.attrs.opacity);
     if (isFinite(opacity) && opacity < 100) styleMap.opacity = String(Math.max(0, opacity) / 100);
+    // U5: rotation and mirroring travel inline in the exported markup.
+    const transform = transformStyleOf(node.attrs as Record<string, unknown>);
+    if (transform) styleMap.transform = transform;
     // U3: a wrapped box floats in the flow, carrying its air inline so the
     // exported HTML stands on its own (same as image and figure). Only a box
     // with an explicit width floats: a full-width box would collapse.

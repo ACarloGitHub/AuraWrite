@@ -99,6 +99,38 @@ export function setupBoxToolbar(view: EditorView): void {
     void setBoxAttrs(view, { wrap: nextCondition(textConditionOf(info.node)) });
   });
 
+  // U5: rotation, mirroring and the single Opacity command.
+  const rotation = el<HTMLInputElement>("box-rotation");
+  rotation?.addEventListener("change", () => {
+    const v = parseIntOrNaN(rotation.value);
+    if (isNaN(v)) return;
+    void setBoxAttrs(view, { rotation: (((v % 360) + 360) % 360) });
+  });
+  const rotateBy = (delta: number): void => {
+    const info = getSelectedBox(view);
+    if (!info) return;
+    const current = Number(info.node.attrs.rotation) || 0;
+    void setBoxAttrs(view, { rotation: ((((current + delta) % 360) + 360) % 360) });
+  };
+  el("box-rotate-left")?.addEventListener("click", () => rotateBy(-90));
+  el("box-rotate-right")?.addEventListener("click", () => rotateBy(90));
+  el("box-flip-h")?.addEventListener("click", () => {
+    const info = getSelectedBox(view);
+    if (!info) return;
+    void setBoxAttrs(view, { flipH: !info.node.attrs.flipH });
+  });
+  el("box-flip-v")?.addEventListener("click", () => {
+    const info = getSelectedBox(view);
+    if (!info) return;
+    void setBoxAttrs(view, { flipV: !info.node.attrs.flipV });
+  });
+  const opacity = el<HTMLInputElement>("box-opacity");
+  opacity?.addEventListener("change", () => {
+    const v = parseIntOrNaN(opacity.value);
+    if (isNaN(v)) return;
+    void setBoxAttrs(view, { opacity: Math.max(0, Math.min(100, v)) });
+  });
+
   bg?.addEventListener("input", () => {
     if (!bg.value) return;
     void setBoxAttrs(view, { bgColor: bg.value });
@@ -203,6 +235,14 @@ export function syncBoxToolbar(view: EditorView): void {
     conditionBtn.title = `Text around this element: ${CONDITION_LABEL[condition]}`;
     conditionBtn.classList.toggle("image-toolbar__btn--active", isWrapping(condition));
   }
+
+  // U5: rotation, mirroring and opacity values.
+  const rotation = el<HTMLInputElement>("box-rotation");
+  if (rotation) rotation.value = String(Number(info.node.attrs.rotation) || 0);
+  const opacity = el<HTMLInputElement>("box-opacity");
+  if (opacity) opacity.value = String(info.node.attrs.opacity ?? 100);
+  el("box-flip-h")?.classList.toggle("image-toolbar__btn--active", !!info.node.attrs.flipH);
+  el("box-flip-v")?.classList.toggle("image-toolbar__btn--active", !!info.node.attrs.flipV);
 
   const bg = el<HTMLInputElement>("box-bg");
   if (bg) bg.value = a.bgColor || "#ffffff";
