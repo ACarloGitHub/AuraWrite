@@ -6299,6 +6299,18 @@ kbd {
   display: flex;
 }
 
+/* U4: the image and box sections are transparent wrappers, so their controls
+   stay direct flex items of the ONE bar; [hidden] still removes the section. */
+#image-controls,
+#box-controls {
+  display: contents;
+}
+
+#image-controls[hidden],
+#box-controls[hidden] {
+  display: none;
+}
+
 .image-toolbar__btn {
   display: inline-flex;
   align-items: center;

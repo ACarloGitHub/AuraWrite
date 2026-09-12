@@ -310,6 +310,7 @@
         <button id="find-close" class="find-bar__btn" title="Close (Escape)">✕</button>
       </div>
       <div id="image-toolbar" class="image-toolbar">
+        <span id="image-controls">
         <!-- F3.a: free distribution first, then the horizontal alignment -->
         <button id="img-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
         <div id="img-free-separator" class="image-toolbar__separator"></div>
@@ -375,9 +376,9 @@
         </span>
         <div class="image-toolbar__separator"></div>
         <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
-      </div>
-      <!-- BOX TOOLBAR (Phase 1 enrichment G2): contextual panel for the styled box -->
-      <div id="box-toolbar" class="image-toolbar">
+        </span>
+        <!-- BOX CONTROLS (U4): same bar as the image, shown only for a styled box -->
+        <span id="box-controls" hidden>
         <button id="box-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
         <div class="image-toolbar__separator"></div>
         <select id="box-variant" class="image-toolbar__select" title="Box kind">
@@ -406,6 +407,7 @@
         <label class="image-toolbar__field" title="Box width in pixels; empty = full column">Width <input id="box-width" type="number" min="60" max="4000" step="10" value="" placeholder="full" /></label>
         <div class="image-toolbar__separator"></div>
         <button id="box-delete" class="image-toolbar__btn" title="Delete Box">Delete</button>
+        </span>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">
         <button id="ocr-load" class="ocr-bar__btn" title="Load file for OCR">📂 Load</button>

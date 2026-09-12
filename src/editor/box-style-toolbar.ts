@@ -45,7 +45,7 @@ function nextCondition(condition: TextCondition): TextCondition {
 
 /** Bind the box panel controls once. */
 export function setupBoxToolbar(view: EditorView): void {
-  const bar = el("box-toolbar");
+  const bar = el("box-controls");
   if (!bar) return;
 
   // Keep native controls interactive while preventing editor focus loss
@@ -161,16 +161,11 @@ export function setupBoxToolbar(view: EditorView): void {
 
 /** Show/hide the box panel and refresh its values for the current selection. */
 export function syncBoxToolbar(view: EditorView): void {
-  const bar = document.getElementById("box-toolbar");
-  if (!bar) return;
-
   const info = getSelectedBox(view);
   if (!info) {
-    bar.classList.remove("image-toolbar--visible");
     document.querySelectorAll(".aw-box--active").forEach((el) => el.classList.remove("aw-box--active"));
     return;
   }
-  bar.classList.add("image-toolbar--visible");
 
   // The handles follow the SAME rule as this bar: the box is "active" whenever
   // it is node-selected OR the caret is inside it, so in flow they appear as

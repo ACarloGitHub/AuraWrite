@@ -17,6 +17,7 @@ import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdo
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
 import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
+import { getSelectedElement } from "./element-commands";
 import { freeElementWidth, freeLeftPx, parseFreeSpec } from "./free-layout";
 import { textColumn } from "./free-style";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -2369,24 +2370,40 @@ function setupImageToolbar(view: EditorView): void {
   void import("./image-style-toolbar").then((m) => m.setupImageStyleToolbar(view));
 }
 
+/**
+ * U4: the ONE secondary bar. It shows only the commands valid for the selected
+ * element: the image/figure section, the box section, or nothing. The two value
+ * syncs below still own their own controls; visibility lives here only.
+ */
+export function syncSecondaryToolbar(view: EditorView): void {
+  const bar = document.getElementById("image-toolbar");
+  const info = getSelectedElement(view, ["image", "figure", "styled_box"]);
+  // These run on every transaction, also when the selection LEAVES an element.
+  void import("./layers-panel").then((m) => m.syncLayersPanel(view));
+  void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
+  updateImageToolbar(view);
+  if (!bar) return;
+  if (!info) {
+    bar.classList.remove("image-toolbar--visible");
+    return;
+  }
+  bar.classList.add("image-toolbar--visible");
+  const isBox = info.node.type.name === "styled_box";
+  const imageControls = document.getElementById("image-controls");
+  const boxControls = document.getElementById("box-controls");
+  if (imageControls) imageControls.hidden = isBox;
+  if (boxControls) boxControls.hidden = !isBox;
+}
+
 export function updateImageToolbar(view: EditorView): void {
   const toolbar = document.getElementById("image-toolbar");
   if (!toolbar) return;
 
   void (async () => {
-    // Phase 1 (G2/G3): the box panel and figure caption section follow every
-    // selection change too.
-    void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
+    // U4: the figure caption section follows every selection change.
     void import("./figure-toolbar").then((m) => m.syncFigureControls(view));
-    // F3.a: the layers window tracks the caret (it must also repaint when the
-    // selection LEAVES an element, so this runs before any early return).
-    void import("./layers-panel").then((m) => m.syncLayersPanel(view));
     const info = await getSelectedImage(view);
-    if (!info) {
-      toolbar.classList.remove("image-toolbar--visible");
-      return;
-    }
-    toolbar.classList.add("image-toolbar--visible");
+    if (!info) return;
     const attrs = info.node.attrs;
     const align = (attrs.align as string) || "center";
 

@@ -36,7 +36,7 @@ import { isWrapping, textConditionFromMarker, textConditionMarker, textCondition
 import { computeImageCss, normalizeImageStyle } from "./image-style";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
-import { updateImageToolbar } from "./toolbar";
+import { syncSecondaryToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
 // ============================================================================
@@ -724,7 +724,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
         view() {
           return {
             update(view) {
-              updateImageToolbar(view as EditorView);
+              syncSecondaryToolbar(view as EditorView);
             },
           };
         },
