@@ -35,7 +35,7 @@
 import { Plugin, PluginKey, EditorState, type Transaction } from "prosemirror-state";
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { Node as PMNode } from "prosemirror-model";
-import { freeLayoutMap, isFreeCapable, isFreeNode, layerLevelOf } from "./free-layout";
+import { freeElementWidth, freeLayoutMap, isFreeCapable, isFreeNode, layerLevelOf } from "./free-layout";
 import {
   applyFlowDepth,
   applyFreeLayout,
@@ -257,6 +257,13 @@ export function createFreeLayoutPlugin(): Plugin {
             clearFreeLayout(dom);
             clearOverlapLayout(dom);
             applyFlowDepth(dom, layerLevelOf(node));
+            // The clears drop the inline width the free/overlap paint had
+            // written. A box owns its width in its attrs, so put it back: a
+            // box coming back from Overlap otherwise stayed full-line.
+            if (node.type.name === "styled_box") {
+              const w = freeElementWidth(node);
+              dom.style.width = w != null ? `${w}px` : "";
+            }
           } else {
             clearFreeLayout(dom);
             clearOverlapLayout(dom);
