@@ -268,8 +268,12 @@ export function renderPrintBody(printDoc: PrintDoc): string {
       (s) =>
         `<section class="aw-print-sheet" data-page="${s.pageNumber}"` +
         ` style="--sheet-w:${PAGE_WIDTH_PX - 1}px;--sheet-h:${PAGE_HEIGHT_PX - 1}px;--bl:${m.left}px;--bt:${bodyTop}px;--cw:${printDoc.contentWidth}px;--ch:${printDoc.contentHeight}px;--foot:${Math.round(m.bottom / 2)}px;">` +
-        `<div class="ProseMirror aw-print-body${s.continued ? " aw-print-cont" : ""}">${s.html}</div>` +
+        // The free layer lives INSIDE the body: text and free elements then
+        // share one origin, so a free element cannot end up lower than the
+        // text on the sheet (T1.6, Carlo 2026-09-11).
+        `<div class="ProseMirror aw-print-body${s.continued ? " aw-print-cont" : ""}">${s.html}` +
         (s.freeHtml ? `<div class="aw-print-free-layer">${s.freeHtml}</div>` : "") +
+        `</div>` +
         `<div class="aw-print-pagenum">${s.pageNumber}</div>` +
         `</section>`,
     )
@@ -287,7 +291,8 @@ export const PRINT_BASE_CSS = `
 #aw-print-doc { display: none; color: #111; background: #fff; }
 .aw-print-sheet { position: relative; box-sizing: border-box; z-index: 0; }
 .ProseMirror.aw-print-body {
-  position: static;
+  /* relative, so the free layer nested inside shares the text's origin */
+  position: relative;
   margin: 0 auto; padding: 0;
   background: transparent; box-shadow: none; white-space: pre-wrap;
 }
@@ -305,7 +310,9 @@ export const PRINT_BASE_CSS = `
    anchored to the sheet with a zero-size anchor: an absolutely positioned box
    inside a position:relative sheet would otherwise stretch the sheet and
    generate extra pages. */
-.aw-print-free-layer { position: absolute; left: var(--bl); top: var(--bt); width: 0; height: 0; }
+/* Nested in .aw-print-body: 0,0 is the text's own origin, so the free
+   coordinates (relative to the text column) land where the editor draws them. */
+.aw-print-free-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .aw-print-free { position: absolute; }
 .aw-print-free img, .aw-print-free figure { margin: 0; }
 .aw-print-free-wrap { background: transparent; border: 0; padding: 0; margin-left: 0; margin-right: 0; }
@@ -356,7 +363,7 @@ export const PRINT_PRINT_CSS = `
   }
   .aw-print-sheet:last-child { break-after: auto; page-break-after: auto; }
   .ProseMirror.aw-print-body {
-    position: static !important; left: auto !important; top: auto !important;
+    position: relative !important; left: auto !important; top: auto !important;
     width: auto !important; max-width: var(--cw) !important; height: auto !important;
     margin: 0 auto !important; overflow: visible !important;
   }
