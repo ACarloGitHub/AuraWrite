@@ -167,9 +167,17 @@ export function syncBoxToolbar(view: EditorView): void {
   const info = getSelectedBox(view);
   if (!info) {
     bar.classList.remove("image-toolbar--visible");
+    document.querySelectorAll(".aw-box--active").forEach((el) => el.classList.remove("aw-box--active"));
     return;
   }
   bar.classList.add("image-toolbar--visible");
+
+  // The handles follow the SAME rule as this bar: the box is "active" whenever
+  // it is node-selected OR the caret is inside it, so in flow they appear as
+  // soon as the box is picked, exactly like in Free.
+  document.querySelectorAll(".aw-box--active").forEach((el) => el.classList.remove("aw-box--active"));
+  const boxDom = view.nodeDOM(info.pos);
+  if (boxDom instanceof HTMLElement) boxDom.classList.add("aw-box--active");
 
   const a = normalizeBoxStyle(info.node.attrs as Record<string, unknown>);
 

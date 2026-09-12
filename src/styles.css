@@ -6482,7 +6482,8 @@ kbd {
   display: none;
 }
 
-.aw-box--selected .aw-box__grip {
+.aw-box--selected .aw-box__grip,
+.aw-box--active .aw-box__grip {
   display: block;
 }
 
@@ -6671,7 +6672,8 @@ kbd {
   display: none;
 }
 
-.aw-box--selected .aw-box__resize-handle {
+.aw-box--selected .aw-box__resize-handle,
+.aw-box--active .aw-box__resize-handle {
   display: block;
 }
 
