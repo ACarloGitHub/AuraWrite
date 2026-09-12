@@ -14,6 +14,7 @@
 import type { Node as PMNode, NodeSpec } from "prosemirror-model";
 import {
   DEFAULT_IMAGE_STYLE,
+  computeImageBoxShadow,
   computeImageCss,
   normalizeImageStyle,
   type ImageBorderStyle,
@@ -96,6 +97,8 @@ export function imageStyleGetDOM(dom: HTMLElement): Record<string, unknown> {
     borderColor: dom.getAttribute("data-border-color") || DEFAULT_IMAGE_STYLE.borderColor,
     borderStyle: (dom.getAttribute("data-border-style") || DEFAULT_IMAGE_STYLE.borderStyle) as ImageBorderStyle,
     frameEffect: (dom.getAttribute("data-frame-effect") || DEFAULT_IMAGE_STYLE.frameEffect) as ImageFrameEffect,
+    // U1: opacity is shared by every element.
+    opacity: numAttr(dom, "data-opacity", 100),
   };
 }
 
@@ -118,6 +121,57 @@ export function imageStyleToDOM(node: PMNode): Record<string, string> {
   if (s.borderColor.toLowerCase() !== DEFAULT_IMAGE_STYLE.borderColor) out["data-border-color"] = s.borderColor;
   if (s.borderStyle !== DEFAULT_IMAGE_STYLE.borderStyle) out["data-border-style"] = s.borderStyle;
   if (s.frameEffect !== DEFAULT_IMAGE_STYLE.frameEffect) out["data-frame-effect"] = s.frameEffect;
+  const opacity = Number(node.attrs.opacity);
+  if (isFinite(opacity) && opacity < 100) out["data-opacity"] = String(Math.max(0, Math.round(opacity)));
+  return out;
+}
+
+/** Opacity is shared by every element (contract U1). */
+export const OPACITY_ATTR: Record<string, { default: unknown }> = { opacity: { default: 100 } };
+
+/**
+ * Shadow, frame effect and opacity for an element that keeps its OWN border
+ * model (the styled box). The image and the figure already carry the shadow and
+ * frame-effect attrs through IMAGE_STYLE_ATTRS; they only need OPACITY_ATTR.
+ */
+export const SHARED_EFFECT_ATTRS: Record<string, { default: unknown }> = {
+  shadowEnabled: { default: DEFAULT_IMAGE_STYLE.shadowEnabled },
+  shadowDistance: { default: DEFAULT_IMAGE_STYLE.shadowDistance },
+  shadowBlur: { default: DEFAULT_IMAGE_STYLE.shadowBlur },
+  shadowOpacity: { default: DEFAULT_IMAGE_STYLE.shadowOpacity },
+  shadowColor: { default: DEFAULT_IMAGE_STYLE.shadowColor },
+  shadowAngle: { default: DEFAULT_IMAGE_STYLE.shadowAngle },
+  frameEffect: { default: DEFAULT_IMAGE_STYLE.frameEffect },
+  ...OPACITY_ATTR,
+};
+
+/** Read the shared effect markers (shadow, frame effect, opacity) off an element. */
+export function sharedEffectGetDOM(dom: HTMLElement): Record<string, unknown> {
+  return {
+    shadowEnabled: dom.hasAttribute("data-shadow-enabled"),
+    shadowDistance: numAttr(dom, "data-shadow-distance", DEFAULT_IMAGE_STYLE.shadowDistance),
+    shadowBlur: numAttr(dom, "data-shadow-blur", DEFAULT_IMAGE_STYLE.shadowBlur),
+    shadowOpacity: numAttr(dom, "data-shadow-opacity", DEFAULT_IMAGE_STYLE.shadowOpacity),
+    shadowColor: dom.getAttribute("data-shadow-color") || DEFAULT_IMAGE_STYLE.shadowColor,
+    shadowAngle: numAttr(dom, "data-shadow-angle", DEFAULT_IMAGE_STYLE.shadowAngle),
+    frameEffect: (dom.getAttribute("data-frame-effect") || DEFAULT_IMAGE_STYLE.frameEffect) as ImageFrameEffect,
+    opacity: numAttr(dom, "data-opacity", 100),
+  };
+}
+
+/** Emit the shared effect markers for a node (D10 export side). */
+export function sharedEffectToDOM(node: PMNode): Record<string, string> {
+  const s = normalizeImageStyle(node.attrs as Record<string, unknown>);
+  const out: Record<string, string> = {};
+  if (s.shadowEnabled) out["data-shadow-enabled"] = "";
+  if (s.shadowDistance !== DEFAULT_IMAGE_STYLE.shadowDistance) out["data-shadow-distance"] = String(s.shadowDistance);
+  if (s.shadowBlur !== DEFAULT_IMAGE_STYLE.shadowBlur) out["data-shadow-blur"] = String(s.shadowBlur);
+  if (s.shadowOpacity !== DEFAULT_IMAGE_STYLE.shadowOpacity) out["data-shadow-opacity"] = String(s.shadowOpacity);
+  if (s.shadowColor.toLowerCase() !== DEFAULT_IMAGE_STYLE.shadowColor) out["data-shadow-color"] = s.shadowColor;
+  if (s.shadowAngle !== DEFAULT_IMAGE_STYLE.shadowAngle) out["data-shadow-angle"] = String(s.shadowAngle);
+  if (s.frameEffect !== DEFAULT_IMAGE_STYLE.frameEffect) out["data-frame-effect"] = s.frameEffect;
+  const opacity = Number(node.attrs.opacity);
+  if (isFinite(opacity) && opacity < 100) out["data-opacity"] = String(Math.max(0, Math.round(opacity)));
   return out;
 }
 
@@ -155,13 +209,15 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     // bands in the calculator and on screen) lands with F3.c.
     wrap: { default: "wrapped" },
     ...FREE_LAYOUT_ATTRS,
+    // U1: same effects as the image (shadow, frame effect, opacity).
+    ...SHARED_EFFECT_ATTRS,
   },
   parseDOM: [
     {
       tag: "div[data-aw-box]",
       getAttrs: (dom: HTMLElement | string) => {
         if (typeof dom === "string") return false;
-        return { ...boxStyleGetDOM(dom), ...boxLayoutGetDOM(dom) };
+        return { ...boxStyleGetDOM(dom), ...boxLayoutGetDOM(dom), ...sharedEffectGetDOM(dom) };
       },
     },
   ],
@@ -184,10 +240,17 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
     Object.assign(attrs, freeLayoutToDOM(node));
     const boxWrapMarker = textConditionMarker(textConditionOf(node));
     if (boxWrapMarker !== null) attrs["data-wrap"] = boxWrapMarker;
+    // U1: shadow, frame effect and opacity markers (D10).
+    Object.assign(attrs, sharedEffectToDOM(node));
     // D10 rule 1: emit BOTH the stable markers and the inline style, so the
     // markup renders universally outside AuraWrite and re-imports exactly.
     const css = computeBoxCss(s);
-    const styleText = Object.entries(css)
+    const styleMap: Record<string, string> = { ...css };
+    const shadow = computeImageBoxShadow(normalizeImageStyle(node.attrs as Record<string, unknown>));
+    if (shadow) styleMap.boxShadow = shadow;
+    const opacity = Number(node.attrs.opacity);
+    if (isFinite(opacity) && opacity < 100) styleMap.opacity = String(Math.max(0, opacity) / 100);
+    const styleText = Object.entries(styleMap)
       .map(([prop, value]) => `${prop.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}: ${value}`)
       .join("; ");
     if (styleText) attrs.style = styleText;
@@ -293,6 +356,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     captionPadBottom: { default: 0 },
     // Phase 1 (enrichment) style attrs — same dialect/logic as the image node.
     ...IMAGE_STYLE_ATTRS,
+    // U1: opacity is shared by every element.
+    ...OPACITY_ATTR,
     // F3.a: depth and free position (shared spec with image and styled_box).
     ...FREE_LAYOUT_ATTRS,
   },
@@ -355,6 +420,8 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
       ...(imgCss.border ? { border: imgCss.border } : {}),
       ...(imgCss.boxShadow ? { "box-shadow": imgCss.boxShadow } : {}),
     };
+    const figOpacity = Number(node.attrs.opacity);
+    if (isFinite(figOpacity) && figOpacity < 100) cssMap.opacity = String(Math.max(0, figOpacity) / 100);
     // T1.4: a floating figure carries its float and air inline, so the exported
     // HTML (no stylesheet) and the print sheet keep the frame and shadow clear.
     const figAlign = String(node.attrs.align ?? "center");

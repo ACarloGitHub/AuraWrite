@@ -25,6 +25,7 @@ import {
   normalizeBoxStyle,
 } from "./box-style";
 import { setStyleCached } from "./element-view";
+import { computeImageBoxShadow, normalizeImageStyle } from "./image-style";
 
 // The box keyboard guard is the shared one (element-view.ts); editor.ts
 // registers `createAtomicElementGuardPlugin("styled_box")`.
@@ -88,6 +89,16 @@ export class StyledBoxNodeView implements NodeView {
     setStyleCached(this.applied, this.dom, "border", css.border ?? null);
     setStyleCached(this.applied, this.dom, "border-radius", css.borderRadius ?? null);
     setStyleCached(this.applied, this.dom, "width", css.width ?? null);
+    // U1: same effects as the image (shadow, frame effect) plus transparency.
+    const shadow = computeImageBoxShadow(normalizeImageStyle(raw));
+    setStyleCached(this.applied, this.dom, "box-shadow", shadow || null);
+    const opacity = Number(raw.opacity);
+    setStyleCached(
+      this.applied,
+      this.dom,
+      "opacity",
+      isFinite(opacity) && opacity < 100 ? String(Math.max(0, opacity) / 100) : null,
+    );
   }
 
   // -------------------------------------------------------------- events

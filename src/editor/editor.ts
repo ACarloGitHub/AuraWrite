@@ -27,7 +27,7 @@ import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
 import { FigureNodeView } from "./figure-node-view";
-import { IMAGE_STYLE_ATTRS, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
+import { IMAGE_STYLE_ATTRS, OPACITY_ATTR, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { createAtomicElementGuardPlugin } from "./element-view";
@@ -265,6 +265,8 @@ const imageSpec: NodeSpec = {
     captionPadBottom: { default: 0 },
     // Phase 1 (enrichment) style attrs — dialect + logic in enriched-schema.ts
     ...IMAGE_STYLE_ATTRS,
+    // U1: opacity is shared by every element.
+    ...OPACITY_ATTR,
     // F3.a: depth + free position (dialect + rules in free-layout.ts).
     ...FREE_LAYOUT_ATTRS,
   },
@@ -337,6 +339,8 @@ const imageSpec: NodeSpec = {
       styleParts.push("outline-offset: 0px");
     }
     if (css.boxShadow) styleParts.push(`box-shadow: ${css.boxShadow}`);
+    const opacity = Number(node.attrs.opacity);
+    if (isFinite(opacity) && opacity < 100) styleParts.push(`opacity: ${Math.max(0, opacity) / 100}`);
     const align = String(node.attrs.align ?? "center");
     if (isWrapping(textConditionOf(node)) && (align === "left" || align === "right") && !node.attrs.free) {
       // Self-contained float: the exported HTML has no stylesheet, so the

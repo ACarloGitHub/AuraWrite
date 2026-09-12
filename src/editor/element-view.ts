@@ -90,6 +90,15 @@ export function applyFrameAndShadow(
   setStyleCached(imgCache, img, "border-radius", radius);
   setStyleCached(imgCache, img, "border", null);
   setStyleCached(imgCache, img, "box-shadow", null);
+
+  // U1: transparency is shared by every element; applied to the whole unit.
+  const opacity = Number(attrs.opacity);
+  setStyleCached(
+    wrapperCache,
+    wrapper,
+    "opacity",
+    isFinite(opacity) && opacity < 100 ? String(Math.max(0, opacity) / 100) : null,
+  );
 }
 
 /**
