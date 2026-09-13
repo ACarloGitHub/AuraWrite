@@ -251,8 +251,12 @@ function freeOverlayHtml(
     const width = freeElementWidth(node) ?? contentWidth;
     const left = Math.round(freeLeftPx({ left: 0, width: contentWidth }, spec, width));
     const top = Math.round(geo.top - (geo.page - 1) * contentHeight);
+    // The wrapper gets a DEFINITE width, the same number the calculator
+    // reserved: it is the element's drawn rectangle. Without it the box hangs
+    // on shrink-to-fit, and the generic image cap (`max-width: 100%`) resolves
+    // against a zero-width container: the photo collapses and never shows.
     parts.push(
-      `<div class="aw-print-free" style="left:${left}px;top:${top}px;` +
+      `<div class="aw-print-free" style="left:${left}px;top:${top}px;width:${Math.round(width)}px;` +
         `z-index:${stackDepthOf(geo.level)}">${holder.innerHTML}</div>`,
     );
   }
