@@ -131,6 +131,37 @@ export function setupBoxToolbar(view: EditorView): void {
     void setBoxAttrs(view, { opacity: Math.max(0, Math.min(100, v)) });
   });
 
+  // The same shadow commands as the image bar, on the shared effect attrs.
+  const shadowToggle = el<HTMLButtonElement>("box-shadow-toggle");
+  const shadowDistance = el<HTMLInputElement>("box-shadow-distance");
+  const shadowBlur = el<HTMLInputElement>("box-shadow-blur");
+  const shadowOpacity = el<HTMLInputElement>("box-shadow-opacity");
+  const shadowColor = el<HTMLInputElement>("box-shadow-color");
+  const shadowAngle = el<HTMLInputElement>("box-shadow-angle");
+
+  shadowToggle?.addEventListener("click", () => {
+    const info = getSelectedBox(view);
+    if (!info) return;
+    void setBoxAttrs(view, { shadowEnabled: !info.node.attrs.shadowEnabled });
+  });
+
+  const bindShadow = (input: HTMLInputElement | null, key: string, min: number, max: number) => {
+    input?.addEventListener("change", () => {
+      const v = parseIntOrNaN(input.value);
+      if (isNaN(v)) return;
+      void setBoxAttrs(view, { [key]: Math.max(min, Math.min(max, v)) });
+    });
+  };
+  bindShadow(shadowDistance, "shadowDistance", 0, 60);
+  bindShadow(shadowBlur, "shadowBlur", 0, 100);
+  bindShadow(shadowOpacity, "shadowOpacity", 0, 100);
+  bindShadow(shadowAngle, "shadowAngle", 0, 359);
+
+  shadowColor?.addEventListener("input", () => {
+    if (!shadowColor.value) return;
+    void setBoxAttrs(view, { shadowColor: shadowColor.value });
+  });
+
   bg?.addEventListener("input", () => {
     if (!bg.value) return;
     void setBoxAttrs(view, { bgColor: bg.value });
@@ -243,6 +274,24 @@ export function syncBoxToolbar(view: EditorView): void {
   if (opacity) opacity.value = String(info.node.attrs.opacity ?? 100);
   el("box-flip-h")?.classList.toggle("image-toolbar__btn--active", !!info.node.attrs.flipH);
   el("box-flip-v")?.classList.toggle("image-toolbar__btn--active", !!info.node.attrs.flipV);
+
+  // The same shadow commands as the image bar: state and values from the node.
+  const shadowEnabled = !!info.node.attrs.shadowEnabled;
+  el("box-shadow-toggle")?.classList.toggle("image-toolbar__btn--active", shadowEnabled);
+  const shadowFields = el<HTMLElement>("box-shadow-fields");
+  if (shadowFields) shadowFields.hidden = !shadowEnabled;
+  if (shadowEnabled) {
+    const shadowDistance = el<HTMLInputElement>("box-shadow-distance");
+    if (shadowDistance) shadowDistance.value = String(info.node.attrs.shadowDistance ?? "");
+    const shadowBlur = el<HTMLInputElement>("box-shadow-blur");
+    if (shadowBlur) shadowBlur.value = String(info.node.attrs.shadowBlur ?? "");
+    const shadowOpacity = el<HTMLInputElement>("box-shadow-opacity");
+    if (shadowOpacity) shadowOpacity.value = String(info.node.attrs.shadowOpacity ?? "");
+    const shadowColor = el<HTMLInputElement>("box-shadow-color");
+    if (shadowColor) shadowColor.value = (info.node.attrs.shadowColor as string) || "#000000";
+    const shadowAngle = el<HTMLInputElement>("box-shadow-angle");
+    if (shadowAngle) shadowAngle.value = String(info.node.attrs.shadowAngle ?? "");
+  }
 
   const bg = el<HTMLInputElement>("box-bg");
   if (bg) bg.value = a.bgColor || "#ffffff";

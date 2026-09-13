@@ -414,6 +414,15 @@
         <label class="image-toolbar__field" title="Corner rounding in pixels">R <input id="box-radius" type="number" min="0" max="100" step="2" value="" placeholder="px" /></label>
         <label class="image-toolbar__field" title="Box width in pixels; empty = full column">Width <input id="box-width" type="number" min="60" max="4000" step="10" value="" placeholder="full" /></label>
         <div class="image-toolbar__separator"></div>
+        <button id="box-shadow-toggle" class="image-toolbar__btn" title="Toggle drop shadow">Shadow</button>
+        <span id="box-shadow-fields" hidden>
+          <label class="image-toolbar__field" title="Shadow distance in pixels">Dist <input id="box-shadow-distance" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field" title="Shadow blur in pixels">Blur <input id="box-shadow-blur" type="number" min="0" max="100" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field" title="Shadow opacity percent">Opa <input id="box-shadow-opacity" type="number" min="0" max="100" step="5" value="" placeholder="35" /></label>
+          <input id="box-shadow-color" type="color" class="image-toolbar__color" title="Shadow color (pick a lighter tone on dark backgrounds)" value="#000000" />
+          <label class="image-toolbar__field" title="Light direction: 0=top, 90=right, 180=bottom, 270=left (shadow falls opposite)">Light <input id="box-shadow-angle" type="number" min="0" max="359" step="15" value="" placeholder="315" /></label>
+        </span>
+        <div class="image-toolbar__separator"></div>
         <button id="box-delete" class="image-toolbar__btn" title="Delete Box">Delete</button>
         </span>
       </div>
