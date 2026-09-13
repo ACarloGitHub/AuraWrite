@@ -28,6 +28,8 @@ Thumbs.db
 raw/
 wiki/
 Tests/
+# The agent schema is local: never in git (README stays tracked)
+AGENTS.md
 *.db
 *.sqlite
 *.sqlite3
