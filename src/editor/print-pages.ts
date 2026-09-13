@@ -23,7 +23,6 @@ import {
   getContentWidth,
   PAGE_WIDTH_PX,
   PAGE_HEIGHT_PX,
-  PAGE_HEADER_PX,
   type FreeBandInput,
   type FreeGeometry,
   type PageMargins,
@@ -266,7 +265,11 @@ function freeOverlayHtml(
 /** Sheet markup (screen-dressed and print-safe; see file header). */
 export function renderPrintBody(printDoc: PrintDoc): string {
   const m = printDoc.margins;
-  const bodyTop = m.top + PAGE_HEADER_PX;
+  // The body starts at the top margin, exactly like the editor and like Word.
+  // The header and footer bands are reserved inside the CONTENT HEIGHT
+  // (getContentHeight), not as an empty offset above the body: adding them here
+  // pushed every text and free element 48px below the editor (Carlo, 2026-09-13).
+  const bodyTop = m.top;
   return printDoc.sheets
     .map(
       (s) =>
