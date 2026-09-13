@@ -14,6 +14,7 @@ import {
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
+import { getEditorZoom } from "./editor-zoom";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -258,10 +259,12 @@ export class ImageNodeView implements NodeView {
     const startWidth = this.img.clientWidth;
     const startHeight = this.img.clientHeight;
     const aspect = startHeight / startWidth || this.aspect;
+    // The pointer is visual, the stored size is in page units.
+    const zoom = getEditorZoom();
 
     const computeNewSize = (ev: MouseEvent): { width: number; height: number } => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      const dx = (ev.clientX - startX) / zoom;
+      const dy = (ev.clientY - startY) / zoom;
       let deltaX = dx;
       let deltaY = dy;
       if (corner === "tl" || corner === "bl") deltaX = -dx;

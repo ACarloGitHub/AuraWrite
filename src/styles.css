@@ -5971,6 +5971,21 @@ kbd {
   padding: 0 !important; /* Rimosso padding esterno per far respirare il foglio fluttuante al 95% */
 }
 
+/* Pure visual zoom (see editor-zoom.ts): the sizer reserves the scaled area
+   for the scroll container, the mount is scaled with a transform and keeps the
+   page's own layout width, so the text never reflows with the zoom. */
+.editor-zoom-sizer {
+  position: relative;
+  /* Below 100% the scaled area is narrower than the editor: keep it centred
+     like the page used to be. Above 100% it is wider and scrolls from the
+     left, which is the ordinary behaviour for a zoomed-in page. */
+  margin: 0 auto;
+}
+
+.editor-zoom-mount {
+  transform-origin: top left;
+}
+
 /* ============================================================================
    TABLE DROPDOWN MENU
    ============================================================================ */

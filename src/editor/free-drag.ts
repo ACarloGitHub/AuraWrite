@@ -44,6 +44,7 @@ import {
 import { ensureAnchorParagraph } from "./free-commands";
 import { freeElementWidth, textColumn } from "./free-style";
 import { refreshFreeWrapBands, setFreeWrapFlightBox } from "./pagination-cassie-plugin";
+import { getEditorZoom } from "./editor-zoom";
 
 /** Distance the pointer must travel before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 4;
@@ -292,11 +293,14 @@ function columnOf(view: EditorView): { viewportLeft: number; width: number } {
   const host = view.dom;
   const rect = host.getBoundingClientRect();
   const cs = getComputedStyle(host);
+  const zoom = getEditorZoom();
   const padLeft = parseFloat(cs.paddingLeft) || 0;
   const padRight = parseFloat(cs.paddingRight) || 0;
+  // The guide lives on the document body (outside the scaled page), so its
+  // geometry is in visual units: layout sizes are scaled here.
   return {
-    viewportLeft: rect.left + padLeft + host.scrollLeft,
-    width: Math.max(1, host.clientWidth - padLeft - padRight),
+    viewportLeft: rect.left + padLeft * zoom + host.scrollLeft,
+    width: Math.max(1, (host.clientWidth - padLeft - padRight) * zoom),
   };
 }
 
@@ -537,19 +541,23 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   const host = view.dom as HTMLElement;
   const hostRect = host.getBoundingClientRect();
   const column = textColumn(host);
-  const leftInHost = drop.startLeft - hostRect.left;
-  const topInHost = drop.startTop - hostRect.top;
+  // The pointer lives in viewport (visual) units, the page lives in layout
+  // units: with the visual zoom the two differ by the scale factor.
+  const zoom = getEditorZoom();
+  const leftInHost = (drop.startLeft - hostRect.left) / zoom;
+  const topInHost = (drop.startTop - hostRect.top) / zoom;
 
   // Carlo's rule for an element leaving the flow with no text block above it:
   // an empty paragraph is opened at the element's own slot and becomes the
   // anchor, in this very transaction - so one undo removes the picture and the
   // line together, and ordinary insertions are never touched.
   const anchorTopInHost = anchorless
-    ? drop.pressTopClient - hostRect.top // the new line takes the element's old slot
-    : drop.anchorTopClient - hostRect.top;
+    ? (drop.pressTopClient - hostRect.top) / zoom // the new line takes the element's old slot
+    : (drop.anchorTopClient - hostRect.top) / zoom;
   const yOff = Math.round(topInHost - anchorTopInHost);
+  const drawnWidth = Math.round(drop.width / zoom);
 
-  const spec = distanceSpec(column, leftInHost, drop.width, yOff, node, wasFree);
+  const spec = distanceSpec(column, leftInHost, drawnWidth, yOff, node, wasFree);
   const attrs: Record<string, unknown> = {
     ...node.attrs,
     free: spec,
@@ -560,8 +568,8 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   // A box without an explicit width would collapse once it leaves the column,
   // so the size it had on screen is recorded (contract §5).
   if (freeElementWidth(node) === null) {
-    if (node.type.name === "styled_box") attrs.widthPx = drop.width;
-    else attrs.width = drop.width;
+    if (node.type.name === "styled_box") attrs.widthPx = drawnWidth;
+    else attrs.width = drawnWidth;
   }
 
   let tr = state.tr;

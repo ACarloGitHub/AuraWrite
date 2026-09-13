@@ -40,6 +40,7 @@ import { setLoading } from "./loading-state";
 import { setupResizablePanels } from "./editor/resizable-panels";
 import { openFindBar, setupFindReplaceUI } from "./editor/find-replace-ui";
 import { setupAppShortcuts } from "./editor/app-shortcuts";
+import { applyEditorZoom, scheduleEditorZoomSync, setEditorZoomParts } from "./editor/editor-zoom";
 import "./styles.css";
 
 const THEME_KEY = "aurawrite-theme";
@@ -151,10 +152,7 @@ function initZoom(): void {
 }
 
 function applyZoom(): void {
-  const editor = document.querySelector(".ProseMirror") as HTMLElement;
-  if (editor) {
-    editor.style.zoom = String(currentZoom / 100);
-  }
+  applyEditorZoom(currentZoom);
   const zoomLevelEl = document.getElementById("zoom-level");
   if (zoomLevelEl) {
     zoomLevelEl.textContent = `${currentZoom}%`;
@@ -218,8 +216,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  const editorView = createEditor(editorElement);
+  // Pure visual zoom: a sizer reserves the scaled area for the scroll
+  // container; the mount carries the transform and holds the page. Layout
+  // units stay the page's own, so the zoom can never reflow the text.
+  const zoomSizer = document.createElement("div");
+  zoomSizer.className = "editor-zoom-sizer";
+  const zoomMount = document.createElement("div");
+  zoomMount.className = "editor-zoom-mount";
+  zoomSizer.appendChild(zoomMount);
+  editorElement.appendChild(zoomSizer);
+  setEditorZoomParts({ host: editorElement, sizer: zoomSizer, mount: zoomMount });
+  applyZoom();
+
+  const editorView = createEditor(zoomMount);
   syncDocumentPaginationState(editorView);
+
+  new ResizeObserver(() => scheduleEditorZoomSync()).observe(zoomMount);
+  window.addEventListener("resize", () => scheduleEditorZoomSync());
 
   // Loading flag (typed module, still mirrored on window for DevTools)
   setLoading(false);
