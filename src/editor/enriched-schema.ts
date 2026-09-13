@@ -478,6 +478,10 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     };
     const figOpacity = Number(node.attrs.opacity);
     if (isFinite(figOpacity) && figOpacity < 100) cssMap.opacity = String(Math.max(0, figOpacity) / 100);
+    // U5/U6, D10 rule 1: the transform wraps the WHOLE figure unit (photo and
+    // caption), exactly as the node view paints it; markers stay for re-import.
+    const figTransform = transformStyleOf(node.attrs as Record<string, unknown>);
+    if (figTransform) cssMap.transform = figTransform;
     // T1.4: a floating figure carries its float and air inline, so the exported
     // HTML (no stylesheet) and the print sheet keep the frame and shadow clear.
     const figAlign = String(node.attrs.align ?? "center");

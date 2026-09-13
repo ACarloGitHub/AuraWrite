@@ -30,7 +30,7 @@ import { FigureNodeView } from "./figure-node-view";
 import { IMAGE_STYLE_ATTRS, OPACITY_ATTR, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
-import { createAtomicElementGuardPlugin } from "./element-view";
+import { createAtomicElementGuardPlugin, transformStyleOf } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
 import { isWrapping, textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
 import { computeImageCss, normalizeImageStyle } from "./image-style";
@@ -341,6 +341,11 @@ const imageSpec: NodeSpec = {
     if (css.boxShadow) styleParts.push(`box-shadow: ${css.boxShadow}`);
     const opacity = Number(node.attrs.opacity);
     if (isFinite(opacity) && opacity < 100) styleParts.push(`opacity: ${Math.max(0, opacity) / 100}`);
+    // U5/U6, D10 rule 1: rotation and mirroring travel inline, so the printed
+    // sheet and the exported HTML rotate like the editor does (the box has
+    // done this since U5; the image carried only the markers until now).
+    const transform = transformStyleOf(node.attrs as Record<string, unknown>);
+    if (transform) styleParts.push(`transform: ${transform}`);
     const align = String(node.attrs.align ?? "center");
     if (isWrapping(textConditionOf(node)) && (align === "left" || align === "right") && !node.attrs.free) {
       // Self-contained float: the exported HTML has no stylesheet, so the
