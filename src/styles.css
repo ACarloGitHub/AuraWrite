@@ -5986,6 +5986,22 @@ kbd {
   transform-origin: top left;
 }
 
+/* Paged view: the sheet gets a strip of background above its top edge, so it
+   no longer sticks to the toolbar. The strip is the beginning of the
+   continuous roll, not a fixed frame: it is padding on the mount, inside the
+   zoom and part of the scrolling content, so it goes away with the page and
+   the scroll area renders it (see editor.ts, `aw-paged-start`). Same measure
+   as the strip the continuous view already has above its floating sheet. */
+.editor-zoom-mount.aw-paged-start {
+  padding-top: 20px;
+}
+
+/* Code mode hides the sheet inside the mount: no strip, or its padding would
+   leave a 20px phantom scroll strip behind the code editor. */
+body.codemirror-mode .editor-zoom-mount.aw-paged-start {
+  padding-top: 0;
+}
+
 /* ============================================================================
    TABLE DROPDOWN MENU
    ============================================================================ */

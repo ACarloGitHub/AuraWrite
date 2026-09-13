@@ -656,6 +656,17 @@ function scrollSelectionIntoView(view: EditorView): void {
   });
 }
 
+/**
+ * The paged sheet must not stick to the toolbar: the mount (the sheet's own
+ * box, which carries the visual zoom) takes a class of its own, and the style
+ * sheet holds the strip of background that marks the beginning of the
+ * document above the sheet. See `.aw-paged-start` in styles.css.
+ */
+function syncCassiePagedClass(view: EditorView, enabled: boolean): void {
+  view.dom.classList.toggle("is-cassie-paged", enabled);
+  view.dom.parentElement?.classList.toggle("aw-paged-start", enabled);
+}
+
 export function createEditor(element: HTMLElement): EditorViewType {
   initPagedMode();
 
@@ -749,16 +760,10 @@ export function createEditor(element: HTMLElement): EditorViewType {
   });
 
   // Set initial pagination classes based on getCassiePagedMode()
-  if (getCassiePagedMode()) {
-    view.dom.classList.add("is-cassie-paged");
-  }
+  syncCassiePagedClass(view, getCassiePagedMode());
 
   window.addEventListener("aurawrite:cassie-paged-changed", ((e: CustomEvent) => {
-    if (e.detail.enabled) {
-      view.dom.classList.add("is-cassie-paged");
-    } else {
-      view.dom.classList.remove("is-cassie-paged");
-    }
+    syncCassiePagedClass(view, e.detail.enabled);
     const tr = view.state.tr.setMeta("force-cassie-recompute", true);
     view.dispatch(tr);
   }) as EventListener);
@@ -796,14 +801,14 @@ export function toggleCassiePagedMode(view: EditorView): void {
   const currentlyPaged = getCassiePagedMode();
   if (currentlyPaged) {
     setCassiePagedMode(false);
-    view.dom.classList.remove("is-cassie-paged");
+    syncCassiePagedClass(view, false);
   } else {
     if (getCassieMode()) {
       // Cassie continuous and Cassie paged are mutually exclusive
       // We just switch to paged
     }
     setCassiePagedMode(true);
-    view.dom.classList.add("is-cassie-paged");
+    syncCassiePagedClass(view, true);
   }
   const tr = view.state.tr.setMeta("force-cassie-recompute", true);
   view.dispatch(tr);
