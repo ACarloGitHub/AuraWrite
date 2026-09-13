@@ -1032,9 +1032,13 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   let pendingAfter = 0; // margin-bottom of the previous in-flow block (collapses)
   // Top of the last ANCHOR block (free-layout.ts), settled one step late, at
   // the start of the next block, so a block moved to the following page reports
-  // the position it really ended up with. It is only used to say WHERE the free
+  // the top it really ended up with. It is only used to say WHERE the free
   // element is drawn - the wrap itself ignores it (contract §13 rev. 2026-09-07).
-  let lastBlockHeight = 0;
+  // The REAL top, taken from the layout lanes: deriving it from the measured
+  // height was wrong whenever the block's laid height differs from its measure
+  // (a wrap band makes the block a line taller), and the free element on paper
+  // sank by the difference while the text stayed right (Carlo, 2026-09-13).
+  let lastBlockTop = 0;
   let lastBlockWasAnchor = false;
   let anchorTopY = 0;
   let hasAnchor = false;
@@ -1151,7 +1155,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
     }
     // The previous block is over: if it was text, its top is now final.
     if (lastBlockWasAnchor) {
-      anchorTopY = y - lastBlockHeight;
+      anchorTopY = lastBlockTop;
       hasAnchor = true;
       lastBlockWasAnchor = false;
     }
@@ -1258,9 +1262,9 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
       const btop = y + Math.max(pendingAfter, bsp.beforePx);
       placeSpacers(node, e, btop, btop + heightPx, pos);
     }
-    // A text block that consumes the flow is somebody's anchor: the number that
-    // matters is its top, settled at the start of the NEXT block.
-    lastBlockHeight = heightPx;
+    // A text block that consumes the flow is somebody's anchor: each lane
+    // records the block's REAL top in `lastBlockTop`, read at the start of the
+    // next block.
     lastBlockWasAnchor = isAnchorBlock(node);
     const sp = spacingFor(node);
     // F1.4 boundary-gap fix: the flow can cross a page boundary INSIDE the
@@ -1299,6 +1303,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         !crossesSolid(startY, startY + heightPx) &&
         startY + heightPx <= boundaryEnd
       ) {
+        lastBlockTop = startY;
         y = startY + heightPx;
         pendingAfter = sp.afterPx;
         pos += node.nodeSize;
@@ -1342,6 +1347,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
           // cut line straddles the boundary: next boundary from its BOTTOM
           boundary = (Math.floor((y0 + idx * lh + lh) / contentHeight) + 1) * contentHeight;
         }
+        lastBlockTop = y0;
         y = y0 + n * lh;
         pos += node.nodeSize;
         return;
@@ -1399,6 +1405,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         // TOP was the empty-pages bug).
         boundary = (Math.floor((lines[idx].y + lines[idx].h) / contentHeight) + 1) * contentHeight;
       }
+      lastBlockTop = startY;
       y = lines[n - 1].y + lines[n - 1].h;
       pos += node.nodeSize;
       return;
@@ -1414,6 +1421,7 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
       blockTop = y + sp.beforePx;
       pendingAfter = 0;
     }
+    lastBlockTop = blockTop;
     y = blockTop + heightPx;
     pendingAfter = sp.afterPx;
     pos += node.nodeSize;
