@@ -2988,6 +2988,12 @@ body.reader-mode .toolbar {
    between pages with margin whitespace, page numbers, and footnotes.
    ============================================================================ */
 .ProseMirror.is-cassie-paged {
+  /* FIXED A4 width, never a maximum: the sheet must not follow the window.
+     The calculator and the print sheets always measure a 602px column; a
+     narrower window reflowed the text on a different column and broke the
+     correspondence with the preview (Carlo, 2026-09-13). Below 794px the
+     editor scrolls horizontally, like a page viewer. */
+  width: 794px;
   max-width: 794px;
   margin: 0 auto;
   padding: 96px 96px;
