@@ -306,6 +306,23 @@ export const PRINT_BASE_CSS = `
 /* a page that starts mid-paragraph continues from the page edge: the
    engine gives that fragment no leading gap, so strip the block's own */
 .ProseMirror.aw-print-body.aw-print-cont > :first-child { margin-top: 0; }
+/* An empty paragraph/heading is ONE LINE TALL in the editor (ProseMirror
+   writes a trailing <br> inside it), but the serialized sheet has nothing
+   inside, so the block collapses to zero and its margins swallow one another:
+   every empty line above makes the sheet's text shorter than the page
+   calculator counted on the editor, and anything positioned by those numbers
+   (a free image, a page cut) comes out lower. The zero-width character gives
+   the line box back and stops the margin collapse; it prints nothing visible
+   (Carlo, 2026-09-13). */
+.ProseMirror.aw-print-body p:empty::before,
+.ProseMirror.aw-print-body h1:empty::before,
+.ProseMirror.aw-print-body h2:empty::before,
+.ProseMirror.aw-print-body h3:empty::before,
+.ProseMirror.aw-print-body h4:empty::before,
+.ProseMirror.aw-print-body h5:empty::before,
+.ProseMirror.aw-print-body h6:empty::before {
+  content: "\\00a0";
+}
 .aw-print-pagenum {
   position: absolute; left: 0; right: 0; bottom: var(--foot);
   text-align: center; font: 11px Georgia, serif; color: #666;
