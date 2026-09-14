@@ -177,7 +177,12 @@ export function startFreeDrag(
       ensureGhost();
     }
     const g = ensureGhost();
-    g.style.transform = `translate(${Math.round(ev.clientX - grabOffsetX)}px, ${Math.round(ev.clientY - grabOffsetY)}px)`;
+    // Positioned with left/top, NOT with a transform: the clone already carries the
+    // element's own rotation, and writing a translate here replaced it - which is why the
+    // flying copy of a turned element showed up straight and the release landed where the
+    // wrong silhouette suggested.
+    g.style.left = `${Math.round(ev.clientX - grabOffsetX)}px`;
+    g.style.top = `${Math.round(ev.clientY - grabOffsetY)}px`;
 
     // The anchor is the TEXT block under the pointer (contract §4): asking the
     // editor itself keeps margins, decorations and re-flowing honest.
