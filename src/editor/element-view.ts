@@ -68,6 +68,28 @@ export function transformWithRotation(deg: number, flipH: boolean, flipV: boolea
  * Neither participates in layout, so the photo/caption are NEVER reduced and
  * there is NO gap between frame and content (offset 0).
  */
+/**
+ * Turn a pointer displacement into the element's OWN axes.
+ *
+ * A drag reports `clientX`/`clientY`, which run along the screen. When the element is
+ * rotated its width no longer grows to the right, so the displacement has to be turned
+ * back by the same angle before it is added to the stored size: otherwise pulling a handle
+ * sideways changes width AND height at once and the gesture does not follow the hand
+ * (defect 13). A rotation pivots on the centre, which is why this is a pure turn of the
+ * vector and needs no measurement of the box.
+ */
+export function pointerInElementAxes(
+  deltaX: number,
+  deltaY: number,
+  rotationDeg: number
+): { dx: number; dy: number } {
+  const rad = -((rotationDeg || 0) * Math.PI) / 180;
+  if (!rad) return { dx: deltaX, dy: deltaY };
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { dx: deltaX * cos - deltaY * sin, dy: deltaX * sin + deltaY * cos };
+}
+
 export function applyFrameAndShadow(
   wrapperCache: StyleCache,
   wrapper: HTMLElement,

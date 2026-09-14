@@ -24,7 +24,7 @@ import {
   isLightBgColor,
   normalizeBoxStyle,
 } from "./box-style";
-import { applyWrapMarker, setStyleCached, transformStyleOf } from "./element-view";
+import { applyWrapMarker, pointerInElementAxes, setStyleCached, transformStyleOf } from "./element-view";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
@@ -141,7 +141,7 @@ export class StyledBoxNodeView implements NodeView {
         e.preventDefault();
         e.stopPropagation();
         this.selectBox();
-        this.startResize(e.clientX);
+        this.startResize(e.clientX, e.clientY);
         return;
       }
       // The grip and the box's own surface both MOVE the box with the shared
@@ -179,17 +179,24 @@ export class StyledBoxNodeView implements NodeView {
   // ----------------------------------------------------------- width drag
 
   /** Live preview through owned DOM (smooth); persist once at release. */
-  private startResize(originX: number): void {
+  private startResize(originX: number, originY: number): void {
     const startPos = this.getPos();
     if (startPos == null) return;
-    const startWidth = this.dom.getBoundingClientRect().width;
+    // The REGISTERED width, not the painted one: with the box turned,
+    // `getBoundingClientRect` reports the quadrilateral around it, so the first move of
+    // the handle jumped the width to that size (defect 13, second half).
+    const node = this.view.state.doc.nodeAt(startPos);
+    const startWidth = node ? (node.attrs.widthPx as number) ?? this.dom.offsetWidth : this.dom.offsetWidth;
+    const rotation = (node?.attrs.rotation as number) || 0;
 
     const onMove = (ev: MouseEvent): void => {
+      const turned = pointerInElementAxes(
+        (ev.clientX - originX) / getEditorZoom(),
+        (ev.clientY - originY) / getEditorZoom(),
+        rotation
+      );
       const width = Math.round(
-        Math.min(
-          BOX_WIDTH_MAX,
-          Math.max(BOX_WIDTH_MIN, startWidth + (ev.clientX - originX) / getEditorZoom()),
-        )
+        Math.min(BOX_WIDTH_MAX, Math.max(BOX_WIDTH_MIN, startWidth + turned.dx))
       );
       setStyleCached(this.applied, this.dom, "width", `${width}px`);
     };
