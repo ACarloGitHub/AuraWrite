@@ -1,0 +1,2085 @@
+
+
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 4px var(--spacing-md);
+  background: var(--color-toolbar);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.find-bar.hidden {
+  display: none;
+}
+
+.find-bar__input {
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  font-size: 13px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  width: 160px;
+}
+
+.find-bar__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.find-bar__replace {
+  width: 140px;
+}
+
+.find-bar__count {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.find-bar__btn {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.find-bar__btn:hover {
+  background: var(--color-background);
+}
+
+.ProseMirror .find-highlight {
+  background: rgba(255, 200, 0, 0.4);
+}
+
+.ProseMirror .find-highlight-active {
+  background: rgba(255, 150, 0, 0.7);
+}
+
+#editor {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing-xl);
+  background: var(--color-background);
+}
+
+/* CodeMirror code-mode area (mounted inside #editor) */
+#editor .cm-editor {
+  height: 100%;
+}
+
+#editor .cm-scroller {
+  font-family: 'Consolas', 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ProseMirror {
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  margin: 0 auto;
+  background: transparent;
+  padding: var(--spacing-xl) 0;
+  /* F3.a: the containing block of the free elements. They are painted with
+     distances from their anchoring paragraph, so the text column itself must
+     be the reference box (free-style.ts). */
+  position: relative;
+  /* F3: and a stacking context. Without this, an element sent BEHIND the words
+     (negative depth) would keep sinking behind the page background and vanish,
+     because the paper colour is painted by this very box in paged mode. */
+  z-index: 0;
+  font-family: var(--font-editor);
+  font-size: 11pt;
+  line-height: 1.7;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+.ProseMirror .selection-ai {
+  background-color: var(--selection-highlight);
+  transition: background-color 0.3s ease;
+}
+
+.ProseMirror .selection-ai.flash {
+  background-color: var(--selection-highlight-flash);
+  animation: selection-flash 0.6s ease-out;
+}
+
+.ProseMirror p {
+  margin-bottom: 1em;
+}
+
+.ProseMirror strong {
+  font-weight: bold;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.suggestions-panel {
+  width: var(--suggestions-panel-width, 320px);
+  min-height: 400px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition:
+    transform 0.2s ease,
+    background 0.3s,
+    border-color 0.3s;
+}
+
+.suggestions-panel.hidden {
+  display: none;
+}
+
+.suggestions-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.suggestions-panel__header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.suggestions-panel__toggle {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0;
+  width: auto;
+}
+
+.suggestions-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.debug-log-entry {
+  margin-bottom: 2px;
+}
+
+.suggestion-item {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-background);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.suggestion-item__original {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  margin-bottom: var(--spacing-xs);
+}
+
+.suggestion-item__proposed {
+  color: var(--color-text);
+  margin-bottom: var(--spacing-sm);
+}
+
+.suggestion-item__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+}
+
+.suggestion-item__actions button {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.suggestion-item__accept {
+  background: var(--color-primary);
+  color: white;
+}
+
+.suggestion-item__reject {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.suggestion-item__switch {
+  background: var(--color-secondary, #6c757d);
+  color: white;
+}
+
+.suggestion-item__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.suggestion-item__toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.suggestion-item__collapse {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.suggestion-item__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.suggestion-item__accepted-badge {
+  background: var(--color-primary, #4a90d9);
+  color: white;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.suggestion-item--accepted {
+  opacity: 0.7;
+}
+
+.suggestion-item--processing {
+  opacity: 0.85;
+}
+
+.suggestion-item--queued {
+  opacity: 0.75;
+}
+
+.suggestion-item--failed {
+  border-left: 3px solid var(--color-error, #dc3545);
+  background: rgba(220, 53, 69, 0.05);
+}
+
+.suggestion-item--no-change {
+  border-left: 3px solid #28a745;
+  background: rgba(40, 167, 69, 0.05);
+}
+
+.suggestion-item__no-change-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #28a745;
+  color: white;
+  font-size: 9px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.suggestion-item__no-change-text {
+  color: #28a745;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.suggestion-item__debug {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.suggestion-item__debug:hover {
+  opacity: 1;
+}
+
+.suggestions-debug-log {
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text-muted);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.3;
+}
+
+.suggestion-item__error-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-error, #dc3545);
+  color: white;
+  font-size: 8px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.suggestion-item__error-text {
+  color: var(--color-error, #dc3545);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.suggestion-item__retry {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.suggestion-item__retry:hover {
+  opacity: 0.9;
+}
+
+.suggestion-item__processing-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) 0;
+}
+
+.suggestion-item__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary, #4a90d9);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.suggestion-item__processing-text {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.suggestion-item__queued-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary, #4a90d9);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.suggestion-item__queued-text {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.suggestion-item__close:hover {
+  color: var(--color-error, #dc3545);
+}
+
+.suggestion-item__body {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.suggestion-item__label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  margin-right: var(--spacing-xs);
+}
+
+.suggestion-item__text {
+  color: var(--color-text);
+}
+
+.suggestion-item__reason {
+  font-style: italic;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: var(--spacing-sm) 0;
+}
+
+.chunk-marker {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--color-secondary, #6c757d);
+  color: white;
+  border-radius: 3px;
+  margin: 0 4px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.chunk-marker:hover {
+  opacity: 0.8;
+}
+
+.chunk-marker--start {
+  background: var(--color-primary, #007bff);
+}
+
+.chunk-marker--end {
+  background: transparent;
+  padding: 0;
+}
+
+.suggestions-empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+/* Page break widget */
+.ProseMirror .page-break-widget {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin: 1rem 0;
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+}
+
+.ProseMirror .page-break-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.ProseMirror .page-break-remove {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.ProseMirror .page-break-remove:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+/* Hide the old CSS-only marker */
+.ProseMirror .page-break-before::before,
+.ProseMirror .page-break-before::after {
+  display: none;
+}
+
+/* ============================================================================
+   SYNONYM POPUP
+   ============================================================================ */
+
+.synonym-popup {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  max-width: 280px;
+  background: var(--color-toolbar);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  font-family: var(--font-family);
+}
+
+.synonym-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.synonym-popup__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.synonym-popup__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  padding: 0 0 0 8px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.synonym-popup__close:hover {
+  color: var(--color-text);
+}
+
+.synonym-popup__body {
+  padding: 6px;
+}
+
+.synonym-popup__loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.synonym-popup__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: synonym-spin 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.synonym-popup__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.synonym-popup__item {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
+}
+
+.synonym-popup__item:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.synonym-popup__empty,
+.synonym-popup__error {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ============================================================================
+   CASSIE PAGED MODE — A4 continuous page with page break margins
+   The document stays flat (no page nodes). The editor area has A4 width
+   with visible margins. Page break decorations create visual separation
+   between pages with margin whitespace, page numbers, and footnotes.
+   ============================================================================ */
+.ProseMirror.is-cassie-paged {
+  /* FIXED A4 width, never a maximum: the sheet must not follow the window.
+     The calculator and the print sheets always measure a 602px column; a
+     narrower window reflowed the text on a different column and broke the
+     correspondence with the preview (Carlo, 2026-09-13). Below 794px the
+     editor scrolls horizontally, like a page viewer. */
+  width: 794px;
+  max-width: 794px;
+  margin: 0 auto;
+  padding: 96px 96px;
+  background: var(--color-paper, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border-radius: 2px;
+  min-height: 1123px;
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   AURAWRITE AUTO PAGE-BREAK DECORATIONS (Cassie-style pagination)
+   These decorations are inserted by pagination-cassie-plugin.ts.
+   They are visual only: no node is added to the document, so the
+   cursor is never trapped and the schema stays flat.
+   ============================================================================ */
+.aw-page-break {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.aw-page-break-line {
+  border-top: 1px dashed #b0b0b0;
+  width: 100%;
+}
+
+.aw-page-break-label {
+  position: absolute;
+  top: -0.7em;
+  right: 0;
+  font-size: 0.75em;
+  color: #888;
+  background: transparent;
+  padding: 0 0.4em;
+  font-family: system-ui, sans-serif;
+}
+
+.aw-page-break-spacer-top,
+.aw-page-break-spacer-bottom {
+  background: transparent;
+}
+
+.aw-page-break:not(.aw-page-break--paged) .aw-page-break-spacer-top,
+.aw-page-break:not(.aw-page-break--paged) .aw-page-break-spacer-bottom {
+  background: transparent;
+}
+
+/* Paged mode: enriched page break with margins */
+.aw-page-break--paged {
+  margin: 0;
+  padding: 0;
+  border: none;
+  height: auto;
+}
+
+.aw-page-break-margin-top {
+  height: 96px;
+  background: transparent;
+}
+
+.aw-page-break-footer {
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted, #999);
+  padding: 0 0 12px 0;
+  font-family: system-ui, sans-serif;
+}
+
+.aw-page-break-separator {
+  border-top: 1px dashed #c0c0c0;
+  margin: 0 32px;
+}
+
+.aw-page-break-header {
+  text-align: center;
+  font-size: 10px;
+  color: var(--color-text-muted, #999);
+  padding: 12px 0 0 0;
+  font-family: system-ui, sans-serif;
+}
+
+.aw-page-break-margin-bottom {
+  height: 96px;
+  background: transparent;
+}
+
+/* ============================================================================
+   LINK POPOVER
+   ============================================================================ */
+
+.link-popover {
+  position: fixed;
+  z-index: 1000;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  min-width: 300px;
+}
+
+.link-popover.hidden {
+  display: none;
+}
+
+.link-popover__row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.link-popover__row:last-child {
+  margin-bottom: 0;
+}
+
+.link-popover__input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text);
+  outline: none;
+}
+
+.link-popover__input:focus {
+  border-color: var(--color-accent, #2e74b5);
+}
+
+.link-popover__input--error {
+  border-color: #e74c3c;
+  background-color: #fdf2f2;
+}
+
+.link-popover__actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.link-popover__btn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.link-popover__btn:hover {
+  background: var(--color-surface-hover, #f0f0f0);
+}
+
+.link-popover__btn--apply {
+  background: var(--color-accent, #2e74b5);
+  color: white;
+  border-color: var(--color-accent, #2e74b5);
+}
+
+.link-popover__btn--apply:hover {
+  background: var(--color-accent-hover, #1a5a96);
+}
+
+.link-popover__btn--remove {
+  color: #e74c3c;
+  border-color: #e74c3c;
+}
+
+.link-popover__btn--remove:hover {
+  background: #fdf2f2;
+}
+
+/* ============================================================================
+   PROSEMIRROR EDITOR STYLES FOR NEW NODES/MARKS
+   ============================================================================ */
+
+/* Headings â€” single source of truth (BUG-HEADINGS-001 fix)
+   DOCX coherence: sans-serif font-family (Inter) matches Office/LO/GoogleDocs
+   default headings, which are Calibri/Inter. The body uses Lora (serif) but
+   headings use a sans-serif for visual hierarchy. */
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.ProseMirror h1 {
+  font-size: 2em;
+  font-weight: 700;
+  color: #2e74b5;
+  margin-bottom: 0.5em;
+  line-height: 1.2;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  color: #2e74b5;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.ProseMirror h3 {
+  font-size: 1.17em;
+  font-weight: 600;
+  color: #2e74b5;
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+.ProseMirror h4 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+.ProseMirror h5 {
+  font-size: 0.83em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+.ProseMirror h6 {
+  font-size: 0.67em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
+
+/* Title style (DOCX <w:pStyle w:val="Title"/> -> mammoth styleMap h1.title).
+   LO/Word default Title: centered + bottom border. */
+.ProseMirror h1.title {
+  text-align: center;
+  border-bottom: 1px solid #2e74b5;
+  padding-bottom: 0.4em;
+  margin-bottom: 0.6em;
+  font-weight: 700;
+}
+
+/* Horizontal rule (DOCX coherence: horizontal line like LO/Google Docs,
+   not a vertical bar). Basic schema renders horizontal_rule as <hr>. */
+.ProseMirror hr {
+  border: 0;
+  border-top: 1px solid var(--color-border, #cccccc);
+  margin: 1em 0;
+  height: 0;
+  background: transparent;
+}
+
+/* Images from DOCX import: limit to readable size in the editor (DOCX
+   inline images arrive as raw base64 without dimensions). */
+.ProseMirror img {
+  max-width: 100%;
+  max-height: 480px;
+  height: auto;
+  display: block;
+  margin: 0.5em auto;
+}
+
+/* Lists */
+.ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.ProseMirror li > p {
+  margin-bottom: 0.25em;
+}
+
+.ProseMirror li > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Blockquote (DOCX coherence: Intense Quote style, like LO/Word/Google Docs).
+   LO default: blue color + bold + 4px left border + 1px bottom border + italic. */
+.ProseMirror blockquote {
+  border: 0;
+  border-left: 4px solid #2e74b5;
+  border-bottom: 1px solid #2e74b5;
+  padding: 0.5em 0 0.5em 1em;
+  margin: 0 0 1em 0;
+  color: #2e74b5;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.ProseMirror blockquote > *:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Code block */
+.ProseMirror pre {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1em;
+  margin: 0 0 1em 0;
+  overflow-x: auto;
+}
+
+.ProseMirror pre code {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+/* Inline code (if basicSchema supports it) */
+.ProseMirror code {
+  font-family: "Courier New", Courier, monospace;
+  background: var(--color-background);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+/* Underline and strikethrough */
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+.ProseMirror s {
+  text-decoration: line-through;
+}
+
+/* Text alignment via data attributes */
+.ProseMirror p[data-align="left"] {
+  text-align: left;
+}
+
+.ProseMirror p[data-align="center"] {
+  text-align: center;
+}
+
+.ProseMirror p[data-align="right"] {
+  text-align: right;
+}
+
+.ProseMirror p[data-align="justify"] {
+  text-align: justify;
+}
+
+.ProseMirror h1[data-align="center"],
+.ProseMirror h2[data-align="center"],
+.ProseMirror h3[data-align="center"] {
+  text-align: center;
+}
+
+.ProseMirror h1[data-align="right"],
+.ProseMirror h2[data-align="right"],
+.ProseMirror h3[data-align="right"] {
+  text-align: right;
+}
+
+.ProseMirror h1[data-align="justify"],
+.ProseMirror h2[data-align="justify"],
+.ProseMirror h3[data-align="justify"] {
+  text-align: justify;
+}
+
+/* Line height */
+.ProseMirror p[data-line-height="1.0"] {
+  line-height: 1;
+}
+
+.ProseMirror p[data-line-height="1.15"] {
+  line-height: 1.15;
+}
+
+.ProseMirror p[data-line-height="1.5"] {
+  line-height: 1.5;
+}
+
+.ProseMirror p[data-line-height="2.0"] {
+  line-height: 2;
+}
+
+/* Page break */
+.ProseMirror .page-break-before {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* StabilitÃ  del visualizzatore dell'editor */
+#editor {
+  display: block !important;
+  overflow: auto !important;
+  padding: 0 !important; /* Rimosso padding esterno per far respirare il foglio fluttuante al 95% */
+}
+
+/* Pure visual zoom (see editor-zoom.ts): the sizer reserves the scaled area
+   for the scroll container, the mount is scaled with a transform and keeps the
+   page's own layout width, so the text never reflows with the zoom. */
+.editor-zoom-sizer {
+  position: relative;
+  /* Below 100% the scaled area is narrower than the editor: keep it centred
+     like the page used to be. Above 100% it is wider and scrolls from the
+     left, which is the ordinary behaviour for a zoomed-in page. */
+  margin: 0 auto;
+}
+
+.editor-zoom-mount {
+  transform-origin: top left;
+}
+
+/* Paged view: the sheet gets a strip of background above its top edge, so it
+   no longer sticks to the toolbar. The strip is the beginning of the
+   continuous roll, not a fixed frame: it is padding on the mount, inside the
+   zoom and part of the scrolling content, so it goes away with the page and
+   the scroll area renders it (see editor.ts, `aw-paged-start`). Same measure
+   as the strip the continuous view already has above its floating sheet. */
+.editor-zoom-mount.aw-paged-start {
+  padding-top: 20px;
+}
+
+/* Code mode hides the sheet inside the mount: no strip, or its padding would
+   leave a 20px phantom scroll strip behind the code editor. */
+body.codemirror-mode .editor-zoom-mount.aw-paged-start {
+  padding-top: 0;
+}
+
+/* ============================================================================
+   TABLE DROPDOWN MENU
+   ============================================================================ */
+
+.table-dropdown {
+  position: fixed;
+  z-index: 9999;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 6px 0;
+  min-width: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.table-dropdown.hidden {
+  display: none;
+}
+
+.table-dropdown__section {
+  padding: 4px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.table-dropdown__item {
+  display: block;
+  width: 100%;
+  padding: 7px 16px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.table-dropdown__item:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.table-dropdown__item:disabled,
+.table-dropdown__item--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.table-dropdown__item:disabled:hover,
+.table-dropdown__item--disabled:hover {
+  background: none;
+  color: inherit;
+}
+
+.table-dropdown__item--danger {
+  color: #dc3545;
+}
+
+.table-dropdown__item--danger:hover {
+  background: #dc3545;
+  color: #fff;
+}
+
+.table-dropdown__divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 4px 0;
+}
+
+/* ============================================================================
+   TABLE NODE STYLES (ProseMirror)
+   ============================================================================ */
+
+.ProseMirror table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  border: 1px solid var(--color-border, #ccc);
+  padding: 6px 12px;
+  vertical-align: top;
+  position: relative;
+}
+
+.ProseMirror th {
+  background: var(--color-table-header-bg, rgba(74, 144, 217, 0.08));
+  font-weight: 600;
+}
+
+.ProseMirror .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--color-primary);
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-primary);
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.ProseMirror .resize-cursor {
+  cursor: col-resize;
+}
+
+.ProseMirror .gapcursor:after {
+  border-top: 1px solid var(--color-text);
+}
+
+/* Table within paged mode */
+.ProseMirror .page-content table {
+  page-break-inside: avoid;
+}
+
+/* ============================================================================
+   IMAGE NODE STYLES (ProseMirror) — Block-level images with text wrap
+   ============================================================================ */
+
+.ProseMirror img {
+  max-width: 100%;
+  max-height: 480px;
+  display: block;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+/* Managed images (ImageNodeView): exempt from the generic DOCX-import caps
+   and default decoration — explicit attrs + self-heal sizing govern here
+   (Phase 1 enrichment). Without this, tall photos get vertically squashed
+   by max-height:480px while width stays put (the "stretched insert" bug). */
+.ProseMirror .image-node-wrapper img {
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.ProseMirror .ProseMirror-selectednode + .image-node-wrapper img,
+.ProseMirror .image-node-wrapper.ProseMirror-selectednode img {
+  outline: 1px solid var(--color-primary, #4a90d9);
+  outline-offset: 1px;
+}
+
+.ProseMirror img[src$=".svg"] {
+  background: transparent;
+}
+
+.image-node-wrapper {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px 0;
+  user-select: none;
+}
+
+.image-node-wrapper[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.image-node-wrapper[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.image-node-wrapper[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.image-node-wrapper[data-wrap][data-align="left"] {
+  float: left;
+  margin-right: var(--aw-float-gap, 12px);
+  margin-left: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.image-node-wrapper[data-wrap][data-align="right"] {
+  float: right;
+  margin-left: var(--aw-float-gap, 12px);
+  margin-right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.image-node-wrapper img {
+  display: block;
+  vertical-align: top;
+  margin: 0;
+  -webkit-user-drag: none;
+}
+
+.image-caption {
+  text-align: center;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-muted, #666);
+  padding: 0 8px;
+  margin: 0;
+}
+
+/* Caption background fills the whole strip under the photo. On a dark fill we
+   switch to light text so the caption stays readable (see ImageNodeView). */
+.image-caption--dark-bg {
+  color: #f2f2f2;
+}
+
+.image-node-wrapper--selected {
+  outline: 1px solid var(--color-primary, #4a90d9);
+  outline-offset: 1px;
+  cursor: move;
+}
+
+.image-resize-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--color-primary, #4a90d9);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: none;
+}
+
+.image-node-wrapper--selected .image-resize-handle {
+  display: block;
+}
+
+.image-resize-handle--tl {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+
+.image-resize-handle--tr {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+
+.image-resize-handle--bl {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
+}
+
+.image-resize-handle--br {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+
+.image-rotate-handle {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 16px;
+  background: var(--color-primary, #4a90d9);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: grab;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: none;
+}
+
+.image-rotate-handle::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 10px;
+  background: var(--color-primary, #4a90d9);
+}
+
+.image-node-wrapper--selected .image-rotate-handle {
+  display: block;
+}
+
+.image-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  min-width: 28px;
+  height: 26px;
+  color: var(--color-text-buttons);
+}
+
+.image-toolbar__btn:hover {
+  background: var(--color-background);
+}
+
+.image-toolbar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.image-toolbar__btn--active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.image-toolbar__separator {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+.image-toolbar__label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0 4px;
+}
+
+.image-toolbar__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.image-toolbar__field input[type="number"] {
+  width: 58px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  height: 26px;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+.image-toolbar__field input[type="number"]::-webkit-inner-spin-button,
+.image-toolbar__field input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.image-toolbar__field--caption input[type="text"] {
+  width: 120px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  height: 26px;
+}
+
+/* ============================================================================
+   IMAGE TOOLBAR — Style section (Phase 1 enrichment: radius/border/shadow)
+   ============================================================================ */
+
+.image-toolbar__select {
+  height: 26px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.image-toolbar__color {
+  width: 28px;
+  height: 26px;
+  padding: 1px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.image-toolbar__field[hidden] {
+  display: none !important;
+}
+
+.image-toolbar__btn[hidden] {
+  display: none !important;
+}
+
+/* Figure caption section (Phase 1 G3): flex group so its controls share the
+   same center line and spacing as the rest of the image toolbar. */
+#figure-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#img-shadow-fields {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#img-shadow-fields[hidden] {
+  display: none !important;
+}
+
+/* ============================================================================
+   BOX TOOLBAR — contextual panel for the styled box (Phase 1 enrichment G2).
+   Reuses .image-toolbar* classes; only the compact clear button is new.
+   ============================================================================ */
+
+.image-toolbar__btn--small {
+  min-width: 20px;
+  width: 20px;
+  padding: 2px 0;
+  font-size: 14px;
+}
+
+/* ============================================================================
+   STYLED BOX (Phase 1 enrichment G2) — editor-side look. Colors/borders/
+   width come as inline styles from the node view (owned DOM, cached writes);
+   this block provides geometry and the interaction affordances.
+   ============================================================================ */
+
+.aw-box {
+  position: relative;
+  /* Top margin 0: keeps the top edge flush with floated images beside it
+     (alignment fix, Carlo 2026-08-26); bottom margin spaces blocks. */
+  margin: 0 0 10px 0;
+  padding: 14px 16px;
+  /* Atomic block vs floats: frame AND inner text keep clear of wrapped
+     images as ONE unit (option 2, Carlo 2026-08-26) instead of the frame
+     painting across the float while only the text warped. */
+  display: flow-root;
+}
+
+/* Drag grip: REAL element, high contrast on both themes, inside the frame.
+   Pressing grip or frame padding selects the box and starts a self-tracked
+   flow drag with a drop line; inner text keeps normal editing. */
+.aw-box__grip {
+  position: absolute;
+  top: 4px;
+  left: 12px;
+  width: 34px;
+  height: 9px;
+  border-radius: 5px;
+  cursor: grab;
+  background-color: var(--color-border);
+  background-image: radial-gradient(circle, var(--color-text) 1.4px, transparent 1.7px);
+  background-size: 7px 5px;
+  background-position: center;
+  opacity: 0.9;
+  /* Visible only while the box is selected (Carlo, 2026-08-26): select the
+     box by clicking its frame, then the tools appear. */
+  display: none;
+}
+
+.aw-box--selected .aw-box__grip,
+.aw-box--active .aw-box__grip {
+  display: block;
+}
+
+.aw-box__grip:hover {
+  background-color: var(--color-primary);
+  opacity: 1;
+}
+
+.aw-box__grip:active {
+  cursor: grabbing;
+}
+
+/* Inner editable content keeps its normal cursors */
+.aw-box :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre) {
+  cursor: auto;
+}
+
+.aw-box--selected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Horizontal alignment within the column (meaningful when a width is set) */
+.aw-box[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.aw-box[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* U3: a wrapped box floats in the flow, with the SAME rule and air as an image
+   (--aw-float-gap is set by the node view; a free box is absolute, so the float
+   does not apply to it). */
+.aw-box[data-wrap][data-width][data-align="left"] {
+  float: left;
+  margin: 0 var(--aw-float-gap, 12px) 0 0;
+}
+
+.aw-box[data-wrap][data-width][data-align="right"] {
+  float: right;
+  margin: 0 0 0 var(--aw-float-gap, 12px);
+}
+
+/* ============================================================================
+   FIGURE NODE (Phase 1 enrichment G3, refactor 2026-08-29) — a single unit:
+   photo <img> (built from the node attrs) + editable <figcaption>. The
+   wrapper carries border/shadow/radius so it embraces photo AND caption.
+   The inner <img> is EXEMPT from the generic DOCX-import caps (the
+   "container not to reduce" rule: max-height removed; ratio preserved by
+   height:auto while the aspect is locked). Never split across pages.
+   ============================================================================ */
+
+.ProseMirror .aw-figure {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--aw-figure-gap, 0px);
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px auto;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.ProseMirror .aw-figure[data-caption-layout="above"] {
+  flex-direction: column-reverse;
+}
+
+.ProseMirror .aw-figure[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.ProseMirror .aw-figure[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ProseMirror .aw-figure[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.ProseMirror .aw-figure[data-wrap][data-align="left"] {
+  float: left;
+  margin-right: var(--aw-float-gap, 12px);
+  margin-left: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.ProseMirror .aw-figure[data-wrap][data-align="right"] {
+  float: right;
+  margin-left: var(--aw-float-gap, 12px);
+  margin-right: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* THE exemption: this is the container not to reduce. The generic
+   `.ProseMirror img` caps (max-width:100%; max-height:480px) must NOT apply
+   to the photo inside a figure — max-height is removed so a circle never
+   becomes an ellipse; height:auto keeps the intrinsic ratio. */
+.ProseMirror .aw-figure img {
+  max-width: 100%;
+  max-height: none;
+  height: auto;
+  display: block;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  -webkit-user-drag: none;
+}
+
+.ProseMirror .aw-figure .aw-figure__caption {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  line-height: inherit;
+  color: var(--color-text-muted, #666);
+}
+
+.ProseMirror .aw-figure .aw-figure__caption p {
+  margin: 0;
+}
+
+/* Dark caption fill → light text, so the subtitle stays readable. */
+.ProseMirror .aw-figure .aw-figure__caption.image-caption--dark-bg {
+  color: #f2f2f2;
+}
+
+.ProseMirror .aw-figure.ProseMirror-selectednode,
+.ProseMirror .aw-figure.aw-figure--selected {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.aw-figure--selected .image-resize-handle,
+.aw-figure--selected .image-rotate-handle {
+  display: block;
+}
+
+.aw-box--ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0 !important;
+  z-index: 70;
+  pointer-events: none;
+  opacity: 0.8;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* Screen-only legibility over light backgrounds (notes): dark text on screen.
+   Print/export keep the user's font colors. */
+.aw-box[data-light-bg="true"] .aw-box__content {
+  color: #1f1f1f;
+}
+
+/* Width resize handle (node-view-owned): right edge of the box; visible only
+   while the box is selected */
+.aw-box__resize-handle {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 44px;
+  border-radius: 5px;
+  background: var(--color-primary);
+  opacity: 0.45;
+  cursor: ew-resize;
+  display: none;
+}
+
+.aw-box--selected .aw-box__resize-handle,
+.aw-box--active .aw-box__resize-handle {
+  display: block;
+}
+
+.aw-box__resize-handle:hover {
+  opacity: 0.95;
+}
+
+/* ============================================================================
+   TABLE WARNING BANNER
+   ============================================================================ */
+
+.table-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  margin: 8px 16px;
+  font-size: 13px;
+  color: #856404;
+}
+
+.table-warning-banner__icon {
+  font-size: 16px;
+}
+
+.table-warning-banner__text {
+  flex: 1;
+}
+
+#download-progress-container {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100001;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  width: 420px;
+  max-width: 92vw;
+  pointer-events: none;
+}
+
+/* ============================================================================
+   F3 LAYERS PANEL — floating, non-modal window (contract §2.12, §7).
+   Everything here is painted with the theme's own variables, so the window
+   reads correctly in clear and in night like every other surface: the first
+   version used colours of its own and came out white on white.
+   ============================================================================ */
+.aw-layers {
+  position: fixed;
+  right: var(--spacing-md);
+  bottom: calc(var(--statusbar-height) + var(--spacing-md));
+  width: 320px;
+  height: 380px;
+  min-width: 240px;
+  min-height: 160px;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.aw-layers.hidden {
+  display: none;
+}
+
+.aw-layers__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-toolbar);
+  color: var(--color-text);
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  user-select: none;
+}
+
+.aw-layers__title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.aw-layers__close {
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  padding: 0;
+  flex: none;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.aw-layers__close:hover {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.aw-layers__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+}
+
+.aw-layers__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.aw-layers__row--name span {
+  flex: 0 0 84px;
+  color: var(--color-text-muted);
+}
+
+.aw-layers__select,
+.aw-layers__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 2px 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.aw-layers__groups {
+  flex: 1;
+}
+
+.aw-layers__stack {
+  margin: var(--spacing-sm) 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--spacing-xs);
+}
+
+/* The two halves of the stack. Each keeps a minimum height even when empty,
+   because a zero-height container cannot receive a dropped row: that is what
+   made "put this picture behind the words" impossible on a page whose back
+   half had nothing in it yet. */
+.aw-layers__zone {
+  min-height: 44px;
+}
+
+.aw-layers__zone:empty::after {
+  content: attr(aria-label);
+  display: block;
+  padding: 6px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* F3.2b: the invisible float that shortens the lines a free element crosses.
+   It carries no content and takes no flow height; its size, offset and side are
+   written inline by the pagination plugin, from the same band numbers the page
+   counter uses. pointer-events off: it must never steal a click from the text. */
+/* The element that is flying: the original hides while the transparent copy
+   follows the pointer. A class, not an inline style, so an interrupted flight
+   (mouse released outside the window) can be swept by the next drag instead of
+   leaving a picture invisible forever. */
+.aw-free--flight {
+  visibility: hidden;
+}
+
+.aw-free-wrap {
+  pointer-events: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-left: 0;
+  margin-right: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.aw-layers__row--item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  margin-bottom: 4px;
+  /* The row selects, the grip drags: the hand appears on the grip only, or the
+     whole row looks draggable and the click that does nothing reads as broken. */
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.aw-layers__row--item:hover {
+  background: var(--color-background);
+}
+
+/* Dragging starts on the grip only; a click anywhere else on the row selects the
+   element, so the two gestures stay distinct (project-dnd.ts uses the same split,
+   and it is the only configuration WebView2 accepts). The grip is padded to the
+   full height of the row and twice as wide as the dots themselves, because a
+   14-pixel target in a 23-pixel row proved impossible to hit deliberately. */
+.aw-layers__grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 28px;
+  margin-right: 4px;
+  cursor: grab;
+}
+
+/* Only while the grip itself is held: pressing the name is a selection, not a
+   drag, and must not borrow the dragging cursor. */
+.aw-layers__grip:active {
+  cursor: grabbing;
+}
+
+/* SortableJS states, painted with the theme's own colours: the ghost is the
+   hole the row will land in, the dragging copy is the one under the pointer. */
+.aw-layers__ghost {
+  opacity: 0.35;
+  background: var(--color-background);
+}
+
+.aw-layers__chosen {
+  border-color: var(--color-primary);
+}
+
+.aw-layers__dragging {
+  opacity: 0.8;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  background: var(--color-surface);
+  cursor: grabbing;
+}
+
+.aw-layers__grip {
+  flex: none;
+  color: var(--color-text-muted);
+  letter-spacing: -1px;
+}
+
+/* Fixed reference row: it cannot be dragged and says so (contract §3.4). */
+.aw-layers__row--text {
+  justify-content: center;
+  padding: 3px 6px;
+  margin: 4px 0;
+  border-top: 1px dashed var(--color-border);
+  border-bottom: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.aw-layers__hint {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.aw-layers__hint[hidden] {
+  display: none;
+}
+
+/* Corner grip: two visible lines, because an invisible handle is no handle. */
+.aw-layers__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 0 45%,
+    var(--color-border) 45% 55%,
+    transparent 55% 70%,
+    var(--color-border) 70% 80%,
+    transparent 80%
+  );
+}
+
+/* ============================================================================
+   F3 FREE DRAG — the two visuals of the gesture (contract §4).
+   The copy in flight is a clone of the element's own DOM, so it shows the real
+   frame/shadow/caption instead of a rectangle; the guide is the thin line that
+   marks which paragraph is about to become the anchor.
+   ============================================================================ */
+.aw-free-ghost {
+  /* Fixed to the viewport: it must follow the pointer even when the pointer
+     leaves the editor area. */
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  background: var(--color-paper);
+}
+
+.aw-free-guide {
+  position: fixed;
+  height: 0;
+  border-top: 1px solid var(--color-primary);
+  pointer-events: none;
+  z-index: 1190;
+  display: none;
+}

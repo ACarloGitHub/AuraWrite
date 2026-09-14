@@ -1,0 +1,45 @@
+
+
+/* Print styles */
+@media print {
+  .title-bar,
+  .toolbar,
+  .find-bar,
+  .status-bar,
+  .project-panel,
+  .ai-panel,
+  .suggestions-panel {
+    display: none !important;
+  }
+
+  #editor {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .ProseMirror {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .page-break-widget {
+    display: none;
+  }
+
+  .page-break-before {
+    break-before: page;
+  }
+
+  .chunk-marker,
+  .suggestion-marker,
+  .selection-ai {
+    display: none !important;
+  }
+}
+
+@media print {
+  .aw-box[data-light-bg="true"] .aw-box__content {
+    color: inherit;
+  }
+}

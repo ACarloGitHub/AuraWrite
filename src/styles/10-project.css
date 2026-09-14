@@ -1,0 +1,925 @@
+
+
+/* When paged mode was active, override the base .ProseMirror layout.
+   Now handled by .is-cassie-paged class above. */
+
+
+/* ============================================================================
+   PROJECT PANEL - Stili gerarchici
+   ============================================================================ */
+
+.project-panel {
+  width: var(--project-panel-width, 320px);
+  background: var(--color-surface, #ffffff);
+  border-right: 1px solid var(--color-border, #cccccc);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 100;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle--active {
+  background: var(--color-primary, #4a90d9);
+  opacity: 0.35;
+}
+
+.panel-resize-handle--projects {
+  right: -3px;
+}
+
+.panel-resize-handle--suggestions {
+  right: -3px;
+}
+
+.panel-resize-handle--ebooks {
+  right: -3px;
+}
+
+.panel-resize-handle--ai {
+  left: -3px;
+}
+
+.project-panel.hidden {
+  display: none;
+}
+
+/* Header con Projects prominente */
+.project-panel__header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #cccccc);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-toolbar, #ffffff);
+}
+
+.project-panel__header-left {
+  display: flex;
+  align-items: center;
+}
+
+.project-panel__header-right {
+  display: flex;
+  gap: 6px;
+}
+
+/* Projects - testo principale */
+.project-panel__header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text, #222222);
+  letter-spacing: -0.5px;
+}
+
+/* Pulsanti Project Panel - stesso stile della toolbar */
+.project-panel__header-right {
+  display: flex;
+  gap: var(--spacing-xs, 4px);
+}
+
+.project-panel__btn-sm {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 8px);
+  background: transparent;
+  border: 1px solid var(--color-border, #cccccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-buttons, #222222);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.3s;
+}
+
+.project-panel__btn-sm:hover {
+  background: var(--color-background, #f0f0f0);
+  border-color: var(--color-primary, #4a90d9);
+}
+
+/* Contenuto */
+.project-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.projects-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Lista vuota */
+.project-panel__empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted, #666666);
+}
+
+/* Gerarchia: stesso stile per tutti i titoli */
+.project-item .item-name,
+.section-item .item-name,
+.document-item .item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #333333);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-rename-input {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 1px 4px;
+  border: 1px solid var(--color-primary, #007bff);
+  border-radius: 3px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #333);
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Project - spaziatura diversa ma stesso stile */
+.project-item {
+  margin-bottom: 8px;
+}
+
+.project-item .item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.project-item .item-header:hover {
+  background: var(--color-background, #f5f5f5);
+}
+
+.project-item.active .item-header {
+  background: var(--color-primary, #4a90d9);
+}
+
+.project-item.active .item-name {
+  color: white;
+}
+
+/* Section - indentazione diversa, stesso stile */
+.section-item {
+  margin-left: 16px;
+  margin-top: 2px;
+}
+
+.section-item.dragging {
+  opacity: 0.5;
+}
+
+.section-item.drag-over {
+  border-top: 2px solid var(--color-primary, #4a90d9);
+}
+
+.section-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 4px;
+  color: var(--color-text-muted, #888);
+  flex-shrink: 0;
+}
+
+.section-toggle-btn:hover {
+  color: var(--color-text, #333);
+}
+
+.section-item .item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: visible;
+}
+
+.section-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header {
+  background: var(--color-background, #121212);
+}
+
+.section-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header:hover {
+  background: var(--color-primary, #6c9bff);
+}
+
+/* La sezione attiva (quella che contiene il documento aperto) mostra solo la
+   cornice blu, senza riempimento: l'area resta grigia come a riposo.
+   Sessione 2026-06-26 con Carlo.
+   Nota: uso ">" (figlio diretto) perche' la sezione contiene anche gli
+   .item-header dei documenti figli: senza ">" la cornice verrebbe applicata
+   anche a tutti i documenti della sezione. */
+.section-item.active > .item-header {
+  outline: 1px solid rgba(74, 144, 217, 0.55);
+  outline-offset: -1px;
+}
+
+.section-item.active > .item-header > .item-name {
+  color: var(--color-primary, #4a90d9);
+}
+
+/* Document - indentazione diversa, stesso stile */
+.document-item {
+  margin-left: 32px;
+  margin-top: 2px;
+}
+
+.document-item.dragging {
+  opacity: 0.5;
+}
+
+.document-item.drag-over {
+  border-top: 2px solid var(--color-primary, #4a90d9);
+}
+
+.drag-handle {
+  cursor: grab;
+  padding: 0 4px;
+  color: var(--color-text-muted, #888);
+  font-size: 14px;
+  font-weight: bold;
+  user-select: none;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.section-item:hover .drag-handle,
+.document-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--color-primary, #4a90d9);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle[draggable="true"] {
+  cursor: grab;
+}
+
+.document-item .item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.document-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header {
+  background: var(--color-background, #121212);
+}
+
+.document-item:not(.sortable-drag):not(.sortable-chosen):not(.sortable-ghost) .item-header:hover {
+  background: var(--color-primary, #6c9bff);
+}
+
+.document-item.active .item-header {
+  outline: 1px solid rgba(74, 144, 217, 0.55);
+  outline-offset: -1px;
+}
+
+.document-item.active .item-name {
+  color: var(--color-primary, #4a90d9);
+  font-weight: 600;
+}
+
+/* SortableJS ghost â€” section */
+.section-item.sortable-ghost {
+  opacity: 0.5;
+  background: var(--color-primary, #4a90d9) !important;
+  border: 2px dashed var(--color-primary, #4a90d9);
+  padding: 8px 10px;
+}
+
+/* Hide docs when section is ghost */
+.section-item.sortable-ghost .docs-list {
+  display: none !important;
+}
+
+/* SortableJS ghost â€” document */
+.document-item.sortable-ghost {
+  opacity: 0.5;
+  background: var(--color-primary, #4a90d9) !important;
+  border: 2px dashed var(--color-primary, #4a90d9);
+  min-height: 20px;
+  padding: 0;
+  margin: 0;
+}
+
+.section-item.sortable-chosen {
+  background: var(--color-background-elevated, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.document-item.sortable-chosen {
+  background: var(--color-background-elevated, #fff);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+
+/* Drag handle â€” always visible, clickable */
+.drag-handle {
+  cursor: grab;
+  padding: 2px 6px;
+  color: var(--color-text-muted, #888);
+  font-size: 16px;
+  font-weight: bold;
+  user-select: none;
+  line-height: 1;
+  opacity: 1;
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  min-height: 28px;
+  border-radius: 3px;
+}
+
+.drag-handle:hover {
+  color: var(--color-primary, #4a90d9);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  color: var(--color-primary, #4a90d9);
+}
+
+/* === CLONE VOLANTE (sortable-drag = drag image) === */
+.sortable-drag {
+  opacity: 0.85 !important;
+  max-height: 40px !important;
+  max-width: 280px !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 9999 !important;
+}
+
+/* Sezione clonata: solo header, no nested */
+.sortable-drag.section-item {
+  background: var(--color-background-elevated, #fff) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid var(--color-border, #ddd) !important;
+  border-radius: 3px !important;
+  padding: 4px 6px !important;
+  margin: 0 !important;
+}
+
+.sortable-drag.section-item .docs-list {
+  display: none !important;
+}
+
+.sortable-drag.section-item .item-header {
+  padding: 0 !important;
+  min-height: unset !important;
+}
+
+/* Documento clonato: molto compatto */
+.sortable-drag.document-item {
+  background: var(--color-background-elevated, #fff) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid var(--color-border, #ddd) !important;
+  border-radius: 3px !important;
+  padding: 2px 4px !important;
+  margin: 0 !important;
+}
+
+.sortable-drag.document-item .item-header {
+  padding: 0 !important;
+  min-height: unset !important;
+}
+
+.sortable-drag.document-item .item-name {
+  font-size: 12px !important;
+}
+
+/* Nascondi azioni nel clone */
+.sortable-drag .item-actions {
+  display: none !important;
+}
+
+/* List containers for SortableJS */
+.sections-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================================
+   MULTIBRANCH â€” container sezioni nidificate
+   ============================================================================ */
+.section-children {
+  display: flex;
+  flex-direction: column;
+  margin-left: 12px;
+  padding-left: 8px;
+  border-left: 1px dashed var(--color-border, #ccc);
+}
+.section-children.root {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+/* Limit indentation at deep levels to keep buttons visible */
+.section-children .section-children .section-children {
+  margin-left: 6px;
+  padding-left: 4px;
+}
+
+/* Clone compatto durante il drag: nascondi sottoalbero nel fantasma */
+.sortable-drag .section-children { display: none !important; }
+
+/* Indicatore intento FIGLIO (meta' alta header) */
+.section-item.drop-as-child > .item-header {
+  border-color: #38c172 !important;
+  box-shadow: inset 0 0 0 1px #38c172, 0 0 0 3px rgba(56,193,114,.18);
+}
+.section-item.drop-as-child > .item-header::after {
+  content: "â†³ figlio";
+  position: absolute;
+  right: 8px;
+  font-size: 10px;
+  color: #38c172;
+  font-weight: 600;
+}
+
+/* Indicatore intento NON valido (ciclo o profondita' > 4) */
+.section-item.drop-blocked > .item-header {
+  border-color: #e74c3c !important;
+  cursor: not-allowed;
+}
+.section-item.drop-blocked > .item-header::after {
+  content: "ðŸš« max 4 / ciclo";
+  position: absolute;
+  right: 8px;
+  font-size: 10px;
+  color: #e74c3c;
+}
+.section-item.child-flash > .item-header { animation: child-flash 0.25s 4; }
+
+/* Label floating durante il drag */
+#drag-label {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  display: none;
+  white-space: nowrap;
+}
+
+.docs-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Azioni inline */
+.item-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.item-header:hover .item-actions {
+  opacity: 1;
+}
+
+.item-action-btn {
+  background: transparent;
+  color: var(--color-primary, #4a90d9);
+  border: 1px solid var(--color-border, #dddddd);
+  border-radius: 3px;
+  font-size: 9px;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+.item-action-btn:hover {
+  background: var(--color-primary, #4a90d9);
+  color: white;
+  border-color: var(--color-primary, #4a90d9);
+}
+
+/* Menu a tendina "+" per creare sezione/documento dentro una sezione */
+.section-add-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.section-add-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 1000;
+  min-width: 92px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #dddddd);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.section-add-menu.open {
+  display: flex;
+}
+
+.section-add-menu__item {
+  background: transparent;
+  border: none;
+  color: var(--color-text, #333);
+  text-align: left;
+  font-size: 10px;
+  padding: 5px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.section-add-menu__item:hover {
+  background: var(--color-primary, #4a90d9);
+  color: white;
+}
+
+.delete-btn {
+  background: transparent;
+  color: #cc0000;
+  border: none;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0.3;
+}
+
+.delete-btn:hover {
+  opacity: 1;
+  background: rgba(204, 0, 0, 0.08);
+}
+
+/* Azioni visibili quando attivo */
+.project-item.active .item-actions,
+.section-item.active .item-actions {
+  opacity: 1;
+}
+
+.project-item.active .delete-btn {
+  color: white;
+  opacity: 0.6;
+}
+
+.project-item.active .delete-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.project-item.active .item-action-btn {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.project-item.active .item-action-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: white;
+}
+
+.index-btn.index-red {
+  color: #cc3333 !important;
+  border-color: #cc3333 !important;
+}
+
+.index-btn.index-red:hover {
+  background: #cc3333 !important;
+  color: white !important;
+}
+
+.index-btn.index-yellow {
+  color: #cc9900 !important;
+  border-color: #cc9900 !important;
+}
+
+.index-btn.index-yellow:hover {
+  background: #cc9900 !important;
+  color: white !important;
+}
+
+.index-btn.index-green {
+  color: #33aa33 !important;
+  border-color: #33aa33 !important;
+}
+
+.index-btn.index-green:hover {
+  background: #33aa33 !important;
+  color: white !important;
+}
+
+.project-item.active .index-btn.index-red {
+  color: #ff5555 !important;
+  border-color: #ff5555 !important;
+}
+
+.project-item.active .index-btn.index-yellow {
+  color: #ffcc00 !important;
+  border-color: #ffcc00 !important;
+}
+
+.project-item.active .index-btn.index-green {
+  color: #55cc55 !important;
+  border-color: #55cc55 !important;
+}
+
+#btn-projects.active {
+  background: var(--color-primary, #4a90d9);
+  color: white;
+}
+
+/* ============================================================================ */
+/* SAVE CHANGES DIALOG */
+/* ============================================================================ */
+
+.save-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.save-dialog {
+  background: var(--color-surface);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+  padding: 20px;
+}
+
+.save-dialog h3 {
+  margin-bottom: 12px;
+  font-size: 16px;
+  color: var(--color-text);
+}
+
+.save-dialog p {
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.save-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.save-dialog-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.save-dialog-btn:hover {
+  background: var(--color-background);
+}
+
+.save-dialog-btn.primary {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.save-dialog-btn.primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.save-dialog-btn.danger {
+  color: #c00;
+}
+
+.save-dialog-btn.danger:hover {
+  background: #c00;
+  color: white;
+}
+
+/* ============================================================================
+/* PROJECT TYPE DIALOG */
+/* ============================================================================ */
+
+.project-type-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.project-type-dialog {
+  background: var(--color-surface);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+  padding: 24px;
+}
+
+.project-type-dialog h3 {
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: var(--color-text);
+}
+
+.project-type-dialog .form-group {
+  margin-bottom: 16px;
+}
+
+.project-type-dialog label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.project-type-dialog .form-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  font-style: italic;
+}
+
+.project-type-dialog .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.project-type-dialog .checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.project-type-dialog .checkbox-label input[type="checkbox"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* AI Settings dialog (project prompts & style) — reuses .save-dialog shell
+   but needs its own form layout: without these rules labels and inputs
+   render side-by-side and cramped. */
+.ai-settings-dialog {
+  max-width: 700px;
+}
+
+.ai-settings-dialog .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.ai-settings-dialog label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.ai-settings-dialog textarea,
+.ai-settings-dialog select {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text);
+  background: var(--color-bg, #141414);
+  border: 1px solid var(--color-border, #3a3a3a);
+  border-radius: 4px;
+}
+
+.ai-settings-dialog textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.project-type-dialog input[type="text"],
+.project-type-dialog select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-text);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Fix per select - stato chiuso e aperto */
+.project-type-dialog select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--color-background) !important;
+  color: var(--color-text) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.project-type-dialog select option {
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+.item-header:hover .item-color-btn,
+.project-item.active .item-color-btn,
+.section-item.active .item-color-btn,
+.document-item.active .item-color-btn {
+  opacity: 1;
+}
+
+.section-item .item-header.has-custom-colors {
+  border-left: 3px solid var(--custom-bg, var(--color-primary, #4a90d9));
+  padding-left: 7px;
+}
+
+.document-item .item-header.has-custom-colors {
+  border-left: 3px solid var(--custom-bg, var(--color-primary, #4a90d9));
+  padding-left: 5px;
+}
+
+.project-item .item-header.has-custom-colors {
+  border-left: 3px solid var(--custom-bg, var(--color-primary, #4a90d9));
+  padding-left: 9px;
+}
+
+/* Preserve active state colors for project */
+.project-item.active .item-header.has-custom-colors {
+  background: var(--custom-bg, var(--color-primary, #4a90d9)) !important;
+}

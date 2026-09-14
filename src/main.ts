@@ -41,7 +41,7 @@ import { setupResizablePanels } from "./editor/resizable-panels";
 import { openFindBar, setupFindReplaceUI } from "./editor/find-replace-ui";
 import { setupAppShortcuts } from "./editor/app-shortcuts";
 import { applyEditorZoom, scheduleEditorZoomSync, setEditorZoomParts } from "./editor/editor-zoom";
-import "./styles.css";
+import "./styles/index.css";
 
 const THEME_KEY = "aurawrite-theme";
 const ZOOM_KEY = "aurawrite-zoom";

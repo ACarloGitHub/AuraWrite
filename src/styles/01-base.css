@@ -1,0 +1,184 @@
+.hidden {
+  display: none !important;
+}
+
+:root {
+  /* v0.4.0+: bundled open-source fonts registered below (Lora, Inter, JetBrains Mono) */
+  --font-family:
+    "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-editor: "Lora", Georgia, "Times New Roman", serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+
+  --color-primary: #4a90d9;
+  --color-primary-hover: #3a7bc8;
+  --color-background: #f0f0f0;
+  --color-toolbar: #ffffff;
+  --color-surface: #ffffff;
+    --color-paper: #ffffff;
+
+
+  --color-border: #cccccc;
+  --color-text: #222222;
+  --color-text-muted: #666666;
+  --color-text-buttons: #222222;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 40px;
+
+  --toolbar-height: 48px;
+  --statusbar-height: 28px;
+  --ai-panel-width: 360px;
+  --project-panel-width: 320px;
+  --suggestions-panel-width: 320px;
+  --mcp-panel-width: 320px;
+  --ebooks-panel-width: 320px;
+
+  --shadow-editor: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --selection-highlight: rgba(255, 255, 0, 0.4);
+  --selection-highlight-flash: rgba(255, 200, 0, 0.6);
+}
+
+/* ============================================================================
+   v0.4.0+: Bundled fonts (SIL OFL 1.1) - Lora, Inter, JetBrains Mono
+   Served from /fonts/* (public/fonts/) via Vite static asset handling.
+   The font-face declarations use font-display: swap so the app
+   renders with system fonts first, then swaps to bundled fonts once
+   loaded. See public/fonts/README.md for license details.
+   ============================================================================ */
+
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Lora-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Lora-Italic-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-Variable.ttf") format("truetype-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Variable.ttf") format("truetype-variations");
+}
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--color-background);
+  color: var(--color-text);
+  overflow: hidden;
+  transition:
+    background 0.3s,
+    color 0.3s;
+}
+
+@keyframes selection-flash {
+  0% {
+    background-color: var(--selection-highlight-flash);
+  }
+  100% {
+    background-color: var(--selection-highlight);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes tool-call-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ai-message--planner-card {
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  max-width: 85%;
+}
+
+.planner-tool-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.planner-tool-card__icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.planner-tool-card__text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+@keyframes synonym-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Lampeggio 1s sul drop-figlio */
+@keyframes child-flash {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 0 3px rgba(74,144,217,.6); }
+}
+
+/* F1.5: hide the editor shell in the print-preview window until the preview UI is ready */
+html[data-aw-preview] {
+  background: #e9e9ec;
+}
+html[data-aw-preview] body {
+  visibility: hidden;
+}

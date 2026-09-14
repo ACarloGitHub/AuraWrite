@@ -1,0 +1,11 @@
+/* Stylesheet index. Import order is part of the cascade: do not reorder. */
+@import './01-base.css';
+@import './02-theme.css';
+@import './03-window.css';
+@import './04-toolbar.css';
+@import './05-document.css';
+@import './06-preferences.css';
+@import './07-assistant.css';
+@import './08-minor-windows.css';
+@import './09-print.css';
+@import './10-project.css';
