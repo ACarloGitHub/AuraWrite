@@ -83,26 +83,21 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const condition = textConditionOf(node);
     if (isOverlap(condition)) continue;
 
-    // The screen has always reserved the PAINTED rectangle (F3.2c): what the browser
-    // reports for a turned element IS the quadrilateral around it. The page count now
-    // derives the same rectangle from the element's own measures plus its turn, so the
-    // two paths agree without the screen having to guess anything (defect 12).
+    // The screen MEASURES; the page count MIRROWS. What the browser reports for a turned
+    // element is already the quadrilateral around it, so the painted rectangle is the claim
+    // - recomputing it here from the element's own box would add a second rounding and a
+    // second opinion on the same number, and the paper would no longer break lines where the
+    // editor does (the lesson of F3.2c, 2026-09-07, and the regression of `739ec9b`). The
+    // page count reaches the same rectangle from the stored measures plus the turn, in
+    // `free-layout.ts` (`paintedBoxOf`).
     const r = pic.getBoundingClientRect();
     // While the element flies, the box that matters is the copy under the
     // pointer (the original is hidden in its old place), and the drag hands it
     // over in these same client pixels.
     const box = override?.get(pos) ?? { top: r.top, bottom: r.bottom, left: r.left, width: r.width };
     if (box.bottom <= box.top || box.width <= 0) continue;
-    // The CLAIM is computed from the element's OWN box (offsetWidth/offsetHeight are
-    // layout units and ignore the transform, so they are exactly the box that turns) and
-    // the turn itself - the same input the page count uses, so screen and paper cannot
-    // drift apart again (defect 12). The painted rectangle above stays what positions the
-    // spacer on a line, because that is what the user sees moving.
-    const paintedWidthCss = box.width / scale;
-    const paintedHeightCss = (box.bottom - box.top) / scale;
-    const ownWidthCss = pic.offsetWidth || paintedWidthCss;
-    const ownHeightCss = pic.offsetHeight || paintedHeightCss;
-    const rotation = Number((node.attrs as Record<string, unknown>)?.rotation) || 0;
+    const widthCss = box.width / scale;
+    const heightCss = (box.bottom - box.top) / scale;
 
     const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
     let side: "left" | "right";
@@ -115,13 +110,12 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
       const band = freeWrapBand({
         column: { left: 0, width: column.width },
         spec,
-        elementWidthPx: ownWidthCss,
-        elementHeightPx: ownHeightCss,
+        elementWidthPx: widthCss,
+        elementHeightPx: heightCss,
         drawnTop: 0,
         wrapOn: true,
         extraClaimPx: extent.x,
         extraHeightPx: extent.y,
-        rotationDeg: rotation,
       });
       if (!band) {
         // The turned unit covers the whole column: there is no side left to claim.
