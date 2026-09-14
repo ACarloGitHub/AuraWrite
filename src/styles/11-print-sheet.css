@@ -84,3 +84,13 @@
     position: absolute; bottom: var(--foot);
   }
 }
+
+/* An image that carries NO size of its own (a raw DOCX import still without dimensions)
+   must not run off the paper: the editor caps are deliberately not applied on the sheet
+   (defect 15), so the column bound is restated here for those images only. An image that
+   does carry width/height is left alone and prints at the size the user chose. */
+.aw-print-body img:not([width]),
+.aw-print-body .aw-figure img:not([width]) {
+  max-width: 100%;
+  height: auto;
+}
