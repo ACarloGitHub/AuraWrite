@@ -105,8 +105,11 @@ export function startFreeDrag(
   const grabOffsetY = originY - ownTop;
   const width = ownVisualWidth;
   const height = ownVisualHeight;
-  // How far the painted box sits from the own box on each side: the text band follows the
-  // PAINTED box, because that is what moves under the user's hand.
+  // How far the painted box sticks OUT beyond the own box on each side. The turn pivots on
+  // the centre, so the painted box is centred on the own one: its left and top edges are
+  // further OUT, i.e. at a SMALLER coordinate. That sign is the whole story - adding it
+  // instead of subtracting moved the band to the far side of the element, so the text
+  // wrapped around an empty space while the copy covered real words (Carlo, 2026-09-15).
   const paintShiftX = (rect.width - ownVisualWidth) / 2;
   const paintShiftY = (rect.height - ownVisualHeight) / 2;
 
@@ -249,9 +252,9 @@ export function startFreeDrag(
     // `#editor` cancels out. Converting through host offsets plus scrollTop is
     // the trap three coordinate systems set in figure-resize.ts.
     setFreeWrapFlightBox(pos, {
-      top: flyingTopClient + paintShiftY,
-      bottom: flyingTopClient + paintShiftY + rect.height,
-      left: flyingLeftClient + paintShiftX,
+      top: flyingTopClient - paintShiftY,
+      bottom: flyingTopClient - paintShiftY + rect.height,
+      left: flyingLeftClient - paintShiftX,
       width: rect.width,
     });
     refreshFreeWrapBands(view);
