@@ -301,19 +301,29 @@ export function freeWrapBand(input: {
   extraClaimPx?: number;
   /** Extra room below, for a bottom shadow, px. */
   extraHeightPx?: number;
+  /**
+   * The element's own turn, in degrees. The measures above are the element's OWN box
+   * (photo, caption, frame: the unit that turns); the claim is then taken from the
+   * rectangle that unit PAINTS, which is what the screen has always measured with
+   * `getBoundingClientRect`. Without this the page count and the paper reserve a
+   * smaller rectangle than the editor does - defect 12.
+   */
+  rotationDeg?: number;
 }): FreeWrapBand | null {
   const { column, spec, elementWidthPx: w, elementHeightPx: h, drawnTop, wrapOn } = input;
   if (!wrapOn) return null;
-  // `freeLeftPx` already resolves the `xFrom` edge and the offset, so the left
-  // edge is handed over as an absolute column position with no edge of its own.
-  const leftPx = freeLeftPx(column, spec, w) - column.left;
+  const painted = paintedBoxOf(w, h, input.rotationDeg ?? 0);
+  // `freeLeftPx` resolves the `xFrom` edge from the OWN width, because that is what
+  // the booked distance refers to; the claim starts where the turn put the painted box,
+  // i.e. half its growth further out on each side.
+  const leftPx = freeLeftPx(column, spec, w) - column.left - painted.leftShift;
   const band = bandOfRect({
     columnWidth: column.width,
     xFrom: "left",
     xOff: leftPx,
-    elementWidthPx: w,
-    elementHeightPx: h,
-    drawnTop,
+    elementWidthPx: painted.widthPx,
+    elementHeightPx: painted.heightPx,
+    drawnTop: drawnTop - painted.topShift,
   });
   if (!band) return null;
   const extraX = input.extraClaimPx ?? 0;
@@ -324,6 +334,43 @@ export function freeWrapBand(input: {
     widthPx: Math.round(Math.min(column.width, band.widthPx + extraX)),
     y0: band.y0,
     y1: band.y1 + extraY,
+  };
+}
+
+/**
+ * The rectangle a turned element actually PAINTS, and how far it sits outside the
+ * element's own box.
+ *
+ * The rotation pivots on the centre, so the painted rectangle keeps the centre of the
+ * own box and grows (or shrinks) symmetrically: `leftShift`/`topShift` are how far its
+ * edges move outwards. At zero degrees this returns the input unchanged, which is what
+ * keeps the whole F1 pagination chain identical for every document that never turns
+ * anything - the control test of the plan is satisfied by construction, not by luck.
+ *
+ * Why the calculator needs it: the screen measured the painted box from the DOM since
+ * F3.2b, but the page count and the print sheets were built from the stored size, so a
+ * free element with text around it reserved two different rectangles in the two places
+ * (defect 12, proven by Carlo on 2026-09-14).
+ */
+export function paintedBoxOf(
+  widthPx: number,
+  heightPx: number,
+  rotationDeg: number
+): { widthPx: number; heightPx: number; leftShift: number; topShift: number } {
+  const deg = ((rotationDeg || 0) % 360 + 360) % 360;
+  if (!deg || widthPx <= 0 || heightPx <= 0) {
+    return { widthPx, heightPx, leftShift: 0, topShift: 0 };
+  }
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const width = widthPx * cos + heightPx * sin;
+  const height = widthPx * sin + heightPx * cos;
+  return {
+    widthPx: width,
+    heightPx: height,
+    leftShift: (width - widthPx) / 2,
+    topShift: (height - heightPx) / 2,
   };
 }
 

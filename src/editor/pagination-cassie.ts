@@ -34,7 +34,7 @@ import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLine }
 import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
 import {
-  isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth,
+  isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth, paintedBoxOf,
   type FreeWrapBand,
 } from "./free-layout";
 import { isOverlap, isUnwrapped, isWrapping, textConditionOf } from "./element-condition";
@@ -1183,6 +1183,14 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         // is now the one this pass settled on.
         const cond = textConditionOf(node);
         const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
+        // DEFECT 12: the screen had been reserving the PAINTED rectangle since F3.2b,
+        // the count and the sheets the stored one. A turned element therefore claimed
+        // two different boxes, with line breaks and page numbers disagreeing between the
+        // editor and the paper. The element is still POSITIONED by its own box (law L1);
+        // only what the text must keep clear follows the turn.
+        const rotation = Number(node.attrs?.rotation) || 0;
+        const painted = paintedBoxOf(w, h, rotation);
+        const paintedTop = top - painted.topShift;
         let next: FreeWrapBand | null = null;
         let full = false;
         if (isWrapping(cond)) {
@@ -1195,11 +1203,30 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
             wrapOn: true,
             extraClaimPx: extent.x,
             extraHeightPx: extent.y,
+            rotationDeg: rotation,
           });
-        } else if (isUnwrapped(cond) && h > 0) {
+          if (!next && painted.heightPx > 0) {
+            // The turned element covers the whole column: no side is left to claim.
+            // Saying "nothing reserved" is what let the words run through the picture,
+            // so the text goes above and below instead - the promise Unwrapped already
+            // makes, and the second half of defect 12.
+            next = {
+              side: "left",
+              widthPx: contentWidth,
+              y0: paintedTop,
+              y1: paintedTop + painted.heightPx + extent.y,
+            };
+            full = true;
+          }
+        } else if (isUnwrapped(cond) && painted.heightPx > 0) {
           // Unwrapped claims the WHOLE width over its drawn rectangle: the text
           // above stays, the text below resumes under the element.
-          next = { side: "left", widthPx: contentWidth, y0: top, y1: top + h + extent.y };
+          next = {
+            side: "left",
+            widthPx: contentWidth,
+            y0: paintedTop,
+            y1: paintedTop + painted.heightPx + extent.y,
+          };
           full = true;
         }
         if (next) outBands.push({ ...next, pos, insertPos: null, lineTop: next.y0, full });
