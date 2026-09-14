@@ -66,9 +66,7 @@
 
 #editor {
   flex: 1;
-  overflow: auto;
-  padding: var(--spacing-xl);
-  background: var(--color-background);
+      background: var(--color-background);
 }
 
 /* CodeMirror code-mode area (mounted inside #editor) */
