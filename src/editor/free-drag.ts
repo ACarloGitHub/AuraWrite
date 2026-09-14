@@ -86,11 +86,29 @@ export function startFreeDrag(
   const originY = event.clientY;
   // Where inside the element the user grabbed: the copy must keep that offset
   // or the element jumps under the pointer at the first move.
+  // TWO boxes matter here, and confusing them was defect 14. `getBoundingClientRect`
+  // returns the PAINTED box: with a rotation it is the quadrilateral around the turned
+  // element, wider and offset from what the element actually is. `offsetWidth`/
+  // `offsetHeight` are the element's OWN box (photo, caption, frame: the unit that turns),
+  // and that is the box the placement, the toolbar fields and the document all speak about.
+  // A rotation pivots on the centre, so the two boxes share their centre and the own box is
+  // recovered from it - no angle, no trigonometry, exact at any zoom.
   const rect = dom.getBoundingClientRect();
-  const grabOffsetX = originX - rect.left;
-  const grabOffsetY = originY - rect.top;
-  const width = Math.round(rect.width);
-  const height = Math.round(rect.height);
+  const scale = getEditorZoom() || 1;
+  const ownVisualWidth = Math.round(dom.offsetWidth * scale);
+  const ownVisualHeight = Math.round(dom.offsetHeight * scale);
+  const ownLeft = rect.left + rect.width / 2 - ownVisualWidth / 2;
+  const ownTop = rect.top + rect.height / 2 - ownVisualHeight / 2;
+  // Where inside the element's OWN box the user grabbed: the copy keeps that offset or the
+  // element jumps under the pointer at the first move.
+  const grabOffsetX = originX - ownLeft;
+  const grabOffsetY = originY - ownTop;
+  const width = ownVisualWidth;
+  const height = ownVisualHeight;
+  // How far the painted box sits from the own box on each side: the text band follows the
+  // PAINTED box, because that is what moves under the user's hand.
+  const paintShiftX = (rect.width - ownVisualWidth) / 2;
+  const paintShiftY = (rect.height - ownVisualHeight) / 2;
 
   // F3.2b: an element that is ALREADY free follows the pointer with its text
   // band while it flies. The press records what the band hangs from - the
@@ -120,6 +138,8 @@ export function startFreeDrag(
     g.style.position = "fixed";
     g.style.left = "0px";
     g.style.top = "0px";
+    // The OWN box, scaled: the clone already carries its own transform, so sizing it to
+    // the painted box here would turn the element a second time (the wrong sagoma).
     g.style.width = `${width}px`;
     g.style.height = `${height}px`;
     g.style.margin = "0";
@@ -224,10 +244,10 @@ export function startFreeDrag(
     // `#editor` cancels out. Converting through host offsets plus scrollTop is
     // the trap three coordinate systems set in figure-resize.ts.
     setFreeWrapFlightBox(pos, {
-      top: flyingTopClient,
-      bottom: flyingTopClient + height,
-      left: flyingLeftClient,
-      width,
+      top: flyingTopClient + paintShiftY,
+      bottom: flyingTopClient + paintShiftY + rect.height,
+      left: flyingLeftClient + paintShiftX,
+      width: rect.width,
     });
     refreshFreeWrapBands(view);
   };
@@ -269,7 +289,7 @@ export function startFreeDrag(
       startTop,
       // Where the element itself sat when the press began: the reference used
       // when the drop has no text block above it and a line must be opened.
-      pressTopClient: rect.top,
+      pressTopClient: ownTop,
       anchorTopClient,
       anchorIndex,
       textPos: lastTextPos,
@@ -555,6 +575,8 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
     ? (drop.pressTopClient - hostRect.top) / zoom // the new line takes the element's old slot
     : (drop.anchorTopClient - hostRect.top) / zoom;
   const yOff = Math.round(topInHost - anchorTopInHost);
+  // The element's OWN width, never the painted one (defect 14): what lands here can be
+  // written into the document below, and a turned element used to change shape forever.
   const drawnWidth = Math.round(drop.width / zoom);
 
   const spec = distanceSpec(column, leftInHost, drawnWidth, yOff, node, wasFree);
