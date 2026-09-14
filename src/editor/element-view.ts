@@ -138,20 +138,38 @@ export function applyWrapMarker(el: HTMLElement, attrs: Record<string, unknown>)
 }
 
 /** Background, vertical padding and dark-background legibility of a caption. */
-export function applyCaptionStripStyle(el: HTMLElement, attrs: Record<string, unknown>): void {
-  const bg = String(attrs.captionBg ?? "");
-  if (el.style.background !== bg) {
-    el.style.background = bg;
-  }
+/**
+ * The caption strip's own look, computed ONCE for the editor and the exported dialect.
+ *
+ * The strip lives in the editor DOM (a class on the caption element) and in the markup
+ * (a class plus an inline style): when the two disagree the paper shows the caption in the
+ * body font, and a one-line caption suddenly costs two lines of height - which moves
+ * anything positioned under it (Carlo, 2026-09-14).
+ */
+export function captionStripLook(attrs: Record<string, unknown>): {
+  background: string;
+  padding: string;
+  classes: string[];
+} {
+  const background = String(attrs.captionBg ?? "");
   const padTop = Number(attrs.captionPadTop);
   const padBottom = Number(attrs.captionPadBottom);
   const top = isFinite(padTop) ? Math.max(0, Math.min(60, padTop)) : 0;
   const bottom = isFinite(padBottom) ? Math.max(0, Math.min(60, padBottom)) : 0;
-  const padding = `${top}px 8px ${bottom}px`;
-  if (el.style.padding !== padding) {
-    el.style.padding = padding;
+  const classes = ["image-caption"];
+  if (background && !isLightBgColor(background)) classes.push("image-caption--dark-bg");
+  return { background, padding: `${top}px 8px ${bottom}px`, classes };
+}
+
+export function applyCaptionStripStyle(el: HTMLElement, attrs: Record<string, unknown>): void {
+  const look = captionStripLook(attrs);
+  if (el.style.background !== look.background) {
+    el.style.background = look.background;
   }
-  el.classList.toggle("image-caption--dark-bg", !!bg && !isLightBgColor(bg));
+  if (el.style.padding !== look.padding) {
+    el.style.padding = look.padding;
+  }
+  el.classList.toggle("image-caption--dark-bg", look.classes.includes("image-caption--dark-bg"));
 }
 
 /**

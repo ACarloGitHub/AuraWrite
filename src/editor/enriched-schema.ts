@@ -42,7 +42,7 @@ import {
   textConditionOf,
 } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
-import { transformStyleOf } from "./element-view";
+import { captionStripLook, transformStyleOf } from "./element-view";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
@@ -519,17 +519,24 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     // <figcaption> with an inline style for the caption background and the
     // vertical whitespace (D10 rule 1: markers above + inline style below, so
     // the look survives export without an external CSS file).
+    const look = captionStripLook(node.attrs as Record<string, unknown>);
     const capStyle: Record<string, string> = {};
-    if (bg) capStyle.background = bg;
-    const capPadTop = Number(node.attrs.captionPadTop);
-    const capPadBottom = Number(node.attrs.captionPadBottom);
-    const pt = isFinite(capPadTop) ? Math.max(0, Math.min(60, capPadTop)) : 0;
-    const pb = isFinite(capPadBottom) ? Math.max(0, Math.min(60, capPadBottom)) : 0;
-    if (pt > 0 || pb > 0) capStyle.padding = `${pt}px 8px ${pb}px`;
+    if (look.background) capStyle.background = look.background;
+    capStyle.padding = look.padding;
     const capStyleText = Object.entries(capStyle)
       .map(([prop, value]) => `${prop}: ${value}`)
       .join("; ");
-    const capAttrs = capStyleText ? { style: capStyleText } : {};
+    // The editor paints the caption through `.aw-figure__caption` (12px, italic, the
+    // muted colour, and the dark-text variant when the strip is light). Without the
+    // class the paper falls back to the body font, and a one-line caption suddenly
+    // costs two lines of height: the caption is plain text on the sheet, and anything
+    // positioned below it moves (Carlo, 2026-09-14).
+    // Same classes the editor puts on the strip, plus the figure's own one so the
+    // `.aw-figure .aw-figure__caption` typography rules keep applying.
+    const capClasses = ["aw-figure__caption"];
+    if (look.classes.includes("image-caption--dark-bg")) capClasses.push("image-caption--dark-bg");
+    const capAttrs: Record<string, string> = { class: capClasses.join(" ") };
+    if (capStyleText) capAttrs.style = capStyleText;
 
     return ["figure", figAttrs, ["img", imgAttrs], ["figcaption", capAttrs, 0]];
   },
