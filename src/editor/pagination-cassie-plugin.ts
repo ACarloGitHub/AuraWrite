@@ -41,11 +41,16 @@ interface DomBand {
  * Measure the bands from the painted page (F3.2c, the fix Carlo's collaudo
  * asked for).
  *
- * Both numbers come from the SAME ruler the picture is painted with: the
- * element's own rectangle on screen, and the text blocks' rectangles. Nothing is
- * converted from the calculator's flow axis, because that axis has no page
- * dividers in it and the screen does - and a band placed with the wrong ruler
- * sits below its picture, shortening text that no image touches.
+ * Two numbers, two authorities, and the split is not symmetric on purpose:
+ *  - WHERE the band starts (its line, its top): the DOM. That is what the user
+ *    sees moving, and the page axis has no dividers in it - a band placed with
+ *    the calculator's ruler sits below its picture (the lesson of F3.2c);
+ *  - HOW WIDE a claim it is and on WHICH side: the shared `freeWrapBand`, fed
+ *    with the element's OWN box and its turn - the same inputs the page count
+ *    uses. Feeding it the painted width instead produced a rectangle that was
+ *    neither box: it started at the registered edge and ended at half the
+ *    turn's growth, so the first letters of every line ran under the picture
+ *    wherever the element was anchored to a side (defect 16).
  *
  * The calculator keeps booking its own bands in flow coordinates: that is the
  * axis the PAGES are counted on, and the print sheets have no dividers, so there
@@ -83,21 +88,21 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const condition = textConditionOf(node);
     if (isOverlap(condition)) continue;
 
-    // The screen MEASURES; the page count MIRROWS. What the browser reports for a turned
-    // element is already the quadrilateral around it, so the painted rectangle is the claim
-    // - recomputing it here from the element's own box would add a second rounding and a
-    // second opinion on the same number, and the paper would no longer break lines where the
-    // editor does (the lesson of F3.2c, 2026-09-07, and the regression of `739ec9b`). The
-    // page count reaches the same rectangle from the stored measures plus the turn, in
-    // `free-layout.ts` (`paintedBoxOf`).
+    // `offsetWidth`/`offsetHeight` are the element's OWN box in layout units: the
+    // transform is not applied to them, which is exactly what makes them the unit
+    // that turns, and what keeps the claim independent of the visual magnification.
+    const ownWidthCss = pic.offsetWidth;
+    const ownHeightCss = pic.offsetHeight;
+    const rotationDeg = Number((node.attrs as Record<string, unknown>)?.rotation) || 0;
+    if (ownWidthCss <= 0 || ownHeightCss <= 0) continue;
     const r = pic.getBoundingClientRect();
-    // While the element flies, the box that matters is the copy under the
-    // pointer (the original is hidden in its old place), and the drag hands it
-    // over in these same client pixels.
-    const box = override?.get(pos) ?? { top: r.top, bottom: r.bottom, left: r.left, width: r.width };
-    if (box.bottom <= box.top || box.width <= 0) continue;
-    const widthCss = box.width / scale;
-    const heightCss = (box.bottom - box.top) / scale;
+    // While the element flies the original is hidden in its old place, so the copy's
+    // rectangle replaces the measured one for the VERTICAL; the claim's size stays the
+    // element's own box, because that is the unit that turns.
+    const flying = override?.get(pos);
+    const paintedTopClient = flying ? flying.top : r.top;
+    const paintedBottomClient = flying ? flying.bottom : r.bottom;
+    if (paintedBottomClient <= paintedTopClient) continue;
 
     const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
     let side: "left" | "right";
@@ -110,8 +115,9 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
       const band = freeWrapBand({
         column: { left: 0, width: column.width },
         spec,
-        elementWidthPx: widthCss,
-        elementHeightPx: heightCss,
+        elementWidthPx: ownWidthCss,
+        elementHeightPx: ownHeightCss,
+        rotationDeg,
         drawnTop: 0,
         wrapOn: true,
         extraClaimPx: extent.x,
@@ -157,7 +163,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
 
     // The picture's own top edge, exactly as painted: the rectangle the browser
     // reports is the ground truth the band has to line up with.
-    const lineTopClient = box.top;
+    const lineTopClient = paintedTopClient;
 
     // The band starts at the anchor block's start and is pushed down to the
     // line by a margin, with `shape-outside` keeping it out of the lines above.
@@ -170,7 +176,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     // ends the measurement feedback: the anchor is a fixed point.
     const anchorTopClient = anchorEl.getBoundingClientRect().top;
     const marginTop = Math.max(0, Math.round(lineTopClient - anchorTopClient));
-    const height = box.bottom - lineTopClient;
+    const height = paintedBottomClient - lineTopClient;
     if (height <= 0) continue;
     out.push({
       pos,
