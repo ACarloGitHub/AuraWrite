@@ -1379,7 +1379,9 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   cursor: nwse-resize;
 }
 
-.image-rotate-handle {
+/* Shared rotation handle (U7): ONE rule for every element that turns - image,
+   figure, box, and later the drawn shapes. Owned by `element-handles.ts`. */
+.aw-rotate-handle {
   position: absolute;
   top: -28px;
   left: 50%;
@@ -1395,7 +1397,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   display: none;
 }
 
-.image-rotate-handle::after {
+.aw-rotate-handle::after {
   content: "";
   position: absolute;
   bottom: -10px;
@@ -1406,7 +1408,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   background: var(--color-primary, #4a90d9);
 }
 
-.image-node-wrapper--selected .image-rotate-handle {
+.image-node-wrapper--selected .aw-rotate-handle {
   display: block;
 }
 
@@ -1745,7 +1747,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 }
 
 .aw-figure--selected .image-resize-handle,
-.aw-figure--selected .image-rotate-handle {
+.aw-figure--selected .aw-rotate-handle {
   display: block;
 }
 
@@ -1783,7 +1785,11 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 }
 
 .aw-box--selected .aw-box__resize-handle,
-.aw-box--active .aw-box__resize-handle {
+.aw-box--active .aw-box__resize-handle,
+/* U7: the box gains the shared rotation handle, shown exactly when its width
+   handle is shown - no new state of its own. */
+.aw-box--selected .aw-rotate-handle,
+.aw-box--active .aw-rotate-handle {
   display: block;
 }
 

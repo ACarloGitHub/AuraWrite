@@ -4,7 +4,8 @@
 //   - idempotent cached style writes (no spurious DOM churn);
 //   - ignoreMutation shield for our own attribute changes;
 //   - self-managed interactions: surface selection, the SHARED free drag (the
-//     same gesture as images), continuous width resize persisted once.
+//     same gesture as images), continuous width resize persisted once, and the
+//     SHARED rotation handle (U7).
 //
 // Native HTML5 drag and raw style pokes are deliberately avoided: they fight
 // ProseMirror's DOM manager on content-bearing blocks and produce flicker and
@@ -25,6 +26,7 @@ import {
   normalizeBoxStyle,
 } from "./box-style";
 import { applyWrapMarker, pointerInElementAxes, setStyleCached, transformStyleOf } from "./element-view";
+import { createRotateHandle, isRotateHandle, startRotateDrag } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
@@ -40,6 +42,7 @@ export class StyledBoxNodeView implements NodeView {
 
   private grip: HTMLElement;
   private resizeHandle: HTMLElement;
+  private rotateHandle: HTMLElement;
   private applied: Record<string, string | undefined> = {};
 
   constructor(
@@ -63,6 +66,17 @@ export class StyledBoxNodeView implements NodeView {
     this.resizeHandle.title = "Drag to resize width";
 
     this.dom.append(this.grip, this.contentDOM, this.resizeHandle);
+
+    // U7: the rotation handle images and figures have always had. The box ALREADY
+    // carries the angle in its attrs (U5) and paints it through `applyStyle`, so
+    // this adds a gesture and no data. Appended last: the handle must paint over
+    // the frame, not under it.
+    this.rotateHandle = createRotateHandle(
+      this.dom,
+      (e) => startRotateDrag(this.view, this.getPos, this.dom, e),
+      "Drag to rotate"
+    );
+
     this.applyStyle(node.attrs as Record<string, unknown>);
     this.bindEvents();
   }
@@ -144,6 +158,8 @@ export class StyledBoxNodeView implements NodeView {
         this.startResize(e.clientX, e.clientY);
         return;
       }
+      // The rotation handle runs its own gesture (`element-handles.ts`).
+      if (isRotateHandle(target)) return;
       // The grip and the box's own surface both MOVE the box with the shared
       // free drag, the same gesture images use: a press without movement is a
       // plain selection; a drag reorders it in the flow or moves it when free.
@@ -161,6 +177,7 @@ export class StyledBoxNodeView implements NodeView {
   /** PM must not process events on the parts we manage ourselves. */
   stopEvent(e: Event): boolean {
     if (e.target === this.grip || e.target === this.resizeHandle) return true;
+    if (isRotateHandle(e.target)) return true;
     if (e.type === "mousedown" && e.target === this.dom) return true;
     return false;
   }

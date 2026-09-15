@@ -28,8 +28,8 @@ import {
   setStyleCached,
   transformStyleOf,
   pointerInElementAxes,
-  transformWithRotation,
 } from "./element-view";
+import { createRotateHandle, isRotateHandle, startRotateDrag } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
@@ -197,10 +197,10 @@ export class FigureNodeView implements NodeView {
   }
 
   private createRotateHandle(): void {
-    this.rotateHandle = document.createElement("div");
-    this.rotateHandle.className = "image-rotate-handle";
-    this.rotateHandle.addEventListener("mousedown", (e) => this.onRotateMouseDown(e));
-    this.dom.appendChild(this.rotateHandle);
+    // U7: one gesture for every element that turns (see `element-handles.ts`).
+    this.rotateHandle = createRotateHandle(this.dom, (e) =>
+      startRotateDrag(this.view, this.getPos, this.dom, e)
+    );
   }
 
   private bindEvents(): void {
@@ -208,7 +208,7 @@ export class FigureNodeView implements NodeView {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
       if (target.classList.contains("image-resize-handle")) return;
-      if (target.classList.contains("image-rotate-handle")) return;
+      if (isRotateHandle(target)) return;
       // Click on the photo (not the caption text) selects the figure as a unit.
       if (target === this.img) {
         e.preventDefault();
@@ -226,7 +226,7 @@ export class FigureNodeView implements NodeView {
   stopEvent(e: Event): boolean {
     if (e.target instanceof HTMLElement) {
       if (e.target.classList.contains("image-resize-handle")) return true;
-      if (e.target.classList.contains("image-rotate-handle")) return true;
+      if (isRotateHandle(e.target)) return true;
     }
     return false;
   }
@@ -311,48 +311,6 @@ export class FigureNodeView implements NodeView {
       });
       this.view.dispatch(tr);
     } catch { /* ignore schema mismatch on resize */ }
-  }
-
-  private onRotateMouseDown(e: MouseEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    const pos = this.getPos();
-    if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    const rect = this.dom.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    const computeRotation = (ev: MouseEvent): number => {
-      const angle = Math.atan2(ev.clientY - centerY, ev.clientX - centerX) * (180 / Math.PI) + 90;
-      return ((Math.round(angle) % 360) + 360) % 360;
-    };
-
-    const onMove = (ev: MouseEvent) => {
-      const deg = computeRotation(ev);
-      this.dom.style.transform = transformWithRotation(
-        deg,
-        node.attrs.flipH as boolean,
-        node.attrs.flipV as boolean,
-      );
-    };
-
-    const onUp = (ev: MouseEvent) => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      const deg = computeRotation(ev);
-      try {
-        const tr = this.view.state.tr.setNodeMarkup(pos!, undefined, {
-          ...node.attrs,
-          rotation: deg,
-        });
-        this.view.dispatch(tr);
-      } catch { /* safeSetNodeMarkup: ignore invalid content errors */ }
-    };
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
   }
 
   update(node: PMNode): boolean {
