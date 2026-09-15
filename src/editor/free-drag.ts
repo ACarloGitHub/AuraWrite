@@ -575,7 +575,7 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
     ? (drop.pressTopClient - hostRect.top) / zoom // the new line takes the element's old slot
     : (drop.anchorTopClient - hostRect.top) / zoom;
   const yOff = Math.round(topInHost - anchorTopInHost);
-  // The element's OWN width, never the painted one (defect 14): what lands here can be
+  // The element's OWN width, never the painted one (defect 14): what lands here can be
   // written into the document below, and a turned element used to change shape forever.
   const drawnWidth = Math.round(drop.width / zoom);
 
