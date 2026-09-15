@@ -259,10 +259,6 @@ const imageSpec: NodeSpec = {
     flipH: { default: false },
     flipV: { default: false },
     aspectLocked: { default: true },
-    caption: { default: "" },
-    captionBg: { default: "" },
-    captionPadTop: { default: 4 },
-    captionPadBottom: { default: 0 },
     // Phase 1 (enrichment) style attrs — dialect + logic in enriched-schema.ts
     ...IMAGE_STYLE_ATTRS,
     // U1: opacity is shared by every element.
@@ -289,10 +285,6 @@ const imageSpec: NodeSpec = {
           flipH: dom.hasAttribute("data-flip-h"),
           flipV: dom.hasAttribute("data-flip-v"),
           aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
-          caption: dom.getAttribute("data-caption") || "",
-          captionBg: dom.getAttribute("data-caption-bg") || "",
-          captionPadTop: parseInt(dom.getAttribute("data-caption-pad-top") || "", 10) || 0,
-          captionPadBottom: parseInt(dom.getAttribute("data-caption-pad-bottom") || "", 10) || 0,
           ...imageStyleGetDOM(dom),
           ...freeLayoutGetDOM(dom),
         };
@@ -316,10 +308,6 @@ const imageSpec: NodeSpec = {
     if (node.attrs.flipH) attrs["data-flip-h"] = "";
     if (node.attrs.flipV) attrs["data-flip-v"] = "";
     if (!node.attrs.aspectLocked) attrs["data-aspect-unlocked"] = "";
-    if (node.attrs.caption) attrs["data-caption"] = node.attrs.caption as string;
-    if (node.attrs.captionBg) attrs["data-caption-bg"] = node.attrs.captionBg as string;
-    if (node.attrs.captionPadTop) attrs["data-caption-pad-top"] = String(node.attrs.captionPadTop);
-    if (node.attrs.captionPadBottom) attrs["data-caption-pad-bottom"] = String(node.attrs.captionPadBottom);
     Object.assign(attrs, imageStyleToDOM(node));
     // T1.4, D10 rule 1: the frame and the shadow must travel with the image,
     // or print and the exported HTML would lose them. The editor draws the

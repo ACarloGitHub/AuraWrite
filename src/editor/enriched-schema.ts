@@ -369,7 +369,6 @@ export function readImageAttrsFromDOM(dom: HTMLElement): Record<string, unknown>
     flipH: dom.hasAttribute("data-flip-h"),
     flipV: dom.hasAttribute("data-flip-v"),
     aspectLocked: !dom.hasAttribute("data-aspect-unlocked"),
-    caption: dom.getAttribute("data-caption") || "",
     ...imageStyleGetDOM(dom),
   };
 }

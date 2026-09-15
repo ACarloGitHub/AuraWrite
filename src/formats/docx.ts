@@ -196,8 +196,6 @@ async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<strin
 
   postProcessBlocks(container, wParagraphs, htmlBlocks);
 
-  mergeImageCaptions(container, wParagraphs, htmlBlocks);
-
   // Replace mammoth-generated <table> elements with richer tables extracted
   // directly from word/document.xml (preserves colspan/rowspan/colwidth).
   await replaceMammothTables(container, arrayBuffer);
@@ -243,39 +241,6 @@ async function replaceMammothTables(container: any, arrayBuffer: ArrayBuffer): P
     }
     if (newTbl && oldTbl.parentNode) {
       oldTbl.parentNode.replaceChild(newTbl, oldTbl);
-    }
-  }
-}
-
-function mergeImageCaptions(container: any, wParagraphs: any[], htmlBlocks: any[]): void {
-  const blockByWPara = new Map<number, any>();
-  for (let i = 0; i < Math.min(wParagraphs.length, htmlBlocks.length); i++) {
-    blockByWPara.set(i, htmlBlocks[i]);
-  }
-
-  for (let i = 1; i < wParagraphs.length; i++) {
-    const wP = wParagraphs[i];
-    const pPr = wP.getElementsByTagNameNS(W_NS, "pPr")?.[0];
-    if (!pPr) continue;
-    const pStyle = pPr.getElementsByTagNameNS(W_NS, "pStyle")?.[0];
-    const styleVal = (attrValue(pStyle, W_NS, "val") || "").toLowerCase();
-    if (styleVal !== "caption") continue;
-
-    const el = blockByWPara.get(i);
-    if (!el) continue;
-    const captionText = (el.textContent || "").trim();
-    if (!captionText) continue;
-
-    for (let j = i - 1; j >= 0; j--) {
-      const prevEl = blockByWPara.get(j);
-      if (!prevEl) continue;
-      const imgs = prevEl.getElementsByTagName ? prevEl.getElementsByTagName("img") : [];
-      if (imgs.length > 0) {
-        const img = imgs[imgs.length - 1];
-        img.setAttribute("data-caption", captionText);
-        if (prevEl.parentNode) prevEl.parentNode.removeChild(el);
-        break;
-      }
     }
   }
 }
@@ -1184,18 +1149,6 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBrea
         alignment: paragraphAlignFromAttr(node.attrs?.align),
         pageBreakBefore,
       });
-      const caption = (node.attrs?.caption as string) || "";
-      const captionAlign = paragraphAlignFromAttr(node.attrs?.align) || AlignmentType.CENTER;
-      if (caption) {
-        return [
-          imgParagraph,
-          new Paragraph({
-            children: [new TextRun({ text: caption, italics: true, size: 18 })],
-            alignment: captionAlign,
-            style: "Caption",
-          }),
-        ];
-      }
       return [imgParagraph];
     }
     case "page":

@@ -3,7 +3,6 @@ import { NodeView, EditorView } from "prosemirror-view";
 import { invoke } from "@tauri-apps/api/core";
 import { resolveImageSrc, uploadImageFile } from "./image-uploader";
 import {
-  applyCaptionStripStyle,
   applyFrameAndShadow,
   applyWrapMarker,
   selectNodeAt,
@@ -29,7 +28,6 @@ export class ImageNodeView implements NodeView {
   private img: HTMLImageElement;
   private handles: HandleEl[] = [];
   private rotateHandle: HTMLElement | null = null;
-  private captionEl: HTMLElement | null = null;
   private aspect = 1;
   /** Last-applied inline style values (idempotent writes: avoid spurious
    *  DOM mutations that ProseMirror's observer misreads as document edits). */
@@ -59,7 +57,6 @@ export class ImageNodeView implements NodeView {
     this.wrapper.appendChild(this.img);
     this.createHandles();
     this.createRotateHandle();
-    this.applyCaption(attrs);
     this.bindEvents();
 
     this.dom = this.wrapper;
@@ -158,7 +155,7 @@ export class ImageNodeView implements NodeView {
     setStyleCached(this.appliedWrapper, this.wrapper, "transform", transformStyleOf(attrs));
   }
 
-  /** Frame + shadow wrap the WHOLE unit (photo + caption), one shared rule. */
+  /** Frame + shadow wrap the whole painted unit, one shared rule. */
   private applyStyle(attrs: Record<string, unknown>): void {
     applyFrameAndShadow(this.appliedWrapper, this.wrapper, this.appliedImg, this.img, attrs);
     // T1.4: when the image floats in the flow, the air it keeps from the text
@@ -170,24 +167,6 @@ export class ImageNodeView implements NodeView {
       ? `${OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(attrs, "image").x)}px`
       : null;
     setStyleCached(this.appliedWrapper, this.wrapper, "--aw-float-gap", gap);
-  }
-
-  private applyCaption(attrs: Record<string, unknown>): void {
-    const caption = (attrs.caption as string) || "";
-    if (caption) {
-      if (!this.captionEl) {
-        this.captionEl = document.createElement("div");
-        this.captionEl.className = "image-caption";
-        this.wrapper.appendChild(this.captionEl);
-      }
-      if (this.captionEl.textContent !== caption) {
-        this.captionEl.textContent = caption;
-      }
-      applyCaptionStripStyle(this.captionEl, attrs);
-    } else if (this.captionEl) {
-      this.captionEl.remove();
-      this.captionEl = null;
-    }
   }
 
   private applySize(attrs: Record<string, unknown>): void {
@@ -454,7 +433,6 @@ export class ImageNodeView implements NodeView {
     applyWrapMarker(this.wrapper, attrs);
     this.applyTransform(attrs);
     this.applyStyle(attrs);
-    this.applyCaption(attrs);
     return true;
   }
 
@@ -469,6 +447,5 @@ export class ImageNodeView implements NodeView {
   destroy(): void {
     this.handles = [];
     this.rotateHandle = null;
-    this.captionEl = null;
   }
 }

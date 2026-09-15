@@ -655,7 +655,6 @@ function parseInlineMarkdown(text: string): any[] {
           flipH: false,
           flipV: false,
           aspectLocked: true,
-          caption: "",
         },
       });
       remaining = remaining.substring(imageMatch[0].length);

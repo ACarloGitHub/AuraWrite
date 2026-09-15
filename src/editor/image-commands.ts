@@ -28,7 +28,6 @@ export function createImageNode(
     flipH: false,
     flipV: false,
     aspectLocked: true,
-    caption: "",
   };
   return imageType.create(attrs);
 }
@@ -119,7 +118,6 @@ export function insertImageFromSrc(
     flipH: false,
     flipV: false,
     aspectLocked: true,
-    caption: "",
   });
   return insertImageBlock(view, node);
 }

@@ -288,7 +288,7 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
     return measureFigureNode(node, contentWidth);
   }
   if (node.type.name === "image") {
-    return measureImageNode(node, contentWidth);
+    return measureImageNode(node);
   }
   // R-b/v2b: paragraphs and headings are measured through the line model
   // (hard breaks split runs, mixed styles measure word by word).
@@ -400,26 +400,14 @@ const FALLBACK_IMAGE_HEIGHT_PX = 220;
 /**
  * image (F1.1): the block's vertical footprint is the photo height from the
  * stored attrs (set at insertion and on resize; the NodeView also self-heals
- * missing sizes by persisting the natural ones) plus the legacy caption strip
- * when `caption` carries text. Rotation is a CSS transform: the layout box â€”
+ * missing sizes by persisting the natural ones). Rotation is a CSS transform: the layout box â€”
  * the space subsequent blocks actually see â€” is always the unrotated one, so
  * rotation does NOT change the measured height.
  */
-function measureImageNode(node: PMNode, contentWidth: number): BlockMetrics {
-  const w = Number(node.attrs.width);
+function measureImageNode(node: PMNode): BlockMetrics {
   const h = Number(node.attrs.height);
-  const imageWidth = isFinite(w) && w > 0 ? w : contentWidth;
   const imageHeight = isFinite(h) && h > 0 ? h : FALLBACK_IMAGE_HEIGHT_PX;
-
-  let height = imageHeight;
-  const caption = String(node.attrs.caption || "");
-  if (caption.trim()) {
-    const pad = captionPaddings(node);
-    const captionWidth = Math.max(120, Math.min(imageWidth, contentWidth));
-    const strip = measureTextHeight(caption, captionWidth, metrics().caption.font, metrics().caption.linePx);
-    height += pad.top + pad.bottom + strip.heightPx;
-  }
-  return { heightPx: height, lineCount: Math.ceil(height / metrics().body.linePx) };
+  return { heightPx: imageHeight, lineCount: Math.ceil(imageHeight / metrics().body.linePx) };
 }
 
 /**

@@ -1312,6 +1312,11 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   -webkit-user-drag: none;
 }
 
+/* Caption typography, shared by the editor's figure caption and the exported
+   markup. Since the plain-image strip is gone, the rule below has ONE live
+   consumer left: the metrics probe in text-metrics.ts, which measures every
+   caption from a `.image-caption` element. Deleting this rule changes the
+   measured caption height, and with it the page counts. */
 .image-caption {
   text-align: center;
   font-size: 12px;

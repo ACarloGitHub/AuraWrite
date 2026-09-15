@@ -450,11 +450,9 @@ export function setGroupOrder(
 export function elementLabel(node: PMNode): string {
   const kind = kindName(node);
   const caption = node.textContent.trim();
-  if (node.type.name === "image") {
-    const own = String(node.attrs.caption ?? "").trim();
-    if (own) return `${kind}: ${truncate(own)}`;
-  } else if (caption) {
-    // Figures and boxes are named by the text they hold (their caption/note).
+  if (caption) {
+    // Figures and boxes are named by the text they hold (their caption/note);
+    // an image holds none, so it falls through to the file name below.
     return `${kind}: ${truncate(caption)}`;
   }
   const alt = String(node.attrs.alt ?? "").trim() || String(node.attrs.title ?? "").trim();
