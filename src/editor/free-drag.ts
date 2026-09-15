@@ -105,10 +105,6 @@ export function startFreeDrag(
   const grabOffsetY = originY - ownTop;
   const width = ownVisualWidth;
   const height = ownVisualHeight;
-  // How far the painted box sits from the own box on each side: the text band follows the
-  // PAINTED box, because that is what moves under the user's hand.
-  const paintShiftX = (rect.width - ownVisualWidth) / 2;
-  const paintShiftY = (rect.height - ownVisualHeight) / 2;
 
   // F3.2b: an element that is ALREADY free follows the pointer with its text
   // band while it flies. The press records what the band hangs from - the
@@ -248,12 +244,11 @@ export function startFreeDrag(
     // and the placement uses only the DIFFERENCE between them, so the scroll of
     // `#editor` cancels out. Converting through host offsets plus scrollTop is
     // the trap three coordinate systems set in figure-resize.ts.
-    setFreeWrapFlightBox(pos, {
-      top: flyingTopClient + paintShiftY,
-      bottom: flyingTopClient + paintShiftY + rect.height,
-      left: flyingLeftClient + paintShiftX,
-      width: rect.width,
-    });
+    // The copy's OWN corner, nothing else. Where the picture paints and how wide a
+    // claim that makes is the band function's business, computed from the same inputs
+    // the page count uses; a shift derived here would be a second opinion on the turn,
+    // and its sign has already been got wrong twice.
+    setFreeWrapFlightBox(pos, { top: flyingTopClient, left: flyingLeftClient });
     refreshFreeWrapBands(view);
   };
 

@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { EditorView } from "prosemirror-view";
-import { freeWrapBand, freeLayoutMap, parseFreeSpec } from "./free-layout";
+import { freeWrapBand, freeLayoutMap, paintedBoxOf, parseFreeSpec, type FreeSpec } from "./free-layout";
 import { isOverlap, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
@@ -66,6 +66,9 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
 
   const column = textColumn(host);
   const scale = hostScale(host);
+  // Needed only to place a FLYING copy inside the column: the copy lives on the
+  // document body, outside the scaled page, and its coordinates are viewport ones.
+  const hostRect = host.getBoundingClientRect();
 
   // ONE walk of the document: the text blocks, by their OWN node positions (the
   // anchor lookup needs their DOM), and the free elements. Positions come from
@@ -100,9 +103,30 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     // rectangle replaces the measured one for the VERTICAL; the claim's size stays the
     // element's own box, because that is the unit that turns.
     const flying = override?.get(pos);
-    const paintedTopClient = flying ? flying.top : r.top;
-    const paintedBottomClient = flying ? flying.bottom : r.bottom;
-    if (paintedBottomClient <= paintedTopClient) continue;
+    const painted = paintedBoxOf(ownWidthCss, ownHeightCss, rotationDeg);
+    // The band's vertical start and the claim's horizontal position. At rest both come
+    // from what is painted and registered; while the element flies, the copy is not in
+    // the document to be measured, so its painted rectangle is DERIVED from its own box
+    // and the turn by the same function the page count uses - never by adding a shift
+    // in one file and subtracting it in another, which is how the sign got wrong twice.
+    let lineTopClient: number;
+    let paintedHeightClient: number;
+    let claimSpec: FreeSpec = spec;
+    if (flying) {
+      lineTopClient = flying.top - painted.topShift * scale;
+      paintedHeightClient = painted.heightPx * scale;
+      // The live position, expressed the way a registered one is: the distance of the
+      // copy's own left edge from the column's left content edge, in layout units.
+      claimSpec = {
+        ...spec,
+        xFrom: "left",
+        xOff: (flying.left - hostRect.left) / scale - column.left,
+      };
+    } else {
+      lineTopClient = r.top;
+      paintedHeightClient = r.height;
+    }
+    if (paintedHeightClient <= 0) continue;
 
     const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
     let side: "left" | "right";
@@ -114,7 +138,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     } else {
       const band = freeWrapBand({
         column: { left: 0, width: column.width },
-        spec,
+        spec: claimSpec,
         elementWidthPx: ownWidthCss,
         elementHeightPx: ownHeightCss,
         rotationDeg,
@@ -161,10 +185,6 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const anchorNode = view.state.doc.nodeAt(anchorPos);
     if (!anchorEl || !anchorNode) continue;
 
-    // The picture's own top edge, exactly as painted: the rectangle the browser
-    // reports is the ground truth the band has to line up with.
-    const lineTopClient = paintedTopClient;
-
     // The band starts at the anchor block's start and is pushed down to the
     // line by a margin, with `shape-outside` keeping it out of the lines above.
     // A float's reserved area normally begins at the top of the line it is
@@ -176,7 +196,7 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     // ends the measurement feedback: the anchor is a fixed point.
     const anchorTopClient = anchorEl.getBoundingClientRect().top;
     const marginTop = Math.max(0, Math.round(lineTopClient - anchorTopClient));
-    const height = paintedBottomClient - lineTopClient;
+    const height = paintedHeightClient;
     if (height <= 0) continue;
     out.push({
       pos,
@@ -277,11 +297,14 @@ function freeWrapDecorations(bands: DomBand[]): Decoration[] {
 
 /** Where the copy of an element under the pointer is, right now. */
 export interface FlyingBox {
-  /** Viewport (client) pixels, the same space `getBoundingClientRect` uses. */
+  /**
+   * The copy's OWN top-left corner, in viewport (client) pixels - the same space
+   * `getBoundingClientRect` uses. Only the corner: the size is the element's own box,
+   * which does not change in flight, and the rectangle it paints comes out of
+   * `paintedBoxOf`, so no caller has to know which way a turn displaces an edge.
+   */
   top: number;
-  bottom: number;
   left: number;
-  width: number;
 }
 
 /** The bands, as last measured on the painted page (module state: one editor). */
