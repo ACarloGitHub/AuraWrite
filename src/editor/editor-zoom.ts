@@ -37,6 +37,23 @@ export function getEditorZoom(): number {
   return zoom;
 }
 
+/**
+ * The magnification ACTUALLY applied to an element of the page, measured from the
+ * element itself: its painted width over its layout width.
+ *
+ * `getEditorZoom()` is what the user asked for; this is what the browser really did.
+ * They are normally the same number, but a document number must never be derived from
+ * an intention: the one legal crossing from visual units into document units is a
+ * division by this measurement, used by every caller - so a gesture, the bands it
+ * paints and the numbers in the toolbar all convert with the same ruler, and the
+ * visual magnification cannot leak into the document (Carlo, 2026-09-15: "lo zoom deve
+ * essere solo un modo di visualizzare il documento").
+ */
+export function appliedScale(host: HTMLElement): number {
+  const painted = host.getBoundingClientRect().width;
+  return host.offsetWidth > 0 ? painted / host.offsetWidth : 1;
+}
+
 /** Store the factor and re-apply the transform + scroll area. */
 export function applyEditorZoom(percent: number): void {
   zoom = Math.max(0.5, Math.min(2, percent / 100));

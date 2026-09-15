@@ -8,6 +8,7 @@ import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
 import { syncEditorMetricsFromDom } from "./text-metrics";
+import { appliedScale } from "./editor-zoom";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
@@ -253,8 +254,7 @@ function sameDomBands(a: DomBand[], b: DomBand[]): boolean {
 
 /** How much the page is scaled on screen (1 when there is no zoom). */
 function hostScale(host: HTMLElement): number {
-  const w = host.getBoundingClientRect().width;
-  return host.offsetWidth > 0 ? w / host.offsetWidth : 1;
+  return appliedScale(host);
 }
 
 /**

@@ -44,7 +44,7 @@ import {
 import { ensureAnchorParagraph } from "./free-commands";
 import { freeElementWidth, textColumn } from "./free-style";
 import { refreshFreeWrapBands, setFreeWrapFlightBox } from "./pagination-cassie-plugin";
-import { getEditorZoom } from "./editor-zoom";
+import { appliedScale } from "./editor-zoom";
 
 /** Distance the pointer must travel before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 4;
@@ -94,7 +94,7 @@ export function startFreeDrag(
   // A rotation pivots on the centre, so the two boxes share their centre and the own box is
   // recovered from it - no angle, no trigonometry, exact at any zoom.
   const rect = dom.getBoundingClientRect();
-  const scale = getEditorZoom() || 1;
+  const scale = appliedScale(view.dom) || 1;
   const ownVisualWidth = Math.round(dom.offsetWidth * scale);
   const ownVisualHeight = Math.round(dom.offsetHeight * scale);
   const ownLeft = rect.left + rect.width / 2 - ownVisualWidth / 2;
@@ -210,13 +210,18 @@ export function startFreeDrag(
       // Live X/Y for the toolbar: the exact position the release will book.
       const host = view.dom as HTMLElement;
       const hostRect = host.getBoundingClientRect();
+      // Document units, not the ones the pointer speaks in: the differences below are
+      // painted pixels and must be divided by the applied magnification BEFORE the
+      // page's own padding comes off, or the readout moves with the visual scale and
+      // stops matching what the release books (defect 17).
+      const liveScale = appliedScale(host) || 1;
       const padLeft = parseFloat(getComputedStyle(host).paddingLeft) || 0;
       window.dispatchEvent(
         new CustomEvent("aurawrite:free-position-preview", {
           detail: {
             pos,
-            x: Math.round(ev.clientX - grabOffsetX - hostRect.left - padLeft),
-            y: Math.round(ev.clientY - grabOffsetY - anchorTopClient),
+            x: Math.round((ev.clientX - grabOffsetX - hostRect.left) / liveScale - padLeft),
+            y: Math.round((ev.clientY - grabOffsetY - anchorTopClient) / liveScale),
           },
         }),
       );
@@ -284,7 +289,7 @@ export function startFreeDrag(
     const startTop = Math.round(lastPointerY - grabOffsetY);
     const startLeft = Math.round(lastPointerX - grabOffsetX);
     applyDrop(view, getPos, {
-      width,
+      layoutWidth: dom.offsetWidth,
       startLeft,
       startTop,
       // Where the element itself sat when the press began: the reference used
@@ -313,7 +318,7 @@ function columnOf(view: EditorView): { viewportLeft: number; width: number } {
   const host = view.dom;
   const rect = host.getBoundingClientRect();
   const cs = getComputedStyle(host);
-  const zoom = getEditorZoom();
+  const zoom = appliedScale(host) || 1;
   const padLeft = parseFloat(cs.paddingLeft) || 0;
   const padRight = parseFloat(cs.paddingRight) || 0;
   // The guide lives on the document body (outside the scaled page), so its
@@ -482,7 +487,8 @@ function selectElement(view: EditorView, pos: number): void {
 }
 
 interface DropInfo {
-  width: number;
+  /** The element's OWN width in layout units - never painted, never scaled. */
+  layoutWidth: number;
   /** Viewport coordinates of the released box. */
   startLeft: number;
   startTop: number;
@@ -562,22 +568,25 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
   const hostRect = host.getBoundingClientRect();
   const column = textColumn(host);
   // The pointer lives in viewport (visual) units, the page lives in layout
-  // units: with the visual zoom the two differ by the scale factor.
-  const zoom = getEditorZoom();
-  const leftInHost = (drop.startLeft - hostRect.left) / zoom;
-  const topInHost = (drop.startTop - hostRect.top) / zoom;
+  // units: the two differ by the magnification actually applied, measured here so the
+  // drop books exactly what the gesture showed and the band painted.
+  const scale = appliedScale(host) || 1;
+  const leftInHost = (drop.startLeft - hostRect.left) / scale;
+  const topInHost = (drop.startTop - hostRect.top) / scale;
 
   // Carlo's rule for an element leaving the flow with no text block above it:
   // an empty paragraph is opened at the element's own slot and becomes the
   // anchor, in this very transaction - so one undo removes the picture and the
   // line together, and ordinary insertions are never touched.
   const anchorTopInHost = anchorless
-    ? (drop.pressTopClient - hostRect.top) / zoom // the new line takes the element's old slot
-    : (drop.anchorTopClient - hostRect.top) / zoom;
+    ? (drop.pressTopClient - hostRect.top) / scale // the new line takes the element's old slot
+    : (drop.anchorTopClient - hostRect.top) / scale;
   const yOff = Math.round(topInHost - anchorTopInHost);
-  // The element's OWN width, never the painted one (defect 14): what lands here can be
-  // written into the document below, and a turned element used to change shape forever.
-  const drawnWidth = Math.round(drop.width / zoom);
+  // The element's OWN width in its OWN units (defect 14): the layout width already IS
+  // the document's number, so it goes straight in. Enlarged for the copy and divided
+  // again on the way back, it picked up a rounding from the magnification - a document
+  // size that shifted with the view, which is the one thing the scale must never do.
+  const drawnWidth = drop.layoutWidth;
 
   const spec = distanceSpec(column, leftInHost, drawnWidth, yOff, node, wasFree);
   const attrs: Record<string, unknown> = {
