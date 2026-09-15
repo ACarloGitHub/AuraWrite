@@ -27,19 +27,19 @@ import {
   selectNodeAt,
   setStyleCached,
   transformStyleOf,
-  pointerInElementAxes,
 } from "./element-view";
-import { createRotateHandle, isRotateHandle, startRotateDrag } from "./element-handles";
+import {
+  createCornerHandles,
+  createRotateHandle,
+  isCornerHandle,
+  isRotateHandle,
+  startCornerResize,
+  startRotateDrag,
+  type Corner,
+} from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
-import { appliedScale } from "./editor-zoom";
-
-type Corner = "tl" | "tr" | "bl" | "br";
-
-interface HandleEl extends HTMLElement {
-  _corner: Corner;
-}
 
 const FIGURE_NODE = "figure";
 
@@ -51,7 +51,7 @@ export class FigureNodeView implements NodeView {
   contentDOM: HTMLElement;
 
   private img: HTMLImageElement;
-  private handles: HandleEl[] = [];
+  private handles: HTMLElement[] = [];
   private rotateHandle: HTMLElement | null = null;
   private aspect = 1;
   /** The raw src attr; the DOM <img> src may be the resolved asset URL. */
@@ -185,15 +185,11 @@ export class FigureNodeView implements NodeView {
   }
 
   private createHandles(): void {
-    const corners: Corner[] = ["tl", "tr", "bl", "br"];
-    for (const corner of corners) {
-      const handle = document.createElement("div") as unknown as HandleEl;
-      handle._corner = corner;
-      handle.className = `image-resize-handle image-resize-handle--${corner}`;
-      handle.addEventListener("mousedown", (e) => this.onHandleMouseDown(e, corner));
-      this.dom.appendChild(handle);
-      this.handles.push(handle);
-    }
+    // U7.3: the corners and their gesture live in `element-handles.ts`, shared
+    // with the image - one rule for how a corner follows the hand.
+    this.handles = createCornerHandles(this.dom, (e, corner) =>
+      this.onHandleMouseDown(e, corner)
+    );
   }
 
   private createRotateHandle(): void {
@@ -207,7 +203,7 @@ export class FigureNodeView implements NodeView {
     this.dom.addEventListener("mousedown", (e: MouseEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      if (target.classList.contains("image-resize-handle")) return;
+      if (isCornerHandle(target)) return;
       if (isRotateHandle(target)) return;
       // Click on the photo (not the caption text) selects the figure as a unit.
       if (target === this.img) {
@@ -225,7 +221,7 @@ export class FigureNodeView implements NodeView {
   /** PM must not process the parts we manage ourselves. */
   stopEvent(e: Event): boolean {
     if (e.target instanceof HTMLElement) {
-      if (e.target.classList.contains("image-resize-handle")) return true;
+      if (isCornerHandle(e.target)) return true;
       if (isRotateHandle(e.target)) return true;
     }
     return false;
@@ -238,64 +234,20 @@ export class FigureNodeView implements NodeView {
   }
 
   private onHandleMouseDown(e: MouseEvent, corner: Corner): void {
-    e.preventDefault();
-    e.stopPropagation();
-    const pos = this.getPos();
-    if (pos == null) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    const aspectLocked = node.attrs.aspectLocked !== false;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = this.img.clientWidth;
-    const startHeight = this.img.clientHeight;
-    const aspect = startHeight / startWidth || this.aspect;
-    // The pointer is visual, the stored size is in page units, and the ruler that
-    // converts one into the other is the magnification MEASURED on the page - the
-    // declared one is what the user asked for, and a document size may not depend
-    // on the way the document is being looked at.
-    const zoom = appliedScale(this.view.dom) || 1;
-
-    const startRotation = (node.attrs.rotation as number) || 0;
-
-    const computeNewSize = (ev: MouseEvent): { width: number; height: number } => {
-      // Divided by the zoom FIRST, then turned onto the element's own axes (defect 13).
-      const turned = pointerInElementAxes(
-        (ev.clientX - startX) / zoom,
-        (ev.clientY - startY) / zoom,
-        startRotation
-      );
-      const dx = turned.dx;
-      const dy = turned.dy;
-      let deltaX = dx;
-      let deltaY = dy;
-      if (corner === "tl" || corner === "bl") deltaX = -dx;
-      if (corner === "tl" || corner === "tr") deltaY = -dy;
-      let newWidth = Math.max(50, startWidth + deltaX);
-      let newHeight = Math.max(20, startHeight + deltaY);
-      if (aspectLocked) {
-        const ratio = aspect > 0 ? aspect : startHeight / startWidth;
-        const avg = (Math.abs(deltaX) + Math.abs(deltaY)) / 2;
-        const sign = deltaX + deltaY >= 0 ? 1 : -1;
-        newWidth = Math.max(50, startWidth + sign * avg);
-        newHeight = Math.round(newWidth * ratio);
-      }
-      return { width: newWidth, height: newHeight };
-    };
-
-    const onMove = (ev: MouseEvent) => {
-      const { width, height } = computeNewSize(ev);
-      this.img.style.width = `${width}px`;
-      this.img.style.height = `${height}px`;
-    };
-    const onUp = (ev: MouseEvent) => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      const { width, height } = computeNewSize(ev);
-      void this.persistSize(width, height);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    startCornerResize({
+      view: this.view,
+      getPos: this.getPos,
+      event: e,
+      corner,
+      startWidth: this.img.clientWidth,
+      startHeight: this.img.clientHeight,
+      naturalRatio: this.aspect,
+      paint: (width, height) => {
+        this.img.style.width = `${width}px`;
+        this.img.style.height = `${height}px`;
+      },
+      commit: (width, height) => void this.persistSize(width, height),
+    });
   }
 
   private async persistSize(width: number, height: number): Promise<void> {
