@@ -11,7 +11,10 @@
 // the scrollbar stay correct. Layout units (offsetTop/offsetWidth, and every
 // position written into the page) are the page's own and never depend on the
 // zoom; only `getBoundingClientRect`/`coordsAtPos` are in visual units, and
-// callers that cross the border convert with `getEditorZoom()`.
+// callers that cross the border convert with `appliedScale()` - measured on the
+// page, never with the number the user asked for. That number stays private here:
+// it exists to set the transform, and handing it out is how a document size ends up
+// depending on the way the document is being looked at.
 // ============================================================================
 
 export interface EditorZoomParts {
@@ -30,11 +33,6 @@ let scheduled = 0;
 /** Store the elements the zoom works on (called once, after the boot). */
 export function setEditorZoomParts(parts: EditorZoomParts | null): void {
   currentParts = parts;
-}
-
-/** The current magnification (1 = 100%), for callers mixing units. */
-export function getEditorZoom(): number {
-  return zoom;
 }
 
 /**

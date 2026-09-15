@@ -15,7 +15,7 @@ import {
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
-import { getEditorZoom } from "./editor-zoom";
+import { appliedScale } from "./editor-zoom";
 
 type Corner = "tl" | "tr" | "bl" | "br";
 
@@ -260,8 +260,11 @@ export class ImageNodeView implements NodeView {
     const startWidth = this.img.clientWidth;
     const startHeight = this.img.clientHeight;
     const aspect = startHeight / startWidth || this.aspect;
-    // The pointer is visual, the stored size is in page units.
-    const zoom = getEditorZoom();
+    // The pointer is visual, the stored size is in page units, and the ruler that
+    // converts one into the other is the magnification MEASURED on the page - the
+    // declared one is what the user asked for, and a document size may not depend
+    // on the way the document is being looked at.
+    const zoom = appliedScale(this.view.dom) || 1;
 
     const startRotation = (node.attrs.rotation as number) || 0;
 

@@ -29,7 +29,7 @@ import { isWrapping, parseTextCondition } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
 import { computeImageBoxShadow, normalizeImageStyle } from "./image-style";
-import { getEditorZoom } from "./editor-zoom";
+import { appliedScale } from "./editor-zoom";
 
 // The box keyboard guard is the shared one (element-view.ts); editor.ts
 // registers `createAtomicElementGuardPlugin("styled_box")`.
@@ -189,10 +189,14 @@ export class StyledBoxNodeView implements NodeView {
     const startWidth = node ? (node.attrs.widthPx as number) ?? this.dom.offsetWidth : this.dom.offsetWidth;
     const rotation = (node?.attrs.rotation as number) || 0;
 
+    // Visual pixels in, page units out: measured on the page, never from the
+    // declared magnification, so a box cannot come out wider at 140% than at 100%.
+    const scale = appliedScale(this.view.dom) || 1;
+
     const onMove = (ev: MouseEvent): void => {
       const turned = pointerInElementAxes(
-        (ev.clientX - originX) / getEditorZoom(),
-        (ev.clientY - originY) / getEditorZoom(),
+        (ev.clientX - originX) / scale,
+        (ev.clientY - originY) / scale,
         rotation
       );
       const width = Math.round(
