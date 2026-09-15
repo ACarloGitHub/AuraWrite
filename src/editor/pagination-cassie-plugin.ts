@@ -51,7 +51,7 @@ interface DomBand {
  *    uses. Feeding it the painted width instead produced a rectangle that was
  *    neither box: it started at the registered edge and ended at half the
  *    turn's growth, so the first letters of every line ran under the picture
- *    wherever the element was anchored to a side (defect 16).
+ *    wherever the element was anchored to a side (defect 17).
  *
  * The calculator keeps booking its own bands in flow coordinates: that is the
  * axis the PAGES are counted on, and the print sheets have no dividers, so there

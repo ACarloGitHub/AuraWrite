@@ -213,7 +213,7 @@ export function startFreeDrag(
       // Document units, not the ones the pointer speaks in: the differences below are
       // painted pixels and must be divided by the applied magnification BEFORE the
       // page's own padding comes off, or the readout moves with the visual scale and
-      // stops matching what the release books (defect 17).
+      // stops matching what the release books (defect 18).
       const liveScale = appliedScale(host) || 1;
       const padLeft = parseFloat(getComputedStyle(host).paddingLeft) || 0;
       window.dispatchEvent(
@@ -252,7 +252,7 @@ export function startFreeDrag(
     // The copy's OWN corner, nothing else. Where the picture paints and how wide a
     // claim that makes is the band function's business, computed from the same inputs
     // the page count uses; a shift derived here would be a second opinion on the turn,
-    // and its sign has already been got wrong twice.
+    // and its sign has already been got wrong twice (defect 17, second half).
     setFreeWrapFlightBox(pos, { top: flyingTopClient, left: flyingLeftClient });
     refreshFreeWrapBands(view);
   };
