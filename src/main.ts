@@ -1,5 +1,6 @@
 import { createEditor, syncDocumentPaginationState } from "./editor/editor";
-import { migrateLegacyDocumentJson } from "./editor/enriched-schema";
+import { applyDocumentJson, clearEditorDocument } from "./editor/document-loader";
+import { installTestHooks } from "./editor/test-hooks";
 import { setupToolbar } from "./editor/toolbar";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupMCPPanel } from "./ai-panel/mcp-panel";
@@ -13,7 +14,6 @@ import { initKeyboardHelp } from "./editor/keyboard-help";
 import { initEbookPanel } from "./ebook/panel";
 import { initErrorBoundaries } from "./error-boundary";
 import { checkForUpdatesOnStartup } from "./updates";
-import { EditorState } from "prosemirror-state";
 import { invoke } from "@tauri-apps/api/core";
 import { listen as tauriListen } from "@tauri-apps/api/event";
 import { updateDownloadProgress } from "./download-toast";
@@ -230,6 +230,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const editorView = createEditor(zoomMount);
   syncDocumentPaginationState(editorView);
+  // The verification tool's doors (wiki: concepts/verification-tools). Nothing
+  // here is visible or reachable without the engine's debug port, which a
+  // normal launch never opens.
+  installTestHooks(editorView);
 
   new ResizeObserver(() => scheduleEditorZoomSync()).observe(zoomMount);
   window.addEventListener("resize", () => scheduleEditorZoomSync());
@@ -237,17 +241,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Loading flag (typed module, still mirrored on window for DevTools)
   setLoading(false);
 
-  function migrateImageNodesInJson(node: any): any {
-    return migrateLegacyDocumentJson(node);
-  }
-
   // Listen for clear editor events
   window.addEventListener("aurawrite:clear-editor", () => {
     setLoading(true);
-    const tr = editorView.state.tr;
-    tr.delete(0, tr.doc.content.size);
-    editorView.dispatch(tr);
-    syncDocumentPaginationState(editorView);
+    clearEditorDocument(editorView);
     console.log("Editor cleared");
     setTimeout(() => setLoading(false), 50);
   });
@@ -300,23 +297,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       setLoading(true);
       try {
         if (doc.content_json && doc.content_json.trim() !== "") {
-          const rawContent = JSON.parse(doc.content_json);
-          const migrated = migrateImageNodesInJson(rawContent);
-          const newDoc = editorView.state.schema.nodeFromJSON(migrated);
-          const newState = EditorState.create({
-            schema: editorView.state.schema,
-            doc: newDoc,
-            plugins: editorView.state.plugins,
-          });
-          editorView.updateState(newState);
-          syncDocumentPaginationState(editorView);
+          applyDocumentJson(editorView, doc.content_json);
           console.log("Loaded document content");
         } else {
-          // Document is empty â€” clear the editor
-          const tr = editorView.state.tr;
-          tr.delete(0, tr.doc.content.size);
-          editorView.dispatch(tr);
-          syncDocumentPaginationState(editorView);
+          // Document is empty — clear the editor
+          clearEditorDocument(editorView);
           console.log("Loaded empty document");
         }
       } catch (e) {
@@ -324,10 +309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("Raw content_json (first 500 chars):", doc.content_json?.slice(0, 500));
         console.error("Document id:", doc.id, "title:", doc.title);
         // Fallback: clear editor on parse error
-        const tr = editorView.state.tr;
-        tr.delete(0, tr.doc.content.size);
-        editorView.dispatch(tr);
-        syncDocumentPaginationState(editorView);
+        clearEditorDocument(editorView);
       }
       setTimeout(() => setLoading(false), 50);
     },    onProjectChange: (project) => {
