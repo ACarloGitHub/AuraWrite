@@ -46,8 +46,15 @@ function placeFreeElements(payload: {
 }): void {
   for (const p of payload.freePlacement ?? []) {
     const wrap = document.querySelector(`.aw-print-free[data-aw-free-pos="${p.pos}"]`);
-    const anchor = document.querySelector(`[data-aw-pos="${p.anchorPos}"]`);
-    if (!(wrap instanceof HTMLElement) || !(anchor instanceof HTMLElement)) continue;
+    if (!(wrap instanceof HTMLElement)) continue;
+    // L'ancora vale solo se sta DENTRO il foglio dell'elemento. Un elemento
+    // libero puo' essere segnato su una pagina e appendersi a un paragrafo della
+    // pagina prima (misurato nel documento lungo: una copia su tre faceva cosi',
+    // e l'immagine finiva 1200 pixel piu' in basso). Fuori dal foglio non c'e'
+    // una posizione da copiare: si lascia il numero gia' scritto.
+    const foglio = wrap.closest(".aw-print-sheet");
+    const anchor = foglio?.querySelector(`[data-aw-pos="${p.anchorPos}"]`);
+    if (!(anchor instanceof HTMLElement)) continue;
     wrap.style.top = `${Math.round(anchor.offsetTop + p.yOff)}px`;
   }
 }
