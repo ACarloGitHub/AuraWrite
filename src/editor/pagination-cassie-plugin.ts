@@ -14,7 +14,7 @@ import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
 /** One band, measured on the screen. */
-interface DomBand {
+export interface DomBand {
   /** The free element this band belongs to. */
   pos: number;
   /**

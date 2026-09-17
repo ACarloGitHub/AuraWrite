@@ -29,6 +29,7 @@ import {
 } from "./pagination-cassie";
 import { freeElementWidth, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
 import { isOverlap, textConditionOf } from "./element-condition";
+import type { DomBand } from "./pagination-cassie-plugin";
 
 export interface PrintSheet {
   html: string;
@@ -46,7 +47,19 @@ export interface PrintDoc {
   totalPages: number;
 }
 
-export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
+export function buildPrintPages(
+  doc: PMNode,
+  margins: PageMargins,
+  /**
+   * Le fasce misurate sulla pagina di AuraWrite (17-09). Quando ci sono, sono
+   * LORO i numeri dello spazio riservato al testo sul foglio: il foglio
+   * ricostruisce la pagina dell'editor invece di rifarla per conto suo, che e'
+   * quello che Carlo pretende - il testo deve essere identico, riga per riga, a
+   * prescindere da dove sta l'immagine. Senza questo elenco si torna ai numeri
+   * del calcolo, come prima.
+   */
+  editorBands: DomBand[] = [],
+): PrintDoc {
   const { breaks, totalPages, freeGeometry } = calculatePageBreaks(doc, margins);
   const cuts: number[] = [0];
   for (const b of breaks) {
@@ -82,8 +95,24 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
     // does on screen.
     const sheetTop = i * contentHeight;
     const sheetBottom = sheetTop + contentHeight;
+    // Le fasce misurate sulla pagina appartengono al blocco che le contiene: si
+    // inseriscono dentro quel blocco, con i numeri dell'editor (larghezza,
+    // altezza, margine). Le altre - quelle senza misura - seguono la strada di
+    // prima, con la geometria del calcolo.
+    const fasciaMisurata = new Map<PMNode, DomBand>();
+    const inizioMisurato = new Map<PMNode, number>();
+    const posizioniMisurate = new Set<number>();
+    for (const b of editorBands) {
+      if (b.insertPos === null || b.insertPos === undefined) continue;
+      const owner = blockStartOf(doc, b.insertPos);
+      if (!owner) continue;
+      fasciaMisurata.set(owner.node, b);
+      inizioMisurato.set(owner.node, owner.start);
+      posizioniMisurate.add(b.pos);
+    }
     const affecting = freeGeometry.filter(
-      (g) => g.band && g.band.y1 > sheetTop + 0.5 && g.band.y0 < sheetBottom - 0.5,
+      (g) => g.band && !posizioniMisurate.has(g.pos)
+        && g.band.y1 > sheetTop + 0.5 && g.band.y0 < sheetBottom - 0.5,
     );
     const bySpacerBlock = new Map<PMNode, FreeGeometry[]>();
     const startOfNode = new Map<PMNode, number>();
@@ -98,9 +127,12 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
       else bySpacerBlock.set(owner.node, [geo]);
     }
     const placed = new Set<FreeGeometry>();
-    slice.content.forEach((node) => {
+    slice.content.forEach((node, offsetInSlice) => {
       if (!inFlow(node)) return;
       const el = serializer.serializeNode(node, {}) as HTMLElement;
+      // Il blocco porta la sua posizione nel documento: all'anteprima serve per
+      // ritrovare il paragrafo a cui un elemento libero e' appeso.
+      el.dataset.awPos = String(cuts[i] + offsetInSlice);
       if (isOverlap(textConditionOf(node))) {
         // Overlap in the flow: out of the page flow but keeping the place it
         // already had, exactly as on screen (free-style.applyOverlapLayout).
@@ -118,6 +150,22 @@ export function buildPrintPages(doc: PMNode, margins: PageMargins): PrintDoc {
         if (width > 0) el.style.width = `${width}px`;
         el.style.margin = "0";
         el.style.zIndex = String(stackDepthOf(zLevelOf(node)));
+      }
+      // La fascia MISURATA sulla pagina dell'editor ha la precedenza: stessi
+      // numeri, stesso punto, quindi stesso testo. Senza misura, la fascia del
+      // calcolo (strada di prima).
+      const misurata = fasciaMisurata.get(node);
+      if (misurata) {
+        const inizio = inizioMisurato.get(node) ?? 0;
+        insertNodeAtOffset(
+          el,
+          wrapSpacerDom(
+            { side: misurata.side, widthPx: misurata.widthPx } as FreeWrapBand,
+            misurata.heightPx,
+            misurata.marginTop,
+          ),
+          misurata.insertPos - inizio - 1,
+        );
       }
       // The float goes INSIDE the block's text, at the line the picture touches.
       // In front of the block with a margin it would narrow the lines from its
@@ -205,7 +253,11 @@ function wrapSpacerDom(band: FreeWrapBand, height: number, marginTop = 0): HTMLE
  */
 function insertFloatAtOffset(root: HTMLElement, band: FreeBandInput, offset: number, height: number): void {
   const marginTop = Math.max(0, Math.round(band.y0 - band.lineTop));
-  const float = wrapSpacerDom(band, height, marginTop);
+  insertNodeAtOffset(root, wrapSpacerDom(band, height, marginTop), offset);
+}
+
+/** Mettere un pezzo (il galleggiante) a un certo carattere dentro un blocco. */
+function insertNodeAtOffset(root: HTMLElement, float: Node, offset: number): void {
   let left = Math.max(0, Math.round(offset));
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -255,7 +307,7 @@ function freeOverlayHtml(
     // on shrink-to-fit, and the generic image cap (`max-width: 100%`) resolves
     // against a zero-width container: the photo collapses and never shows.
     parts.push(
-      `<div class="aw-print-free" style="left:${left}px;top:${top}px;width:${Math.round(width)}px;` +
+      `<div class="aw-print-free" data-aw-free-pos="${geo.pos}" style="left:${left}px;top:${top}px;width:${Math.round(width)}px;` +
         `z-index:${stackDepthOf(geo.level)}">${holder.innerHTML}</div>`,
     );
   }

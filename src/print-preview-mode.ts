@@ -34,6 +34,24 @@ html.aw-pv .pv-empty { padding: 40px; text-align: center; color: #77777f; }
 }
 `;
 
+/**
+ * Mettere ogni elemento libero alla stessa altezza che ha nell'editor: il bordo
+ * alto si prende dal paragrafo a cui e' appeso, che qui e' disegnato dal
+ * navigatore, piu' lo spostamento chiesto. E' la stessa regola dell'editor
+ * (`free-style.ts`: ancora disegnata + spostamento), quindi il foglio
+ * ricostruisce la pagina di AuraWrite invece di calcolarla per conto suo.
+ */
+function placeFreeElements(payload: {
+  freePlacement?: { pos: number; anchorPos: number; yOff: number }[];
+}): void {
+  for (const p of payload.freePlacement ?? []) {
+    const wrap = document.querySelector(`.aw-print-free[data-aw-free-pos="${p.pos}"]`);
+    const anchor = document.querySelector(`[data-aw-pos="${p.anchorPos}"]`);
+    if (!(wrap instanceof HTMLElement) || !(anchor instanceof HTMLElement)) continue;
+    wrap.style.top = `${Math.round(anchor.offsetTop + p.yOff)}px`;
+  }
+}
+
 function previewLabel(): string {
   try {
     return (getCurrentWindow() as unknown as { label?: string }).label || PREVIEW_LABEL;
@@ -96,7 +114,12 @@ export async function startPrintPreviewWindow(): Promise<void> {
   }
 
   async function load(autoIfAsked: boolean): Promise<void> {
-    let payload: { title?: string; body?: string; autoPrint?: boolean } | null = null;
+    let payload: {
+      title?: string;
+      body?: string;
+      autoPrint?: boolean;
+      freePlacement?: { pos: number; anchorPos: number; yOff: number }[];
+    } | null = null;
     try {
       if (await exists(PREVIEW_FILE, { baseDir: BaseDirectory.AppData })) {
         payload = JSON.parse(await readTextFile(PREVIEW_FILE, { baseDir: BaseDirectory.AppData }));
@@ -121,6 +144,13 @@ export async function startPrintPreviewWindow(): Promise<void> {
     doc.innerHTML = payload.body;
     doc.style.zoom = "";
     stage.appendChild(doc);
+    placeFreeElements(payload);
+    // I caratteri possono arrivare dopo: la stessa collocazione si rifa' quando
+    // l'impaginazione del foglio e' certa.
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => placeFreeElements(payload!)).catch(() => undefined);
+    }
+    window.requestAnimationFrame(() => placeFreeElements(payload!));
     zoomSel.value = "1";
     applyZoom();
     document.documentElement.removeAttribute("data-aw-preview");

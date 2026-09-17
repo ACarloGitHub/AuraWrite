@@ -21,6 +21,8 @@ import { emitTo } from "@tauri-apps/api/event";
 import { mkdir, writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import type { EditorView } from "prosemirror-view";
 import { getMargins } from "./pagination-state";
+import { freeWrapState } from "./pagination-cassie-plugin";
+import { freeLayoutMap, parseFreeSpec } from "./free-layout";
 import { buildPrintPages, renderPrintBody, type PrintDoc } from "./print-pages";
 import { embedImagesInDom } from "../formats/html";
 
@@ -30,7 +32,10 @@ export const PREVIEW_LABEL = "print-preview";
 export const PREVIEW_URL = "index.html?view=print-preview";
 
 async function buildPrintDoc(view: EditorView): Promise<PrintDoc> {
-  const doc = buildPrintPages(view.state.doc, getMargins());
+  // Lo spazio riservato al testo sul foglio viene dalle fasce MISURATE sulla
+  // pagina dell'editor: e' la richiesta di Carlo (17-09) - il foglio
+  // ricostruisce la pagina di AuraWrite, non la rifa' per conto suo.
+  const doc = buildPrintPages(view.state.doc, getMargins(), freeWrapState().bands);
   for (const sheet of doc.sheets) {
     const host = document.createElement("div");
     host.innerHTML = sheet.html;
@@ -49,6 +54,23 @@ async function buildPrintDoc(view: EditorView): Promise<PrintDoc> {
   return doc;
 }
 
+/**
+ * Dove l'editor ha appeso ogni elemento libero (`anchorPos`) e di quanto l'ha
+ * spostato (`yOff`): all'anteprima servono per mettere l'elemento alla stessa
+ * altezza, rispetto alla riga disegnata, invece di usare la posizione calcolata
+ * (misurato il 17-09: con quella finiva 17-26 pixel piu' in basso).
+ */
+export function freePlacement(view: EditorView): { pos: number; anchorPos: number; yOff: number }[] {
+  const out: { pos: number; anchorPos: number; yOff: number }[] = [];
+  for (const { pos, anchorPos } of freeLayoutMap(view.state.doc)) {
+    if (anchorPos === null) continue;
+    const node = view.state.doc.nodeAt(pos);
+    const spec = node ? parseFreeSpec(node.attrs?.free) : null;
+    out.push({ pos, anchorPos, yOff: spec ? spec.yOff : 0 });
+  }
+  return out;
+}
+
 export function documentTitle(): string {
   try {
     const t = document.getElementById("document-title")?.textContent?.trim();
@@ -57,13 +79,17 @@ export function documentTitle(): string {
   return "Document";
 }
 
-async function writeAndOpen(autoPrint: boolean): Promise<void> {
+async function writeAndOpen(
+  autoPrint: boolean,
+  placement: { pos: number; anchorPos: number; yOff: number }[],
+): Promise<void> {
   const printDoc = await printDocCache;
   if (!printDoc) return;
   const payload = JSON.stringify({
     title: documentTitle(),
     autoPrint,
     generated: Date.now(),
+    freePlacement: placement,
     body: renderPrintBody(printDoc),
   });
   await mkdir(PREVIEW_DIR, { baseDir: BaseDirectory.AppData, recursive: true });
@@ -93,11 +119,11 @@ let printDocCache: Promise<PrintDoc> | null = null;
 /** Build the print document, open the preview window, print on arrival. */
 export async function printDocumentNow(view: EditorView): Promise<void> {
   printDocCache = buildPrintDoc(view);
-  await writeAndOpen(true);
+  await writeAndOpen(true, freePlacement(view));
 }
 
 /** Build the print document and open the preview window for viewing. */
 export async function openPrintPreview(view: EditorView): Promise<void> {
   printDocCache = buildPrintDoc(view);
-  await writeAndOpen(false);
+  await writeAndOpen(false, freePlacement(view));
 }
