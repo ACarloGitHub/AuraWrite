@@ -297,9 +297,15 @@ export function refreshFreeWrapBands(view: EditorView): void {
   const measured = measureDomBands(view, override);
   if (sameDomBands(measured, domBands)) return;
   domBands = measured;
-  conta.pubblicazioni++;
-  if (republishLeft <= 0) return; // settled enough: the last numbers stay
+  if (republishLeft <= 0) {
+    // The numbers moved but nothing was painted: this is the state that used to
+    // leave the previous document's bands on screen. Counted apart so the tool
+    // can see it, never silently.
+    conta.trattenute++;
+    return; // settled enough: the last numbers stay
+  }
   republishLeft--;
+  conta.pubblicazioni++;
   view.dispatch(
     view.state.tr.setMeta("force-cassie-recompute", true).setMeta("addToHistory", false),
   );
@@ -380,7 +386,7 @@ let domBands: DomBand[] = [];
  * e' stata chiesta, quante volte il codice ha pubblicato le fasce, quanti
  * aggiornamenti e quanti eventi sono arrivati. Non cambiano il comportamento.
  */
-const conta = { misure: 0, pubblicazioni: 0, aggiornamenti: 0, metriche: 0, dipinto: 0 };
+const conta = { misure: 0, pubblicazioni: 0, trattenute: 0, aggiornamenti: 0, metriche: 0, dipinto: 0 };
 
 /**
  * Where a flying element is right now, while the user drags it. The original is
@@ -530,7 +536,18 @@ export function createCassiePaginationPlugin(
     key: cassiePaginationPluginKey,
 
     state: {
-      init: (_, state) => buildDecorations(state.doc, options.enabled(), getCassiePagedMode(), editorDom),
+      // A state built from scratch is a DIFFERENT document (it is how opening a
+      // document works: a new EditorState, not an edit). The bands measured on
+      // the previous one describe pictures that do not exist here, and painting
+      // them was measured to be one document behind: opening A09 after A17 left
+      // A17's reserved space on A09's page (the text narrowed where the old
+      // picture was, and the print - which now follows the editor's numbers -
+      // narrowed with it). So a new document starts with NO bands and gets its
+      // own ones from the measurement that follows the paint.
+      init: (_, state) => {
+        domBands = [];
+        return buildDecorations(state.doc, options.enabled(), getCassiePagedMode(), editorDom);
+      },
       apply: (tr, old, _oldState, newState) => {
         // The bands are re-published by the view after every paint, so a
         // rebuild is asked for with the same meta the metrics probe already

@@ -21,7 +21,7 @@ import { emitTo } from "@tauri-apps/api/event";
 import { mkdir, writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import type { EditorView } from "prosemirror-view";
 import { getMargins } from "./pagination-state";
-import { freeWrapState } from "./pagination-cassie-plugin";
+import { freeWrapState, refreshFreeWrapBands } from "./pagination-cassie-plugin";
 import { freeLayoutMap, parseFreeSpec } from "./free-layout";
 import { buildPrintPages, renderPrintBody, type PrintDoc } from "./print-pages";
 import { embedImagesInDom } from "../formats/html";
@@ -32,6 +32,12 @@ export const PREVIEW_LABEL = "print-preview";
 export const PREVIEW_URL = "index.html?view=print-preview";
 
 async function buildPrintDoc(view: EditorView): Promise<PrintDoc> {
+  // Il foglio ricostruisce la pagina dell'editor, quindi ha bisogno dei numeri
+  // che l'editor ha misurato. Un documento appena aperto puo' non averli ancora
+  // (le fasce si misurano dopo la pittura, e un documento nuovo parte senza):
+  // qui si chiede la misura ADESSO, invece di ricadere sui numeri del calcolo e
+  // ritrovarsi il testo distribuito diversamente dalla pagina di AuraWrite.
+  if (freeWrapState().bands.length === 0) refreshFreeWrapBands(view);
   // Lo spazio riservato al testo sul foglio viene dalle fasce MISURATE sulla
   // pagina dell'editor: e' la richiesta di Carlo (17-09) - il foglio
   // ricostruisce la pagina di AuraWrite, non la rifa' per conto suo.

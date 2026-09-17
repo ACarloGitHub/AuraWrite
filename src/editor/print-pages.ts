@@ -99,20 +99,25 @@ export function buildPrintPages(
     // inseriscono dentro quel blocco, con i numeri dell'editor (larghezza,
     // altezza, margine). Le altre - quelle senza misura - seguono la strada di
     // prima, con la geometria del calcolo.
-    const fasciaMisurata = new Map<PMNode, DomBand>();
-    const inizioMisurato = new Map<PMNode, number>();
-    const posizioniMisurate = new Set<number>();
+    const fascePerBlocco = new Map<PMNode, DomBand[]>();
+    const inizioBlocco = new Map<PMNode, number>();
+    // Due elementi liberi appesi allo stesso paragrafo (le due immagini
+    // affiancate, l'immagine e la nota sovrapposte): il blocco ha BISOGNO di
+    // tutte e due le fasce. Mapparne una sola per blocco lasciava il testo girare
+    // attorno a una immagine e passare sotto l'altra.
+    const fasceMisurate = new Set<number>();
     for (const b of editorBands) {
       if (b.insertPos === null || b.insertPos === undefined) continue;
       const owner = blockStartOf(doc, b.insertPos);
       if (!owner) continue;
-      fasciaMisurata.set(owner.node, b);
-      inizioMisurato.set(owner.node, owner.start);
-      posizioniMisurate.add(b.pos);
+      const lista = fascePerBlocco.get(owner.node);
+      if (lista) lista.push(b);
+      else fascePerBlocco.set(owner.node, [b]);
+      inizioBlocco.set(owner.node, owner.start);
+      fasceMisurate.add(b.pos);
     }
     const affecting = freeGeometry.filter(
-      (g) => g.band && !posizioniMisurate.has(g.pos)
-        && g.band.y1 > sheetTop + 0.5 && g.band.y0 < sheetBottom - 0.5,
+      (g) => g.band && g.band.y1 > sheetTop + 0.5 && g.band.y0 < sheetBottom - 0.5,
     );
     const bySpacerBlock = new Map<PMNode, FreeGeometry[]>();
     const startOfNode = new Map<PMNode, number>();
@@ -154,17 +159,12 @@ export function buildPrintPages(
       // La fascia MISURATA sulla pagina dell'editor ha la precedenza: stessi
       // numeri, stesso punto, quindi stesso testo. Senza misura, la fascia del
       // calcolo (strada di prima).
-      const misurata = fasciaMisurata.get(node);
-      if (misurata) {
-        const inizio = inizioMisurato.get(node) ?? 0;
+      const inizio = inizioBlocco.get(node) ?? 0;
+      for (const m of fascePerBlocco.get(node) ?? []) {
         insertNodeAtOffset(
           el,
-          wrapSpacerDom(
-            { side: misurata.side, widthPx: misurata.widthPx } as FreeWrapBand,
-            misurata.heightPx,
-            misurata.marginTop,
-          ),
-          misurata.insertPos - inizio - 1,
+          wrapSpacerDom({ side: m.side, widthPx: m.widthPx } as FreeWrapBand, m.heightPx, m.marginTop),
+          m.insertPos - inizio - 1,
         );
       }
       // The float goes INSIDE the block's text, at the line the picture touches.
@@ -173,6 +173,9 @@ export function buildPrintPages(
       // above the picture, on paper as on screen.
       for (const geo of bySpacerBlock.get(node) ?? []) {
         placed.add(geo);
+        // Chi ha la fascia dell'editor e' gia' sistemata qui sopra: il conto del
+        // calcolo non deve aggiungere una seconda riserva nello stesso blocco.
+        if (fasceMisurate.has(geo.pos)) continue;
         const band = geo.band!;
         const start = startOfNode.get(node) ?? 0;
         // The float starts at the line it must shorten, so no margin is needed;
