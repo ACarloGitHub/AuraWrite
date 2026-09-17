@@ -19,6 +19,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "prosemirror-view";
 import { applyDocumentJson } from "./document-loader";
+import { freeWrapDiagnosis, freeWrapState } from "./pagination-cassie-plugin";
+import { calculatePageBreaks } from "./pagination-cassie";
+import { getMargins } from "./pagination-state";
 
 /** What a hook answers: the tool never has to guess whether it worked. */
 export interface HookResult {
@@ -30,6 +33,12 @@ export interface HookResult {
 export interface TestHooks {
   /** Read a stored document (ProseMirror JSON) from `path` and open it. */
   openDocument(path: string): Promise<HookResult>;
+  /**
+   * The numbers as they are right now: the reservation pieces the screen has
+   * measured and painted, and the ones the engine books (page breaks and the
+   * band of every free element). Read-only.
+   */
+  measures(ricalcola?: boolean): HookResult;
 }
 
 declare global {
@@ -48,6 +57,42 @@ export function installTestHooks(view: EditorView): void {
           ok: true,
           blocks: view.state.doc.childCount,
           words: view.state.doc.textContent.trim().split(/\s+/).filter(Boolean).length,
+        };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    measures(ricalcola = false): HookResult {
+      try {
+        const screen = freeWrapState();
+        // Su richiesta, la misura si fa ADESSO: e' il modo di distinguere "la
+        // misura non trova niente" da "nessuno l'ha piu' chiesta".
+        if (ricalcola) {
+          window.dispatchEvent(new Event("aurawrite:editor-metrics-changed"));
+        }
+        const engine = calculatePageBreaks(view.state.doc, getMargins());
+        return {
+          ok: true,
+          diagnosis: freeWrapDiagnosis(view),
+          screen: {
+            painted: screen.painted,
+            republishLeft: screen.republishLeft,
+            conta: screen.conta,
+            bands: screen.bands.map((b) => ({
+              pos: b.pos, insertPos: b.insertPos, marginTop: b.marginTop,
+              side: b.side, widthPx: b.widthPx, heightPx: b.heightPx, full: b.full,
+            })),
+          },
+          engine: {
+            pages: engine.totalPages,
+            breaks: engine.breaks.length,
+            free: engine.freeGeometry.map((g) => ({
+              pos: g.pos, page: g.page, top: Math.round(g.top), anchorTop: Math.round(g.anchorTop),
+              heightPx: Math.round(g.heightPx), level: g.level,
+              band: g.band ? { side: g.band.side, widthPx: g.band.widthPx, y0: Math.round(g.band.y0), y1: Math.round(g.band.y1), insertPos: g.band.insertPos } : null,
+            })),
+          },
         };
       } catch (e) {
         return { ok: false, error: `${e}` };

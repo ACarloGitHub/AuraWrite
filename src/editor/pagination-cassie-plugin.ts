@@ -57,13 +57,24 @@ interface DomBand {
  * axis the PAGES are counted on, and the print sheets have no dividers, so there
  * the two rulers agree.
  */
-export function measureDomBands(view: EditorView, override?: Map<number, FlyingBox>): DomBand[] {
+export function measureDomBands(
+  view: EditorView,
+  override?: Map<number, FlyingBox>,
+  // Read-only: when a caller passes a list, the measurement writes down why it
+  // skipped what it skipped. It is how the verification tool finds out why a
+  // document that has just been opened gets no band at all.
+  diagnosis?: Record<string, unknown>[],
+): DomBand[] {
+  conta.misure++;
   const host = view.dom as HTMLElement;
   const out: DomBand[] = [];
   const pictures = Array.from(host.children).filter(
     (el) => (el as HTMLElement).dataset?.awFree === "1",
   ) as HTMLElement[];
-  if (pictures.length === 0) return out;
+  if (pictures.length === 0) {
+    diagnosis?.push({ fermo: "nessun figlio del documento porta il segno degli elementi liberi" });
+    return out;
+  }
 
   const column = textColumn(host);
   const scale = hostScale(host);
@@ -83,14 +94,24 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     if (/^P$|^H[1-6]$/.test(el.tagName)) elsByPos.set(offset, el);
     if (el.dataset?.awFree === "1") freeEls.set(offset, el);
   });
-  if (elsByPos.size === 0 || freeEls.size === 0) return out;
+  if (elsByPos.size === 0 || freeEls.size === 0) {
+    diagnosis?.push({ fermo: "paragrafi o elementi liberi non trovati nel documento",
+                      paragrafi: elsByPos.size, liberi: freeEls.size, figli: host.children.length });
+    return out;
+  }
 
   for (const [pos, pic] of freeEls) {
     const node = view.state.doc.nodeAt(pos);
     const spec = node ? parseFreeSpec(node.attrs?.free) : null;
-    if (!node || !spec) continue;
+    if (!node || !spec) {
+      diagnosis?.push({ pos, fermo: node ? "posizione free illeggibile" : "nessun nodo a questa posizione" });
+      continue;
+    }
     const condition = textConditionOf(node);
-    if (isOverlap(condition)) continue;
+    if (isOverlap(condition)) {
+      diagnosis?.push({ pos, fermo: "elemento sovrapposto: non chiede spazio" });
+      continue;
+    }
 
     // `offsetWidth`/`offsetHeight` are the element's OWN box in layout units: the
     // transform is not applied to them, which is exactly what makes them the unit
@@ -98,7 +119,10 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const ownWidthCss = pic.offsetWidth;
     const ownHeightCss = pic.offsetHeight;
     const rotationDeg = Number((node.attrs as Record<string, unknown>)?.rotation) || 0;
-    if (ownWidthCss <= 0 || ownHeightCss <= 0) continue;
+    if (ownWidthCss <= 0 || ownHeightCss <= 0) {
+      diagnosis?.push({ pos, fermo: "misura dell'elemento nulla", largo: ownWidthCss, alto: ownHeightCss });
+      continue;
+    }
     const r = pic.getBoundingClientRect();
     // While the element flies the original is hidden in its old place, so the copy's
     // rectangle replaces the measured one for the VERTICAL; the claim's size stays the
@@ -127,7 +151,10 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
       lineTopClient = r.top;
       paintedHeightClient = r.height;
     }
-    if (paintedHeightClient <= 0) continue;
+    if (paintedHeightClient <= 0) {
+      diagnosis?.push({ pos, fermo: "altezza dipinta nulla", dipinta: paintedHeightClient });
+      continue;
+    }
 
     const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
     let side: "left" | "right";
@@ -181,10 +208,17 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     //    lines against the 99 the browser really draws), so the index points at
     //    the wrong character.
     const anchorPos = freeLayoutMap(view.state.doc).find((e) => e.pos === pos)?.anchorPos ?? null;
-    if (anchorPos === null) continue;
+    if (anchorPos === null) {
+      diagnosis?.push({ pos, fermo: "nessun paragrafo a cui appoggiare l'elemento" });
+      continue;
+    }
     const anchorEl = elsByPos.get(anchorPos);
     const anchorNode = view.state.doc.nodeAt(anchorPos);
-    if (!anchorEl || !anchorNode) continue;
+    if (!anchorEl || !anchorNode) {
+      diagnosis?.push({ pos, fermo: "paragrafo ancora non trovato", anchorPos,
+                        haDom: !!anchorEl, haNodo: !!anchorNode });
+      continue;
+    }
 
     // The band starts at the anchor block's start and is pushed down to the
     // line by a margin, with `shape-outside` keeping it out of the lines above.
@@ -198,7 +232,10 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
     const anchorTopClient = anchorEl.getBoundingClientRect().top;
     const marginTop = Math.max(0, Math.round(lineTopClient - anchorTopClient));
     const height = paintedHeightClient;
-    if (height <= 0) continue;
+    if (height <= 0) {
+      diagnosis?.push({ pos, fermo: "altezza nulla prima di scrivere la fascia" });
+      continue;
+    }
     out.push({
       pos,
       insertPos: anchorPos + 1,
@@ -209,6 +246,13 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
       full: condition === "unwrapped",
     });
   }
+  return out;
+}
+
+/** Read-only: why the measurement of the bands skipped what it skipped. */
+export function freeWrapDiagnosis(view: EditorView): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  measureDomBands(view, undefined, out);
   return out;
 }
 
@@ -229,11 +273,31 @@ export function measureDomBands(view: EditorView, override?: Map<number, FlyingB
  * are put back exactly where they were. Synchronous, so nothing observes the
  * document in between: no flicker, no second paint.
  */
+/**
+ * Read-only look at the band machinery, for the verification tool: the numbers
+ * the screen measured, how many more re-measures it is allowed to ask for, and
+ * how many reservation pieces are actually painted. It changes nothing.
+ */
+export function freeWrapState(): {
+  bands: DomBand[];
+  republishLeft: number;
+  painted: number;
+  conta: Record<string, number>;
+} {
+  return {
+    bands: domBands,
+    republishLeft,
+    painted: document.querySelectorAll(".aw-free-wrap").length,
+    conta: { ...conta },
+  };
+}
+
 export function refreshFreeWrapBands(view: EditorView): void {
   const override = flightBox ? new Map([[flightBox.pos, flightBox.box]]) : undefined;
   const measured = measureDomBands(view, override);
   if (sameDomBands(measured, domBands)) return;
   domBands = measured;
+  conta.pubblicazioni++;
   if (republishLeft <= 0) return; // settled enough: the last numbers stay
   republishLeft--;
   view.dispatch(
@@ -309,6 +373,14 @@ export interface FlyingBox {
 
 /** The bands, as last measured on the painted page (module state: one editor). */
 let domBands: DomBand[] = [];
+
+/**
+ * Contatori di sola lettura (17-09). Servono allo strumento di verifica per
+ * sapere quali strade hanno davvero percorso il codice: quante volte la misura
+ * e' stata chiesta, quante volte il codice ha pubblicato le fasce, quanti
+ * aggiornamenti e quanti eventi sono arrivati. Non cambiano il comportamento.
+ */
+const conta = { misure: 0, pubblicazioni: 0, aggiornamenti: 0, metriche: 0, dipinto: 0 };
 
 /**
  * Where a flying element is right now, while the user drags it. The original is
@@ -475,6 +547,7 @@ export function createCassiePaginationPlugin(
     view() {
       let dom: HTMLElement | null = null;
       const onMetricsChanged = () => {
+        conta.metriche++;
         syncEditorMetricsFromDom(dom);
         const v = liveView;
         if (v && !v.isDestroyed) {
@@ -486,13 +559,24 @@ export function createCassiePaginationPlugin(
       let liveView: import("prosemirror-view").EditorView | null = null;
       window.addEventListener("aurawrite:editor-metrics-changed", onMetricsChanged);
       const onFreePainted = () => {
+        conta.dipinto++;
         const v = liveView;
         if (v && !v.isDestroyed) refreshFreeWrapBands(v);
       };
       window.addEventListener("aurawrite:free-painted", onFreePainted);
       return {
-        update(view) {
+        update(view, prevState) {
+          conta.aggiornamenti++;
           liveView = view;
+          // A document that has just been REPLACED (opened, not edited) brings
+          // its own allowance for the band measurement. Without this the budget
+          // could already be spent by the previous document: the picture would
+          // be on screen with no band under it, and the text would run through
+          // it until the first keystroke or drag - measured: zero band pieces on
+          // an opened document, three after typing a single character.
+          // The recompute transactions this view dispatches do not change the
+          // document, so they cannot renew the allowance: the loop stays bounded.
+          if (prevState.doc !== view.state.doc) republishLeft = REPUBLISH_BUDGET;
           // F3.2c: measure the bands on the painted page and republish them when
           // they moved. Two paints settle it: the first places the picture with
           // its anchor, the second puts the band where the picture now is.
