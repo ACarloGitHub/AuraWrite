@@ -194,7 +194,17 @@ export function buildPrintPages(
     });
     // Bands that came over from a previous sheet: they begin at the top of this
     // one, clipped, in document order.
-    const carried = affecting.filter((g) => !placed.has(g));
+    //
+    // Only the ones the editor did NOT measure. For a measured element the
+    // numbers are already on the sheet, inside its own block: adding the
+    // calculator's band as well put a SECOND float at the top of the sheet with
+    // no margin, which narrowed the whole page - measured on A20 (title wrapped
+    // into 5 lines on paper against 3 on screen, and the lines beside the picture
+    // shortened twice). The measured numbers cannot say where an overflow past
+    // the sheet's bottom edge begins, so an editor band that CONTINUES on the
+    // next sheet is not reproduced there yet: a known limit, smaller than the
+    // error it replaces.
+    const carried = affecting.filter((g) => !placed.has(g) && !fasceMisurate.has(g.pos));
     for (let k = carried.length - 1; k >= 0; k--) {
       const band = carried[k].band!;
       const el = wrapSpacerDom(band, Math.min(band.y1, sheetBottom) - sheetTop);
