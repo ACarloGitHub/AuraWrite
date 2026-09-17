@@ -287,6 +287,12 @@ export function createFreeLayoutPlugin(): Plugin {
 
       const onResize = (): void => schedule();
       window.addEventListener("resize", onResize);
+      // The reserved space moves the text, and the text is what the pictures hang
+      // from: when the bands are (re)published, place the free elements again.
+      // No transaction here, only a repaint - the same reason the painter itself
+      // announces its work with an event instead of dispatching one.
+      const onBandsPublished = (): void => schedule();
+      window.addEventListener("aurawrite:bands-published", onBandsPublished);
       // Self-healing, same idea as the calculator's style probe: when the user
       // changes the document font or the margins from Preferences, the column
       // and the block heights move without any document change.
@@ -303,6 +309,7 @@ export function createFreeLayoutPlugin(): Plugin {
         destroy: () => {
           if (frame) cancelAnimationFrame(frame);
           window.removeEventListener("resize", onResize);
+          window.removeEventListener("aurawrite:bands-published", onBandsPublished);
           window.removeEventListener("aurawrite:editor-metrics-changed", onMetrics);
         },
       };

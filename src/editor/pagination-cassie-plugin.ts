@@ -309,6 +309,13 @@ export function refreshFreeWrapBands(view: EditorView): void {
   view.dispatch(
     view.state.tr.setMeta("force-cassie-recompute", true).setMeta("addToHistory", false),
   );
+  // A band narrows the lines it covers, and narrowing lines moves every block
+  // below them - including the picture's own anchor. The picture was placed
+  // against the text BEFORE the bands landed, so after a publish it hangs from
+  // a paragraph that has since moved (measured: the first picture on the page
+  // sat on its anchor, the second 88px above it, the third 176px, and so on).
+  // Say so, once, and let the painter place the pictures again.
+  window.dispatchEvent(new Event("aurawrite:bands-published"));
 }
 
 function sameDomBands(a: DomBand[], b: DomBand[]): boolean {
@@ -536,16 +543,19 @@ export function createCassiePaginationPlugin(
     key: cassiePaginationPluginKey,
 
     state: {
-      // A state built from scratch is a DIFFERENT document (it is how opening a
-      // document works: a new EditorState, not an edit). The bands measured on
-      // the previous one describe pictures that do not exist here, and painting
-      // them was measured to be one document behind: opening A09 after A17 left
-      // A17's reserved space on A09's page (the text narrowed where the old
-      // picture was, and the print - which now follows the editor's numbers -
-      // narrowed with it). So a new document starts with NO bands and gets its
-      // own ones from the measurement that follows the paint.
       init: (_, state) => {
+        // A state built from scratch is a DIFFERENT document: opening one goes
+        // through here (the loader creates a new EditorState), and because that
+        // new state carries a NEW plugins array, ProseMirror recreates the plugin
+        // views instead of updating them (verified in prosemirror-view), so this
+        // is the only place where "a new document is starting" is reliably seen.
+        // Two things follow: the bands measured on the previous document must go
+        // (they describe pictures that are not here - painting them was measured
+        // to leave the page one document behind), and the allowance to measure
+        // and paint the new ones must be given here, because no edit
+        // transaction and no view update ever runs for this event.
         domBands = [];
+        republishLeft = REPUBLISH_BUDGET;
         return buildDecorations(state.doc, options.enabled(), getCassiePagedMode(), editorDom);
       },
       apply: (tr, old, _oldState, newState) => {
@@ -582,21 +592,14 @@ export function createCassiePaginationPlugin(
       };
       window.addEventListener("aurawrite:free-painted", onFreePainted);
       return {
-        update(view, prevState) {
+        update(view) {
           conta.aggiornamenti++;
           liveView = view;
-          // A document that has just been REPLACED (opened, not edited) brings
-          // its own allowance for the band measurement. Without this the budget
-          // could already be spent by the previous document: the picture would
-          // be on screen with no band under it, and the text would run through
-          // it until the first keystroke or drag - measured: zero band pieces on
-          // an opened document, three after typing a single character.
-          // The recompute transactions this view dispatches do not change the
-          // document, so they cannot renew the allowance: the loop stays bounded.
-          if (prevState.doc !== view.state.doc) republishLeft = REPUBLISH_BUDGET;
-          // F3.2c: measure the bands on the painted page and republish them when
-          // they moved. Two paints settle it: the first places the picture with
-          // its anchor, the second puts the band where the picture now is.
+          // No allowance renewal here on purpose: opening a document builds a new
+          // EditorState, ProseMirror then recreates the plugin views and never
+          // calls this update (verified in prosemirror-view). The allowance for a
+          // new document is given where a new document actually begins -
+          // `state.init` above.
           refreshFreeWrapBands(view);
           if (!dom) {
             dom = view.dom as HTMLElement;
