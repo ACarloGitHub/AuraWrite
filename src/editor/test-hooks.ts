@@ -19,6 +19,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "prosemirror-view";
 import { applyDocumentJson } from "./document-loader";
+import { freeAnchorState } from "./free-layout-plugin";
 import { freeWrapDiagnosis, freeWrapState } from "./pagination-cassie-plugin";
 import { calculatePageBreaks } from "./pagination-cassie";
 import { getMargins } from "./pagination-state";
@@ -82,11 +83,19 @@ export function installTestHooks(view: EditorView): void {
             bands: screen.bands.map((b) => ({
               pos: b.pos, insertPos: b.insertPos, marginTop: b.marginTop,
               side: b.side, widthPx: b.widthPx, heightPx: b.heightPx, full: b.full,
+              // Su quali pagine dipinte la riserva accorcia davvero: piu' di un
+              // numero vuol dire che scavalca un confine di pagina, e che il foglio
+              // dopo riceve il suo pezzo invece di ricavarlo da se'.
+              pagine: b.pieces.map((p) => p.page),
             })),
           },
           engine: {
             pages: engine.totalPages,
             breaks: engine.breaks.length,
+            // Quante volte la regola della pagina ha gia' spostato un'immagine,
+            // e se ne ha rifiutata una perche' il movimento tornava a chiedere
+            // lo stesso spostamento (oscillazione).
+            anchorFix: freeAnchorState(),
             free: engine.freeGeometry.map((g) => ({
               pos: g.pos, page: g.page, top: Math.round(g.top), anchorTop: Math.round(g.anchorTop),
               heightPx: Math.round(g.heightPx), level: g.level,

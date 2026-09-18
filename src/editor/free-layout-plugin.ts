@@ -45,8 +45,31 @@ import {
   clearOverlapLayout,
 } from "./free-style";
 import { isOverlap, textConditionOf } from "./element-condition";
+import { applyAnchorMove, planAnchorMove } from "./free-anchor-page";
+import { freeWrapFlightActive } from "./pagination-cassie-plugin";
 
 export const freeLayoutPluginKey = new PluginKey("awFreeLayout");
+
+/** How long the page must sit still before the anchor rule is allowed to write. */
+const SETTLE_MS = 900;
+/** How soon the next picture is looked at after one was moved. */
+const NEXT_MS = 150;
+/** The same move refused twice in this window means the rule is oscillating. */
+const REPEAT_BLOCK_MS = 4000;
+/**
+ * How many pictures one user edit may cause to be re-hanged. A move repaints,
+ * the repaint re-arms the check, so a rule that did not settle could write
+ * forever - and every write marks the document as modified. Beyond this the
+ * rule stops and says so.
+ */
+const MAX_MOVES_PER_EDIT = 12;
+
+/** Read-only tally of the anchor moves this session (for the verification tool). */
+const anchorTally = { moves: 0, refused: 0, last: "", lastAt: 0, sinceUserEdit: 0 };
+
+export function freeAnchorState(): { moves: number; refused: number; last: string } {
+  return { moves: anchorTally.moves, refused: anchorTally.refused, last: anchorTally.last };
+}
 
 interface AnchorRecord {
   /** Start of the free element in the document this record describes. */
@@ -229,6 +252,14 @@ export function createFreeLayoutPlugin(): Plugin {
     },
     view: (view) => {
       let frame = 0;
+      // The page rule writes to the document, and its write comes back here as a
+      // document change. This flag is what tells the two apart: how many
+      // re-hangings one user edit may cause is bounded below, and the count has
+      // to restart on a real edit. (`filterTransaction` would be the tidy place
+      // for that, but this app installs its own `dispatchTransaction` for the
+      // dirty flag - toolbar.ts - and that one calls `state.apply`, which never
+      // runs the transaction filters.)
+      let ownMoveInFlight = false;
 
       const paint = (): void => {
         // One walk decides the anchors, then each element is painted from the
@@ -282,7 +313,46 @@ export function createFreeLayoutPlugin(): Plugin {
           // An event, not a transaction: a paint that dispatched a transaction
           // would schedule the next paint, and that loop has no end.
           window.dispatchEvent(new CustomEvent("aurawrite:free-painted"));
+          // Every repaint is also the signal that the page has NOT settled yet:
+          // the anchor rule may only write after the last one of these.
+          arm(SETTLE_MS);
         });
+      };
+
+      // --- the page rule, run when things have settled -------------------
+      let settleTimer = 0;
+      const settleCheck = (): void => {
+        if (freeWrapFlightActive()) {
+          arm(SETTLE_MS); // a gesture is running: ask again after it
+          return;
+        }
+        if (anchorTally.sinceUserEdit >= MAX_MOVES_PER_EDIT) {
+          anchorTally.refused++;
+          return; // the rule is not settling: stop writing, say nothing more
+        }
+        const move = planAnchorMove(view);
+        if (!move) return;
+        const signature = `${move.elementPos}>${move.newAnchorPos}@${view.state.doc.content.size}`;
+        if (signature === anchorTally.last && Date.now() - anchorTally.lastAt < REPEAT_BLOCK_MS) {
+          // The same move we just performed is being asked for again: the layout
+          // did not accept it. Say so, count it, and leave the document alone.
+          anchorTally.refused++;
+          return;
+        }
+        ownMoveInFlight = true; // the dispatch happens inside, before this returns
+        if (!applyAnchorMove(view, move)) {
+          ownMoveInFlight = false;
+          return;
+        }
+        anchorTally.moves++;
+        anchorTally.sinceUserEdit++;
+        anchorTally.last = signature;
+        anchorTally.lastAt = Date.now();
+        arm(NEXT_MS); // one picture per pass: the move repaints, then we look again
+      };
+      const arm = (delay: number): void => {
+        window.clearTimeout(settleTimer);
+        settleTimer = window.setTimeout(settleCheck, delay);
       };
 
       const onResize = (): void => schedule();
@@ -304,10 +374,15 @@ export function createFreeLayoutPlugin(): Plugin {
         update: (editorView, prevState) => {
           // PluginView.update receives the VIEW plus the previous state; the
           // document lives behind editorView.state.
-          if (prevState && editorView.state.doc !== prevState.doc) schedule();
+          if (prevState && editorView.state.doc !== prevState.doc) {
+            if (ownMoveInFlight) ownMoveInFlight = false; // the rule's own write
+            else anchorTally.sinceUserEdit = 0; // a real edit: the rule gets its chances again
+            schedule();
+          }
         },
         destroy: () => {
           if (frame) cancelAnimationFrame(frame);
+          window.clearTimeout(settleTimer);
           window.removeEventListener("resize", onResize);
           window.removeEventListener("aurawrite:bands-published", onBandsPublished);
           window.removeEventListener("aurawrite:editor-metrics-changed", onMetrics);
