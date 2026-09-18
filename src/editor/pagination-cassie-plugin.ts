@@ -13,6 +13,30 @@ import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
+/**
+ * One piece of a reservation, on ONE painted page.
+ *
+ * This is the shape Carlo asked for (18-09, third time): the print sheet must not
+ * derive the text from where the picture ends up. It must receive, page by page,
+ * which lines the editor shortens, how wide, on which side, and how deep - so a
+ * reservation that crosses a page's bottom arrives as TWO pieces, one per page,
+ * and the second page is not left unshortened (that omission was the defect of
+ * A20 page 4, and it was introduced on 17-09 by excluding the carried float
+ * without replacing it with the editor's numbers).
+ */
+export interface BandPiece {
+  /** 0-based index of the painted page: the sheets are numbered the same way. */
+  page: number;
+  /** Start of the text block that carries this piece's spacer. */
+  insertPos: number;
+  /** Distance from that block's top to the piece's top, in layout pixels. */
+  marginTop: number;
+  side: "left" | "right";
+  widthPx: number;
+  heightPx: number;
+  full: boolean;
+}
+
 /** One band, measured on the screen. */
 export interface DomBand {
   /** The free element this band belongs to. */
@@ -36,6 +60,107 @@ export interface DomBand {
   heightPx: number;
   /** Unwrapped: the spacer claims the whole column, so no line sits beside it. */
   full: boolean;
+  /**
+   * The band split per painted page. The FIRST piece is the one the screen uses
+   * (same block, same margin - so the screen cannot drift from what is shipped);
+   * the pieces after it are the continuation on the next page's lines, which the
+   * screen gets for free from one continuous flow and the paper cannot.
+   */
+  pieces: BandPiece[];
+}
+
+/** The painted pages as vertical ranges, in the host's own layout units. */
+function paintedPageAreas(host: HTMLElement, scale: number): { top: number; bottom: number }[] {
+  const hostTop = host.getBoundingClientRect().top;
+  const rel = (el: HTMLElement): { top: number; bottom: number } => {
+    const r = el.getBoundingClientRect();
+    return { top: (r.top - hostTop) / scale, bottom: (r.bottom - hostTop) / scale };
+  };
+  // A page-break widget draws the two pages' margins (and header/footer): what
+  // lies ABOVE it is this page's lines, what lies BELOW it is the next page's.
+  // The strip inside the widget has no line to shorten on paper either, because
+  // on paper that strip is a margin - so clipping a reservation to the ranges
+  // BETWEEN widgets is exactly what the sheets must be told.
+  const widgets = Array.from(host.querySelectorAll<HTMLElement>(".aw-page-break"))
+    .map(rel)
+    .sort((a, b) => a.top - b.top);
+  const out: { top: number; bottom: number }[] = [];
+  let cursor = 0;
+  for (const w of widgets) {
+    out.push({ top: cursor, bottom: w.top });
+    cursor = w.bottom;
+  }
+  out.push({ top: cursor, bottom: Number.MAX_SAFE_INTEGER });
+  return out;
+}
+
+function pageOfArea(areas: { top: number; bottom: number }[], y: number): number {
+  for (let i = 0; i < areas.length; i++) if (y < areas[i].bottom) return i;
+  return areas.length - 1;
+}
+
+/**
+ * Split a reservation into one piece per painted page it touches.
+ *
+ * Every piece is computed the same way, the first one included, and that is the
+ * point: the first piece used to be handed over as "the anchor's block plus the
+ * anchor's margin" while its PAGE was decided by the band's own top - and a
+ * picture dropped into the space BETWEEN two pages has the top inside the page
+ * break widget, whose strip belongs to the page below. Block from one page, page
+ * from the next: the sheet could not place it, and since the element was also
+ * marked as measured (which switches the calculator's own band off), NOTHING was
+ * shortened on any sheet. Seen by Carlo on A20 right after the 06:56 build: the
+ * text distribution was worse than before, not better.
+ *
+ * The block that carries a piece is the last text block starting at or above the
+ * piece's top (for the first piece it is the anchor itself) - the same rule
+ * `freeWrapPlacement` uses, for the same reason: a float cannot rise out of the
+ * block it sits in, so the block before the gap is the only one that can begin
+ * the shortening at the right line.
+ */
+function bandPieces(input: {
+  /** The anchor block: what carries the first piece, as on the screen. */
+  anchor: { pos: number; top: number };
+  /** The reservation's painted span, in the host's own layout units. */
+  top: number;
+  bottom: number;
+  side: "left" | "right";
+  widthPx: number;
+  full: boolean;
+  areas: { top: number; bottom: number }[];
+  blocks: { pos: number; top: number }[];
+}): BandPiece[] {
+  const { anchor, top, bottom, side, widthPx, full, areas, blocks } = input;
+  if (blocks.length === 0 || bottom <= top) return [];
+  // The pages to look at are those whose LINES the span overlaps: the strip of a
+  // page break (a page's bottom margin, the separator, the next page's top
+  // margin) is white space on paper too, so it has no line to shorten and gets no
+  // piece of its own.
+  const firstPage = pageOfArea(areas, anchor.top);
+  const lastPage = pageOfArea(areas, bottom - 1);
+  const out: BandPiece[] = [];
+  for (let page = firstPage; page <= lastPage; page++) {
+    const lo = Math.max(top, areas[page].top);
+    const hi = Math.min(bottom, areas[page].bottom);
+    if (hi - lo <= 0.5) continue; // the strip on this page is margin, not lines
+    let carrier = page === firstPage ? anchor : blocks[0];
+    if (page !== firstPage) {
+      for (const b of blocks) {
+        if (b.top <= lo + 0.5) carrier = b;
+        else break;
+      }
+    }
+    out.push({
+      page,
+      insertPos: carrier.pos + 1,
+      marginTop: Math.max(0, Math.round(lo - carrier.top)),
+      side,
+      widthPx,
+      heightPx: Math.max(1, Math.round(hi - lo)),
+      full,
+    });
+  }
+  return out;
 }
 
 /**
@@ -81,6 +206,10 @@ export function measureDomBands(
   // Needed only to place a FLYING copy inside the column: the copy lives on the
   // document body, outside the scaled page, and its coordinates are viewport ones.
   const hostRect = host.getBoundingClientRect();
+  // The painted pages on the SAME axis the band is measured on: what a reservation
+  // shortens, page by page, is decided here - never by the print sheet re-deriving
+  // it (Carlo, 18-09: the text must arrive measured).
+  const pageAreas = paintedPageAreas(host, scale);
 
   // ONE walk of the document: the text blocks, by their OWN node positions (the
   // anchor lookup needs their DOM), and the free elements. Positions come from
@@ -99,6 +228,13 @@ export function measureDomBands(
                       paragrafi: elsByPos.size, liberi: freeEls.size, figli: host.children.length });
     return out;
   }
+  // The text blocks with their top on that same axis, in document order (which is
+  // the order they are painted in): the carrier of a piece is the last block that
+  // starts at or above the piece's top.
+  const blockTops = Array.from(elsByPos.entries()).map(([pos, el]) => ({
+    pos,
+    top: (el.getBoundingClientRect().top - hostRect.top) / scale,
+  }));
 
   for (const [pos, pic] of freeEls) {
     const node = view.state.doc.nodeAt(pos);
@@ -230,11 +366,35 @@ export function measureDomBands(
     // Inserting at the block's start (instead of hunting the line) is also what
     // ends the measurement feedback: the anchor is a fixed point.
     const anchorTopClient = anchorEl.getBoundingClientRect().top;
-    const marginTop = Math.max(0, Math.round(lineTopClient - anchorTopClient));
+    // Layout pixels, not viewport ones: the spacer lives INSIDE the magnified
+    // page, so a margin read off the screen must lose the magnification first.
+    // Left undivided, a zoomed editor reserved the space a fraction too low and
+    // the sheet - never magnified - disagreed with it.
+    const marginTop = Math.max(0, Math.round((lineTopClient - anchorTopClient) / scale));
     const height = paintedHeightClient;
     if (height <= 0) {
       diagnosis?.push({ pos, fermo: "altezza nulla prima di scrivere la fascia" });
       continue;
+    }
+    const heightPx = Math.max(1, Math.round(height / scale) + Math.round(extent.y));
+    const bandTop = (lineTopClient - hostRect.top) / scale;
+    const full = condition === "unwrapped";
+    // The pieces are what the sheets get. The screen keeps painting its own
+    // single spacer from the fields below (anchor block, anchor margin, full
+    // height) - one continuous flow needs no split, and that is the behaviour
+    // the six concordant documents were verified with.
+    const pieces = bandPieces({
+      anchor: { pos: anchorPos, top: (anchorTopClient - hostRect.top) / scale },
+      top: bandTop,
+      bottom: bandTop + heightPx,
+      side,
+      widthPx,
+      full,
+      areas: pageAreas,
+      blocks: blockTops,
+    });
+    if (pieces.length === 0) {
+      diagnosis?.push({ pos, fermo: "la riserva non tocca righe di nessuna pagina" });
     }
     out.push({
       pos,
@@ -242,8 +402,9 @@ export function measureDomBands(
       marginTop,
       side,
       widthPx,
-      heightPx: Math.max(1, Math.round(height / scale) + Math.round(extent.y)),
-      full: condition === "unwrapped",
+      heightPx,
+      full,
+      pieces,
     });
   }
   return out;
@@ -283,29 +444,66 @@ export function freeWrapState(): {
   republishLeft: number;
   painted: number;
   conta: Record<string, number>;
+  /**
+   * True when the last measurement was withheld: the screen has not painted it,
+   * so the sheet has not received it either (they can never differ).
+   */
+  withheld: boolean;
 } {
   return {
     bands: domBands,
     republishLeft,
     painted: document.querySelectorAll(".aw-free-wrap").length,
     conta: { ...conta },
+    withheld,
   };
 }
 
-export function refreshFreeWrapBands(view: EditorView): void {
+export function refreshFreeWrapBands(view: EditorView, options?: { force?: boolean }): void {
+  // One walk of the page, not one per repaint.
+  //
+  // This used to run on EVERY view update and on EVERY paint, and a publish is
+  // what causes a paint - so a single keystroke bought the whole allowance of
+  // full-document walks. Measured on a real book (18-09: 4.267 blocks, 874 pages,
+  // 266 pictures with the text around): one walk is 82 ms, a keystroke cost
+  // 1.200 ms, and twenty characters produced 212 measurements and 124
+  // republishes. Now: a document version is measured once, the publish that
+  // follows is allowed exactly one more look (the publish moves the text, so the
+  // numbers can genuinely shift), and a deliberate action (print, preview, a
+  // gesture, new margins) can always force one.
+  const fresh = view.state.doc !== measuredDoc;
+  if (!options?.force && !fresh && !allowOneMore) return;
+  measuredDoc = view.state.doc;
+  allowOneMore = false;
   const override = flightBox ? new Map([[flightBox.pos, flightBox.box]]) : undefined;
+  // `force` is for a deliberate action (printing, opening the preview): nobody is
+  // typing, so the withheld numbers get their pass now and the sheet is built on
+  // what the screen is showing at that moment.
+  if (options?.force) republishLeft = Math.max(republishLeft, 1);
   const measured = measureDomBands(view, override);
-  if (sameDomBands(measured, domBands)) return;
-  domBands = measured;
-  if (republishLeft <= 0) {
-    // The numbers moved but nothing was painted: this is the state that used to
-    // leave the previous document's bands on screen. Counted apart so the tool
-    // can see it, never silently.
-    conta.trattenute++;
-    return; // settled enough: the last numbers stay
+  if (sameDomBands(measured, domBands)) {
+    withheld = false;
+    return;
   }
+  if (republishLeft <= 0) {
+    // The numbers moved but the screen cannot be repainted right now, so they are
+    // NOT handed over: what the print sheet receives must be what AuraWrite is
+    // showing, always. Shipping numbers the screen does not have is what left page
+    // 30 of C01 with the sheet wrapping the text around the picture and the
+    // writing window letting the picture cover it (Carlo, 18-09). The measurement
+    // is kept back and the page gets one more publish when the writing stops.
+    conta.trattenute++;
+    armSettlePass(view);
+    return;
+  }
+  domBands = measured;
+  withheld = false;
   republishLeft--;
   conta.pubblicazioni++;
+  // Painting the bands moves the lines they cover, and the pictures hang from
+  // those lines: after a publish one more look is fair. Not more than one - that
+  // is exactly what the allowance exists to bound.
+  allowOneMore = true;
   view.dispatch(
     view.state.tr.setMeta("force-cassie-recompute", true).setMeta("addToHistory", false),
   );
@@ -318,13 +516,40 @@ export function refreshFreeWrapBands(view: EditorView): void {
   window.dispatchEvent(new Event("aurawrite:bands-published"));
 }
 
+/**
+ * One more chance to publish, when the writing has stopped.
+ *
+ * The allowance exists to stop a loop (a band moves the lines, the lines move the
+ * anchor, the anchor moves the band). Paying for it by letting the two surfaces
+ * drift apart was the wrong price: now a withheld measurement is kept back, and
+ * the page is given ONE more publish once the typing has stopped - the moment when
+ * the numbers can no longer move again - so the screen catches up and the sheet
+ * gets exactly what the screen shows.
+ */
+function armSettlePass(view: EditorView): void {
+  withheld = true;
+  window.clearTimeout(settlePassTimer);
+  settlePassTimer = window.setTimeout(() => {
+    if (view.isDestroyed) return;
+    republishLeft = Math.max(republishLeft, 1);
+    refreshFreeWrapBands(view);
+  }, SETTLE_MS_BANDS);
+}
+
 function sameDomBands(a: DomBand[], b: DomBand[]): boolean {
   if (a.length !== b.length) return false;
+  const firma = (p: BandPiece): string =>
+    `${p.page}:${p.insertPos}:${p.marginTop}:"${p.side}":${p.widthPx}:${p.heightPx}:${p.full}`;
   return a.every((x, i) => {
     const y = b[i];
     return x.pos === y.pos && x.insertPos === y.insertPos && x.marginTop === y.marginTop
       && x.side === y.side && x.widthPx === y.widthPx && x.heightPx === y.heightPx
-      && x.full === y.full;
+      && x.full === y.full
+      // The split per page has to be part of the signature too: a reservation that
+      // starts covering the same line but now reaches (or no longer reaches) the
+      // page below is a different sheet, and must be republished.
+      && x.pieces.length === y.pieces.length
+      && x.pieces.every((p, k) => firma(p) === firma(y.pieces[k]));
   });
 }
 
@@ -386,6 +611,10 @@ export interface FlyingBox {
 
 /** The bands, as last measured on the painted page (module state: one editor). */
 let domBands: DomBand[] = [];
+/** The document version the last measurement was taken from. */
+let measuredDoc: PMNode | null = null;
+/** True when one more look is allowed even if the document did not change. */
+let allowOneMore = false;
 
 /**
  * Contatori di sola lettura (17-09). Servono allo strumento di verifica per
@@ -408,6 +637,17 @@ let flightBox: { pos: number; box: FlyingBox } | null = null;
 export function setFreeWrapFlightBox(pos: number, box: FlyingBox | null): void {
   flightBox = box ? { pos, box } : null;
   republishLeft = REPUBLISH_BUDGET; // a moving picture is allowed to move the band again
+  allowOneMore = true;              // and to be measured again: the document does not change while it flies
+}
+
+/**
+ * True while a picture is flying under the pointer. Nothing that WRITES to the
+ * document may run in that state: the picture has no measured position yet, and
+ * the gesture is not over. The page rule for anchors asks for this before it
+ * touches anything (free-anchor-page.ts).
+ */
+export function freeWrapFlightActive(): boolean {
+  return flightBox !== null;
 }
 
 /**
@@ -419,8 +659,13 @@ export function setFreeWrapFlightBox(pos: number, box: FlyingBox | null): void {
  * iterate a bounded number of times and keep the last answer. Without the
  * budget the editor repainted itself forever (the bench froze on exactly this).
  */
-const REPUBLISH_BUDGET = 4;
+const REPUBLISH_BUDGET = 2;
 let republishLeft = REPUBLISH_BUDGET;
+/** How long the writing must be still before the withheld numbers get their pass. */
+const SETTLE_MS_BANDS = 260;
+let settlePassTimer = 0;
+/** True when the last measurement was kept back (the screen has not painted it). */
+let withheld = false;
 
 function buildDecorations(
   doc: PMNode,
@@ -555,6 +800,8 @@ export function createCassiePaginationPlugin(
         // and paint the new ones must be given here, because no edit
         // transaction and no view update ever runs for this event.
         domBands = [];
+        measuredDoc = null;
+        allowOneMore = false;
         republishLeft = REPUBLISH_BUDGET;
         return buildDecorations(state.doc, options.enabled(), getCassiePagedMode(), editorDom);
       },
@@ -576,6 +823,9 @@ export function createCassiePaginationPlugin(
       const onMetricsChanged = () => {
         conta.metriche++;
         syncEditorMetricsFromDom(dom);
+        // New margins, new font, new line height: the document did not change,
+        // but every band may sit elsewhere, so the next look is allowed.
+        allowOneMore = true;
         const v = liveView;
         if (v && !v.isDestroyed) {
           v.dispatch(
@@ -627,6 +877,7 @@ export function createCassiePaginationPlugin(
         destroy() {
           window.removeEventListener("aurawrite:editor-metrics-changed", onMetricsChanged);
           window.removeEventListener("aurawrite:free-painted", onFreePainted);
+          window.clearTimeout(settlePassTimer);
         },
       };
     },

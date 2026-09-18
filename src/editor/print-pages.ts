@@ -27,9 +27,9 @@ import {
   type FreeGeometry,
   type PageMargins,
 } from "./pagination-cassie";
-import { freeElementWidth, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
+import { freeElementWidth, freeLayoutMap, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
 import { isOverlap, textConditionOf } from "./element-condition";
-import type { DomBand } from "./pagination-cassie-plugin";
+import type { BandPiece, DomBand } from "./pagination-cassie-plugin";
 
 export interface PrintSheet {
   html: string;
@@ -78,11 +78,24 @@ export function buildPrintPages(
   // (contract §7, one source: the calculator). `inFlow` keeps them out of the
   // slice, `free` collects their overlay markup per page.
   const inFlow = (node: PMNode): boolean => !isFreeNode(node);
+  // Quale foglio disegna un elemento libero. Il calcolo indica una pagina, ma il
+  // disegno del foglio parte dalla riga-ancora: se l'ancora sta in un foglio
+  // DIVERSO, in quella pagina non c'e' nulla a cui misurarsi, e il numero resta
+  // quello ipotizzato dal calcolo (e' cosi' che una copia finiva 1200 pixel piu'
+  // in basso). Il foglio dell'ancora e' quello che puo' ricostruire la pagina
+  // dell'editor: quando i due non coincidono, comanda l'ancora.
+  const anchorOfFree = new Map(freeLayoutMap(doc).map((e) => [e.pos, e.anchorPos]));
+  const sheetHolding = (pos: number): number => {
+    for (let k = cuts.length - 2; k >= 0; k--) if (pos >= cuts[k]) return k + 1;
+    return 1;
+  };
   const freeByPage = new Map<number, FreeGeometry[]>();
   for (const geo of freeGeometry) {
-    const list = freeByPage.get(geo.page) ?? [];
+    const anchorPos = anchorOfFree.get(geo.pos) ?? null;
+    const sheet = anchorPos === null ? geo.page : sheetHolding(anchorPos);
+    const list = freeByPage.get(sheet) ?? [];
     list.push(geo);
-    freeByPage.set(geo.page, list);
+    freeByPage.set(sheet, list);
   }
 
   for (let i = 0; i < cuts.length - 1; i++) {
@@ -95,26 +108,45 @@ export function buildPrintPages(
     // does on screen.
     const sheetTop = i * contentHeight;
     const sheetBottom = sheetTop + contentHeight;
-    // Le fasce misurate sulla pagina appartengono al blocco che le contiene: si
-    // inseriscono dentro quel blocco, con i numeri dell'editor (larghezza,
-    // altezza, margine). Le altre - quelle senza misura - seguono la strada di
-    // prima, con la geometria del calcolo.
-    const fascePerBlocco = new Map<PMNode, DomBand[]>();
-    const inizioBlocco = new Map<PMNode, number>();
+    // Le fasce misurate sulla pagina arrivano SPEZZATE PER PAGINA: l'editor dice
+    // quali righe di QUESTO foglio accorciare, di quanto, da quale lato e da quale
+    // blocco. Non c'e' piu' niente da ricavare da dove l'immagine e' finita sul
+    // foglio - che e' la richiesta di Carlo del 18-09: il testo arriva misurato,
+    // non come conseguenza della foto. Una riserva che scavalca il fondo pagina
+    // arriva con un pezzo anche sul foglio dopo (che e' il caso A20 pagina 4).
+    // I blocchi che questo foglio stampera', con la loro posizione nel documento:
+    // servono perche' un pezzo misurato puo' indicare un paragrafo che su questo
+    // foglio NON c'e' (paragrafo spezzato a meta', o riserva che entra dal bianco
+    // sopra la prima riga). In quel caso lo porta il primo blocco del foglio, dal
+    // suo bordo alto. Mappare i pezzi per identita' del nodo li faceva cadere nel
+    // vuoto - ed e' il perche', dopo la build delle 06:56, la distribuzione del
+    // testo di A20 era peggiore di prima: non era accorciata da nessuna parte.
+    const iniziDelFoglio = new Set<number>();
+    slice.content.forEach((node, offsetInSlice) => {
+      if (inFlow(node)) iniziDelFoglio.add(cuts[i] + offsetInSlice);
+    });
+    const primoBlocco = iniziDelFoglio.size > 0 ? Math.min(...iniziDelFoglio) : null;
+    const fascePerInizio = new Map<number, BandPiece[]>();
     // Due elementi liberi appesi allo stesso paragrafo (le due immagini
     // affiancate, l'immagine e la nota sovrapposte): il blocco ha BISOGNO di
     // tutte e due le fasce. Mapparne una sola per blocco lasciava il testo girare
     // attorno a una immagine e passare sotto l'altra.
     const fasceMisurate = new Set<number>();
     for (const b of editorBands) {
-      if (b.insertPos === null || b.insertPos === undefined) continue;
-      const owner = blockStartOf(doc, b.insertPos);
-      if (!owner) continue;
-      const lista = fascePerBlocco.get(owner.node);
-      if (lista) lista.push(b);
-      else fascePerBlocco.set(owner.node, [b]);
-      inizioBlocco.set(owner.node, owner.start);
+      // Chi ha una misura dell'editor non riceve niente dal calcolo, neppure in
+      // cima al foglio: i pezzi dicono gia' dove il calcolo doveva intervenire.
       fasceMisurate.add(b.pos);
+      for (const pezzo of b.pieces) {
+        if (pezzo.page !== i) continue; // it belongs to another sheet's lines
+        let pz = pezzo;
+        if (!iniziDelFoglio.has(pz.insertPos - 1)) {
+          if (primoBlocco === null) continue;
+          pz = { ...pz, insertPos: primoBlocco + 1, marginTop: 0 };
+        }
+        const lista = fascePerInizio.get(pz.insertPos - 1);
+        if (lista) lista.push(pz);
+        else fascePerInizio.set(pz.insertPos - 1, [pz]);
+      }
     }
     const affecting = freeGeometry.filter(
       (g) => g.band && g.band.y1 > sheetTop + 0.5 && g.band.y0 < sheetBottom - 0.5,
@@ -159,12 +191,17 @@ export function buildPrintPages(
       // La fascia MISURATA sulla pagina dell'editor ha la precedenza: stessi
       // numeri, stesso punto, quindi stesso testo. Senza misura, la fascia del
       // calcolo (strada di prima).
-      const inizio = inizioBlocco.get(node) ?? 0;
-      for (const m of fascePerBlocco.get(node) ?? []) {
+      const mioInizio = cuts[i] + offsetInSlice;
+      for (const m of fascePerInizio.get(mioInizio) ?? []) {
+        // The piece is already clipped to its page by the editor; the sheet's own
+        // content box is the last word, because a reserved area taller than the
+        // paper would push the rest of the text off the sheet.
+        const altezza = Math.min(m.heightPx, contentHeight - m.marginTop);
+        if (altezza <= 0) continue;
         insertNodeAtOffset(
           el,
-          wrapSpacerDom({ side: m.side, widthPx: m.widthPx } as FreeWrapBand, m.heightPx, m.marginTop),
-          m.insertPos - inizio - 1,
+          wrapSpacerDom({ side: m.side, widthPx: m.widthPx } as FreeWrapBand, altezza, m.marginTop),
+          m.insertPos - mioInizio - 1,
         );
       }
       // The float goes INSIDE the block's text, at the line the picture touches.
@@ -215,7 +252,7 @@ export function buildPrintPages(
       html: host.innerHTML,
       pageNumber: i + 1,
       continued: slice.openStart > 0,
-      freeHtml: freeOverlayHtml(freeByPage.get(i + 1) ?? [], doc, serializer, contentHeight, contentWidth),
+      freeHtml: freeOverlayHtml(freeByPage.get(i + 1) ?? [], i + 1, doc, serializer, contentHeight, contentWidth),
     });
   }
   return { sheets, margins, contentWidth, contentHeight, totalPages: Math.max(sheets.length, totalPages) };
@@ -295,6 +332,7 @@ function insertNodeAtOffset(root: HTMLElement, float: Node, offset: number): voi
  */
 function freeOverlayHtml(
   list: FreeGeometry[],
+  sheetPage: number,
   doc: PMNode,
   serializer: DOMSerializer,
   contentHeight: number,
@@ -314,7 +352,10 @@ function freeOverlayHtml(
     holder.appendChild(serializer.serializeNode(plain, {}));
     const width = freeElementWidth(node) ?? contentWidth;
     const left = Math.round(freeLeftPx({ left: 0, width: contentWidth }, spec, width));
-    const top = Math.round(geo.top - (geo.page - 1) * contentHeight);
+    // `sheetPage`, not `geo.page`: the two differ when the element was booked on
+    // the sheet that holds its anchor, and the number written here is only the
+    // starting point - the preview replaces it with the anchor's own top edge.
+    const top = Math.round(geo.top - (sheetPage - 1) * contentHeight);
     // The wrapper gets a DEFINITE width, the same number the calculator
     // reserved: it is the element's drawn rectangle. Without it the box hangs
     // on shrink-to-fit, and the generic image cap (`max-width: 100%`) resolves
