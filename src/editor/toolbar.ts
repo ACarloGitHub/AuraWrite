@@ -1,7 +1,6 @@
 import { undo, redo } from "prosemirror-history";
 import { toggleMark, wrapIn, lift, setBlockType } from "prosemirror-commands";
 import type { EditorView } from "prosemirror-view";
-import { EditorState } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 import type { NodeType } from "prosemirror-model";
 
@@ -11,13 +10,13 @@ import { toHTML } from "../formats/html";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { setLoading as setLoadingState, isLoading as isLoadingState } from "../loading-state";
 import { schema } from "./editor";
-import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
 import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
 import { getSelectedElement } from "./element-commands";
+import { applyDocumentJson, installDocument, installEmptyDocument } from "./document-loader";
 import { freeElementWidth, freeLeftPx, parseFreeSpec } from "./free-layout";
 import { textColumn } from "./free-style";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -324,19 +323,14 @@ async function handleNew(): Promise<void> {
 
   setLoadingState(true);
 
-  const newState = EditorState.create({
-    schema: editorView.state.schema,
-    plugins: editorView.state.plugins,
-  });
-  editorView.updateState(newState);
-
-  const { syncDocumentPaginationState } = await import("./editor");
-  syncDocumentPaginationState(editorView);
+  // File > New goes through the same door as an open: the empty document is
+  // installed, and the space the free elements reserve is asked for again.
+  installEmptyDocument(editorView);
 
   documentState.path = null;
   documentState.format = null;
   documentState.isDirty = false;
-  documentState.lastSavedContent = JSON.stringify(newState.doc.toJSON());
+  documentState.lastSavedContent = JSON.stringify(editorView.state.doc.toJSON());
   updateWindowTitle();
   updateDocumentTitleBar();
 
@@ -487,22 +481,9 @@ async function handleOpen(): Promise<void> {
 
 export async function openJSON(path: string): Promise<void> {
   const content = await loadFile(path);
-  const json = JSON.parse(content);
-  const migrated = migrateImageNodesInJson(json);
-
-  const { Node } = await import("prosemirror-model");
-
-  const newDoc = Node.fromJSON(schema, migrated);
-  const newState = EditorState.create({
-    schema: editorView.state.schema,
-    doc: newDoc,
-    plugins: editorView.state.plugins,
-  });
-  editorView.updateState(newState);
-
-  const { syncDocumentPaginationState } = await import("./editor");
-  syncDocumentPaginationState(editorView);
-
+  // The same text shape the project panel stores: the same door, no second copy
+  // of the sequence (the migration and the re-measure live in the door).
+  applyDocumentJson(editorView, content);
   markSaved(content, path, "json");
 }
 
@@ -512,17 +493,7 @@ export async function openMarkdown(path: string): Promise<void> {
 
   const { Node } = await import("prosemirror-model");
 
-  const newDoc = Node.fromJSON(schema, json);
-  const newState = EditorState.create({
-    schema: editorView.state.schema,
-    doc: newDoc,
-    plugins: editorView.state.plugins,
-  });
-  editorView.updateState(newState);
-
-  const { syncDocumentPaginationState } = await import("./editor");
-  syncDocumentPaginationState(editorView);
-
+  installDocument(editorView, Node.fromJSON(schema, json));
   markSaved(JSON.stringify(json), path, "md");
 }
 
@@ -531,18 +502,11 @@ export async function openDOCX(path: string): Promise<void> {
     const arrayBuffer = await loadBinaryFile(path);
     const html = await fromDocx(arrayBuffer);
 
-    const { parseHTML, syncDocumentPaginationState } = await import("./editor");
+    const { parseHTML } = await import("./editor");
 
-    const newDoc = parseHTML(html);
-    const newState = EditorState.create({
-      schema: editorView.state.schema,
-      doc: newDoc,
-      plugins: editorView.state.plugins,
-    });
-    editorView.updateState(newState);
-    syncDocumentPaginationState(editorView);
+    installDocument(editorView, parseHTML(html));
 
-    markSaved(JSON.stringify(newState.doc.toJSON()), path, "docx");
+    markSaved(JSON.stringify(editorView.state.doc.toJSON()), path, "docx");
   } catch (e) {
     console.error("DOCX import failed:", e);
     alert("Failed to import DOCX.");
@@ -555,17 +519,7 @@ export async function openTXT(path: string): Promise<void> {
 
   const { Node } = await import("prosemirror-model");
 
-  const newDoc = Node.fromJSON(schema, json);
-  const newState = EditorState.create({
-    schema: editorView.state.schema,
-    doc: newDoc,
-    plugins: editorView.state.plugins,
-  });
-  editorView.updateState(newState);
-
-  const { syncDocumentPaginationState } = await import("./editor");
-  syncDocumentPaginationState(editorView);
-
+  installDocument(editorView, Node.fromJSON(schema, json));
   markSaved(JSON.stringify(json), path, "txt");
 }
 
@@ -574,18 +528,11 @@ export async function openHTML(path: string, preprocess?: (html: string) => stri
     const raw = await loadFile(path);
     const content = preprocess ? preprocess(raw) : raw;
 
-    const { parseHTML, syncDocumentPaginationState } = await import("./editor");
+    const { parseHTML } = await import("./editor");
 
-    const newDoc = parseHTML(content);
-    const newState = EditorState.create({
-      schema: editorView.state.schema,
-      doc: newDoc,
-      plugins: editorView.state.plugins,
-    });
-    editorView.updateState(newState);
-    syncDocumentPaginationState(editorView);
+    installDocument(editorView, parseHTML(content));
 
-    markSaved(JSON.stringify(newState.doc.toJSON()), path, "html");
+    markSaved(JSON.stringify(editorView.state.doc.toJSON()), path, "html");
   } catch (e) {
     console.error("HTML import failed:", e);
     alert("Failed to import HTML.");
@@ -630,27 +577,17 @@ export async function closeCurrentFileIfInside(baseDir: string): Promise<boolean
   const base = normalize(baseDir);
   if (!path.startsWith(base)) return false;
 
-  const newState = EditorState.create({
-    schema: editorView.state.schema,
-    plugins: editorView.state.plugins,
-  });
-  editorView.updateState(newState);
-
-  const { syncDocumentPaginationState } = await import("./editor");
-  syncDocumentPaginationState(editorView);
+  // Closing the file is an install too: the empty page must be measured again,
+  // not left holding the reservations of the document that just went away.
+  installEmptyDocument(editorView);
 
   documentState.path = null;
   documentState.format = null;
   documentState.isDirty = false;
-  documentState.lastSavedContent = JSON.stringify(newState.doc.toJSON());
+  documentState.lastSavedContent = JSON.stringify(editorView.state.doc.toJSON());
   updateWindowTitle();
   updateDocumentTitleBar();
   return true;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function migrateImageNodesInJson(node: any): any {
-  return migrateLegacyDocumentJson(node);
 }
 
 async function handleExport(): Promise<void> {

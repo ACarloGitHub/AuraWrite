@@ -1,13 +1,21 @@
 /**
  * The one door a stored document walks through to get into the editor.
  *
- * Three places used to repeat the sequence by hand - the project panel's
- * document selection, the "clear the editor" event, and (empty text) the
- * parse-error fallback - and a fourth one (the verification tool) had to reach
- * inside the view to do it. The sequence is short but it has a step with
- * consequences: after the state is replaced, the pagination must be re-synced,
- * and a caller that forgets that step gets an editor that shows one document
- * and paginates another.
+ * `installDocument` is the door: EVERY surface that puts a document in front of
+ * the writer goes through it - the project panel, the verification tool, and
+ * each File > Open format in `toolbar.ts` (which translate first, and then
+ * install the node like everybody else). It exists because the sequence has a
+ * step that is easy to forget and impossible to notice: replacing the state
+ * rebuilds the editor's plugin views, and a rebuilt view never gets its
+ * `update` call (`prosemirror-view/dist/index.js:5561-5575` destroys and
+ * re-creates them when the plugins array is not the same object, which is what
+ * any fresh `EditorState.create` gives). So nothing that lives in an `update`
+ * - including the reserved-space measurement, which is painted one frame later
+ * - happens by itself after an open. Measured on 2026-09-17: a document that
+ * had just been opened showed ZERO reservation pieces while the calculator
+ * booked three, and the first keystroke (which does reach `update`) restored
+ * them. A road that installs without asking gets an editor whose text runs
+ * under the pictures until the writer types.
  *
  * `applyDocumentJson` throws on unusable text: the caller decides whether an
  * unusable document clears the editor (the panel's long-standing behaviour) or
@@ -26,9 +34,13 @@ export function documentNodeFromJson(view: EditorView, text: string): PMNode {
   return view.state.schema.nodeFromJSON(migrateLegacyDocumentJson(raw));
 }
 
-/** Make the editor show exactly this document, then re-sync the pagination. */
-export function applyDocumentJson(view: EditorView, text: string): void {
-  const doc = documentNodeFromJson(view, text);
+/**
+ * Put exactly this document in front of the writer, and ask again for the space
+ * its free elements reserve to the text. The two things are one step on purpose:
+ * the second only makes sense for the document that is now on the page, so no
+ * caller should ever have to remember to say it.
+ */
+export function installDocument(view: EditorView, doc: PMNode): void {
   view.updateState(
     EditorState.create({
       schema: view.state.schema,
@@ -36,8 +48,23 @@ export function applyDocumentJson(view: EditorView, text: string): void {
       plugins: view.state.plugins,
     }),
   );
-  syncDocumentPaginationState(view);
   askForBandMeasurement(view);
+}
+
+/** Show an empty document (File > New, and a file whose folder was deleted). */
+export function installEmptyDocument(view: EditorView): void {
+  view.updateState(
+    EditorState.create({
+      schema: view.state.schema,
+      plugins: view.state.plugins,
+    }),
+  );
+  askForBandMeasurement(view);
+}
+
+/** Make the editor show exactly this stored text, through the one door. */
+export function applyDocumentJson(view: EditorView, text: string): void {
+  installDocument(view, documentNodeFromJson(view, text));
 }
 
 /**
@@ -50,8 +77,9 @@ export function applyDocumentJson(view: EditorView, text: string): void {
  * One ask is not enough: the free elements are placed one frame after the state
  * update (see free-layout-plugin), and a picture that has just been mounted can
  * still report a size of zero. So: immediately, on the next two frames, and once
- * more shortly after. The ask is the same event the program already fires when
- * the fonts or the theme change; it only costs a re-measure.
+ * more shortly after. The ask is the same measurement the plugin runs after every
+ * paint; it only costs a re-measure, and it empties the reservations of the
+ * document that is going away as well as filling in the new one's.
  */
 function askForBandMeasurement(view: EditorView): void {
   // Direttamente la misura, non un evento che la chieda: misurato il 17-09 su un
