@@ -9,6 +9,7 @@ import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks } from "./pagination-cassie";
 import { syncEditorMetricsFromDom } from "./text-metrics";
 import { appliedScale } from "./editor-zoom";
+import { measurePaintedPages, type PaintedPages } from "./painted-pages";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
@@ -69,35 +70,12 @@ export interface DomBand {
   pieces: BandPiece[];
 }
 
-/** The painted pages as vertical ranges, in the host's own layout units. */
-function paintedPageAreas(host: HTMLElement, scale: number): { top: number; bottom: number }[] {
-  const hostTop = host.getBoundingClientRect().top;
-  const rel = (el: HTMLElement): { top: number; bottom: number } => {
-    const r = el.getBoundingClientRect();
-    return { top: (r.top - hostTop) / scale, bottom: (r.bottom - hostTop) / scale };
-  };
-  // A page-break widget draws the two pages' margins (and header/footer): what
-  // lies ABOVE it is this page's lines, what lies BELOW it is the next page's.
-  // The strip inside the widget has no line to shorten on paper either, because
-  // on paper that strip is a margin - so clipping a reservation to the ranges
-  // BETWEEN widgets is exactly what the sheets must be told.
-  const widgets = Array.from(host.querySelectorAll<HTMLElement>(".aw-page-break"))
-    .map(rel)
-    .sort((a, b) => a.top - b.top);
-  const out: { top: number; bottom: number }[] = [];
-  let cursor = 0;
-  for (const w of widgets) {
-    out.push({ top: cursor, bottom: w.top });
-    cursor = w.bottom;
-  }
-  out.push({ top: cursor, bottom: Number.MAX_SAFE_INTEGER });
-  return out;
-}
-
-function pageOfArea(areas: { top: number; bottom: number }[], y: number): number {
-  for (let i = 0; i < areas.length; i++) if (y < areas[i].bottom) return i;
-  return areas.length - 1;
-}
+/**
+ * The pages as vertical ranges of LINES, in the host's own layout units, and the
+ * single answer to "which painted page holds this point": both come from
+ * `painted-pages.ts`, which the anchoring rule measures the same way. Nothing is
+ * computed here, and that is the point - see the note at the top of that file.
+ */
 
 /**
  * Split a reservation into one piece per painted page it touches.
@@ -117,6 +95,12 @@ function pageOfArea(areas: { top: number; bottom: number }[], y: number): number
  * `freeWrapPlacement` uses, for the same reason: a float cannot rise out of the
  * block it sits in, so the block before the gap is the only one that can begin
  * the shortening at the right line.
+ *
+ * "Which page is this" is NOT decided here: it comes from `pages`, the one
+ * measure `painted-pages.ts` shares with the anchoring rule. What this function
+ * owns is the OTHER question - which range of LINES each page has - because the
+ * strip of a page-break widget has none, and a piece that would fall there is
+ * dropped rather than squeezed into a page that has no line to shorten.
  */
 function bandPieces(input: {
   /** The anchor block: what carries the first piece, as on the screen. */
@@ -127,17 +111,18 @@ function bandPieces(input: {
   side: "left" | "right";
   widthPx: number;
   full: boolean;
-  areas: { top: number; bottom: number }[];
+  pages: PaintedPages;
   blocks: { pos: number; top: number }[];
 }): BandPiece[] {
-  const { anchor, top, bottom, side, widthPx, full, areas, blocks } = input;
+  const { anchor, top, bottom, side, widthPx, full, pages, blocks } = input;
   if (blocks.length === 0 || bottom <= top) return [];
+  const areas = pages.areas;
   // The pages to look at are those whose LINES the span overlaps: the strip of a
   // page break (a page's bottom margin, the separator, the next page's top
   // margin) is white space on paper too, so it has no line to shorten and gets no
   // piece of its own.
-  const firstPage = pageOfArea(areas, anchor.top);
-  const lastPage = pageOfArea(areas, bottom - 1);
+  const firstPage = pages.pageOf(anchor.top);
+  const lastPage = pages.pageOf(bottom - 1);
   const out: BandPiece[] = [];
   for (let page = firstPage; page <= lastPage; page++) {
     const lo = Math.max(top, areas[page].top);
@@ -208,8 +193,10 @@ export function measureDomBands(
   const hostRect = host.getBoundingClientRect();
   // The painted pages on the SAME axis the band is measured on: what a reservation
   // shortens, page by page, is decided here - never by the print sheet re-deriving
-  // it (Carlo, 18-09: the text must arrive measured).
-  const pageAreas = paintedPageAreas(host, scale);
+  // it (Carlo, 18-09: the text must arrive measured). One measure for the ranges of
+  // lines and for "which page is this point on": the anchoring rule calls the same
+  // function, so the two surfaces cannot mean two different things by "page".
+  const pages = measurePaintedPages(host, scale);
 
   // ONE walk of the document: the text blocks, by their OWN node positions (the
   // anchor lookup needs their DOM), and the free elements. Positions come from
@@ -390,7 +377,7 @@ export function measureDomBands(
       side,
       widthPx,
       full,
-      areas: pageAreas,
+      pages,
       blocks: blockTops,
     });
     if (pieces.length === 0) {

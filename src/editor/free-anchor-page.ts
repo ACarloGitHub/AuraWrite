@@ -29,6 +29,7 @@ import type { EditorView } from "prosemirror-view";
 import { NodeSelection } from "prosemirror-state";
 import { freeLayoutMap, isAnchorBlock, isFreeNode, parseFreeSpec } from "./free-layout";
 import { appliedScale } from "./editor-zoom";
+import { measurePaintedPages } from "./painted-pages";
 
 /** Meta marker: this transaction is the program moving a picture, not the user. */
 export const FREE_ANCHOR_MOVE_META = "aw-free-anchor-move";
@@ -47,26 +48,17 @@ export interface AnchorMove {
   toPage: number;
 }
 
-/** The editor's page separators, as tops in the host's own layout units. */
-function separatorTops(view: EditorView, toLayoutTop: (el: HTMLElement) => number): number[] {
-  const host = view.dom as HTMLElement;
-  const tops: number[] = [];
-  host.querySelectorAll<HTMLElement>(".aw-page-break").forEach((widget) => {
-    // The widget draws both pages' margins: the boundary is its separator line,
-    // not its box. Without a line (older markup) fall back to the box top.
-    const line = widget.querySelector<HTMLElement>(".aw-page-break-separator, .aw-page-break-line");
-    tops.push(toLayoutTop(line ?? widget));
-  });
-  return tops.sort((a, b) => a - b);
-}
-
 /**
  * The first picture that is drawn on a page other than its anchor's, or null
  * when every picture already hangs from a line of its own page.
  *
  * The page of a picture is the page holding its MIDDLE - the same rule the page
  * calculator uses, so the two surfaces cannot mean two different things by
- * "which page is this on".
+ * "which page is this on". And "which page is this point on" is not decided here
+ * either: it comes from `measurePaintedPages`, the same measure the reservations
+ * are split with, because the boundary between two pages is ONE thing (the
+ * separator line inside the page-break widget) and a second definition of it is
+ * how the two surfaces start to disagree. See `painted-pages.ts`.
  */
 export function planAnchorMove(view: EditorView): AnchorMove | null {
   const host = view.dom as HTMLElement;
@@ -74,16 +66,9 @@ export function planAnchorMove(view: EditorView): AnchorMove | null {
   const hostTop = host.getBoundingClientRect().top;
   const layoutTop = (el: HTMLElement): number => (el.getBoundingClientRect().top - hostTop) / scale;
 
-  const seps = separatorTops(view, layoutTop);
-  if (seps.length === 0) return null; // continuous mode: the whole document is one page
-  const pageOf = (top: number): number => {
-    let page = 0;
-    for (const s of seps) {
-      if (s <= top) page++;
-      else break;
-    }
-    return page;
-  };
+  const painted = measurePaintedPages(host, scale);
+  if (!painted.bounded) return null; // continuous mode: the whole document is one page
+  const pageOf = painted.pageOf;
 
   const domAt = (pos: number): HTMLElement | null => {
     const d = view.nodeDOM(pos);
