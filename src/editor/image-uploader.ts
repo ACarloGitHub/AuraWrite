@@ -1,6 +1,18 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
+/**
+ * Image formats AuraWrite accepts, and the mime type each one has.
+ *
+ * One home on purpose: `chat.ts`, `toolbar.ts` and `image-node-view.ts` each
+ * kept their own copy of the same two answers ("this name is an image" and
+ * "this name is that mime"), and this file's own `getImageMimeType` was never
+ * called. They import these now.
+ *
+ * `formats/html.ts` keeps its own, deliberately: its answer defaults to
+ * `image/png` because the result goes into a data URI for the export, while an
+ * unknown attachment must honestly say `application/octet-stream`.
+ */
+export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
 
 export function isImageFilename(name: string): boolean {
   const lower = name.toLowerCase();

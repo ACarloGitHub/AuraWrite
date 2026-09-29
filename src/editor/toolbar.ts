@@ -7,6 +7,7 @@ import type { NodeType } from "prosemirror-model";
 import { toMarkdown, toMarkdownWithRewrites, fromMarkdown } from "../formats/markdown";
 import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
+import { getImageMimeType } from "./image-uploader";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { setLoading as setLoadingState, isLoading as isLoadingState } from "../loading-state";
 import { schema } from "./editor";
@@ -64,7 +65,7 @@ async function openImagePicker(view: EditorView): Promise<void> {
     if (!selected || typeof selected !== "string") return;
     const fileName = selected.split(/[\\/]/).pop() || "image";
     const base64 = await invoke<string>("load_binary_file", { path: selected });
-    const mime = mimeFromFilename(fileName);
+    const mime = getImageMimeType(fileName);
     const fakeFile = makeFileLike(fileName, mime, base64);
     await insertImageFromFile(view, fakeFile);
   } catch (e) {
@@ -79,17 +80,6 @@ function makeFileLike(name: string, type: string, base64: string): File {
   for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
   const blob = new Blob([bytes], { type });
   return new File([blob], name, { type });
-}
-
-function mimeFromFilename(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".bmp")) return "image/bmp";
-  if (lower.endsWith(".svg")) return "image/svg+xml";
-  return "application/octet-stream";
 }
 
 export function setupToolbar(view: EditorView): void {

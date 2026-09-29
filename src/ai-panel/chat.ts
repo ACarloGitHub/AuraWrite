@@ -18,6 +18,7 @@ import {
   clearChunkDecorations,
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
+import { IMAGE_EXTENSIONS, getImageMimeType, isImageFilename } from "../editor/image-uploader";
 import { applyAuraEdit } from "./edit-executor";
 import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
@@ -49,34 +50,17 @@ interface Message {
 
 let pendingAttachments: Attachment[] = [];
 
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
 const DOCUMENT_EXTENSIONS = ["txt", "md", "json", "csv", "html", "xml", "log", "ts", "js", "py", "rs", "go", "java", "c", "cpp", "h"];
 const DOCX_EXTENSIONS = ["docx"];
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
 const MAX_DOCUMENT_SIZE = 500 * 1024;
 const MAX_DOCX_SIZE = 10 * 1024 * 1024;
 
-function getMimeType(filename: string): string {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".bmp")) return "image/bmp";
-  if (lower.endsWith(".svg")) return "image/svg+xml";
-  return "application/octet-stream";
-}
-
-function isImageFile(filename: string): boolean {
-  const lower = filename.toLowerCase();
-  return IMAGE_EXTENSIONS.some((ext) => lower.endsWith("." + ext));
-}
-
 async function resolveImageSrcToAttachment(src: string): Promise<Attachment | undefined> {
   try {
     const base64: string = await invoke("read_image_asset_base64", { relativePath: src });
     const filename = src.split("/").pop() || src.split("\\").pop() || "image";
-    const mimeType = getMimeType(filename);
+    const mimeType = getImageMimeType(filename);
     return {
       id: `sel-img-${Date.now()}`,
       kind: "image",
@@ -150,7 +134,7 @@ async function addDocxAttachment(file: File): Promise<void> {
 async function addAttachmentFromFile(file: File): Promise<void> {
   const filename = file.name;
 
-  if (isImageFile(filename)) {
+  if (isImageFilename(filename)) {
     if (file.size > MAX_IMAGE_SIZE) {
       console.warn(`[attachments] Image ${filename} is ${(file.size / 1024 / 1024).toFixed(1)}MB, exceeds ${MAX_IMAGE_SIZE / 1024 / 1024}MB limit`);
       return;
@@ -159,7 +143,7 @@ async function addAttachmentFromFile(file: File): Promise<void> {
     pendingAttachments.push({
       id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       kind: "image",
-      mimeType: getMimeType(filename),
+      mimeType: getImageMimeType(filename),
       filename,
       data: base64,
       size: file.size,

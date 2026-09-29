@@ -1,7 +1,7 @@
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView } from "prosemirror-view";
 import { invoke } from "@tauri-apps/api/core";
-import { resolveImageSrc, uploadImageFile } from "./image-uploader";
+import { resolveImageSrc, uploadImageFile, getImageMimeType } from "./image-uploader";
 import {
   applyFrameAndShadow,
   applyWrapMarker,
@@ -264,7 +264,7 @@ export class ImageNodeView implements NodeView {
     try {
       const fileName = selected.split(/[\\/]/).pop() || "image";
       const base64 = await invoke<string>("load_binary_file", { path: selected });
-      const fakeFile = this.makeFileLike(fileName, this.mimeFromFilename(fileName), base64);
+      const fakeFile = this.makeFileLike(fileName, getImageMimeType(fileName), base64);
       const uploaded = await uploadImageFile(fakeFile);
       const pos = this.getPos();
       if (pos == null) return;
@@ -293,17 +293,6 @@ export class ImageNodeView implements NodeView {
     for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
     const blob = new Blob([bytes], { type });
     return new File([blob], name, { type });
-  }
-
-  private mimeFromFilename(name: string): string {
-    const lower = name.toLowerCase();
-    if (lower.endsWith(".png")) return "image/png";
-    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-    if (lower.endsWith(".gif")) return "image/gif";
-    if (lower.endsWith(".webp")) return "image/webp";
-    if (lower.endsWith(".bmp")) return "image/bmp";
-    if (lower.endsWith(".svg")) return "image/svg+xml";
-    return "application/octet-stream";
   }
 
   update(node: PMNode): boolean {
