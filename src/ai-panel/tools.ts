@@ -697,6 +697,24 @@ async function chatSearch(
 // Helper Functions
 // ============================================================================
 
+/**
+ * Plain text of a stored document, for the model's reading tools.
+ *
+ * `content_json` arrives in two shapes: the document itself
+ * (`{"type":"doc","content":[...]}`, what `JSON.stringify(doc.toJSON())`
+ * writes) or the whole editor state (`{"doc":{...},"selection":{...}}`).
+ * Only strings and arrays were handled, so the object shape - the normal one -
+ * fell through to `""`: `search_documents` never matched inside the text
+ * (tools.ts:439) and `read_project` / `read_section` handed the model empty
+ * documents (tools.ts:587, :635). `get_document_content` never showed it,
+ * because that tool returns the raw row with `content_json` and does not come
+ * through here.
+ *
+ * The other two extractions answer different questions and stay as they are:
+ * project-indexing.ts feeds the stored search index, entity-extraction.ts
+ * feeds the template tables. This one does not fall back to the raw text on a
+ * bad format: its callers already do that (the `catch` around the JSON.parse).
+ */
 function extractTextFromContent(content: unknown): string {
   if (typeof content === "string") {
     return content;
@@ -704,6 +722,11 @@ function extractTextFromContent(content: unknown): string {
 
   if (Array.isArray(content)) {
     return content.map((node) => extractTextFromNode(node)).join(" ");
+  }
+
+  if (content && typeof content === "object") {
+    const obj = content as Record<string, unknown>;
+    return extractTextFromNode(obj.doc ?? obj);
   }
 
   return "";
