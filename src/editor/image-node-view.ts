@@ -1,7 +1,7 @@
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView } from "prosemirror-view";
 import { invoke } from "@tauri-apps/api/core";
-import { resolveImageSrc, uploadImageFile, getImageMimeType } from "./image-uploader";
+import { resolveImageSrc, uploadImageFile, getImageMimeType, IMAGE_EXTENSIONS } from "./image-uploader";
 import {
   applyFrameAndShadow,
   applyWrapMarker,
@@ -258,7 +258,7 @@ export class ImageNodeView implements NodeView {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({
       multiple: false,
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg"] }],
+      filters: [{ name: "Images", extensions: [...IMAGE_EXTENSIONS] }],
     });
     if (!selected || typeof selected !== "string") return;
     try {

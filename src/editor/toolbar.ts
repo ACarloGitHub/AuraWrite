@@ -7,7 +7,7 @@ import type { NodeType } from "prosemirror-model";
 import { toMarkdown, toMarkdownWithRewrites, fromMarkdown } from "../formats/markdown";
 import { toPlainText, fromPlainText } from "../formats/txt";
 import { toHTML } from "../formats/html";
-import { getImageMimeType } from "./image-uploader";
+import { IMAGE_EXTENSIONS, getImageMimeType } from "./image-uploader";
 import { toDocx, fromDocx, Packer } from "../formats/docx";
 import { setLoading as setLoadingState, isLoading as isLoadingState } from "../loading-state";
 import { schema } from "./editor";
@@ -58,7 +58,7 @@ async function openImagePicker(view: EditorView): Promise<void> {
       filters: [
         {
           name: "Images",
-          extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"],
+          extensions: [...IMAGE_EXTENSIONS],
         },
       ],
     });

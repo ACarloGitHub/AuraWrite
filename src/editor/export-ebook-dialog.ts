@@ -14,6 +14,7 @@
 
 import Sortable from "sortablejs";
 import { getProject, getSections, getDocuments } from "../database/db";
+import { IMAGE_EXTENSIONS } from "./image-uploader";
 import type { Project, Section, Document } from "../types/database";
 import {
   getExportConfig,
@@ -145,7 +146,7 @@ export async function openExportEbookDialog(projectId: string): Promise<void> {
     const picked = await open({
       multiple: false,
       filters: [
-        { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"] },
+        { name: "Images", extensions: [...IMAGE_EXTENSIONS] },
       ],
     });
     if (picked && typeof picked === "string") {
