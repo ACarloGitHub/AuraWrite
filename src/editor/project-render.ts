@@ -140,7 +140,12 @@ export function renderProjectsList(): void {
  */
 export function refreshTitleBar(): void {
   const titleEl = document.getElementById("document-title");
-  if (!titleEl || !currentProject) return;
+  if (!titleEl) return;
+  if (!currentProject) {
+    // Nothing open: the word the label starts with at boot (index.html:27).
+    titleEl.textContent = "Untitled";
+    return;
+  }
   if (currentSection && currentDocument) {
     titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${currentDocument.title}`;
   } else {

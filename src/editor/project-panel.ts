@@ -112,6 +112,7 @@ export function initProjectPanel(
       setCurrentDocument(null);
       lastSavedContent = null;
       clearEditor();
+      refreshTitleBar();
       renderProjectsList();
     }
   });
@@ -533,6 +534,7 @@ async function handleNewProject(): Promise<void> {
     setCurrentProject(projectResult.project);
     setCurrentSection(null);
     setCurrentDocument(null);
+    refreshTitleBar();
     setSections(projectResult.sections || []);
     setDocuments([]);
     // Load documents for all sections created by the template
@@ -571,6 +573,7 @@ export async function handleDeleteProject(project: Project): Promise<void> {
       setCurrentProject(null);
       setCurrentSection(null);
       setCurrentDocument(null);
+      refreshTitleBar();
     }
     renderProjectsList();
     console.log("Deleted project:", project.name);
@@ -595,6 +598,7 @@ export async function handleDeleteSection(section: Section): Promise<void> {
     if (currentSection?.id === section.id) {
       setCurrentSection(null);
       setCurrentDocument(null);
+      refreshTitleBar();
     }
     renderProjectsList();
     console.log("Deleted section:", section.name);
@@ -618,6 +622,7 @@ export async function handleDeleteDocument(doc: Document): Promise<void> {
     if (currentDocument?.id === doc.id) {
       setCurrentDocument(null);
       clearEditor();
+      refreshTitleBar();
     }
     renderProjectsList();
     console.log("Deleted document:", doc.title);

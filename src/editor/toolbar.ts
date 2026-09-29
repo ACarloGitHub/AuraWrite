@@ -122,7 +122,7 @@ function setupDirtyTracking(): void {
         if (documentState.lastSavedContent !== newContent) {
           documentState.isDirty = true;
           updateWindowTitle();
-          updateDocumentTitleBar();
+          updateDocumentDirtyMark();
 
           if (!isLoading) {
             window.dispatchEvent(new CustomEvent("aurawrite:content-changed", {
@@ -147,6 +147,28 @@ function updateWindowTitle(): void {
     : `${title} - AuraWrite`;
 }
 
+/**
+ * Only the "modified" asterisk after the title (`#document-title.dirty`, the
+ * ` *` of styles/03-window.css), never the text.
+ *
+ * Every content change reaches this line, and the text of the label belongs to
+ * one of two memories that ignore each other: the file (File menu) or the
+ * project document (refreshTitleBar). Writing the text here meant that opening
+ * a project document showed `Progetto / Sezione / Documento` and the first
+ * keystroke replaced it with `Untitled` - or with the name of a file opened
+ * earlier in the session - for the rest of the writing.
+ */
+function updateDocumentDirtyMark(): void {
+  const titleEl = document.getElementById("document-title");
+  if (!titleEl) return;
+  titleEl.classList.toggle("dirty", documentState.isDirty);
+}
+
+/**
+ * The label as the FILE sees it: the name of the open file, or `Untitled`.
+ * Called only by file events (open, save with name, File > New, closing a file)
+ * and once at start-up; typing no longer goes through here.
+ */
 function updateDocumentTitleBar(): void {
   const titleEl = document.getElementById("document-title");
   const formatEl = document.getElementById("document-format");
@@ -158,7 +180,7 @@ function updateDocumentTitleBar(): void {
     : "Untitled";
 
   titleEl.textContent = title;
-  titleEl.classList.toggle("dirty", documentState.isDirty);
+  updateDocumentDirtyMark();
 
   const formatNames: Record<string, string> = {
     json: "JSON",
