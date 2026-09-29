@@ -50,7 +50,7 @@ import {
   indexDocumentForSearch,
   updateIndexIndicators,
 } from "./project-indexing";
-import { renderProjectsList, refreshActiveHighlight } from "./project-render";
+import { renderProjectsList, refreshActiveHighlight, refreshTitleBar } from "./project-render";
 import { MAX_DEPTH } from "./project-dnd";
 
 // Live re-exports (ESM live bindings): external consumers keep seeing fresh
@@ -733,10 +733,7 @@ export async function selectDocument(doc: Document): Promise<void> {
   if (onDocumentSelect) {
     onDocumentSelect(currentDocument!);
   }
-  const titleEl = document.getElementById("document-title");
-  if (titleEl && currentProject && currentSection) {
-    titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${currentDocument!.title}`;
-  }
+  refreshTitleBar();
   // Aggiorna subito la cornice di selezione (documento + sezione che lo
   // contiene) senza ricostruire tutta la lista: preserva scroll e istanze
   // SortableJS. (Bug del ritardo evidenziato da Carlo, 2026-06-26.)
@@ -788,10 +785,7 @@ export function selectProject(project: Project): void {
     onProjectChange(project);
   }
 
-  const titleEl = document.getElementById("document-title");
-  if (titleEl) {
-    titleEl.textContent = project.name;
-  }
+  refreshTitleBar();
 }
 
 export function toggleAndSelectSection(section: Section): void {

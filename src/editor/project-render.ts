@@ -125,6 +125,29 @@ export function renderProjectsList(): void {
   initSortable();
 }
 
+/**
+ * The text of the title bar: `project / section / document`, or the project
+ * name alone when no document is open.
+ *
+ * This used to be written by hand in four places - `selectDocument` and
+ * `selectProject` in project-panel.ts, the project rename and the project
+ * colour picker here - each with its own two-branch copy. Four copies of one
+ * decision means four ways to fall behind: change the composition in one and
+ * the bar tells two different truths about the same project depending on which
+ * button was pressed last. One reader, fed by the same state every caller
+ * already reads (callers that have just written a new name write it before
+ * calling, so this always reads the stored state).
+ */
+export function refreshTitleBar(): void {
+  const titleEl = document.getElementById("document-title");
+  if (!titleEl || !currentProject) return;
+  if (currentSection && currentDocument) {
+    titleEl.textContent = `${currentProject.name} / ${currentSection.name} / ${currentDocument.title}`;
+  } else {
+    titleEl.textContent = currentProject.name;
+  }
+}
+
 export function createActiveProjectElement(project: Project): HTMLElement {
   const div = document.createElement("div");
   div.className = "project-item active";
@@ -143,12 +166,7 @@ export function createActiveProjectElement(project: Project): HTMLElement {
       project.updated_at = Date.now();
       await updateProject(project);
       nameEl.innerHTML = `<strong>${newName}</strong>`;
-      const titleEl = document.getElementById("document-title");
-      if (titleEl && currentSection && currentDocument) {
-        titleEl.textContent = `${newName} / ${currentSection.name} / ${currentDocument.title}`;
-      } else if (titleEl) {
-        titleEl.textContent = newName;
-      }
+      refreshTitleBar();
     }, () => {
       nameEl.innerHTML = `<strong>${project.name}</strong>`;
     });
@@ -211,12 +229,7 @@ export function createActiveProjectElement(project: Project): HTMLElement {
         await updateProject(project);
         nameEl.innerHTML = `<strong>${newName}</strong>`;
         applyItemColors(header, bg, text, "project");
-        const titleEl = document.getElementById("document-title");
-        if (titleEl && currentSection && currentDocument) {
-          titleEl.textContent = `${newName} / ${currentSection.name} / ${currentDocument.title}`;
-        } else if (titleEl) {
-          titleEl.textContent = newName;
-        }
+        refreshTitleBar();
       },
       onReset: async () => {
         project.bg_color = undefined;
