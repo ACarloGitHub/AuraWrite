@@ -686,6 +686,61 @@ function updateAnalysisStatus(status: string): void {
   }
 }
 
+/**
+ * The mechanics both buttons share once they know which text goes in: put the
+ * text in place of the old range, move the marker to the new range, tell the
+ * rest of the editor that the document changed.
+ *
+ * Written once on purpose: `acceptSuggestion` and `switchSuggestion` kept
+ * character-for-character copies of these 34 lines - only the variable holding
+ * the text differed - so a change to the marker or to the notification could
+ * reach one of them and not the other, and the two would answer differently on
+ * the same suggestion.
+ *
+ * The order matters and is kept: replace, then move the marker, then notify.
+ */
+function putSuggestionTextIn(
+  id: string,
+  pos: { from: number; to: number },
+  text: string,
+): void {
+  const view = editorViewRef!;
+  const oldLen = pos.to - pos.from;
+
+  const tr = view.state.tr.replaceWith(
+    pos.from,
+    pos.to,
+    view.state.schema.text(text),
+  );
+
+  view.dispatch(tr);
+
+  const newLen = text.length;
+
+  const newDeco = createSuggestionDecoration(
+    id,
+    pos.from,
+    pos.from + newLen,
+  );
+  const tr2 = view.state.tr.setMeta(suggestionsMarkerPluginKey, {
+    remove: [
+      Decoration.inline(
+        pos.from,
+        pos.to,
+        { class: "suggestion-marker", "data-slot-id": id },
+        { id },
+      ),
+    ],
+    add: [newDeco],
+  });
+  view.dispatch(tr2);
+
+  notifyDocumentChange(
+    { from: pos.from, oldLen, newLen },
+    "suggestions",
+  );
+}
+
 export function acceptSuggestion(id: string): void {
   log(`ACCEPT: Accepting suggestion for slot ${id}`);
 
@@ -703,40 +758,7 @@ export function acceptSuggestion(id: string): void {
   }
 
   const finalSuggested = suggestion.suggested || suggestion.original;
-  const oldLen = currentPos.to - currentPos.from;
-
-  const tr = editorViewRef.state.tr.replaceWith(
-    currentPos.from,
-    currentPos.to,
-    editorViewRef.state.schema.text(finalSuggested),
-  );
-
-  editorViewRef.dispatch(tr);
-
-  const newLen = finalSuggested.length;
-
-  const newDeco = createSuggestionDecoration(
-    id,
-    currentPos.from,
-    currentPos.from + newLen,
-  );
-  const tr2 = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
-    remove: [
-      Decoration.inline(
-        currentPos.from,
-        currentPos.to,
-        { class: "suggestion-marker", "data-slot-id": id },
-        { id },
-      ),
-    ],
-    add: [newDeco],
-  });
-  editorViewRef.dispatch(tr2);
-
-  notifyDocumentChange(
-    { from: currentPos.from, oldLen, newLen },
-    "suggestions",
-  );
+  putSuggestionTextIn(id, currentPos, finalSuggested);
 
   slot.state = "accepted";
   suggestion.isAccepted = true;
@@ -790,40 +812,7 @@ export function switchSuggestion(id: string): void {
     ? suggestion.suggested || suggestion.original
     : suggestion.original;
 
-  const oldLen = currentPos.to - currentPos.from;
-
-  const tr = editorViewRef.state.tr.replaceWith(
-    currentPos.from,
-    currentPos.to,
-    editorViewRef.state.schema.text(newText),
-  );
-
-  editorViewRef.dispatch(tr);
-
-  const newLen = newText.length;
-
-  const newDeco = createSuggestionDecoration(
-    id,
-    currentPos.from,
-    currentPos.from + newLen,
-  );
-  const tr2 = editorViewRef.state.tr.setMeta(suggestionsMarkerPluginKey, {
-    remove: [
-      Decoration.inline(
-        currentPos.from,
-        currentPos.to,
-        { class: "suggestion-marker", "data-slot-id": id },
-        { id },
-      ),
-    ],
-    add: [newDeco],
-  });
-  editorViewRef.dispatch(tr2);
-
-  notifyDocumentChange(
-    { from: currentPos.from, oldLen, newLen },
-    "suggestions",
-  );
+  putSuggestionTextIn(id, currentPos, newText);
 
   suggestion.showingOriginal = !isShowingOriginal;
   if (!isShowingOriginal) {
