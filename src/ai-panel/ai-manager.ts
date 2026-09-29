@@ -20,7 +20,7 @@ import {
 } from "./manual-providers";
 import { buildToolSystemPrompt, type ToolPreferences } from "./tools";
 import { toolFlagsFrom } from "../preferences/types";
-import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
+import { recordChatTurn } from "./chat-session-usage";
 import { resolveContextWindowFromAPI, setCachedContextWindow, getCachedContextWindow } from "./context-window";
 import { setContextFooterModel, updateContextFooter } from "./context-footer";
 import { invoke } from "@tauri-apps/api/core";
@@ -262,12 +262,75 @@ export function getAISettings(): PreferencesAI {
   return loadAIFromPreferences();
 }
 
+/**
+ * Make the active provider match the preferences. One road for both callers:
+ * `updateAISettings` (the preferences-changed event; rebuildAlways - a fresh
+ * instance carries the saved settings for every provider) and the safety belt
+ * in `sendToAI` (rebuild only when the provider really changed, apply the rest
+ * in place - nothing is torn down before a request for nothing).
+ *
+ * Switching provider or model does NOT touch the session's token counter: the
+ * counter measures the conversation (chat-session-usage.ts), while the total it
+ * is compared against is the model's context window, read fresh on every footer
+ * update - so only the denominator changes. Decision of Carlo, 29-09. The
+ * counter is reset only where the conversation really changes: clear chat
+ * (chat.ts:1576) and compaction (chat.ts:1025).
+ */
+async function alignActiveProvider(settings: PreferencesAI, rebuildAlways: boolean): Promise<void> {
+  const current = currentProvider;
+  if (!current) {
+    currentProvider = createProvider(settings);
+    return;
+  }
+  if (current.name !== settings.aiProvider) {
+    if (current.name === "local-llamacpp") {
+      await (current as LocalLlamacppProvider).shutdownServer();
+    }
+    currentProvider = createProvider(settings);
+    return;
+  }
+  if (rebuildAlways) {
+    currentProvider = createProvider(settings);
+    return;
+  }
+  // Same provider: settings a provider already in place can take, instead of
+  // rebuilding it. Declared as an optional-method shape: the runtime checks
+  // stay (not every provider has every setter) but nothing is untyped here.
+  const settable = current as typeof current & {
+    model?: string;
+    setModel?: (model: string) => void;
+    setApiKey?: (apiKey: string) => void;
+    setBaseUrl?: (baseUrl: string) => void;
+    setApiType?: (apiType: ManualApiType) => void;
+    setProfileName?: (name: string) => void;
+  };
+  if (current.name === "local-llamacpp" && settings.aiModel) {
+    const llamacppProv = current as LocalLlamacppProvider;
+    const newMmproj = localStorage.getItem("aurawrite-llamacpp-mmproj") || undefined;
+    if (llamacppProv.getConfig().modelPath !== settings.aiModel) {
+      llamacppProv.setModel(settings.aiModel, newMmproj);
+    }
+  }
+  if (typeof settable.setModel === "function" && settings.aiModel && current.name !== "local-llamacpp") {
+    settable.setModel(settings.aiModel);
+  }
+  if (typeof settable.setApiKey === "function") {
+    settable.setApiKey(settings.aiApiKey);
+  }
+  if (typeof settable.setBaseUrl === "function" && settings.aiBaseUrl) {
+    settable.setBaseUrl(settings.aiBaseUrl);
+  }
+  if (typeof settable.setApiType === "function" && settings.aiManualApiType) {
+    settable.setApiType(settings.aiManualApiType);
+  }
+  if (typeof settable.setProfileName === "function" && settings.aiManualName) {
+    settable.setProfileName(settings.aiManualName);
+  }
+}
+
 export async function updateAISettings(): Promise<void> {
   const settings = loadAIFromPreferences();
-  if (currentProvider && currentProvider.name === "local-llamacpp" && settings.aiProvider !== "local-llamacpp") {
-    await (currentProvider as LocalLlamacppProvider).shutdownServer();
-  }
-  currentProvider = createProvider(settings);
+  await alignActiveProvider(settings, true);
   setContextFooterModel(settings.aiProvider, settings.aiModel);
   resolveAndCacheContextWindow(settings.aiProvider, settings.aiModel);
 }
@@ -327,51 +390,7 @@ export async function sendToAI(
   // applied to the next request, even if the preferences-changed event
   // failed to reach handlePreferencesChanged (e.g. listener not yet
   // attached, event fired before chat panel setup, race condition).
-  const current = currentProvider!;
-  if (current.name !== settings.aiProvider) {
-    if (current.name === "local-llamacpp") {
-      await (current as LocalLlamacppProvider).shutdownServer();
-    }
-    currentProvider = createProvider(settings);
-  } else {
-    // Settings that can be applied to a provider already in place instead of
-    // rebuilding it. Declared as an optional-method shape: the runtime checks
-    // stay (not every provider has every setter) but nothing is untyped here.
-    const settable = current as typeof current & {
-      model?: string;
-      setModel?: (model: string) => void;
-      setApiKey?: (apiKey: string) => void;
-      setBaseUrl?: (baseUrl: string) => void;
-      setApiType?: (apiType: ManualApiType) => void;
-      setProfileName?: (name: string) => void;
-    };
-    if (current.name === "local-llamacpp" && settings.aiModel) {
-      const llamacppProv = current as LocalLlamacppProvider;
-      const newMmproj = localStorage.getItem("aurawrite-llamacpp-mmproj") || undefined;
-      if (llamacppProv.getConfig().modelPath !== settings.aiModel) {
-        llamacppProv.setModel(settings.aiModel, newMmproj);
-      }
-    }
-    if (typeof settable.setModel === "function" && settings.aiModel && current.name !== "local-llamacpp") {
-      const previousModel = settable.model;
-      settable.setModel(settings.aiModel);
-      if (previousModel && previousModel !== settings.aiModel) {
-        resetSessionUsage();
-      }
-    }
-    if (typeof settable.setApiKey === "function") {
-      settable.setApiKey(settings.aiApiKey);
-    }
-    if (typeof settable.setBaseUrl === "function" && settings.aiBaseUrl) {
-      settable.setBaseUrl(settings.aiBaseUrl);
-    }
-    if (typeof settable.setApiType === "function" && settings.aiManualApiType) {
-      settable.setApiType(settings.aiManualApiType);
-    }
-    if (typeof settable.setProfileName === "function" && settings.aiManualName) {
-      settable.setProfileName(settings.aiManualName);
-    }
-  }
+  await alignActiveProvider(settings, false);
   const active = currentProvider!;
 
   const providersRequiringKey: Array<PreferencesAI["aiProvider"]> = ["openai", "anthropic", "deepseek", "openrouter", "ollama-cloud", "minimax", "zai"];
