@@ -3,29 +3,6 @@
 // Data-only module (no CodeMirror import) so it can be required from anywhere
 // without pulling the editor into the initial bundle.
 
-/** File extensions supported by the installed CodeMirror language modules. */
-export const CODEMIRROR_EXTENSIONS: string[] = [
-  "html", "htm",
-  "xml", "xhtml", "svg",
-  "css", "less", "scss", "sass",
-  "js", "mjs", "cjs", "jsx", "ts", "tsx",
-  "json",
-  "md", "markdown",
-  "yaml", "yml",
-  "py",
-  "sql",
-  "java",
-  "c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx",
-  "rs",
-  "go",
-  "php",
-  "wast", "wat",
-  "vue",
-  "liquid",
-  "jinja", "j2",
-  "txt",
-];
-
 /** Save As filters (system dialog) for the formats CodeMirror supports. */
 export const CODEMIRROR_FILTERS: { name: string; extensions: string[] }[] = [
   { name: "HTML", extensions: ["html", "htm"] },
@@ -50,3 +27,20 @@ export const CODEMIRROR_FILTERS: { name: string; extensions: string[] }[] = [
   { name: "Jinja", extensions: ["jinja", "j2"] },
   { name: "Plain Text", extensions: ["txt"] },
 ];
+
+/**
+ * File extensions supported by the installed CodeMirror language modules: what
+ * the ebook tree asks before it lets a file be clicked open
+ * (`isOpenableFile`, ebook/tree.ts). Built from the filters above, so a new
+ * language is one edit and not two lists that must be kept in step.
+ *
+ * Note the other list: `languageForExtension` in codemirror-editor.ts maps an
+ * extension to its highlighting module and deliberately holds one entry more -
+ * `angular`, from `@codemirror/lang-angular`, one of the 21 official modules
+ * (wiki/concepts/ebook-publishing.md, "Moduli linguaggio"). No file extension
+ * maps to Angular templates (they are *.component.html), so today it is only
+ * reachable through the language field planned for the Coder mode, which will
+ * let the user type an extension by hand (wiki/concepts/coder-writer-mode.md,
+ * UI section). It is kept on purpose, not left over.
+ */
+export const CODEMIRROR_EXTENSIONS: string[] = CODEMIRROR_FILTERS.flatMap((f) => f.extensions);
