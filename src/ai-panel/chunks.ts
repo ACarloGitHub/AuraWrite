@@ -1,3 +1,5 @@
+import { CHARS_PER_TOKEN, estimateTokensFromText } from "./token-counter";
+
 export interface Chunk {
   id: string;
   index: number;
@@ -13,7 +15,6 @@ export interface ChunkSettings {
 }
 
 const DEFAULT_MAX_TOKENS = 8000;
-const CHARS_PER_TOKEN = 4;
 
 export function getChunkSettings(): ChunkSettings {
   const saved = localStorage.getItem("aurawrite-ai-settings");
@@ -35,8 +36,14 @@ export function saveChunkSettings(settings: ChunkSettings): void {
   localStorage.setItem("aurawrite-ai-settings", JSON.stringify(current));
 }
 
+/**
+ * The weight of a text, in tokens — the same estimate the context bar and the
+ * request accounting use (`token-counter.ts`). The formula lives there and is
+ * called from here; a rough rule kept in two places starts lying to one of its
+ * users the moment either copy is tuned.
+ */
 export function estimateTokenCount(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+  return estimateTokensFromText(text);
 }
 
 export function splitIntoChunks(

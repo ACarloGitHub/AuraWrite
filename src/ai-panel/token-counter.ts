@@ -7,7 +7,17 @@ export interface TokenUsage {
   source: "provider" | "estimated";
 }
 
-const CHARS_PER_TOKEN = 4;
+/**
+ * Characters per token — the whole weight rule, written ONCE.
+ *
+ * It is a rough estimate (4 characters ≈ 1 token) and it serves several logics
+ * that never see each other: how heavy a request is before sending it
+ * (`estimateInputTokens`), where to cut a long document into chunks
+ * (`chunks.ts`), what the context bar counts. One place, called from many: a
+ * better estimate would otherwise have to be made in each of them, and the bar
+ * would end up telling a different story from the chunks.
+ */
+export const CHARS_PER_TOKEN = 4;
 
 export function estimateTokensFromText(text: string): number {
   if (!text) return 0;
