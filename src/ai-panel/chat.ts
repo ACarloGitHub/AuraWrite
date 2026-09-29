@@ -1159,6 +1159,21 @@ interface ToolLoopOutcome {
   contentToPersist: string | null;
 }
 
+/**
+ * Remove the command blocks (`<tool name="...">{...}</tool>`) from an answer:
+ * they are the program's own request, not something the chat or the stored
+ * history should show.
+ *
+ * ONE rule, called from the five places that used to carry their own copy of it
+ * (two in `runToolCallingLoop`, three in `renderFinalAssistantContent`). The
+ * five copies were byte-identical, compared on 2026-09-29, and nothing kept
+ * them that way: a pattern changed in one of them would leak raw tags into the
+ * chat exactly on the path where nobody looks twice.
+ */
+function stripToolTags(text: string): string {
+  return text.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+}
+
 async function runToolCallingLoop(
   text: string,
   context: AIContext,
@@ -1287,7 +1302,7 @@ async function runToolCallingLoop(
       }
     }
 
-    const cleanResponse = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+    const cleanResponse = stripToolTags(aiContent);
 
     let followUpPrompt: string;
     if (hasPlannerTools && toolResults.every((r) => r.tool && r.tool.startsWith("plan_"))) {
@@ -1328,7 +1343,7 @@ Based on these results, provide your final response to the user's question. ${ha
 
     if (wasStoppedByUser()) {
       if (placeholder) {
-        const stoppedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
+        const stoppedContent = stripToolTags(aiContent);
         placeholder.textContent = stoppedContent || "Stopped by user.";
         placeholder.classList.add("ai-message--error");
       }
@@ -1357,6 +1372,10 @@ function renderFinalAssistantContent(aiContent: string, placeholder: HTMLDivElem
   let persistedAssistantContent: string | null = null;
   if (placeholder) {
     if (aiContent) {
+      // The answer we show and the answer we store are the answer WITHOUT the
+      // command blocks: computed once here, the three branches below only
+      // choose what goes on screen.
+      const cleanedContent = stripToolTags(aiContent);
       const editResult = applyAuraEdit(
         aiContent,
         editorViewRef!,
@@ -1370,14 +1389,11 @@ function renderFinalAssistantContent(aiContent: string, placeholder: HTMLDivElem
         }
         // For edit operations the full AI content (stripped of tool tags)
         // is what the user cares about for future RAG, not the summary line.
-        const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
         persistedAssistantContent = cleanedContent || aiContent;
       } else if (editResult.error) {
         placeholder.textContent = aiContent;
-        const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
         persistedAssistantContent = cleanedContent || aiContent;
       } else {
-        const cleanedContent = aiContent.replace(/<tool[^>]*>.*?<\/tool>/gs, "").trim();
         placeholder.textContent = cleanedContent || aiContent;
         persistedAssistantContent = cleanedContent || aiContent;
       }
