@@ -17,6 +17,7 @@ import { getSessionUsage, getCompactionCount, MAX_COMPACTIONS_PER_SESSION } from
 import { getContextWindow } from "./context-window";
 import { estimateTokensFromText } from "./token-counter";
 import { getAISettings } from "./ai-manager";
+import { getCurrentSessionId } from "./chat-storage";
 
 const COMPACTION_THRESHOLD = 0.65;
 const COMPACTION_TAIL_TURNS = 3;
@@ -149,7 +150,11 @@ export async function compactConversation(
 
   const summary = response.content;
 
-  const sessionId = localStorage.getItem("aurawrite-chat-session-id") || `s-${Date.now().toString(36)}`;
+  // One road for the session identity: chat-storage reads the key, and when it
+  // is missing it generates the id AND saves it. Reading the key here used to
+  // invent an id without the random part and without saving it, so the summary
+  // would land under a session id no other message would ever use.
+  const sessionId = getCurrentSessionId();
   const date = new Date().toISOString().slice(0, 10);
   const model = settings.aiModel || "unknown";
 
