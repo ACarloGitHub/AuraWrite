@@ -19,6 +19,7 @@ import {
 } from "../editor/chunk-decorations";
 import { getEditorContent } from "../editor/editor";
 import { IMAGE_EXTENSIONS, getImageMimeType, isImageFilename } from "../editor/image-uploader";
+import { toolFlagsFrom } from "../preferences/types";
 import { applyAuraEdit } from "./edit-executor";
 import { parseToolCalls, executeTool, type ToolResult } from "./tools";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
@@ -334,11 +335,7 @@ function getPreferences(): Preferences {
       aiWritingLanguage: prefs.aiWritingLanguage || "English",
       aiAssistantName: prefs.aiAssistantName || "Aura",
       aiUserName: prefs.aiUserName || "",
-      plannerEnabled: prefs.plannerEnabled ?? true,
-      webSearchEnabled: prefs.webSearchEnabled ?? true,
-      fileSystemEnabled: prefs.fileSystemEnabled ?? true,
-      shellExecEnabled: prefs.shellExecEnabled ?? false,
-      ragEnabled: prefs.ragEnabled ?? false,
+      ...toolFlagsFrom(prefs),
     };
   }
   return {
@@ -349,11 +346,7 @@ function getPreferences(): Preferences {
     aiWritingLanguage: "English",
     aiAssistantName: "Aura",
     aiUserName: "",
-    plannerEnabled: true,
-    webSearchEnabled: true,
-    fileSystemEnabled: true,
-    shellExecEnabled: false,
-    ragEnabled: false,
+    ...toolFlagsFrom({}),
   };
 }
 

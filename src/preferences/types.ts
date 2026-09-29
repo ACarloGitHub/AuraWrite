@@ -166,3 +166,29 @@ export const defaultPreferences: Preferences = {
   shellExecEnabled: false,
   ragEnabled: false,
 };
+
+/**
+ * The five tool switches read from a preference object, which may be partial or
+ * empty. A value that was never saved (a new installation, preferences written
+ * before the field existed) falls back to `defaultPreferences`, where the
+ * defaults live.
+ *
+ * chat.ts - both its branch with saved preferences and its branch without - and
+ * ai-manager.ts used to write these `??` fallbacks by hand: three copies of one
+ * decision. A default changed in one place and missed in the others would show
+ * the preferences window one thing and send the model another.
+ */
+export function toolFlagsFrom(
+  prefs: Record<string, unknown>,
+): Pick<
+  Preferences,
+  "plannerEnabled" | "webSearchEnabled" | "fileSystemEnabled" | "shellExecEnabled" | "ragEnabled"
+> {
+  return {
+    plannerEnabled: (prefs.plannerEnabled ?? defaultPreferences.plannerEnabled) as boolean,
+    webSearchEnabled: (prefs.webSearchEnabled ?? defaultPreferences.webSearchEnabled) as boolean,
+    fileSystemEnabled: (prefs.fileSystemEnabled ?? defaultPreferences.fileSystemEnabled) as boolean,
+    shellExecEnabled: (prefs.shellExecEnabled ?? defaultPreferences.shellExecEnabled) as boolean,
+    ragEnabled: (prefs.ragEnabled ?? defaultPreferences.ragEnabled) as boolean,
+  };
+}

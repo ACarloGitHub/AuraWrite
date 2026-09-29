@@ -19,6 +19,7 @@ import {
   type ManualApiType,
 } from "./manual-providers";
 import { buildToolSystemPrompt, type ToolPreferences } from "./tools";
+import { toolFlagsFrom } from "../preferences/types";
 import { recordChatTurn, resetSessionUsage } from "./chat-session-usage";
 import { resolveContextWindowFromAPI, setCachedContextWindow, getCachedContextWindow } from "./context-window";
 import { setContextFooterModel, updateContextFooter } from "./context-footer";
@@ -543,13 +544,7 @@ export function getCurrentProvider(): AIProvider | null {
 export function buildContextWithTools(context: AIContext): AIContext {
   const saved = localStorage.getItem("aurawrite-preferences");
   const prefs = saved ? JSON.parse(saved) : {};
-  const toolPrefs: ToolPreferences = {
-    plannerEnabled: prefs.plannerEnabled ?? true,
-    webSearchEnabled: prefs.webSearchEnabled ?? true,
-    fileSystemEnabled: prefs.fileSystemEnabled ?? true,
-    shellExecEnabled: prefs.shellExecEnabled ?? false,
-    ragEnabled: prefs.ragEnabled ?? false,
-  };
+  const toolPrefs: ToolPreferences = toolFlagsFrom(prefs);
 
   const hasAnyTool = toolPrefs.plannerEnabled || toolPrefs.webSearchEnabled ||
     toolPrefs.fileSystemEnabled || toolPrefs.ragEnabled || toolPrefs.shellExecEnabled;
