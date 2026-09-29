@@ -326,63 +326,21 @@ export class AnthropicProvider implements AIProvider {
   }
 }
 
+/**
+ * The instructions every model receives are ONE text.
+ *
+ * This is the same prompt as `buildOpenAICompatibleSystemPrompt`, called through: the two
+ * versions in this file were kept in step by hand, and on 2026-09-29 they were compared line
+ * by line - 58 lines each, identical - which nothing had been keeping true. One line added to
+ * one of the two would have split the instructions between Anthropic-style services and the
+ * rest. Both names stay because both are imported (manual-provider.ts and the Anthropic
+ * provider below); the string itself is written once.
+ *
+ * The text is English on purpose: it is what the model reads, and every prompt this
+ * program sends is written in English.
+ */
 export function buildAnthropicSystemPrompt(context?: AIContext): string {
-  const parts: string[] = [];
-
-  if (context?.customAssistantPrompt) {
-    parts.push(context.customAssistantPrompt);
-  } else {
-    parts.push("You are an AI assistant for AuraWrite, a writing application.");
-    parts.push("Help the user with writing, editing, and organizing their documents.");
-  }
-
-  if (context?.assistantName) {
-    parts.push(`Your name is ${context.assistantName}.`);
-  }
-  if (context?.userName) {
-    parts.push(`The user's name is ${context.userName}.`);
-  }
-  if (context?.interfaceLanguage) {
-    parts.push(`Respond to the user in ${context.interfaceLanguage}.`);
-  }
-  if (context?.writingLanguage && context.writingLanguage !== context.interfaceLanguage) {
-    parts.push(`When writing or suggesting text for the document, write in ${context.writingLanguage}.`);
-  }
-
-  if (context?.toolInstructions) {
-    parts.push(context.toolInstructions);
-  }
-
-  if (context?.projectType) {
-    parts.push(`The current project is of type: ${context.projectType}`);
-  }
-
-  if (context?.documentTitle) {
-    parts.push(`The current document is titled: ${context.documentTitle}`);
-  }
-
-  if (context?.writingStyleFragment) {
-    parts.push(`WRITING STYLE:\n${context.writingStyleFragment}`);
-  }
-
-  if (context?.documentText) {
-    parts.push(`\nDOCUMENT CONTENT:\n"""\n${context.documentText}\n"""`);
-  }
-
-  if (context?.selectedText) {
-    parts.push(
-      `\nSELECTED TEXT (you may ONLY modify this):\n"""\n${context.selectedText}\n"""`,
-    );
-  }
-
-  parts.push(`
-When the user explicitly asks you to modify, replace, or change text in the document, respond with the AURA_EDIT format:
-<<<AURA_EDIT>>>
-{"aura_edit": {"message": "Brief explanation", "operations": [{"op": "replace", "find": "exact text", "content": [{"type": "text", "text": "new text"}]}]}}
-<<<END_AURA_EDIT>>>
-Do NOT use AURA_EDIT for normal conversation - only for document edits.`);
-
-  return parts.join("\n");
+  return buildOpenAICompatibleSystemPrompt(context);
 }
 
 export function buildAnthropicMessages(
