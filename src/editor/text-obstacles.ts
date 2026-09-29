@@ -27,6 +27,8 @@
 //  - striscia solida / solid strip: a height where no line fits at all.
 // ============================================================================
 
+import { elementDecorationExtent } from "./element-decoration";
+
 /** Which side of the column an obstacle occupies. */
 export type ObstacleSide = "left" | "right";
 
@@ -48,6 +50,37 @@ export interface Obstacle {
  * it.
  */
 export const OBSTACLE_MARGIN_PX = 12;
+
+/**
+ * How far the text keeps clear of an element that floats beside it (In flow,
+ * Wrapped, Left/Right): the base air above, plus how far frame and shadow reach
+ * beyond the element's own box.
+ *
+ * ONE function, because the same sum used to be written out in seven places that
+ * never spoke to each other:
+ *  - the three node views that paint it as a margin on screen
+ *    (`image-node-view.ts`, `figure-node-view.ts`, `box-node-view.ts`);
+ *  - the page counter, which adds it to the element's width to learn how narrow
+ *    a line becomes next to it (`pagination-cassie.ts`);
+ *  - the three exports, which write it inline because the exported markup has no
+ *    stylesheet (`editor.ts`, `enriched-schema.ts` twice).
+ * Seven copies meant seven chances for one of them to drift: if the counter and
+ * the painter disagreed, the pages would break where the window does not show
+ * them, and if one export disagreed, the printed file would not match what was
+ * seen (see the note on `OBSTACLE_MARGIN_PX` above, which says the same thing).
+ *
+ * A `Free` element is deliberately NOT in here: it never reaches this function
+ * (the callers above ask `!attrs.free` first), and its band is computed by
+ * `bandOfRect` below, which adds the same base air by itself. That is why the
+ * two systems are separate rather than two answers to one question.
+ *
+ * The stylesheet's own fallback (`var(--aw-float-gap, 12px)`) is not reachable
+ * from here and is not counted as one of the seven: it is the value shown when
+ * no node view has written the variable yet.
+ */
+export function floatGapPx(attrs: Record<string, unknown> | undefined, typeName?: string): number {
+  return OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(attrs, typeName).x);
+}
 
 /**
  * Narrowest line the calculator will ever report. It is a floor, not a

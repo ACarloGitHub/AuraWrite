@@ -34,8 +34,7 @@ import { createAtomicElementGuardPlugin, transformStyleOf } from "./element-view
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
 import { isWrapping, textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
 import { computeImageCss, normalizeImageStyle } from "./image-style";
-import { elementDecorationExtent } from "./element-decoration";
-import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
+import { floatGapPx } from "./text-obstacles";
 import { syncSecondaryToolbar } from "./toolbar";
 import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } from "./pagination-state";
 
@@ -337,10 +336,9 @@ const imageSpec: NodeSpec = {
     const align = String(node.attrs.align ?? "center");
     if (isWrapping(textConditionOf(node)) && (align === "left" || align === "right") && !node.attrs.free) {
       // Self-contained float: the exported HTML has no stylesheet, so the
-      // float and its air (frame and shadow included) travel inline.
-      const gap = Math.round(
-        OBSTACLE_MARGIN_PX + elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name).x,
-      );
+      // float and its air (frame and shadow included) travel inline. The air is
+      // the same number the node views paint and the page counter adds up.
+      const gap = floatGapPx(node.attrs as Record<string, unknown>, node.type.name);
       styleParts.push(`float: ${align}`);
       styleParts.push(`${align === "left" ? "margin-right" : "margin-left"}: ${gap}px`);
       styleParts.push("margin-top: 0");

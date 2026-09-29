@@ -45,7 +45,7 @@ import { elementDecorationExtent } from "./element-decoration";
 // page count alike.
 import {
   ObstacleSet,
-  OBSTACLE_MARGIN_PX,
+  floatGapPx,
   type Obstacle,
   type ObstacleSide,
   type SolidStrip,
@@ -691,9 +691,10 @@ function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } 
   const w = freeElementWidth(node);
   if (w === null) return null;
   // Frame and shadow reach beyond the photo: the text must keep clear of them
-  // too (T1.4).
-  const extent = elementDecorationExtent(node.attrs as Record<string, unknown>, node.type.name);
-  return { side: align, widthPx: w + OBSTACLE_MARGIN_PX + Math.round(extent.x) };
+  // too (T1.4), and that sum is the same one the node views paint with - one
+  // function, `floatGapPx`, instead of the formula written out here.
+  const gap = floatGapPx(node.attrs as Record<string, unknown>, node.type.name);
+  return { side: align, widthPx: w + gap };
 }
 
 /** Normalise a raw line-start to a word start (never inside whitespace). */

@@ -38,8 +38,7 @@ import {
   type Corner,
 } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
-import { elementDecorationExtent } from "./element-decoration";
-import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
+import { floatGapPx } from "./text-obstacles";
 
 const FIGURE_NODE = "figure";
 
@@ -161,7 +160,7 @@ export class FigureNodeView implements NodeView {
     const floating =
       !attrs.free && isWrapping(parseTextCondition(attrs.wrap)) && (align === "left" || align === "right");
     const gap = floating
-      ? `${OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(attrs, "figure").x)}px`
+      ? `${floatGapPx(attrs, "figure")}px`
       : null;
     setStyleCached(this.applied, this.dom, "--aw-float-gap", gap);
   }

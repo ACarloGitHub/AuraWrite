@@ -28,8 +28,7 @@ import {
 import { applyWrapMarker, pointerInElementAxes, setStyleCached, transformStyleOf } from "./element-view";
 import { createRotateHandle, isRotateHandle, startRotateDrag } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
-import { elementDecorationExtent } from "./element-decoration";
-import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
+import { floatGapPx } from "./text-obstacles";
 import { computeImageBoxShadow, normalizeImageStyle } from "./image-style";
 import { appliedScale } from "./editor-zoom";
 
@@ -140,7 +139,7 @@ export class StyledBoxNodeView implements NodeView {
     const floating =
       !raw.free && isWrapping(parseTextCondition(raw.wrap)) && (align === "left" || align === "right");
     const gap = floating
-      ? `${OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(raw, "styled_box").x)}px`
+      ? `${floatGapPx(raw, "styled_box")}px`
       : null;
     setStyleCached(this.applied, this.dom, "--aw-float-gap", gap);
   }

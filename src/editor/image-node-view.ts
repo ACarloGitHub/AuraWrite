@@ -19,8 +19,7 @@ import {
   type Corner,
 } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
-import { elementDecorationExtent } from "./element-decoration";
-import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
+import { floatGapPx } from "./text-obstacles";
 
 export class ImageNodeView implements NodeView {
   dom: HTMLElement;
@@ -164,7 +163,7 @@ export class ImageNodeView implements NodeView {
     const floating =
       !attrs.free && isWrapping(parseTextCondition(attrs.wrap)) && (align === "left" || align === "right");
     const gap = floating
-      ? `${OBSTACLE_MARGIN_PX + Math.round(elementDecorationExtent(attrs, "image").x)}px`
+      ? `${floatGapPx(attrs, "image")}px`
       : null;
     setStyleCached(this.appliedWrapper, this.wrapper, "--aw-float-gap", gap);
   }

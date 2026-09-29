@@ -41,9 +41,8 @@ import {
   textConditionMarker,
   textConditionOf,
 } from "./element-condition";
-import { elementDecorationExtent } from "./element-decoration";
 import { captionStripLook, transformStyleOf } from "./element-view";
-import { OBSTACLE_MARGIN_PX } from "./text-obstacles";
+import { floatGapPx } from "./text-obstacles";
 
 /** Attr specs to spread into the image node spec (editor.ts). */
 export const IMAGE_STYLE_ATTRS: Record<string, { default: unknown }> = {
@@ -300,9 +299,7 @@ export const STYLED_BOX_NODE_SPEC: NodeSpec = {
       (s.align === "left" || s.align === "right") &&
       !node.attrs.free
     ) {
-      const gap =
-        OBSTACLE_MARGIN_PX +
-        Math.round(elementDecorationExtent(node.attrs as Record<string, unknown>, "styled_box").x);
+      const gap = floatGapPx(node.attrs as Record<string, unknown>, "styled_box");
       styleMap.float = s.align;
       styleMap.margin = s.align === "left" ? `0 ${gap}px 0 0` : `0 0 0 ${gap}px`;
     }
@@ -485,9 +482,7 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
     // HTML (no stylesheet) and the print sheet keep the frame and shadow clear.
     const figAlign = String(node.attrs.align ?? "center");
     if (isWrapping(textConditionOf(node)) && (figAlign === "left" || figAlign === "right") && !node.attrs.free) {
-      const gap = Math.round(
-        OBSTACLE_MARGIN_PX + elementDecorationExtent(node.attrs as Record<string, unknown>, "figure").x,
-      );
+      const gap = floatGapPx(node.attrs as Record<string, unknown>, "figure");
       cssMap["float"] = figAlign;
       cssMap[figAlign === "left" ? "margin-right" : "margin-left"] = `${gap}px`;
       cssMap["margin-top"] = "0";
