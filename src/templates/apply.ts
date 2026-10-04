@@ -58,7 +58,6 @@ export const ALL_TEMPLATES: Template[] = [
 ];
 
 export function getTemplate(type: string): Template | null {
-  if (type === "chef-b") return chefTemplateBMultibranch;
   return ALL_TEMPLATES.find((t) => t.type === type) || null;
 }
 
