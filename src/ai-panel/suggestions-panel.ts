@@ -1,6 +1,7 @@
 import type { EditorView } from "prosemirror-view";
 import { Decoration } from "prosemirror-view";
 import { sendToAI, extractJson } from "./ai-manager";
+import { escapeHtml } from "../html-escape";
 import { notifyDocumentChange } from "./modification-hub";
 import { currentProject, currentSection, currentDocument } from "../editor/project-panel";
 import { resolveWritingStyleFragment } from "../templates/apply";
@@ -1074,12 +1075,6 @@ function toggleDebugFromPanel(): void {
 function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + "...";
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }
 
 export function getSuggestions(): SentenceSuggestion[] {

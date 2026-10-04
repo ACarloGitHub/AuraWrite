@@ -1,6 +1,7 @@
 import type { EditorView } from "prosemirror-view";
 import { getSynonyms } from "../ai-panel/ai-manager";
 import { buildContextWithTools } from "../ai-panel/ai-manager";
+import { escapeHtml } from "../html-escape";
 import type { AIContext } from "../ai-panel/providers";
 import { currentProject } from "./project-panel";
 
@@ -249,10 +250,4 @@ export function removeSynonymPopup(): void {
 
 export function isSynonymPopupVisible(): boolean {
   return isPopupVisible;
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }

@@ -8,6 +8,7 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { closeCurrentFileIfInside } from "../editor/toolbar";
+import { escapeHtml } from "../html-escape";
 import { createColorBtn, openColorPicker } from "../editor/color-picker";
 import {
   ebookListAll,
@@ -673,10 +674,3 @@ function startInlineRename(
   input.addEventListener("blur", finish);
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c] as string
-  );
-}

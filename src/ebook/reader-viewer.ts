@@ -19,6 +19,7 @@ import {
   readerWorkDir,
 } from "./reader-io";
 import type { ReaderBook, ReaderBookState, ReaderBookmark, ReaderSettings } from "./reader-io";
+import { escapeHtml, escapeAttr } from "../html-escape";
 import {
   buildReadingList,
   parseEpubPackage,
@@ -740,10 +741,3 @@ function toggleFullscreen(): void {
   node.classList.toggle("reader-viewer--fullscreen");
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c] as string);
-}
-
-function escapeAttr(s: string): string {
-  return escapeHtml(s);
-}

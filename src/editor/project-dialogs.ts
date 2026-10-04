@@ -9,6 +9,7 @@
 import { updateProject } from "../database/db";
 import { listTemplates, getTemplate } from "../templates/apply";
 import { currentProject, projects, setCurrentProject } from "./project-state";
+import { escapeHtml } from "../html-escape";
 import type { Project } from "../types/database";
 
 export function showSaveDialog(): Promise<'save' | 'dont-save' | 'cancel'> {
@@ -486,15 +487,6 @@ export function showProjectAISettingsDialog(project: Project): Promise<void> {
       }
     });
   });
-}
-
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }
 
 export function showConfirmDialog(title: string, message: string): Promise<boolean> {

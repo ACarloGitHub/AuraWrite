@@ -2,6 +2,8 @@
 // Color Picker - Modal for item customization (name, bg_color, text_color)
 // ============================================================================
 
+import { escapeAttr } from "../html-escape";
+
 const PRESET_COLORS: string[] = [
   "#e74c3c", "#e67e22", "#f39c12", "#f1c40f",
   "#2ecc71", "#1abc9c", "#3498db", "#9b59b6",
@@ -256,8 +258,4 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     g: parseInt(h.substring(2, 4), 16),
     b: parseInt(h.substring(4, 6), 16),
   };
-}
-
-function escapeAttr(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

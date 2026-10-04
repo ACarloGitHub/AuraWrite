@@ -15,6 +15,7 @@
 import Sortable from "sortablejs";
 import { getProject, getSections, getDocuments } from "../database/db";
 import { IMAGE_EXTENSIONS } from "./image-uploader";
+import { escapeHtml, escapeAttr } from "../html-escape";
 import type { Project, Section, Document } from "../types/database";
 import {
   getExportConfig,
@@ -428,13 +429,3 @@ function renderNode(container: HTMLElement, node: TreeNode, config: EbookExportC
   }
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c] as string
-  );
-}
-
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
