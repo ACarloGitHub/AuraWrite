@@ -1,26 +1,5 @@
 import type { Template } from "./_types";
-
-// Helper: document-level tutorial (explanation + example + writable header + prompts)
-const docTutorial = (title: string, explanation: string, example: string, writableHeader: string, prompts: string[]) => ({
-  title,
-  body: [
-    explanation,
-    "",
-    "## Example",
-    example,
-    "",
-    writableHeader,
-    "",
-    "## Suggested prompts",
-    ...prompts.map((p) => `- Ask the AI: "${p}"`),
-  ].join("\n"),
-});
-
-// Helper: empty document (user will fill in)
-const emptyDoc = (title: string) => ({
-  title,
-  body: "",
-});
+import { docTutorial, emptyDoc } from "./_helpers";
 
 export const notesTemplate: Template = {
   type: "notes",

@@ -1,4 +1,5 @@
 import type { Template } from "./_types";
+import { docTutorial, emptyDoc } from "./_helpers";
 
 // Helper: section-level tutorial (Approccio C: explanation + example + prompts)
 const sectionTutorial = (title: string, explanation: string, example: string, prompts: string[]) => ({
@@ -12,28 +13,6 @@ const sectionTutorial = (title: string, explanation: string, example: string, pr
     "## Suggested prompts",
     ...prompts.map((p) => `- Ask the AI: "${p}"`),
   ].join("\n"),
-});
-
-// Helper: document-level tutorial (Approccio C with writable header)
-const docTutorial = (title: string, explanation: string, example: string, writableHeader: string, prompts: string[]) => ({
-  title,
-  body: [
-    explanation,
-    "",
-    "## Example",
-    example,
-    "",
-    writableHeader,
-    "",
-    "## Suggested prompts",
-    ...prompts.map((p) => `- Ask the AI: "${p}"`),
-  ].join("\n"),
-});
-
-// Helper: empty document (for chapters the user will fill)
-const emptyDoc = (title: string) => ({
-  title,
-  body: "",
 });
 
 export const bookTemplate: Template = {
