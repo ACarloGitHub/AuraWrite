@@ -61,6 +61,25 @@ export function getTemplate(type: string): Template | null {
   return ALL_TEMPLATES.find((t) => t.type === type) || null;
 }
 
+/**
+ * The template object for a project choice: the template type, plus the Chef
+ * variant when B was picked (Chef is the only template with two shapes).
+ *
+ * One road on purpose: `createProjectFromTemplate` (which variant did the user
+ * choose?) and the style lookup (which styles belong to this project?) used to
+ * decide separately. Known limit, left in place: a Chef B project stores
+ * `template_type: "chef"` - the variant is not part of the type - so a lookup
+ * by type alone resolves variant A. The two share their styles today (B is A
+ * with different sections); if they ever diverge, the variant has to be stored
+ * first.
+ */
+export function resolveTemplate(type: string, chefVariant?: "a" | "b"): Template | null {
+  const template = getTemplate(type);
+  if (!template) return null;
+  if (template.type === "chef" && chefVariant === "b") return chefTemplateBMultibranch;
+  return template;
+}
+
 export function listTemplates(): Template[] {
   return ALL_TEMPLATES;
 }
@@ -76,7 +95,7 @@ export function resolveWritingStyleFragment(
   project: Project,
   document?: Pick<Document, "selected_style"> | null
 ): string | undefined {
-  const tpl = getTemplate(project.template_type || "");
+  const tpl = resolveTemplate(project.template_type || "");
   if (!tpl) return undefined;
 
   const styleName =
@@ -157,14 +176,8 @@ export async function createProjectFromTemplate(opts: {
   createSections?: boolean;
   createDocuments?: boolean;
 }): Promise<{ project: Project; sections: Section[] }> {
-  const template = getTemplate(opts.templateType);
-  if (!template) throw new Error(`Unknown template: ${opts.templateType}`);
-
-  // Resolve which variant of chef to apply.
-  let effectiveTemplate = template;
-  if (opts.templateType === "chef" && opts.chefVariant === "b") {
-    effectiveTemplate = chefTemplateBMultibranch;
-  }
+  const effectiveTemplate = resolveTemplate(opts.templateType, opts.chefVariant);
+  if (!effectiveTemplate) throw new Error(`Unknown template: ${opts.templateType}`);
 
   // 1) Create the project (no sections, no entity types yet).
   const projectId = "proj-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
