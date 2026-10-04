@@ -1,5 +1,6 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { isManualProvider, type ManualApiType } from "./manual-providers";
+import { removeKeysWithPrefix } from "../local-cache";
 
 export interface ModelInfo {
   id: string;
@@ -56,12 +57,7 @@ export function setCachedModels(provider: string, baseUrl: string, hasApiKey: bo
 }
 
 export function clearModelCache(): void {
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(CACHE_PREFIX)) keysToRemove.push(k);
-  }
-  keysToRemove.forEach((k) => localStorage.removeItem(k));
+  removeKeysWithPrefix(CACHE_PREFIX);
 }
 
 export async function listModelsForProvider(
@@ -93,13 +89,7 @@ export async function listModelsForProvider(
 
 /** Remove the cached model list of one provider namespace. */
 export function clearModelCacheFor(provider: string): void {
-  const prefix = `${CACHE_PREFIX}${provider}:`;
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(prefix)) keysToRemove.push(k);
-  }
-  keysToRemove.forEach((k) => localStorage.removeItem(k!));
+  removeKeysWithPrefix(`${CACHE_PREFIX}${provider}:`);
 }
 
 function firstString(...values: unknown[]): string {

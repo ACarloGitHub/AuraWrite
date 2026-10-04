@@ -6,6 +6,7 @@ import {
   type ManualApiType,
 } from "./manual-providers";
 import { parseModelList } from "./model-listing";
+import { removeKeysWithPrefix } from "../local-cache";
 
 export type ProviderName = "ollama" | "ollama-cloud" | "openai" | "anthropic" | "deepseek" | "openrouter" | "lmstudio" | "minimax" | "zai" | "local-llamacpp" | "manual";
 
@@ -201,13 +202,7 @@ export function setCachedContextWindow(provider: string, model: string, contextL
 
 /** Drop every cached context size of one provider namespace. */
 export function clearContextCacheFor(provider: string): void {
-  const prefix = `${CONTEXT_CACHE_PREFIX}${provider}:`;
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(prefix)) keysToRemove.push(k);
-  }
-  keysToRemove.forEach((k) => localStorage.removeItem(k!));
+  removeKeysWithPrefix(`${CONTEXT_CACHE_PREFIX}${provider}:`);
 }
 
 export async function resolveContextWindowFromAPI(
