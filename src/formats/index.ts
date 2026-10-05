@@ -1,84 +1,18 @@
+// The converter modules of this folder, re-exported from one address.
+//
+// The format registry that used to live here (`supportedFormats`, with the two
+// filter builders `getImportFilters` / `getExportFilters`) was removed on
+// 29-09 (Carlo). It had no caller anywhere in the program - the File menu
+// builds its own lists in `editor/toolbar.ts` - and its table was wrong in
+// three places: it claimed PDF import and export and ODT export (the
+// placeholders in `pdf.ts` and `odt.ts` only throw "not yet implemented"), and
+// it claimed HTML cannot be imported (importing HTML works since 2026-08-14,
+// `openHTML`). The plan for PDF and ODT lives in the wiki:
+// `wiki/todo/_priorita-5.md`, section "Canale PDF + multimedia".
+
 export * from "./markdown";
 export * from "./txt";
 export * from "./html";
 export * from "./docx";
 export * from "./odt";
 export * from "./pdf";
-
-export interface FormatOption {
-  name: string;
-  extension: string;
-  mimeType: string;
-  canImport: boolean;
-  canExport: boolean;
-}
-
-export const supportedFormats: FormatOption[] = [
-  {
-    name: "ProseMirror JSON",
-    extension: "json",
-    mimeType: "application/json",
-    canImport: true,
-    canExport: true,
-  },
-  {
-    name: "Markdown",
-    extension: "md",
-    mimeType: "text/markdown",
-    canImport: true,
-    canExport: true,
-  },
-  {
-    name: "Plain Text",
-    extension: "txt",
-    mimeType: "text/plain",
-    canImport: true,
-    canExport: true,
-  },
-  {
-    name: "HTML",
-    extension: "html",
-    mimeType: "text/html",
-    canImport: false,
-    canExport: true,
-  },
-  {
-    name: "Word Document",
-    extension: "docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    canImport: true,
-    canExport: true,
-  },
-  {
-    name: "OpenDocument",
-    extension: "odt",
-    mimeType: "application/vnd.oasis.opendocument.text",
-    canImport: false,
-    canExport: true,
-  },
-  {
-    name: "PDF",
-    extension: "pdf",
-    mimeType: "application/pdf",
-    canImport: true,
-    canExport: true,
-  },
-];
-
-export function getImportFilters(): { name: string; extensions: string[] }[] {
-  return supportedFormats
-    .filter((f) => f.canImport)
-    .map((f) => ({
-      name: f.name,
-      extensions: [f.extension],
-    }));
-}
-
-export function getExportFilters(): { name: string; extensions: string[] }[] {
-  return supportedFormats
-    .filter((f) => f.canExport)
-    .map((f) => ({
-      name: f.name,
-      extensions: [f.extension],
-    }));
-}
