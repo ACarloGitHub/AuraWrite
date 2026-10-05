@@ -1,5 +1,5 @@
 import type { Template } from "./_types";
-import { docTutorial } from "./_helpers";
+import { docTutorial, customStyleEntry, userStyleEntry, noneStyleEntry } from "./_helpers";
 
 export const thesisTemplate: Template = {
   type: "thesis",
@@ -315,9 +315,9 @@ export const thesisTemplate: Template = {
     { name: "Minimal", fragment: "Concise, no filler. Cut anything that doesn't earn its place. Short sentences, simple lexicon, active verbs. Citations still required but without ornamental phrasing." },
     { name: "Methodological", fragment: "Hypotheses stated explicitly, evidence-based, reproducible. Every claim followed by its method or source. Tables and figures preferred over prose for results. Methods described in enough detail that another researcher could replicate the study." },
     { name: "Critical", fragment: "Analytical, multiple perspectives, debate. Explicitly engage counter-arguments. Use phrases like 'however', 'on the other hand', 'this assumes'. Aim for intellectual honesty over rhetorical victory." },
-    { name: "Custom", fragment: "" },
-    { name: "User", fragment: "Adapt to the user's existing writing style. Observe the existing text and match its tone, rhythm, vocabulary, and citation density." },
-    { name: "None", fragment: "" },
+    customStyleEntry,
+    userStyleEntry,
+    noneStyleEntry,
   ],
   defaultStyleName: "Academic",
 

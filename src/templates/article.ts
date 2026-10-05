@@ -1,5 +1,5 @@
 import type { Template } from "./_types";
-import { docTutorial } from "./_helpers";
+import { docTutorial, customStyleEntry, userStyleEntry, noneStyleEntry } from "./_helpers";
 
 export const articleTemplate: Template = {
   type: "article",
@@ -316,9 +316,9 @@ export const articleTemplate: Template = {
     { name: "Conversational", fragment: "First-person, informal, reflective. As if talking to a thoughtful friend. Short sentences mixed with longer ones. Personal experience, opinions, mild humor allowed. No condescension, no slang for its own sake." },
     { name: "Marketing", fragment: "Persuasive, benefit-driven, call-to-action oriented. Lead with the reader's problem or desire. Concrete outcomes, specific numbers, social proof. Active voice, strong verbs, short sentences. End with a clear next step." },
     { name: "Plain", fragment: "Simple, accessible, universal. Short words, short sentences, one idea per sentence. No jargon, no acronyms without expansion, no insider references. Aim for reading ease, not display of knowledge." },
-    { name: "Custom", fragment: "" },
-    { name: "User", fragment: "Adapt to the user's existing writing style. Observe the existing text and match its tone, rhythm, vocabulary and sentence structure." },
-    { name: "None", fragment: "" },
+    customStyleEntry,
+    userStyleEntry,
+    noneStyleEntry,
   ],
   defaultStyleName: "Minimal",
 

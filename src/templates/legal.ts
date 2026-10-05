@@ -1,4 +1,5 @@
 import type { Template } from "./_types";
+import { customStyleEntry, userStyleEntry, noneStyleEntry } from "./_helpers";
 
 const legalTutorial = (title: string, explanation: string, example: string, prompts: string[]) => ({
   title,
@@ -264,9 +265,9 @@ export const legalTemplate: Template = {
   styles: [
     { name: "Formal-legal", fragment: "Formal register, technical-legal language, citations of code articles and special laws, references to court decisions (Cassazione/Merito with full citation), canonical form of Italian judicial acts. Legal lexicon, structured sentences." },
     { name: "Plain language (client communication)", fragment: "Clear register, accessible to non-legal clients. Explain in a comprehensible way without giving up precision. Avoid unnecessary Latinisms, prefer explicit formulations. Professional but empathic tone." },
-    { name: "Custom", fragment: "" },
-    { name: "User", fragment: "Adapt to the user's personal writing style. Observe the existing text and match its tone, rhythm and vocabulary." },
-    { name: "None", fragment: "" },
+    customStyleEntry,
+    userStyleEntry,
+    noneStyleEntry,
   ],
   defaultStyleName: "Formal-legal",
   prompts: {

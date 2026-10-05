@@ -1,4 +1,5 @@
 import type { Template } from "./_types";
+import { userStyleEntry, noneStyleEntry } from "./_helpers";
 
 export const customTemplate: Template = {
   type: "custom",
@@ -9,8 +10,8 @@ export const customTemplate: Template = {
   sections: [],
   entityTypes: [],
   styles: [
-    { name: "User", fragment: "Adapt to the user's personal writing style. Observe the existing text and match its tone, rhythm and vocabulary." },
-    { name: "None", fragment: "" },
+    userStyleEntry,
+    noneStyleEntry,
   ],
   defaultStyleName: null,
   prompts: {
