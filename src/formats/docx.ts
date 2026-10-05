@@ -30,7 +30,6 @@ import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
 const A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
-const _PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
 function getDOMParser(): any {
   const g: any = globalThis as any;
@@ -498,8 +497,6 @@ function applyRunMeta(wP: any, el: any): void {
     if (!rText) continue;
 
     const targetLeaf = findLeafForText(el, rText);
-    const dbg = (globalThis as any).__DBG_RUN;
-    if (dbg) dbg.push(`run="${rText.substring(0, 20)}" leaf=${targetLeaf ? (targetLeaf.nodeType + "/" + (targetLeaf.textContent || "").substring(0, 20)) : "null"}`);
     if (!targetLeaf) continue;
 
     const styles = collectRunStyles(rPr);
@@ -1042,57 +1039,6 @@ function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
     );
   }
   return paragraphs;
-}
-
-function _nodeToParagraphs(node: any): Paragraph[] {
-  switch (node.type.name) {
-    case "paragraph":
-      return [paragraphFromNode(node, { align: node.attrs?.align })];
-    case "heading": {
-      // Title style: heading level 1 with center alignment (set by schema toDOM)
-      const isTitle = node.attrs?.level === 1 && node.attrs?.align === "center";
-      const p = paragraphFromNode(node, {
-        heading: isTitle ? HeadingLevel.TITLE : getHeadingLevel(node.attrs.level),
-        style: isTitle ? "Title" : undefined,
-        align: node.attrs?.align,
-      });
-      return [p];
-    }
-    case "blockquote":
-      return contentToArray(node.content).map((child: any) =>
-        paragraphFromNode(child, { style: "IntenseQuote" }),
-      );
-    case "code_block":
-      return contentToArray(node.content).map((child: any) => {
-        const txt = getTextContent(child);
-        return new Paragraph({
-          children: [new TextRun({ text: txt, font: "Courier New", size: 20 })],
-          shading: { fill: "F5F5F5" },
-          indent: { left: 360 },
-          spacing: { before: 80, after: 80, line: 240 },
-        });
-      });
-    case "bullet_list":
-      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-bullet"));
-    case "ordered_list":
-      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-ordered"));
-    case "horizontal_rule":
-      return [
-        new Paragraph({
-          children: [new TextRun("")],
-          border: {
-            bottom: { color: "CCCCCC", size: 1, space: 1, style: "single" },
-          },
-        }),
-      ];
-    case "page":
-      return contentToArray(node.content).flatMap((child: any) => _nodeToParagraphs(child));
-    default:
-      if (node.isBlock) {
-        return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
-      }
-      return [];
-  }
 }
 
 function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBreakBefore: boolean = false): any[] {
