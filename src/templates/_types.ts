@@ -1,19 +1,19 @@
 // Template system types
 
+// Names removed 29-09 (Carlo): `school` and `university` were replaced by the
+// Student and Teacher templates (which exist), `developer` by the Coder work
+// tracked in the wiki todo. A future template adds its own name back here.
 export type TemplateType =
   | "custom"
   | "book"
   | "chef"
   | "legal"
-  | "developer"
   | "notes"
   | "article"
   | "thesis"
   | "doctor"
   | "student"
-  | "teacher"
-  | "school"
-  | "university";
+  | "teacher";
 
 export type ChefVariant = "a" | "b";
 
