@@ -39,7 +39,7 @@
 .ProseMirror.aw-print-body h4:empty::before,
 .ProseMirror.aw-print-body h5:empty::before,
 .ProseMirror.aw-print-body h6:empty::before {
-  content: "\\00a0";
+  content: "\00a0";
 }
 .aw-print-pagenum {
   position: absolute; left: 0; right: 0; bottom: var(--foot);
