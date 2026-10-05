@@ -755,6 +755,9 @@ export function acceptSuggestion(id: string): void {
   const currentPos = getSlotPositionFromDecoration(id);
   if (!currentPos) {
     log(`ACCEPT ERROR: Could not find decoration for slot ${id}`);
+    // Marker gone: the suggestion cannot be placed any more. Drop it, the same
+    // answer the Switch button gives (decided by Carlo, 29-09).
+    closeSuggestion(id);
     return;
   }
 
@@ -877,9 +880,27 @@ function removeSuggestion(id: string): void {
   renderSuggestions();
 }
 
+/**
+ * A suggestion whose marker is gone cannot be applied any more: the position
+ * it points at is lost. The panel drops it on its own - at its next update,
+ * not only at the buttons (Carlo, 29-09: se sparisce il marcatore, il
+ * suggerimento deve scomparire da solo).
+ */
+function pruneSuggestionsWithoutMarker(): void {
+  if (!editorViewRef) return;
+  const lost = slots.filter(
+    (s) => s.state !== "closed" && !getSlotPositionFromDecoration(s.id),
+  );
+  for (const s of lost) {
+    log(`PRUNE: marker gone for slot ${s.id}, suggestion dropped`);
+    closeSuggestion(s.id);
+  }
+}
+
 function renderSuggestions(): void {
   const contentEl = document.querySelector(".suggestions-panel__content");
   if (!contentEl) return;
+  pruneSuggestionsWithoutMarker();
 
   if (suggestions.length === 0) {
     contentEl.innerHTML = `
