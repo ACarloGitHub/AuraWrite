@@ -452,7 +452,7 @@
   box-shadow: inset 0 0 0 1px #38c172, 0 0 0 3px rgba(56,193,114,.18);
 }
 .section-item.drop-as-child > .item-header::after {
-  content: "â†³ figlio";
+  content: "↳ figlio";
   position: absolute;
   right: 8px;
   font-size: 10px;
@@ -466,7 +466,7 @@
   cursor: not-allowed;
 }
 .section-item.drop-blocked > .item-header::after {
-  content: "ðŸš« max 4 / ciclo";
+  content: "🚫 max 4 / ciclo";
   position: absolute;
   right: 8px;
   font-size: 10px;
