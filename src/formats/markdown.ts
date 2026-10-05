@@ -95,6 +95,50 @@ export function toMarkdownWithRewrites(
   return result;
 }
 
+/**
+ * The embed line for one image node. Shared by the `image` case, the `figure`
+ * case and the inline image - three places used to spell the same rules out.
+ */
+function imageMarkdownOf(
+  node: any,
+  opts: {
+    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
+    linkPathFor?: (href: string) => string | null;
+    useObsidianWikilinks?: boolean;
+  }
+): string {
+  const src: string = node.attrs?.src || "";
+  const alt: string = node.attrs?.alt || "";
+  const title: string = node.attrs?.title || "";
+  // Resolve path: if imagePathFor returns a non-null path, use it; otherwise
+  // use src as-is. The Obsidian export uses this to rewrite
+  // asset://localhost/... into relative attachments/... names.
+  const resolved = opts.imagePathFor && src ? opts.imagePathFor(src, alt, title) : null;
+  const finalPath = resolved || src;
+  // Obsidian wikilink embed syntax (no description) is more reliable than the
+  // standard ![alt](path) form, especially for images in subfolders of the
+  // vault: paths starting with the literal "attachments/" go out as wikilinks.
+  if (opts.useObsidianWikilinks && finalPath.startsWith("attachments/")) {
+    return `![[${finalPath}]]`;
+  }
+  const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
+  return `![${alt}](${finalPath}${titlePart})`;
+}
+
+/**
+ * Plain text of a node. The live page carries `textContent`; the saved content
+ * (what the vault export passes, document by document) has to be walked child
+ * by child - without this the text of a code block came out empty.
+ */
+function nodeTextOf(node: any): string {
+  if (!node) return "";
+  if (typeof node.text === "string") return node.text;
+  if (typeof node.textContent === "string" && node.textContent !== "") return node.textContent;
+  return contentToArray(node.content)
+    .map((c: any) => nodeTextOf(c))
+    .join("");
+}
+
 function nodeToMarkdown(
   node: any,
   opts: {
@@ -127,7 +171,7 @@ function nodeToMarkdown(
       return "> " + quote.replace(/\n/g, "\n> ");
     }
     case "code_block": {
-      const codeText = node.textContent || "";
+      const codeText = nodeTextOf(node);
       let fence = "```";
       while (codeText.includes(fence)) {
         fence += "`";
@@ -180,27 +224,19 @@ function nodeToMarkdown(
           .replace(/\n\n+/g, "\n") + "\n"
       );
     }
-    case "image": {
-      const src: string = node.attrs?.src || "";
-      const alt: string = node.attrs?.alt || "";
-      const title: string = node.attrs?.title || "";
-      // Resolve path: if imagePathFor returns a non-null path, use it;
-      // otherwise use src as-is. The Obsidian export uses this to rewrite
-      // asset://localhost/... into relative _attachments/<doc-title>/...
-      const resolved =
-        opts.imagePathFor && src
-          ? opts.imagePathFor(src, alt, title)
-          : null;
-      const finalPath = resolved || src;
-      const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
-      // Obsidian wikilink embed syntax (no description) is more reliable
-      // than the standard ![alt](path) markdown form, especially for
-      // images that live in subfolders of the vault. Detect paths that
-      // start with the literal "attachments/" and emit the wikilink form.
-      if (opts.useObsidianWikilinks && finalPath.startsWith("attachments/")) {
-        return `![[${finalPath}]]\n\n`;
-      }
-      return `![${alt}](${finalPath}${titlePart})\n\n`;
+    case "image":
+      return imageMarkdownOf(node, opts) + "\n\n";
+    case "figure": {
+      // The photo attrs sit on the figure node itself and its content is the
+      // caption (saved shape and live shape alike). Without this case a figure
+      // simply vanished from the exported .md: the fallback below recognises
+      // only the live shape.
+      const img = imageMarkdownOf(node, opts);
+      const caption = contentToArray(node.content)
+        .map((n: any) => inlineToMarkdown(n, opts))
+        .join("")
+        .trim();
+      return caption ? `${img}\n\n${caption}\n\n` : `${img}\n\n`;
     }
     default:
       if (node.isBlock) {
@@ -286,17 +322,7 @@ function inlineToMarkdown(
   // Inline image: not technically inline in ProseMirror (image is a leaf
   // node), but it can appear inside a paragraph. Emit markdown syntax.
   if (getNodeType(node) === "image") {
-    const src: string = node.attrs?.src || "";
-    const alt: string = node.attrs?.alt || "";
-    const title: string = node.attrs?.title || "";
-    const resolved = opts.imagePathFor && src ? opts.imagePathFor(src, alt, title) : null;
-    const finalPath = resolved || src;
-    // Obsidian wikilink embed syntax for attachments/ paths
-    if (opts.useObsidianWikilinks && finalPath.startsWith("attachments/")) {
-      return `![[${finalPath}]]`;
-    }
-    const titlePart = title ? ` "${title.replace(/"/g, '\\"')}"` : "";
-    return `![${alt}](${finalPath}${titlePart})`;
+    return imageMarkdownOf(node, opts);
   }
   return "";
 }
