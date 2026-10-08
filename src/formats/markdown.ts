@@ -61,31 +61,40 @@ export function toMarkdown(doc: any): string {
 }
 
 /**
- * Like toMarkdown, but with image and link transformations applied.
- * Used by the Obsidian vault export to rewrite image srcs and internal links.
- *
- * @param doc ProseMirror document node
- * @param opts.imagePathFor Function that maps an image src to a relative
- *   path to use in the .md (e.g. "_attachments/<doc-title>/image.png").
- *   If not provided, image srcs are used as-is.
- * @param opts.linkPathFor Function that maps an internal link href to a
- *   relative path or wikilink. If it returns a string starting with "[[",
- *   it is inserted as-is (wikilink). Otherwise it is wrapped in a
- *   markdown link [text](result).
+ * Optional rewrites applied while converting a document to markdown.
+ * Used by the Obsidian vault export to rewrite image srcs and internal
+ * links.
+ */
+type MarkdownRewriteOptions = {
+  /**
+   * Maps an image src to a relative path to use in the .md
+   * (e.g. "_attachments/<doc-title>/image.png"). If not provided, image
+   * srcs are used as-is.
+   */
+  imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
+  /**
+   * Maps an internal link href to a relative path or wikilink. If it
+   * returns a string starting with "[[", it is inserted as-is (wikilink).
+   * Otherwise it is wrapped in a markdown link [text](result).
+   */
+  linkPathFor?: (href: string) => string | null;
+  /**
+   * If true, image paths that start with "attachments/" are emitted
+   * as Obsidian wikilink embeds (![[attachments/<file>]]) instead of
+   * the standard markdown ![]() syntax. This is more reliable for
+   * images that live in subfolders of the vault.
+   */
+  useObsidianWikilinks?: boolean;
+};
+
+/**
+ * Like toMarkdown, but with image and link transformations applied
+ * (see MarkdownRewriteOptions). Used by the Obsidian vault export to
+ * rewrite image srcs and internal links.
  */
 export function toMarkdownWithRewrites(
   doc: any,
-  opts: {
-    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
-    linkPathFor?: (href: string) => string | null;
-    /**
-     * If true, image paths that start with "attachments/" are emitted
-     * as Obsidian wikilink embeds (![[attachments/<file>]]) instead of
-     * the standard markdown ![]() syntax. This is more reliable for
-     * images that live in subfolders of the vault.
-     */
-    useObsidianWikilinks?: boolean;
-  } = {}
+  opts: MarkdownRewriteOptions = {}
 ): string {
   const nodes = rootToNodes(doc);
   let result = "";
@@ -99,14 +108,7 @@ export function toMarkdownWithRewrites(
  * The embed line for one image node. Shared by the `image` case, the `figure`
  * case and the inline image - three places used to spell the same rules out.
  */
-function imageMarkdownOf(
-  node: any,
-  opts: {
-    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
-    linkPathFor?: (href: string) => string | null;
-    useObsidianWikilinks?: boolean;
-  }
-): string {
+function imageMarkdownOf(node: any, opts: MarkdownRewriteOptions): string {
   const src: string = node.attrs?.src || "";
   const alt: string = node.attrs?.alt || "";
   const title: string = node.attrs?.title || "";
@@ -139,14 +141,7 @@ function nodeTextOf(node: any): string {
     .join("");
 }
 
-function nodeToMarkdown(
-  node: any,
-  opts: {
-    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
-    linkPathFor?: (href: string) => string | null;
-    useObsidianWikilinks?: boolean;
-  } = {}
-): string {
+function nodeToMarkdown(node: any, opts: MarkdownRewriteOptions = {}): string {
   const t = getNodeType(node);
   switch (t) {
     case "paragraph": {
@@ -246,14 +241,7 @@ function nodeToMarkdown(
   }
 }
 
-function inlineToMarkdown(
-  node: any,
-  opts: {
-    imagePathFor?: (src: string, alt?: string, title?: string) => string | null;
-    linkPathFor?: (href: string) => string | null;
-    useObsidianWikilinks?: boolean;
-  } = {}
-): string {
+function inlineToMarkdown(node: any, opts: MarkdownRewriteOptions = {}): string {
   if (getNodeType(node) === "image") {
     // No diagnostic logging here.
   } else if (node && (node.isBlock || getNodeType(node) === "paragraph")) {
