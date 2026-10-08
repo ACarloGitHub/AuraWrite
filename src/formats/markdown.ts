@@ -396,43 +396,18 @@ export function fromMarkdown(markdown: string): any {
     }
 
     if (line.match(/^[-*]\s+/)) {
-      const items: any[] = [];
-      while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
-        const text = lines[i].replace(/^[-*]\s+/, "");
-        items.push({
-          type: "list_item",
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text }],
-            },
-          ],
-        });
-        i++;
-      }
+      const { items, next } = parseListItems(lines, i, /^[-*]\s+/);
       if (pendingPageBreak && items.length > 0) {
         items[0].attrs = { ...(items[0].attrs || {}), pageBreakBefore: true };
         pendingPageBreak = false;
       }
       content.push({ type: "bullet_list", content: items });
+      i = next;
       continue;
     }
 
     if (line.match(/^\d+\.\s+/)) {
-      const items: any[] = [];
-      while (i < lines.length && lines[i].match(/^\d+\.\s+/)) {
-        const text = lines[i].replace(/^\d+\.\s+/, "");
-        items.push({
-          type: "list_item",
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text }],
-            },
-          ],
-        });
-        i++;
-      }
+      const { items, next } = parseListItems(lines, i, /^\d+\.\s+/);
       if (pendingPageBreak && items.length > 0) {
         items[0].attrs = { ...(items[0].attrs || {}), pageBreakBefore: true };
         pendingPageBreak = false;
@@ -442,6 +417,7 @@ export function fromMarkdown(markdown: string): any {
         attrs: { order: 1 },
         content: items,
       });
+      i = next;
       continue;
     }
 
@@ -568,6 +544,29 @@ function convertHtmlTablesToMarkdown(html: string): string {
 
     return md;
   });
+}
+
+/**
+ * Collect the list items of a consecutive run of list lines starting at
+ * lines[i]. Each matching line becomes a list_item holding one paragraph.
+ * Returns the items and the index of the first line after the run. Shared
+ * by the bullet and ordered list branches of fromMarkdown.
+ */
+function parseListItems(
+  lines: string[],
+  i: number,
+  marker: RegExp
+): { items: any[]; next: number } {
+  const items: any[] = [];
+  while (i < lines.length && lines[i].match(marker)) {
+    const text = lines[i].replace(marker, "");
+    items.push({
+      type: "list_item",
+      content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    });
+    i++;
+  }
+  return { items, next: i };
 }
 
 function parseMarkdownTable(lines: string[], pageBreak: boolean): any | null {
