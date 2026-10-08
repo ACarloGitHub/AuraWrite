@@ -141,21 +141,27 @@ function nodeTextOf(node: any): string {
     .join("");
 }
 
+/**
+ * The inline text of a block's content: its children rendered as inline
+ * markdown and joined. Shared by the paragraph and heading cases.
+ */
+function inlineTextOf(node: any, opts: MarkdownRewriteOptions = {}): string {
+  return contentToArray(node.content)
+    .map((n: any) => inlineToMarkdown(n, opts))
+    .join("") || "";
+}
+
 function nodeToMarkdown(node: any, opts: MarkdownRewriteOptions = {}): string {
   const t = getNodeType(node);
   switch (t) {
     case "paragraph": {
-      const text = contentToArray(node.content)
-        .map((n: any) => inlineToMarkdown(n, opts))
-        .join("") || "";
+      const text = inlineTextOf(node, opts);
       const pageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return pageBreak + text + "\n\n";
     }
     case "heading": {
       const level = node.attrs.level || 1;
-      const hText = contentToArray(node.content)
-        .map((n: any) => inlineToMarkdown(n, opts))
-        .join("") || "";
+      const hText = inlineTextOf(node, opts);
       const hPageBreak = node.attrs?.pageBreakBefore ? "---\n\n" : "";
       return hPageBreak + "#".repeat(level) + " " + hText + "\n\n";
     }
