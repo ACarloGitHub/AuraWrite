@@ -248,9 +248,7 @@ function nodeToMarkdown(node: any, opts: MarkdownRewriteOptions = {}): string {
 }
 
 function inlineToMarkdown(node: any, opts: MarkdownRewriteOptions = {}): string {
-  if (getNodeType(node) === "image") {
-    // No diagnostic logging here.
-  } else if (node && (node.isBlock || getNodeType(node) === "paragraph")) {
+  if (node && (node.isBlock || getNodeType(node) === "paragraph")) {
     // Block-level node inside a paragraph (unusual but possible if
     // the document has nested paragraphs from a previous bug or import).
     // Recurse into its children to find inline content.
