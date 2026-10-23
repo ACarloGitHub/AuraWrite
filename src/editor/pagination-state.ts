@@ -1,4 +1,4 @@
-import { DEFAULT_MARGIN_TOP, DEFAULT_MARGIN_BOTTOM, DEFAULT_MARGIN_LEFT, DEFAULT_MARGIN_RIGHT, MARGIN_MIN, MARGIN_MAX, type PageMargins } from "./pagination-cassie";
+import { DEFAULT_MARGIN_TOP, DEFAULT_MARGIN_BOTTOM, DEFAULT_MARGIN_LEFT, DEFAULT_MARGIN_RIGHT, MARGIN_MIN, MARGIN_MAX, initPageFormat, type PageMargins } from "./pagination-cassie";
 
 const PAGINATION_KEY = "aurawrite-paged-mode";
 const CASSIE_PAGINATION_KEY = "aurawrite-cassie-pagination-mode";
@@ -71,6 +71,9 @@ function migrateOldMarginKey(): void {
 }
 
 export function initPagedMode(): void {
+  // The page geometry is part of the stored state too: read it before any
+  // measurement, or the first render would use A4 on a Letter document.
+  initPageFormat();
   const saved = localStorage.getItem(PAGINATION_KEY);
   isPagedMode = saved === "true";
   const savedCassie = localStorage.getItem(CASSIE_PAGINATION_KEY);

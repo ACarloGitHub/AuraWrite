@@ -634,19 +634,19 @@
    between pages with margin whitespace, page numbers, and footnotes.
    ============================================================================ */
 .ProseMirror.is-cassie-paged {
-  /* FIXED A4 width, never a maximum: the sheet must not follow the window.
-     The calculator and the print sheets always measure a 602px column; a
-     narrower window reflowed the text on a different column and broke the
-     correspondence with the preview (Carlo, 2026-09-13). Below 794px the
-     editor scrolls horizontally, like a page viewer. */
-  width: 794px;
-  max-width: 794px;
+  /* The page box comes from the page format (pagination-cassie.ts), written on
+     the element as --aw-page-w/--aw-page-h by pagination-cassie-plugin.ts.
+     Fixed, never a maximum: the calculator and the print sheets measure this
+     column, so a narrower window must not reflow the text. Below the page
+     width the editor scrolls horizontally, like a page viewer. */
+  width: var(--aw-page-w, 794px);
+  max-width: var(--aw-page-w, 794px);
   margin: 0 auto;
   padding: 96px 96px;
   background: var(--color-paper, #fff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border-radius: 2px;
-  min-height: 1123px;
+  min-height: var(--aw-page-h, 1123px);
   font-size: 11pt;
   line-height: 1.6;
 }
@@ -704,7 +704,14 @@
   background: transparent;
 }
 
+/* The header and the footer of the divider occupy EXACTLY the bands the
+   calculator reserves (PAGE_HEADER_PX + PAGE_FOOTER_PX = 72), whatever the
+   font does: 24 (footer) + 1 (separator) + 47 (header) = 72. With padding or
+   line-height in charge, the two bands came out 56 and every page lost 16px. */
 .aw-page-break-footer {
+  box-sizing: border-box;
+  height: 24px;
+  line-height: 12px;
   text-align: center;
   font-size: 10px;
   color: var(--color-text-muted, #999);
@@ -713,11 +720,21 @@
 }
 
 .aw-page-break-separator {
-  border-top: 1px dashed #c0c0c0;
+  box-sizing: border-box;
+  height: 1px;
+  border: 0;
   margin: 0 32px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #c0c0c0 0 4px,
+    transparent 4px 8px
+  );
 }
 
 .aw-page-break-header {
+  box-sizing: border-box;
+  height: 47px;
+  line-height: 20px;
   text-align: center;
   font-size: 10px;
   color: var(--color-text-muted, #999);

@@ -759,6 +759,13 @@ export function createEditor(element: HTMLElement): EditorViewType {
     view.dispatch(tr);
   }) as EventListener);
 
+  // A new page format changes the column and the height of every page, so the
+  // whole document must be measured again (the divider reads the new page).
+  window.addEventListener("aurawrite:page-format-changed", (() => {
+    const tr = view.state.tr.setMeta("force-cassie-recompute", true);
+    view.dispatch(tr);
+  }) as EventListener);
+
   return view as unknown as EditorViewType;
 }
 

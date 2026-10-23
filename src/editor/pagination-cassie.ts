@@ -73,10 +73,81 @@ function metrics(): EditorMetrics {
   return getEditorMetrics();
 }
 
-export const PAGE_WIDTH_PX = 794;
-export const PAGE_HEIGHT_PX = 1123;
-export const PAGE_HEADER_PX = 48;
-export const PAGE_FOOTER_PX = 24;
+// ============================================================================
+// THE PAGE (one place)
+//
+// A page is a rectangle plus the two bands reserved for header and footer:
+//   content height = height - top margin - bottom margin - header - footer
+// Everything that draws or measures a page reads it from here: the calculator,
+// the divider on screen, the print sheets, the DOCX section. Before this block
+// the same numbers were written in five places (this file, the plugin's CSS,
+// print-pages, docx.ts, 11-print-sheet.css) and a change in one of them moved
+// the pages of the others - the reason the editor and the preview could not
+// agree on where page 4 began.
+//
+// The A4 values stay exported as constants because the DOCX writer uses them as
+// defaults; the LIVE page is always `getPageFormat()`.
+// ============================================================================
+
+export interface PageFormat {
+  id: string;
+  label: string;
+  /** Full sheet width, px. */
+  widthPx: number;
+  /** Full sheet height, px. */
+  heightPx: number;
+  /** Band reserved for the running header, px. */
+  headerPx: number;
+  /** Band reserved for the page number, px. */
+  footerPx: number;
+}
+
+/** The formats AuraWrite knows. Add one here and every surface follows. */
+export const PAGE_FORMATS: Record<string, PageFormat> = {
+  a4: { id: "a4", label: "A4", widthPx: 794, heightPx: 1123, headerPx: 48, footerPx: 24 },
+  a3: { id: "a3", label: "A3", widthPx: 1123, heightPx: 1587, headerPx: 48, footerPx: 24 },
+  letter: { id: "letter", label: "Letter", widthPx: 816, heightPx: 1056, headerPx: 48, footerPx: 24 },
+};
+
+const PAGE_FORMAT_KEY = "aurawrite-page-format";
+const DEFAULT_PAGE_FORMAT = PAGE_FORMATS.a4;
+
+let currentPageFormat: PageFormat = DEFAULT_PAGE_FORMAT;
+
+/** The page everything must draw and measure right now. */
+export function getPageFormat(): PageFormat {
+  return currentPageFormat;
+}
+
+/** Change the page of the document. Persisted; listeners recompute. */
+export function setPageFormat(id: string): PageFormat {
+  const next = PAGE_FORMATS[id] ?? DEFAULT_PAGE_FORMAT;
+  if (next.id === currentPageFormat.id) return currentPageFormat;
+  currentPageFormat = next;
+  try {
+    localStorage.setItem(PAGE_FORMAT_KEY, next.id);
+  } catch {
+    /* storage unavailable: the page still changes for this session */
+  }
+  window.dispatchEvent(new CustomEvent("aurawrite:page-format-changed", { detail: { format: next } }));
+  return next;
+}
+
+/** Read the stored page at start-up (A4 when nothing was stored). */
+export function initPageFormat(): void {
+  try {
+    const saved = localStorage.getItem(PAGE_FORMAT_KEY);
+    if (saved && PAGE_FORMATS[saved]) currentPageFormat = PAGE_FORMATS[saved];
+  } catch {
+    currentPageFormat = DEFAULT_PAGE_FORMAT;
+  }
+}
+
+// A4 defaults, kept as names for the callers that need a constant (DOCX).
+export const PAGE_WIDTH_PX = DEFAULT_PAGE_FORMAT.widthPx;
+export const PAGE_HEIGHT_PX = DEFAULT_PAGE_FORMAT.heightPx;
+export const PAGE_HEADER_PX = DEFAULT_PAGE_FORMAT.headerPx;
+export const PAGE_FOOTER_PX = DEFAULT_PAGE_FORMAT.footerPx;
 
 export const DEFAULT_MARGIN_TOP = 96;
 export const DEFAULT_MARGIN_BOTTOM = 96;
@@ -96,11 +167,13 @@ export interface PageMargins {
 }
 
 export function getContentWidth(margins: PageMargins): number {
-  return PAGE_WIDTH_PX - margins.left - margins.right;
+  const page = getPageFormat();
+  return page.widthPx - margins.left - margins.right;
 }
 
 export function getContentHeight(margins: PageMargins): number {
-  return PAGE_HEIGHT_PX - margins.top - margins.bottom - PAGE_HEADER_PX - PAGE_FOOTER_PX;
+  const page = getPageFormat();
+  return page.heightPx - margins.top - margins.bottom - page.headerPx - page.footerPx;
 }
 
 export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - DEFAULT_MARGIN_LEFT - DEFAULT_MARGIN_RIGHT;

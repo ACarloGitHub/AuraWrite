@@ -20,8 +20,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "prosemirror-view";
 import { applyDocumentJson } from "./document-loader";
 import { freeAnchorState } from "./free-layout-plugin";
-import { freeWrapDiagnosis, freeWrapState } from "./pagination-cassie-plugin";
-import { calculatePageBreaks } from "./pagination-cassie";
+import { freeWrapDiagnosis, freeWrapState, pageGeometry } from "./pagination-cassie-plugin";
+import { calculatePageBreaks, getPageFormat, setPageFormat, PAGE_FORMATS } from "./pagination-cassie";
 import { getMargins } from "./pagination-state";
 
 /** What a hook answers: the tool never has to guess whether it worked. */
@@ -40,6 +40,14 @@ export interface TestHooks {
    * band of every free element). Read-only.
    */
   measures(ricalcola?: boolean): HookResult;
+  /**
+   * The page frame as the screen has it: where every divider's text stopped,
+   * where the next page's content must start, and how much the divider had to
+   * fill. Read-only. One check answers "is every page exactly one page tall?".
+   */
+  pageFrame(): HookResult;
+  /** Change the page format (a4 / a3 / letter) and measure again. */
+  pageFormat(id?: string): HookResult;
 }
 
 declare global {
@@ -103,6 +111,47 @@ export function installTestHooks(view: EditorView): void {
             })),
           },
         };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    pageFrame(): HookResult {
+      try {
+        const format = getPageFormat();
+        const margins = getMargins();
+        const rows = pageGeometry();
+        // "exact" means: the divider, as it is now, puts the next page's
+        // content exactly on the line it must start from. No arithmetic is
+        // left to the reader.
+        const exact = rows.every(
+          (r) => Math.abs(r.top + margins.bottom + r.fill + r.rest - r.wanted) < 1.5,
+        );
+        return {
+          ok: true,
+          format: {
+            id: format.id,
+            width: format.widthPx,
+            height: format.heightPx,
+            header: format.headerPx,
+            footer: format.footerPx,
+          },
+          contentHeight:
+            format.heightPx - margins.top - margins.bottom - format.headerPx - format.footerPx,
+          margins,
+          pages: rows.length + 1,
+          frame: rows,
+          exact,
+        };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    pageFormat(id?: string): HookResult {
+      try {
+        if (id) setPageFormat(id);
+        return { ok: true, current: getPageFormat().id, formats: Object.keys(PAGE_FORMATS) };
       } catch (e) {
         return { ok: false, error: `${e}` };
       }

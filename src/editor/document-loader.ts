@@ -87,15 +87,20 @@ function askForBandMeasurement(view: EditorView): void {
   // producevano nessuna fascia (0 pezzi, 0 fasce in memoria), mentre la stessa
   // misura chiamata da qui le produce. Il documento appena aperto deve mostrare
   // subito lo spazio riservato al testo, senza dover cliccare.
-  const ask = (): void => {
-    if (!view.isDestroyed) refreshFreeWrapBands(view);
+  const ask = (force: boolean): void => {
+    if (!view.isDestroyed) refreshFreeWrapBands(view, force ? { force: true } : undefined);
   };
-  ask();
+  // `force`: opening a document is a deliberate action, and a page that has just
+  // been built needs several passes to settle (band -> text -> anchor -> band).
+  // Without it the third measurement stays withheld and the lines run under the
+  // pictures until something else forces a measure - which is exactly what the
+  // print preview used to do, moving everything as it opened (L01, 2026-10-23).
+  ask(true);
   window.requestAnimationFrame(() => {
-    ask();
-    window.requestAnimationFrame(ask);
+    ask(false);
+    window.requestAnimationFrame(() => ask(false));
   });
-  window.setTimeout(ask, 250);
+  window.setTimeout(() => ask(true), 250);
 }
 
 /** Empty the editor, the same way an empty stored document empties it. */

@@ -22,7 +22,7 @@ import {
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
 } from "docx";
-import { PAGE_WIDTH_PX, PAGE_HEIGHT_PX, PAGE_HEADER_PX, PAGE_FOOTER_PX } from "../editor/pagination-cassie";
+import { getPageFormat } from "../editor/pagination-cassie";
 import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
@@ -906,6 +906,7 @@ export async function toDocx(doc: any): Promise<Document> {
   );
 
   const margins = getMargins();
+  const page = getPageFormat();
 
   const children: any[] = [];
   for (const node of contentToArray(doc.content)) {
@@ -921,16 +922,16 @@ export async function toDocx(doc: any): Promise<Document> {
         properties: {
           page: {
             size: {
-              width: pxToTwip(PAGE_WIDTH_PX),
-              height: pxToTwip(PAGE_HEIGHT_PX),
+              width: pxToTwip(page.widthPx),
+              height: pxToTwip(page.heightPx),
             },
             margin: {
               top: pxToTwip(margins.top),
               bottom: pxToTwip(margins.bottom),
               left: pxToTwip(margins.left),
               right: pxToTwip(margins.right),
-              header: pxToTwip(PAGE_HEADER_PX),
-              footer: pxToTwip(PAGE_FOOTER_PX),
+              header: pxToTwip(page.headerPx),
+              footer: pxToTwip(page.footerPx),
             },
           },
         },
@@ -1562,20 +1563,21 @@ export function fromMarkdownToDocx(markdown: string): Document {
   }
 
   const margins = getMargins();
+  const page = getPageFormat();
   const pxToTwip = (px: number) => px * 15;
 
   return new Document({
     sections: [{
       properties: {
         page: {
-          size: { width: pxToTwip(PAGE_WIDTH_PX), height: pxToTwip(PAGE_HEIGHT_PX) },
+          size: { width: pxToTwip(page.widthPx), height: pxToTwip(page.heightPx) },
           margin: {
             top: pxToTwip(margins.top),
             bottom: pxToTwip(margins.bottom),
             left: pxToTwip(margins.left),
             right: pxToTwip(margins.right),
-            header: pxToTwip(PAGE_HEADER_PX),
-            footer: pxToTwip(PAGE_FOOTER_PX),
+            header: pxToTwip(page.headerPx),
+            footer: pxToTwip(page.footerPx),
           },
         },
       },

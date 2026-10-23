@@ -6,7 +6,7 @@ import { isOverlap, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
-import { calculatePageBreaks } from "./pagination-cassie";
+import { calculatePageBreaks, getPageFormat } from "./pagination-cassie";
 import { syncEditorMetricsFromDom } from "./text-metrics";
 import { appliedScale } from "./editor-zoom";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
@@ -476,10 +476,17 @@ export function refreshFreeWrapBands(view: EditorView, options?: { force?: boole
   measuredDoc = view.state.doc;
   allowOneMore = false;
   const override = flightBox ? new Map([[flightBox.pos, flightBox.box]]) : undefined;
-  // `force` is for a deliberate action (printing, opening the preview): nobody is
-  // typing, so the withheld numbers get their pass now and the sheet is built on
-  // what the screen is showing at that moment.
-  if (options?.force) republishLeft = Math.max(republishLeft, 1);
+  // `force` is for a deliberate action (printing, opening the preview, opening
+  // a document): nobody is typing, so the withheld numbers get their pass now
+  // and the sheet is built on what the screen is showing at that moment.
+  //
+  // The allowance is 4 and not 1 because a fresh page needs SEVERAL passes to
+  // settle: the band moves the text, the text moves the anchor, the anchor
+  // moves the band. With one pass the third measurement was kept back and never
+  // published - measured on L01 (2026-10-23): at open the lines ran UNDER the
+  // picture (no band painted), and they only shortened when the preview forced
+  // a new measurement. Bounded, so the loop still cannot run away.
+  if (options?.force) republishLeft = Math.max(republishLeft, 4);
   const measured = measureDomBands(view, override);
   if (sameDomBands(measured, domBands)) {
     withheld = false;
@@ -776,6 +783,150 @@ export interface CassiePaginationOptions {
   enabled: () => boolean;
 }
 
+// ---------------------------------------------------------------------------
+// CLOSING THE PAGE (the divider takes the space that is left)
+//
+// What was wrong, measured: a full page of prose ends its last line at 858px
+// (39 lines x 22px) and the divider drew 249px of fixed margins, so the next
+// page started at 1107 instead of 1123. Sixteen pixels short, on every page,
+// accumulating: by page 30 the text sat half a page above the paper. The same
+// arithmetic made a page that ends on a block boundary 1.3px short and one
+// whose block was moved to the next page short by the whole gap.
+//
+// The fault was not the 16px alone: it was that the divider carried a CONSTANT
+// height while the space left on the page is anything but constant. So the
+// divider now measures where the text really stopped and takes the rest:
+//
+//     next page's content top = padTop + (page - 1) x pageHeight
+//
+// That single rule covers every way a page can end (mid-paragraph, block moved,
+// manual break, image) and every page format, and it needs no second pagination
+// engine: it reads the layout the browser has already done.
+//
+// Cost, and why it is two passes: writing a spacer and then reading the next
+// divider forces a layout on every page. All the reads happen first, all the
+// writes after (the fills of the previous dividers are carried in `shift`), so
+// one layout per update, not one per page.
+// ---------------------------------------------------------------------------
+
+/** One divider, as the last closing pass left it (read-only, for the tool). */
+export interface PageGeometryRow {
+  page: number;
+  /** Measured top of the divider = where this page's text stopped. */
+  top: number;
+  /** Where the next page's content must start (padTop + (page-1) x height). */
+  wanted: number;
+  /** Pixels the divider had to add to its bottom margin. */
+  fill: number;
+  /** Measured height of footer + separator + header + top margin. */
+  rest: number;
+  /** True when this pass changed it. */
+  applied: boolean;
+}
+
+let lastPageGeometry: PageGeometryRow[] = [];
+
+/** The last closing pass, for the verification tool (read-only). */
+export function pageGeometry(): PageGeometryRow[] {
+  return lastPageGeometry.map((r) => ({ ...r }));
+}
+
+interface DividerRead {
+  el: HTMLElement;
+  page: number;
+  spacer: HTMLElement;
+  top: number;
+  rest: number;
+  oldFill: number;
+}
+
+export function closePageHeights(view: EditorView): void {
+  const host = view.dom as HTMLElement;
+  if (!host.classList.contains("is-cassie-paged")) {
+    lastPageGeometry = [];
+    return;
+  }
+  const format = getPageFormat();
+  // The page box itself is the same datum: the stylesheet reads these two.
+  const wantW = `${format.widthPx}px`;
+  const wantH = `${format.heightPx}px`;
+  if (host.style.getPropertyValue("--aw-page-w") !== wantW) host.style.setProperty("--aw-page-w", wantW);
+  if (host.style.getPropertyValue("--aw-page-h") !== wantH) host.style.setProperty("--aw-page-h", wantH);
+
+  const dividers = Array.from(host.querySelectorAll<HTMLElement>(".aw-page-break--paged"));
+  if (dividers.length === 0) {
+    lastPageGeometry = [];
+    return;
+  }
+  const scale = appliedScale(host) || 1;
+  const hostTop = host.getBoundingClientRect().top;
+  const padTop = parseFloat(getComputedStyle(host).paddingTop) || 0;
+  const margins = getMargins();
+
+  // ---- pass 1: read everything (one layout, no writes in between) --------
+  // Two rectangles per divider (the whole widget and its top spacer): `rest`
+  // comes out exact by subtraction, where summing five `offsetHeight`s would
+  // round each part to a whole pixel.
+  const reads: DividerRead[] = [];
+  for (const el of dividers) {
+    const page = Number(el.dataset.page || "0");
+    if (!page || page < 2) continue;
+    let spacer: HTMLElement | null = null;
+    for (const child of Array.from(el.children) as HTMLElement[]) {
+      if (child.classList.contains("aw-page-break-margin-top")) {
+        spacer = child;
+        break;
+      }
+    }
+    if (!spacer) continue;
+    const box = el.getBoundingClientRect();
+    const spacerBox = spacer.getBoundingClientRect();
+    const spacerHeight = spacerBox.height / scale;
+    reads.push({
+      el,
+      page,
+      spacer,
+      top: (box.top - hostTop) / scale,
+      rest: box.height / scale - spacerHeight,
+      oldFill: spacerHeight - margins.bottom,
+    });
+  }
+
+  // ---- pass 2: arithmetic, then the writes -------------------------------
+  const out: PageGeometryRow[] = [];
+  let shift = 0;
+  for (const r of reads) {
+    const wanted = padTop + (r.page - 1) * format.heightPx;
+    const top = r.top + shift;
+    // With no fill the divider is: bottom margin + footer + separator + header + top margin.
+    const natural = margins.bottom + r.rest;
+    // The fill can be NEGATIVE, and it must be: a page that ends between two
+    // blocks carries the last paragraph's margin-bottom into the divider (in
+    // the model that margin is not content, in the DOM it is drawn). Refusing
+    // to shrink made every such page ~7-15px too tall, and the error then piled
+    // up page after page. Shrinking the bottom margin is visually free: those
+    // pixels are white either way.
+    const wantedFill = wanted - (top + natural);
+    const spacerHeight = Math.max(0, margins.bottom + wantedFill);
+    const fill = spacerHeight - margins.bottom;
+    let applied = false;
+    if (Math.abs(fill - r.oldFill) >= 0.5) {
+      r.spacer.style.height = `${Math.round(spacerHeight * 100) / 100}px`;
+      applied = true;
+    }
+    shift += fill - r.oldFill;
+    out.push({
+      page: r.page,
+      top: Math.round(top * 100) / 100,
+      wanted: Math.round(wanted * 100) / 100,
+      fill: Math.round(fill * 100) / 100,
+      rest: Math.round(r.rest * 100) / 100,
+      applied,
+    });
+  }
+  lastPageGeometry = out;
+}
+
 export function createCassiePaginationPlugin(
   options: CassiePaginationOptions,
 ): Plugin {
@@ -845,6 +996,9 @@ export function createCassiePaginationPlugin(
         update(view) {
           conta.aggiornamenti++;
           liveView = view;
+          // The page frame first: the dividers have just been rendered, so this
+          // is the only moment at which "where did the text stop" is readable.
+          closePageHeights(view);
           // No allowance renewal here on purpose: opening a document builds a new
           // EditorState, ProseMirror then recreates the plugin views and never
           // calls this update (verified in prosemirror-view). The allowance for a

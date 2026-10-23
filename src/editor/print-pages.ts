@@ -21,8 +21,7 @@ import {
   calculatePageBreaks,
   getContentHeight,
   getContentWidth,
-  PAGE_WIDTH_PX,
-  PAGE_HEIGHT_PX,
+  getPageFormat,
   type FreeBandInput,
   type FreeGeometry,
   type PageMargins,
@@ -371,6 +370,11 @@ function freeOverlayHtml(
 /** Sheet markup (screen-dressed and print-safe; see file header). */
 export function renderPrintBody(printDoc: PrintDoc): string {
   const m = printDoc.margins;
+  // The sheet is the page: same width and height as the editor draws, from the
+  // same datum (getPageFormat). 1122 was the A4 height minus one, a correction
+  // that made the sheets agree with nothing in particular; the extra pixel is
+  // gone and the page is the page.
+  const page = getPageFormat();
   // The body starts at the top margin, exactly like the editor and like Word.
   // The header and footer bands are reserved inside the CONTENT HEIGHT
   // (getContentHeight), not as an empty offset above the body: adding them here
@@ -380,7 +384,7 @@ export function renderPrintBody(printDoc: PrintDoc): string {
     .map(
       (s) =>
         `<section class="aw-print-sheet" data-page="${s.pageNumber}"` +
-        ` style="--sheet-w:${PAGE_WIDTH_PX - 1}px;--sheet-h:${PAGE_HEIGHT_PX - 1}px;--bl:${m.left}px;--bt:${bodyTop}px;--cw:${printDoc.contentWidth}px;--ch:${printDoc.contentHeight}px;--foot:${Math.round(m.bottom / 2)}px;">` +
+        ` style="--sheet-w:${page.widthPx}px;--sheet-h:${page.heightPx}px;--bl:${m.left}px;--bt:${bodyTop}px;--cw:${printDoc.contentWidth}px;--ch:${printDoc.contentHeight}px;--foot:${Math.round(m.bottom / 2)}px;">` +
         // The free layer lives INSIDE the body: text and free elements then
         // share one origin, so a free element cannot end up lower than the
         // text on the sheet (T1.6, Carlo 2026-09-11).

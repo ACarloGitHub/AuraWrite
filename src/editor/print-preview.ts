@@ -31,6 +31,19 @@ export const PREVIEW_FILE = "aurawrite-print/preview.json";
 export const PREVIEW_LABEL = "print-preview";
 export const PREVIEW_URL = "index.html?view=print-preview";
 
+/** Wait n animation frames (the free-element painter works on one). */
+function waitFrames(n: number): Promise<void> {
+  return new Promise((resolve) => {
+    let left = n;
+    const tick = (): void => {
+      left -= 1;
+      if (left <= 0) resolve();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
 async function buildPrintDoc(view: EditorView): Promise<PrintDoc> {
   // Il foglio ricostruisce la pagina dell'editor, quindi ha bisogno dei numeri
   // che l'editor ha misurato. Aprire l'anteprima (o stampare) e' un'azione voluta,
@@ -39,6 +52,15 @@ async function buildPrintDoc(view: EditorView): Promise<PrintDoc> {
   // sui numeri che la pagina di AuraWrite sta mostrando in questo momento - mai
   // su numeri che lo schermo non ha.
   refreshFreeWrapBands(view, { force: true });
+  // The publish moves the text; the text moves the pictures, and the painter
+  // puts them back on the NEXT FRAME (free-layout-plugin schedules a rAF). The
+  // sheets must be built after that, or they leave with positions the editor no
+  // longer shows - the reason opening the preview used to move the photo in the
+  // editor while the two windows disagreed. Measured 2026-10-23 on L01.
+  await waitFrames(2);
+  // The geometry is now the one on screen: one more measurement photographs it.
+  refreshFreeWrapBands(view, { force: true });
+  await waitFrames(1);
   // Lo spazio riservato al testo sul foglio viene dalle fasce MISURATE sulla
   // pagina dell'editor: e' la richiesta di Carlo (17-09) - il foglio
   // ricostruisce la pagina di AuraWrite, non la rifa' per conto suo.
@@ -89,9 +111,8 @@ export function documentTitle(): string {
 async function writeAndOpen(
   autoPrint: boolean,
   placement: { pos: number; anchorPos: number; yOff: number }[],
+  printDoc: PrintDoc,
 ): Promise<void> {
-  const printDoc = await printDocCache;
-  if (!printDoc) return;
   const payload = JSON.stringify({
     title: documentTitle(),
     autoPrint,
@@ -121,16 +142,16 @@ async function writeAndOpen(
   });
 }
 
-let printDocCache: Promise<PrintDoc> | null = null;
-
 /** Build the print document, open the preview window, print on arrival. */
 export async function printDocumentNow(view: EditorView): Promise<void> {
-  printDocCache = buildPrintDoc(view);
-  await writeAndOpen(true, freePlacement(view));
+  // The anchors are read AFTER the build: the build waits for the repaint that
+  // settles the free elements, so this is the geometry the editor is showing.
+  const doc = await buildPrintDoc(view);
+  await writeAndOpen(true, freePlacement(view), doc);
 }
 
 /** Build the print document and open the preview window for viewing. */
 export async function openPrintPreview(view: EditorView): Promise<void> {
-  printDocCache = buildPrintDoc(view);
-  await writeAndOpen(false, freePlacement(view));
+  const doc = await buildPrintDoc(view);
+  await writeAndOpen(false, freePlacement(view), doc);
 }
