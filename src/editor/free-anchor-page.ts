@@ -2,6 +2,17 @@
 // Free-anchor page rule (F3.2d) — a picture and the text it hangs from have to
 // live on the SAME page.
 //
+// NOT INVOKED SINCE 2026-10-24. Kept as a reference, not as behaviour: the
+// module is no longer imported by anything. It used to run 900 ms after every
+// paint and, on a picture straddling two pages, it moved the node in the
+// document and rewrote the distance every single time - a second rule writing
+// the position the drop had just decided, which re-flowed the text and changed
+// the wrap a couple of seconds after the release (Carlo, 24-10). The print
+// sheets no longer need the anchor to live on the same sheet: when it is not
+// there they fall back to the written position (print-preview-mode.ts).
+// Re-enabling this module means re-enabling that competition; read
+// wiki/todo/_priorita-1.md first.
+//
 // Why this is a rule and not a preference: the print sheet rebuilds the editor's
 // page by finding the anchor block ON THE SHEET and measuring the picture from
 // it (see `print-preview-mode.ts`). A picture that slid into the page below its

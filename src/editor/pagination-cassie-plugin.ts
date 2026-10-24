@@ -490,6 +490,18 @@ export function refreshFreeWrapBands(view: EditorView, options?: { force?: boole
   const measured = measureDomBands(view, override);
   if (sameDomBands(measured, domBands)) {
     withheld = false;
+    // An EMPTY measurement is not an answer when the document HAS free elements.
+    //
+    // Right after a drop the picture has not been painted as free yet (the
+    // painter runs on the next frame), so this look finds nothing; comparing
+    // "nothing" with "nothing" used to close the door - the document was marked
+    // as measured and every later look returned at the top of this function.
+    // The band then appeared only when something forced a measure, which is the
+    // intermittent "sometimes the text does not wrap" reported on 2026-10-24:
+    // the same drop worked or failed depending on how quickly the painter ran.
+    // Re-open the door (no dispatch here, so this cannot loop): the next paint
+    // asks again.
+    if (measured.length === 0 && freeLayoutMap(view.state.doc).length > 0) allowOneMore = true;
     return;
   }
   if (republishLeft <= 0) {

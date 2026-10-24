@@ -22,12 +22,11 @@
 //  - the move of the node AND its new distances are ONE transaction, so one
 //    undo gives back exactly what the user had.
 //
-// The text re-flows while the copy flies, for an element that was already free:
-// the band it claims from the lines is rewritten live, without a single
-// transaction (free-drag.ts, moveLiveBand). An element that is LEAVING the flow
-// in this gesture re-flows when it lands, because until the drop the document
-// still believes it is in the line - and a transaction per pointer move would
-// flood the undo history for a movement nobody can read.
+// The text does NOT re-flow while the copy flies (changed 2026-10-24). It used
+// to: the band was rewritten live every 90 ms, and every rewrite rebuilt the
+// page decorations and re-flowed the text under the hand - the page appeared to
+// be rebuilt and the dividers to shift. The band is now measured once, at the
+// release. The copy follows the pointer and nothing else moves.
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
@@ -43,14 +42,11 @@ import {
 } from "./free-layout";
 import { ensureAnchorParagraph } from "./free-commands";
 import { freeElementWidth, textColumn } from "./free-style";
-import { refreshFreeWrapBands, setFreeWrapFlightBox } from "./pagination-cassie-plugin";
+import { setFreeWrapFlightBox } from "./pagination-cassie-plugin";
 import { appliedScale } from "./editor-zoom";
 
 /** Distance the pointer must travel before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 4;
-
-/** Minimum gap between two live band rewrites, in milliseconds. */
-const LIVE_BAND_MIN_INTERVAL_MS = 90;
 
 /** Class marking the original of a flying element (see styles.css). */
 const FLIGHT_CLASS = "aw-free--flight";
@@ -111,7 +107,6 @@ export function startFreeDrag(
   // anchor's top, in the editor's own space - so the live rewrite can be
   // derived the same way the drop derives it.
   const wasFreeAtPress = parseFreeSpec(node.attrs?.free) !== null;
-  let lastLiveBandAt = 0;
 
   let dragging = false;
   // Held in an object on purpose: the elements are created inside the pointer
@@ -122,9 +117,6 @@ export function startFreeDrag(
     guide: null,
   };
   let anchorTopClient = rect.top;
-  let anchorIndex = -1;
-  /** Spot INSIDE a paragraph where an in-flow element lands (between lines). */
-  let lastTextPos: number | null = null;
 
   const ensureGhost = (): HTMLElement => {
     if (flight.ghost) return flight.ghost;
@@ -181,19 +173,14 @@ export function startFreeDrag(
     g.style.top = `${Math.round(ev.clientY - grabOffsetY)}px`;
 
     // The anchor is the TEXT block under the pointer (contract §4): asking the
-    // editor itself keeps margins, decorations and re-flowing honest.
+    // editor itself keeps margins, decorations and re-flowing honest. The index
+    // is not kept: the drop resolves it from the ghost (see onUp).
     const found = findAnchorAt(view, ev.clientY);
-    if (found) {
-      anchorIndex = found.index;
-      anchorTopClient = found.top;
-    } else {
-      anchorIndex = -1;
-    }
+    if (found) anchorTopClient = found.top;
     // An element IN THE FLOW can land BETWEEN TWO LINES of a paragraph; a free
     // element keeps its free placement. The exact spot is the character under
     // the pointer, mapped by the editor itself (cross-engine safe).
     const precise = wasFreeAtPress ? null : preciseDropPos(view, ev.clientX, ev.clientY);
-    lastTextPos = precise?.pos ?? null;
     const guideTop = precise ? precise.lineTop : found ? found.top : null;
     if (guideTop !== null) {
       const line = ensureGuide();
@@ -232,29 +219,17 @@ export function startFreeDrag(
   };
 
   /**
-   * Follow the pointer with the text band WITHOUT touching the document.
+   * Mark the gesture as running, and nothing else.
    *
-   * The numbers are not computed here: the plugin that paints the bands is
-   * asked to re-measure with the flying box as its input (refreshFreeWrapBands).
-   * One measurement, two callers, so the band under the user's hand and the band
-   * that lands can never be two different calculations - which is what the
-   * rejected delivery got wrong.
+   * This used to ask for a new measurement of the bands every 90 ms. A publish
+   * re-renders the decorations, which rebuilds the page dividers and reflows the
+   * text WHILE THE HAND IS MOVING: the page appeared to be rebuilt and the
+   * dividers to shift under the element (Carlo, 2026-10-24). The element has to
+   * follow the hand; the page must stay still until the release. The mark below
+   * is what keeps the anchor rule from writing during the gesture.
    */
   const moveLiveBand = (flyingLeftClient: number, flyingTopClient: number): void => {
-    const now = Date.now();
-    if (now - lastLiveBandAt < LIVE_BAND_MIN_INTERVAL_MS) return;
-    lastLiveBandAt = now;
-    // Viewport coordinates on both sides, on purpose: `getBoundingClientRect`
-    // (what the band is measured from) and the flying copy live in this space,
-    // and the placement uses only the DIFFERENCE between them, so the scroll of
-    // `#editor` cancels out. Converting through host offsets plus scrollTop is
-    // the trap three coordinate systems set in figure-resize.ts.
-    // The copy's OWN corner, nothing else. Where the picture paints and how wide a
-    // claim that makes is the band function's business, computed from the same inputs
-    // the page count uses; a shift derived here would be a second opinion on the turn,
-    // and its sign has already been got wrong twice (defect 17, second half).
     setFreeWrapFlightBox(pos, { top: flyingTopClient, left: flyingLeftClient });
-    refreshFreeWrapBands(view);
   };
 
   let lastPointerX = originX;
@@ -288,6 +263,22 @@ export function startFreeDrag(
     lastPointerY = ev.clientY;
     const startTop = Math.round(lastPointerY - grabOffsetY);
     const startLeft = Math.round(lastPointerX - grabOffsetX);
+    // THE ANCHOR IS RESOLVED HERE, FROM THE GHOST.
+    //
+    // It used to come from the last mousemove (stale on a fast release), and from
+    // the POINTER even for a free element. The pointer is wherever the hand
+    // grabbed the picture, which on a picture straddling two pages can be BELOW
+    // its top: the distance to the anchor turned negative, was clamped to zero,
+    // and the reserved space started under the picture's top - so the lines
+    // beside the upper part never shortened. Measured by Carlo on 2026-10-24.
+    //
+    // For a free element the reference is the ghost's top: the last text block
+    // starting above it, so the distance is never negative and the band begins
+    // at the picture, whatever the hand is holding. An element still IN THE FLOW
+    // keeps the pointer rule (the drop there is a place in the text).
+    const anchorY = wasFreeAtPress ? startTop + 2 : ev.clientY;
+    const released = findAnchorAt(view, anchorY);
+    const releasedPrecise = wasFreeAtPress ? null : preciseDropPos(view, ev.clientX, ev.clientY);
     applyDrop(view, getPos, {
       layoutWidth: dom.offsetWidth,
       startLeft,
@@ -295,9 +286,9 @@ export function startFreeDrag(
       // Where the element itself sat when the press began: the reference used
       // when the drop has no text block above it and a line must be opened.
       pressTopClient: ownTop,
-      anchorTopClient,
-      anchorIndex,
-      textPos: lastTextPos,
+      anchorTopClient: released ? released.top : anchorTopClient,
+      anchorIndex: released ? released.index : -1,
+      textPos: releasedPrecise ? releasedPrecise.pos : null,
     });
     hooks.onDone?.();
   };
