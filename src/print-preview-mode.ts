@@ -34,6 +34,55 @@ html.aw-pv .pv-empty { padding: 40px; text-align: center; color: #77777f; }
 }
 `;
 
+/** L'altezza del foglio, presa dalla misura che il foglio porta con sé. */
+function sheetHeight(sheet: HTMLElement): number {
+  const fromVar = parseFloat(getComputedStyle(sheet).getPropertyValue("--sheet-h"));
+  return Number.isFinite(fromVar) && fromVar > 0 ? fromVar : sheet.offsetHeight;
+}
+
+/** Lo strato degli elementi liberi di un foglio, creato se non c'è. */
+function freeLayerOf(sheet: HTMLElement): HTMLElement | null {
+  const body = sheet.querySelector(".ProseMirror.aw-print-body");
+  if (!(body instanceof HTMLElement)) return null;
+  const existing = body.querySelector(".aw-print-free-layer");
+  if (existing instanceof HTMLElement) return existing;
+  const layer = document.createElement("div");
+  layer.className = "aw-print-free-layer";
+  body.appendChild(layer);
+  return layer;
+}
+
+/**
+ * Il pezzo che scavalca il bordo basso del foglio continua sul foglio dopo.
+ *
+ * Il foglio e' alto quanto la pagina (1123), il testo scorre nella sua area
+ * (859): un elemento libero disegnato vicino al fondo viene tagliato dal bordo
+ * del foglio, ma la parte mancante non finiva su nessun foglio. Qui si copia
+ * l'elemento sul foglio successivo, alla stessa distanza meno un'altezza di
+ * foglio, cosi' le due parti si ricongiungono al taglio. Il foglio nuovo, che
+ * ha gia' il suo `overflow: hidden`, mostra solo il pezzo che gli spetta.
+ * La copia si rifà da capo a ogni giro (questa funzione gira piu' volte:
+ * subito, dopo i caratteri, al frame successivo).
+ */
+function continueOnNextSheets(wrap: HTMLElement, sheet: HTMLElement): void {
+  const height = wrap.offsetHeight;
+  if (height <= 0) return;
+  let current = sheet;
+  let top = parseFloat(wrap.style.top) || 0;
+  while (top + height > sheetHeight(current) + 0.5) {
+    const next = current.nextElementSibling;
+    if (!(next instanceof HTMLElement) || !next.classList.contains("aw-print-sheet")) return;
+    const layer = freeLayerOf(next);
+    if (!layer) return;
+    top -= sheetHeight(current);
+    const clone = wrap.cloneNode(true) as HTMLElement;
+    clone.dataset.awFreeCont = "1";
+    clone.style.top = `${Math.round(top)}px`;
+    layer.appendChild(clone);
+    current = next;
+  }
+}
+
 /**
  * Mettere ogni elemento libero alla stessa altezza che ha nell'editor: il bordo
  * alto si prende dal paragrafo a cui e' appeso, che qui e' disegnato dal
@@ -44,8 +93,10 @@ html.aw-pv .pv-empty { padding: 40px; text-align: center; color: #77777f; }
 function placeFreeElements(payload: {
   freePlacement?: { pos: number; anchorPos: number; yOff: number }[];
 }): void {
+  // Le copie di continuazione si ricostruiscono da zero a ogni giro.
+  document.querySelectorAll(".aw-print-free[data-aw-free-cont]").forEach((old) => old.remove());
   for (const p of payload.freePlacement ?? []) {
-    const wrap = document.querySelector(`.aw-print-free[data-aw-free-pos="${p.pos}"]`);
+    const wrap = document.querySelector(`.aw-print-free[data-aw-free-pos="${p.pos}"]:not([data-aw-free-cont])`);
     if (!(wrap instanceof HTMLElement)) continue;
     // L'ancora vale solo se sta DENTRO il foglio dell'elemento. Un elemento
     // libero puo' essere segnato su una pagina e appendersi a un paragrafo della
@@ -53,9 +104,10 @@ function placeFreeElements(payload: {
     // e l'immagine finiva 1200 pixel piu' in basso). Fuori dal foglio non c'e'
     // una posizione da copiare: si lascia il numero gia' scritto.
     const foglio = wrap.closest(".aw-print-sheet");
-    const anchor = foglio?.querySelector(`[data-aw-pos="${p.anchorPos}"]`);
-    if (!(anchor instanceof HTMLElement)) continue;
-    wrap.style.top = `${Math.round(anchor.offsetTop + p.yOff)}px`;
+    if (!(foglio instanceof HTMLElement)) continue;
+    const anchor = foglio.querySelector(`[data-aw-pos="${p.anchorPos}"]`);
+    if (anchor instanceof HTMLElement) wrap.style.top = `${Math.round(anchor.offsetTop + p.yOff)}px`;
+    continueOnNextSheets(wrap, foglio);
   }
 }
 
