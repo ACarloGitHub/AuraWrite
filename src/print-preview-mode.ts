@@ -34,10 +34,13 @@ html.aw-pv .pv-empty { padding: 40px; text-align: center; color: #77777f; }
 }
 `;
 
-/** L'altezza del foglio, presa dalla misura che il foglio porta con sé. */
-function sheetHeight(sheet: HTMLElement): number {
+/** L'altezza della pagina e il bordo alto dell'area di testo del foglio. */
+function sheetMetrics(sheet: HTMLElement): { pageHeight: number; textTop: number } {
   const fromVar = parseFloat(getComputedStyle(sheet).getPropertyValue("--sheet-h"));
-  return Number.isFinite(fromVar) && fromVar > 0 ? fromVar : sheet.offsetHeight;
+  const pageHeight = Number.isFinite(fromVar) && fromVar > 0 ? fromVar : sheet.offsetHeight;
+  const body = sheet.querySelector(".ProseMirror.aw-print-body");
+  const textTop = body instanceof HTMLElement ? body.offsetTop : 0;
+  return { pageHeight, textTop };
 }
 
 /** Lo strato degli elementi liberi di un foglio, creato se non c'è. */
@@ -52,34 +55,55 @@ function freeLayerOf(sheet: HTMLElement): HTMLElement | null {
   return layer;
 }
 
+/** Una copia dell'elemento per un altro foglio, alla sua altezza. */
+function continuedCopy(wrap: HTMLElement, top: number): HTMLElement {
+  const clone = wrap.cloneNode(true) as HTMLElement;
+  clone.dataset.awFreeCont = "1";
+  clone.style.top = `${Math.round(top)}px`;
+  return clone;
+}
+
 /**
- * Il pezzo che scavalca il bordo basso del foglio continua sul foglio dopo.
+ * L'elemento che scavalca il bordo del foglio continua sul foglio vicino.
  *
- * Il foglio e' alto quanto la pagina (1123), il testo scorre nella sua area
- * (859): un elemento libero disegnato vicino al fondo viene tagliato dal bordo
- * del foglio, ma la parte mancante non finiva su nessun foglio. Qui si copia
- * l'elemento sul foglio successivo, alla stessa distanza meno un'altezza di
- * foglio, cosi' le due parti si ricongiungono al taglio. Il foglio nuovo, che
- * ha gia' il suo `overflow: hidden`, mostra solo il pezzo che gli spetta.
- * La copia si rifà da capo a ogni giro (questa funzione gira piu' volte:
+ * Il foglio taglia ai suoi bordi: in coordinate del testo il bordo alto è
+ * `-textTop` e il bordo basso `pageHeight - textTop` (il margine sotto il testo
+ * fa parte della pagina, quindi un elemento può entrarci e venire tagliato più
+ * in basso). Un elemento che scavalla il basso ricompare in cima al foglio dopo,
+ * spostato di un'altezza di pagina in su; uno che scavalla l'alto ricompare in
+ * fondo al foglio prima, spostato di un'altezza di pagina in giù. Così le due
+ * parti si ricongiungono al taglio, e il foglio vicino, che ha già il suo
+ * `overflow: hidden`, mostra solo il pezzo che gli spetta.
+ * Le copie si rifanno da capo a ogni giro (questa funzione gira più volte:
  * subito, dopo i caratteri, al frame successivo).
  */
-function continueOnNextSheets(wrap: HTMLElement, sheet: HTMLElement): void {
+function continueOnOtherSheets(wrap: HTMLElement, sheet: HTMLElement): void {
   const height = wrap.offsetHeight;
   if (height <= 0) return;
+  const startTop = parseFloat(wrap.style.top) || 0;
+  const { pageHeight, textTop } = sheetMetrics(sheet);
+  const bottomEdge = pageHeight - textTop;
+  let top = startTop;
   let current = sheet;
-  let top = parseFloat(wrap.style.top) || 0;
-  while (top + height > sheetHeight(current) + 0.5) {
+  while (top + height > bottomEdge + 0.5) {
     const next = current.nextElementSibling;
-    if (!(next instanceof HTMLElement) || !next.classList.contains("aw-print-sheet")) return;
+    if (!(next instanceof HTMLElement) || !next.classList.contains("aw-print-sheet")) break;
     const layer = freeLayerOf(next);
-    if (!layer) return;
-    top -= sheetHeight(current);
-    const clone = wrap.cloneNode(true) as HTMLElement;
-    clone.dataset.awFreeCont = "1";
-    clone.style.top = `${Math.round(top)}px`;
-    layer.appendChild(clone);
+    if (!layer) break;
+    top -= pageHeight;
+    layer.appendChild(continuedCopy(wrap, top));
     current = next;
+  }
+  top = startTop;
+  current = sheet;
+  while (top < -textTop - 0.5) {
+    const prev = current.previousElementSibling;
+    if (!(prev instanceof HTMLElement) || !prev.classList.contains("aw-print-sheet")) break;
+    const layer = freeLayerOf(prev);
+    if (!layer) break;
+    top += pageHeight;
+    layer.appendChild(continuedCopy(wrap, top));
+    current = prev;
   }
 }
 
@@ -107,7 +131,7 @@ function placeFreeElements(payload: {
     if (!(foglio instanceof HTMLElement)) continue;
     const anchor = foglio.querySelector(`[data-aw-pos="${p.anchorPos}"]`);
     if (anchor instanceof HTMLElement) wrap.style.top = `${Math.round(anchor.offsetTop + p.yOff)}px`;
-    continueOnNextSheets(wrap, foglio);
+    continueOnOtherSheets(wrap, foglio);
   }
 }
 
