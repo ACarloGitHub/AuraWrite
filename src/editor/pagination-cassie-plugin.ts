@@ -182,6 +182,27 @@ function bandPieces(input: {
  * axis the PAGES are counted on, and the print sheets have no dividers, so there
  * the two rulers agree.
  */
+/**
+ * The DOM element of a block, remembered by NODE identity.
+ *
+ * ProseMirror keeps the element of a block it did not touch and, when it does
+ * rebuild one, it does so from a NEW node object: the same node therefore
+ * answers with the same element until it is replaced. `nodeDOM` is a walk from
+ * the root, and calling it for every one of the 4.267 blocks on every pass was
+ * one of the costs measured on 26-10 (the `descAt` entries of the profile). The
+ * cache keeps the answer and checks the element is still in the document.
+ */
+const domOfNode = new WeakMap<PMNode, HTMLElement>();
+
+function elementOf(view: EditorView, node: PMNode, offset: number): HTMLElement | null {
+  const remembered = domOfNode.get(node);
+  if (remembered && remembered.isConnected) return remembered;
+  const el = view.nodeDOM(offset);
+  if (!(el instanceof HTMLElement)) return null;
+  domOfNode.set(node, el);
+  return el;
+}
+
 export function measureDomBands(
   view: EditorView,
   override?: Map<number, FlyingBox>,
@@ -189,8 +210,7 @@ export function measureDomBands(
   // skipped what it skipped. It is how the verification tool finds out why a
   // document that has just been opened gets no band at all.
   diagnosis?: Record<string, unknown>[],
-): DomBand[] {
-  conta.misure++;
+): DomBand[] {  conta.misure++;
   const host = view.dom as HTMLElement;
   const out: DomBand[] = [];
   const pictures = Array.from(host.children).filter(
@@ -218,8 +238,8 @@ export function measureDomBands(
   const elsByPos = new Map<number, HTMLElement>();
   const freeEls = new Map<number, HTMLElement>();
   view.state.doc.forEach((childNode, offset) => {
-    const el = view.nodeDOM(offset);
-    if (!(el instanceof HTMLElement)) return;
+    const el = elementOf(view, childNode, offset);
+    if (!el) return;
     if (/^P$|^H[1-6]$/.test(el.tagName)) elsByPos.set(offset, el);
     if (el.dataset?.awFree === "1") freeEls.set(offset, el);
   });
@@ -519,6 +539,7 @@ export function refreshFreeWrapBands(view: EditorView, options?: { force?: boole
   withheld = false;
   republishLeft--;
   conta.pubblicazioni++;
+  bandsVersion++;
   // Painting the bands moves the lines they cover, and the pictures hang from
   // those lines: after a publish one more look is fair. Not more than one - that
   // is exactly what the allowance exists to bound.
@@ -634,6 +655,11 @@ let domBands: DomBand[] = [];
 let measuredDoc: PMNode | null = null;
 /** True when one more look is allowed even if the document did not change. */
 let allowOneMore = false;
+/** Bumped every time new band numbers are published: the page must reclose. */
+let bandsVersion = 0;
+/** The document, format, margins and band version the last closing pass saw. */
+let closedDoc: PMNode | null = null;
+let closedKey = "";
 
 /**
  * Contatori di sola lettura (17-09). Servono allo strumento di verifica per
@@ -875,6 +901,15 @@ export function closePageHeights(view: EditorView): void {
   const padTop = parseFloat(getComputedStyle(host).paddingTop) || 0;
   const margins = getMargins();
 
+  // Una pagina si richiude solo quando qualcosa che la sposta e' cambiato: il
+  // documento, il formato, i margini o le fasce appena pubblicate. Un semplice
+  // movimento del cursore non cambia nessuna altezza; la chiusura invece costa
+  // due rettangoli per ognuno degli 874 divisori, e il profilo del 26-10 la
+  // vedeva partire a ogni aggiornamento.
+  const closeKey = `${format.id}:${format.widthPx}/${format.heightPx}:` +
+    `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}:${bandsVersion}`;
+  if (view.state.doc === closedDoc && closeKey === closedKey) return;
+
   // ---- pass 1: read everything (one layout, no writes in between) --------
   // Two rectangles per divider (the whole widget and its top spacer): `rest`
   // comes out exact by subtraction, where summing five `offsetHeight`s would
@@ -937,6 +972,8 @@ export function closePageHeights(view: EditorView): void {
     });
   }
   lastPageGeometry = out;
+  closedDoc = view.state.doc;
+  closedKey = closeKey;
 }
 
 export function createCassiePaginationPlugin(

@@ -259,6 +259,11 @@ export function createFreeLayoutPlugin(): Plugin {
           return d instanceof HTMLElement ? d : null;
         };
         view.state.doc.forEach((node, offset) => {
+          // Solo i nodi che possono portare gli stili di questa pittura (immagini,
+          // figure, riquadri) hanno bisogno di essere cercati nel DOM: gli altri
+          // rami non facevano nulla, e su un libro erano migliaia di ricerche
+          // dall'alto a ogni pittura (profilo del 26-10).
+          if (!isFreeCapable(node)) return;
           const dom = view.nodeDOM(offset);
           if (!(dom instanceof HTMLElement)) return;
           if (isFreeNode(node)) {
