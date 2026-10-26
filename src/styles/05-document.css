@@ -1306,7 +1306,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   margin-right: 0;
 }
 
-.image-node-wrapper[data-wrap][data-align="left"] {
+.image-node-wrapper[data-wrap=""][data-align="left"] {
   float: left;
   margin-right: var(--aw-float-gap, 12px);
   margin-left: 0;
@@ -1314,7 +1314,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   margin-bottom: 0;
 }
 
-.image-node-wrapper[data-wrap][data-align="right"] {
+.image-node-wrapper[data-wrap=""][data-align="right"] {
   float: right;
   margin-left: var(--aw-float-gap, 12px);
   margin-right: 0;
@@ -1650,12 +1650,12 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 /* U3: a wrapped box floats in the flow, with the SAME rule and air as an image
    (--aw-float-gap is set by the node view; a free box is absolute, so the float
    does not apply to it). */
-.aw-box[data-wrap][data-width][data-align="left"] {
+.aw-box[data-wrap=""][data-width][data-align="left"] {
   float: left;
   margin: 0 var(--aw-float-gap, 12px) 0 0;
 }
 
-.aw-box[data-wrap][data-width][data-align="right"] {
+.aw-box[data-wrap=""][data-width][data-align="right"] {
   float: right;
   margin: 0 0 0 var(--aw-float-gap, 12px);
 }
@@ -1701,7 +1701,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   margin-right: 0;
 }
 
-.ProseMirror .aw-figure[data-wrap][data-align="left"] {
+.ProseMirror .aw-figure[data-wrap=""][data-align="left"] {
   float: left;
   margin-right: var(--aw-float-gap, 12px);
   margin-left: 0;
@@ -1709,7 +1709,7 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   margin-bottom: 0;
 }
 
-.ProseMirror .aw-figure[data-wrap][data-align="right"] {
+.ProseMirror .aw-figure[data-wrap=""][data-align="right"] {
   float: right;
   margin-left: var(--aw-float-gap, 12px);
   margin-right: 0;
