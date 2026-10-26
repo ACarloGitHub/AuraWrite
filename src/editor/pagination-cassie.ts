@@ -46,6 +46,7 @@ import { elementDecorationExtent } from "./element-decoration";
 import {
   ObstacleSet,
   floatGapPx,
+  MIN_LINE_WIDTH_PX,
   type Obstacle,
   type ObstacleSide,
   type SolidStrip,
@@ -1280,6 +1281,16 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
             };
             full = true;
           }
+          // Una fascia che non lascia spazio a una riga NON è una colonna da 120
+          // pixel: il browser manda il testo sotto di lei, non accanto. Vale la
+          // stessa striscia solida che Unwrapped dichiara, e la fascia resta
+          // intera: cambia solo il fatto che nessuna riga le sta di fianco.
+          // Senza questo il conto delle pagine impagina righe che il foglio non
+          // disegna (B05, Carlo 2026-10-26: il divisorio cadeva a 1181).
+          if (next && contentWidth - next.widthPx < MIN_LINE_WIDTH_PX) {
+            next = { side: "left", widthPx: contentWidth, y0: next.y0, y1: next.y1 };
+            full = true;
+          }
         } else if (isUnwrapped(cond) && painted.heightPx > 0) {
           // Unwrapped claims the WHOLE width over its drawn rectangle: the text
           // above stays, the text below resumes under the element.
@@ -1465,6 +1476,19 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         pushBreak(pos, moved, false);
         y = moved;
         pendingAfter = 0; // the previous block's margin stays on the old page
+        startY = y + sp.beforePx;
+        lines = pushPastSolidLines(computeLines(startY), startY);
+      }
+      // Una striscia solida (Unwrapped, o una fascia che occupa la colonna) può
+      // spingere la prima riga sotto il bordo di pagina anche se il blocco è
+      // cominciato in questa. Senza confine la pagina si terrebbe righe che il
+      // foglio, tagliando al bordo della carta, perde (B05, Carlo 2026-10-26).
+      const startPage = Math.floor(startY / contentHeight);
+      if (lines.length > 0 && Math.floor(lines[0].y / contentHeight) > startPage) {
+        const moved = (startPage + 1) * contentHeight;
+        pushBreak(pos, moved, false);
+        y = moved;
+        pendingAfter = 0;
         startY = y + sp.beforePx;
         lines = pushPastSolidLines(computeLines(startY), startY);
       }
