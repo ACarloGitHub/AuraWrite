@@ -414,7 +414,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   void checkForUpdatesOnStartup();
 });
 
+/**
+ * Il conteggio parole, chiesto quando la scrittura si ferma.
+ *
+ * Il plugin lo chiama a ogni modifica del documento; `doc.textContent` su un
+ * libro lungo costruisce una stringa di megabyte e `split` la spezza, per due
+ * numeri nella barra di stato. Differirlo toglie il costo dal tasto e lascia i
+ * numeri giusti: l'ultima parola della battuta entra nel conto alla pausa.
+ */
+let wordCountTimer: ReturnType<typeof setTimeout> | null = null;
+
 function updateWordCount(view: any): void {
+  if (wordCountTimer) clearTimeout(wordCountTimer);
+  wordCountTimer = setTimeout(() => {
+    wordCountTimer = null;
+    countWordsNow(view);
+  }, 300);
+}
+
+function countWordsNow(view: any): void {
   const text = view.state.doc.textContent;
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   const chars = text.length;

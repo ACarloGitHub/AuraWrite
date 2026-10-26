@@ -106,26 +106,37 @@ function setupDirtyTracking(): void {
       const newState = editorView.state.apply(transaction);
       editorView.updateState(newState);
 
-      if (transaction.docChanged) {
-        const isLoading = isLoadingState();
-        const newContent = JSON.stringify(newState.doc.toJSON());
-        if (documentState.lastSavedContent !== newContent) {
-          documentState.isDirty = true;
-          updateWindowTitle();
-          updateDocumentDirtyMark();
-
-          if (!isLoading) {
-            window.dispatchEvent(new CustomEvent("aurawrite:content-changed", {
-              detail: { content: newContent }
-            }));
-          }
-        }
+      if (transaction.docChanged && !isLoadingState()) {
+        // Il documento non si serializza piu' a ogni tasto: la domanda "e'
+        // cambiato rispetto all'ultimo salvataggio?" si fa una volta, quando la
+        // scrittura si ferma. Serializzare tutto il libro a ogni lettera era un
+        // costo che cresceva con l'opera, per un asterisco sul titolo.
+        scheduleDirtyCheck();
       }
 
       updateAlignMenuSelection();
     },
   });
   updateAlignMenuSelection();
+}
+
+/** Il controllo differito del segno "modificato" (uno per pausa di scrittura). */
+let dirtyCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDirtyCheck(): void {
+  if (dirtyCheckTimer) clearTimeout(dirtyCheckTimer);
+  dirtyCheckTimer = setTimeout(() => {
+    dirtyCheckTimer = null;
+    const current = JSON.stringify(editorView.state.doc.toJSON());
+    if (documentState.lastSavedContent === current) return;
+    documentState.isDirty = true;
+    updateWindowTitle();
+    updateDocumentDirtyMark();
+    // L'evento non porta piu' il documento: nessun ascoltatore leggeva quel
+    // dettaglio (l'autosalvataggio chiede il contenuto per conto suo quando
+    // scade), e ricostruirlo qui riporterebbe il costo sulla pausa.
+    window.dispatchEvent(new CustomEvent("aurawrite:content-changed"));
+  }, 400);
 }
 
 function updateWindowTitle(): void {
