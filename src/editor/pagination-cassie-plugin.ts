@@ -429,8 +429,11 @@ export function measureDomBands(
       widthPx,
       full,
       areas: pageAreas,
-      // Only a reservation that crosses a page edge needs the blocks' positions.
-      blocks: crossesPage ? blockTops() : [],
+      // Only a reservation that crosses a page edge needs the blocks' positions;
+      // otherwise the anchor alone is enough, but the list must not be empty -
+      // `bandPieces` reads an empty list as "no lines to shorten" and would drop
+      // the piece (caught by the A06 check of 27-10: editor shortened, sheet not).
+      blocks: crossesPage ? blockTops() : [{ pos: anchorPos, top: anchorTop }],
     });
     if (pieces.length === 0) {
       diagnosis?.push({ pos, fermo: "la riserva non tocca righe di nessuna pagina" });
