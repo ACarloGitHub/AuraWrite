@@ -920,6 +920,9 @@ export function closePageHeights(view: EditorView): void {
   const host = view.dom as HTMLElement;
   if (!host.classList.contains("is-cassie-paged")) {
     lastPageGeometry = [];
+    // Tornando alla vista a pagine si deve richiudere tutto: qui non c'era
+    // niente da chiudere, quindi la "fotografia" precedente non vale piu'.
+    closedDoc = null;
     return;
   }
   const format = getPageFormat();
@@ -932,6 +935,7 @@ export function closePageHeights(view: EditorView): void {
   const dividers = Array.from(host.querySelectorAll<HTMLElement>(".aw-page-break--paged"));
   if (dividers.length === 0) {
     lastPageGeometry = [];
+    closedDoc = null;
     return;
   }
   const scale = appliedScale(host) || 1;
