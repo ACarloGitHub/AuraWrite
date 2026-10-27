@@ -49,32 +49,57 @@ export function clearFreeLayout(dom: HTMLElement): void {
 }
 
 /**
- * Paint the element according to its `free` attribute.
+ * I numeri da cui un elemento libero viene dipinto, LETTI prima di scrivere.
  *
- * @param anchorDom the DOM box of the text block this element hangs from, or
- *        null when the document has no text block before it (an element at the
- *        very top: it then measures from the start of the column).
+ * Leggere e scrivere il DOM a righe alternate è il modo più sicuro di far
+ * rifare l'impaginazione al browser una volta per elemento: `clientWidth` e
+ * `offsetTop` chiedono il disegno aggiornato, e una scrittura appena fatta lo
+ * rende vecchio. Misurato sul libro il 27-10: 108 ms per battuta, la voce più
+ * cara di tutte, spesi dentro `textColumn` chiamata una volta per immagine.
+ * Adesso le misure si fanno tutte insieme (la disposizione si calcola una volta
+ * sola), e le scritture vengono dopo.
  */
-export function applyFreeLayout(
+export interface PaintGeometry {
+  column: { left: number; width: number };
+  /** Top of the anchor block in the host's own layout pixels. */
+  anchorTop: number;
+  /** The element's own width (attribute, or the box measured before painting). */
+  width: number;
+}
+
+/**
+ * Read one element's painting numbers. `column` is passed in because it is the
+ * same for the whole document and reading it costs a layout.
+ */
+export function readPaintGeometry(
   dom: HTMLElement,
   node: PMNode,
   anchorDom: HTMLElement | null,
-): void {
+  column: { left: number; width: number },
+): PaintGeometry {
+  return {
+    column,
+    anchorTop: anchorDom && anchorDom !== dom ? anchorDom.offsetTop : 0,
+    width: freeElementWidth(node) ?? Math.round(dom.offsetWidth),
+  };
+}
+
+/**
+ * Paint the element according to its `free` attribute.
+ *
+ * @param geometry the numbers read by `readPaintGeometry` before any write.
+ */
+export function applyFreeLayout(dom: HTMLElement, node: PMNode, geometry: PaintGeometry): void {
   const spec: FreeSpec | null = parseFreeSpec(node.attrs?.free);
   if (!spec) {
     clearFreeLayout(dom);
     return;
   }
-  const host = dom.parentElement;
-  if (!host) return;
-
-  // Width first: measured while still in flow if the node carries no width.
-  const width = freeElementWidth(node) ?? Math.round(dom.offsetWidth);
+  const width = geometry.width;
   if (width <= 0) return;
 
-  const column = textColumn(host);
-  const anchorTop = anchorDom && anchorDom !== dom ? anchorDom.offsetTop : 0;
-  const top = freeTopPx(anchorTop, spec);
+  const column = geometry.column;
+  const top = freeTopPx(geometry.anchorTop, spec);
   const left = freeLeftPx({ left: column.left, width: column.width }, spec, width);
 
   // Measuring happens before the switch: reading offsetWidth after going
@@ -100,12 +125,10 @@ export function applyFreeLayout(
  * whole trick: for an absolutely positioned box it means "the static position",
  * i.e. exactly where the box sat before it was taken out of the flow.
  */
-export function applyOverlapLayout(dom: HTMLElement, node: PMNode): void {
-  const host = dom.parentElement;
-  if (!host) return;
-  const width = freeElementWidth(node) ?? Math.round(dom.offsetWidth);
+export function applyOverlapLayout(dom: HTMLElement, node: PMNode, geometry: PaintGeometry): void {
+  const width = geometry.width;
   if (width <= 0) return;
-  const column = textColumn(host);
+  const column = geometry.column;
   const align = String(node.attrs?.align ?? "center");
   const xFrom: FreeXFrom = align === "left" || align === "right" ? align : "center";
   const left = freeLeftPx({ left: column.left, width: column.width }, { xFrom, xOff: 0, yOff: 0, g: "" }, width);

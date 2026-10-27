@@ -41,6 +41,7 @@ import { setupResizablePanels } from "./editor/resizable-panels";
 import { openFindBar, setupFindReplaceUI } from "./editor/find-replace-ui";
 import { setupAppShortcuts } from "./editor/app-shortcuts";
 import { applyEditorZoom, scheduleEditorZoomSync, setEditorZoomParts } from "./editor/editor-zoom";
+import type { Node as PMNode } from "prosemirror-model";
 import "./styles/index.css";
 
 const THEME_KEY = "aurawrite-theme";
@@ -414,16 +415,94 @@ document.addEventListener("DOMContentLoaded", async () => {
   void checkForUpdatesOnStartup();
 });
 
+// ---------------------------------------------------------------------------
+// CONTO DELLE PAROLE — si corregge per differenza, non si riconta da capo.
+//
+// Il numero grande di un libro (misurato sul libro di prova: 404.009 parole,
+// 2.447.824 caratteri) si otteneva ricostruendo tutto il testo a ogni battuta:
+// `doc.textContent` più una divisione in 404.009 pezzi, 18 ms per battuta, la
+// seconda voce più cara del tasto.
+//
+// Il conto però è una somma di blocchi: ogni blocco si conta una volta e si
+// ricorda; la battuta ne cambia uno solo, e il totale si corregge per
+// differenza. La definizione di parola resta IDENTICA a prima, perché è quella
+// che Carlo vede sullo schermo: si contano le sequenze di caratteri non-spazio
+// nel testo del documento, e due blocchi che si toccano (uno finisce con una
+// lettera, il successivo comincia con una lettera) formano una parola sola -
+// il testo concatenato non ha separatori fra i blocchi, e quel conto qui si
+// toglie e si rimette con la stessa regola.
+// ---------------------------------------------------------------------------
+
+interface BlockCount {
+  chars: number;
+  /** Sequenze di caratteri non-spazio dentro il blocco. */
+  runs: number;
+  /** Il blocco comincia e finisce con un carattere non-spazio. */
+  firstSolid: boolean;
+  lastSolid: boolean;
+}
+
+const blockCounts = new WeakMap<PMNode, BlockCount>();
+let wordsTotal = 0;
+let charsTotal = 0;
+let countedDoc: PMNode | null = null;
+
+function countBlock(node: PMNode): BlockCount {
+  const hit = blockCounts.get(node);
+  if (hit) return hit;
+  const text = node.textContent;
+  const parts = text.length ? text.split(/\s+/) : [];
+  let runs = 0;
+  for (const part of parts) if (part) runs++;
+  const out: BlockCount = {
+    chars: text.length,
+    runs,
+    firstSolid: text.length > 0 && !/^\s/.test(text),
+    lastSolid: text.length > 0 && !/\s$/.test(text),
+  };
+  blockCounts.set(node, out);
+  return out;
+}
+
+/**
+ * Il conto di un documento.
+ *
+ * Costo: una passata sui BLOCCHI (4.267 sul libro, ognuno contato una volta e
+ * poi ricordato), non sui 2,4 milioni di caratteri. La definizione resta quella
+ * di prima, compreso un caso che la formula vecchia risolveva da sola: un
+ * blocco senza testo (una foto) non separa niente, perché nel testo concatenato
+ * fra i due paragrafi non c'è nulla, e le due parole restano una.
+ */
+function countDocument(doc: PMNode): { words: number; chars: number } {
+  let runs = 0;
+  let chars = 0;
+  let joins = 0;
+  let previousSolid = false;
+  for (let i = 0; i < doc.childCount; i++) {
+    const c = countBlock(doc.child(i));
+    runs += c.runs;
+    chars += c.chars;
+    if (c.chars === 0) continue; // nessun testo: non separa e non unisce
+    if (previousSolid && c.firstSolid) joins += 1;
+    previousSolid = c.lastSolid;
+  }
+  return { words: runs - joins, chars };
+}
+
 function updateWordCount(view: any): void {
-  const text = view.state.doc.textContent;
-  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-  const chars = text.length;
+  const doc: PMNode = view.state.doc;
+  if (doc !== countedDoc) {
+    const counted = countDocument(doc);
+    wordsTotal = counted.words;
+    charsTotal = counted.chars;
+    countedDoc = doc;
+  }
 
   const wordCountEl = document.getElementById("word-count");
   const charCountEl = document.getElementById("char-count");
 
-  if (wordCountEl) wordCountEl.textContent = `Words: ${words}`;
-  if (charCountEl) charCountEl.textContent = `Characters: ${chars}`;
+  if (wordCountEl) wordCountEl.textContent = `Words: ${wordsTotal}`;
+  if (charCountEl) charCountEl.textContent = `Characters: ${charsTotal}`;
 }
 
 (window as any).updateWordCount = updateWordCount;

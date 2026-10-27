@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import type { EditorView } from "prosemirror-view";
-import { freeWrapBand, freeLayoutMap, paintedBoxOf, parseFreeSpec, type FreeSpec } from "./free-layout";
+import { freeWrapBand, freeLayoutMap, isAnchorBlock, isFreeNode, paintedBoxOf, parseFreeSpec, type FreeSpec } from "./free-layout";
 import { isOverlap, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
@@ -515,12 +515,15 @@ export function refreshFreeWrapBands(view: EditorView, options?: { force?: boole
   // gesture, new margins) can always force one.
   const fresh = view.state.doc !== measuredDoc;
   if (!options?.force && !fresh && !allowOneMore) return;
-  // Un tasto dopo l'ultima foto non puo' spostare nessuno spazio riservato: gli
-  // spazi dipendono dagli ancoraggi, e gli ancoraggi stanno tutti prima. Quindi la
-  // passata intera si salta - e' la fetta piu' cara del tasto (profilo 26-10).
+  // La battuta non può spostare nessuno spazio riservato se cade fuori dai due
+  // soli punti da cui dipendono i suoi numeri: il blocco che lo ancora (le righe
+  // da cui parte) e l'elemento stesso (la sua altezza). Scrivere altrove sposta
+  // ancoraggio ed elemento insieme, e la fascia è misurata relativamente
+  // all'ancoraggio: i numeri restano quelli, e la passata intera - la fetta più
+  // cara del tasto (profilo 26-10) - si salta.
   if (!options?.force && fresh && lastEditStart !== null) {
-    const lastFree = lastFreePos(view.state.doc);
-    if (lastFree !== null && lastEditStart > lastFree) {
+    const frees = freeLayoutMap(view.state.doc).length;
+    if (frees === measuredFrees && !editCanMoveBands(view.state.doc, lastEditStart)) {
       measuredDoc = view.state.doc;
       allowOneMore = false;
       withheld = false;
@@ -528,6 +531,7 @@ export function refreshFreeWrapBands(view: EditorView, options?: { force?: boole
     }
   }
   measuredDoc = view.state.doc;
+  measuredFrees = freeLayoutMap(view.state.doc).length;
   allowOneMore = false;
   const override = flightBox ? new Map([[flightBox.pos, flightBox.box]]) : undefined;
   // `force` is for a deliberate action (printing, opening the preview, opening
@@ -687,6 +691,8 @@ export interface FlyingBox {
 let domBands: DomBand[] = [];
 /** The document version the last measurement was taken from. */
 let measuredDoc: PMNode | null = null;
+/** How many free elements the document had when the bands were last measured. */
+let measuredFrees = -1;
 /** True when one more look is allowed even if the document did not change. */
 let allowOneMore = false;
 /** Bumped every time new band numbers are published: the page must reclose. */
@@ -699,18 +705,40 @@ let closedBandsVersion = -1;
 /** Where the last document change starts (null when the document did not change). */
 let lastEditStart: number | null = null;
 
-/** Start position of the LAST free element of the document, or null. */
-function lastFreePos(doc: PMNode): number | null {
-  let end: number | null = null;
-  doc.forEach((node, offset) => {
-    if (parseFreeSpec((node.attrs as Record<string, unknown> | undefined)?.free) !== null) {
-      // The END, not the start: editing the last picture's own caption changes
-      // its height and therefore its space, so only a change strictly AFTER the
-      // whole element can leave every band untouched.
-      end = offset + node.nodeSize;
+/**
+ * Può questa battuta spostare lo spazio riservato?
+ *
+ * I numeri di una fascia sono due, e dipendono da due soli punti: le righe del
+ * blocco che la ÀNCORA (da lì si misura la sua altezza) e l'elemento stesso (il
+ * suo ingombro). Una battuta in un blocco precedente sposta ancoraggio ed
+ * elemento della stessa quantità, quindi la differenza non cambia; una battuta
+ * in un blocco successivo non tocca né l'uno né l'altro. Solo i due punti qui
+ * sotto richiedono una nuova misura.
+ *
+ * La regola è stretta di proposito: se sbaglia, lo spazio riservato resta quello
+ * di prima (nessun testo attraversa la foto), e la prima azione che lo forza -
+ * stampa, anteprima, apertura - lo rimette a posto comunque.
+ */
+function editCanMoveBands(doc: PMNode, editStart: number): boolean {
+  let pos = 0;
+  for (let i = 0; i < doc.childCount; i++) {
+    const node = doc.child(i);
+    const end = pos + node.nodeSize;
+    if (editStart >= pos && editStart < end) {
+      // Dentro un elemento libero: cambia il suo ingombro (o la sua didascalia).
+      if (isFreeNode(node)) return true;
+      if (!isAnchorBlock(node)) return false;
+      // Nel blocco d'ancoraggio: conta solo se quel blocco àncora qualcosa.
+      for (let k = i + 1; k < doc.childCount; k++) {
+        const next = doc.child(k);
+        if (isAnchorBlock(next)) return false; // il gruppo dell'ancoraggio finisce qui
+        if (isFreeNode(next)) return true;
+      }
+      return false;
     }
-  });
-  return end;
+    pos = end;
+  }
+  return false;
 }
 
 /**
@@ -916,6 +944,12 @@ export interface PageGeometryRow {
 
 let lastPageGeometry: PageGeometryRow[] = [];
 
+/**
+ * Le parti fisse del divisorio (piede, separatore, testa, margine superiore),
+ * misurate una volta. Cambiano solo con formato, margini, ingrandimento o stili.
+ */
+let restCache: { key: string; rest: number } | null = null;
+
 /** The last closing pass, for the verification tool (read-only). */
 export function pageGeometry(): PageGeometryRow[] {
   return lastPageGeometry.map((r) => ({ ...r }));
@@ -991,9 +1025,16 @@ export function closePageHeights(view: EditorView): void {
   }
 
   // ---- pass 1: read everything (one layout, no writes in between) --------
-  // Two rectangles per divider (the whole widget and its top spacer): `rest`
-  // comes out exact by subtraction, where summing five `offsetHeight`s would
-  // round each part to a whole pixel.
+  // UN rettangolo per divisorio, non due: le parti fisse del divisorio (piede,
+  // separatore, testa, margine superiore) sono identiche su ogni pagina e si
+  // misurano una volta sola. La riempitura che il divisorio aveva è quella
+  // scritta nella passata precedente, che è già in memoria. Erano 1.746
+  // rettangoli per battuta, e i rettangoli sono la voce più cara di questa
+  // funzione (misurato il 27-10: 27 ms all'inizio del libro).
+  const fillByPage = new Map<number, number>();
+  for (const row of lastPageGeometry) fillByPage.set(row.page, row.fill);
+  const restKey = `${format.id}:${format.widthPx}/${format.heightPx}:` +
+    `${margins.top}/${margins.bottom}:${scale}:${getMetricsGeneration()}`;
   const reads: DividerRead[] = [];
   for (const el of dividers) {
     const page = Number(el.dataset.page || "0");
@@ -1008,15 +1049,26 @@ export function closePageHeights(view: EditorView): void {
     }
     if (!spacer) continue;
     const box = el.getBoundingClientRect();
-    const spacerBox = spacer.getBoundingClientRect();
-    const spacerHeight = spacerBox.height / scale;
+    const known = fillByPage.get(page);
+    let rest: number;
+    let oldFill: number;
+    if (restCache && restCache.key === restKey && known !== undefined) {
+      rest = restCache.rest;
+      oldFill = known;
+    } else {
+      const spacerBox = spacer.getBoundingClientRect();
+      const spacerHeight = spacerBox.height / scale;
+      rest = box.height / scale - spacerHeight;
+      oldFill = spacerHeight - margins.bottom;
+      restCache = { key: restKey, rest };
+    }
     reads.push({
       el,
       page,
       spacer,
       top: (box.top - hostTop) / scale,
-      rest: box.height / scale - spacerHeight,
-      oldFill: spacerHeight - margins.bottom,
+      rest,
+      oldFill,
     });
   }
 
@@ -1089,6 +1141,7 @@ export function createCassiePaginationPlugin(
         // transaction and no view update ever runs for this event.
         domBands = [];
         measuredDoc = null;
+        measuredFrees = -1;
         allowOneMore = false;
         lastEditStart = null;
         republishLeft = REPUBLISH_BUDGET;

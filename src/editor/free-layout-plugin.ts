@@ -43,6 +43,9 @@ import {
   clearFlowDepth,
   clearFreeLayout,
   clearOverlapLayout,
+  readPaintGeometry,
+  textColumn,
+  type PaintGeometry,
 } from "./free-style";
 import { isOverlap, textConditionOf } from "./element-condition";
 
@@ -252,30 +255,41 @@ export function createFreeLayoutPlugin(): Plugin {
       const paint = (): void => {
         // One walk decides the anchors, then each element is painted from the
         // DOM of ITS anchor (never from whatever sibling happens to be there).
+        //
+        // Misure PRIMA, scritture DOPO. Leggere e scrivere a righe alternate
+        // costringe il browser a rifare la disposizione una volta per elemento:
+        // misurato sul libro il 27-10, 108 ms per battuta - la voce più cara di
+        // tutte, dentro `textColumn` chiamata per ogni immagine. La colonna si
+        // legge una volta sola, le posizioni di ancoraggio tutte insieme, e solo
+        // dopo si scrivono gli stili.
         const anchors = new Map(freeLayoutMap(view.state.doc).map((e) => [e.pos, e.anchorPos]));
-        const domAt = (pos: number | null): HTMLElement | null => {
-          if (pos === null) return null;
-          const d = view.nodeDOM(pos);
-          return d instanceof HTMLElement ? d : null;
-        };
+        const column = textColumn(view.dom as HTMLElement);
+        const work: { node: PMNode; dom: HTMLElement; geometry: PaintGeometry }[] = [];
         view.state.doc.forEach((node, offset) => {
-          // Solo i nodi che possono portare gli stili di questa pittura (immagini,
-          // figure, riquadri) hanno bisogno di essere cercati nel DOM: gli altri
-          // rami non facevano nulla, e su un libro erano migliaia di ricerche
-          // dall'alto a ogni pittura (profilo del 26-10).
           if (!isFreeCapable(node)) return;
           const dom = view.nodeDOM(offset);
           if (!(dom instanceof HTMLElement)) return;
+          const anchorPos = anchors.get(offset) ?? null;
+          const anchorDom = anchorPos === null ? null : view.nodeDOM(anchorPos);
+          const geometry = readPaintGeometry(
+            dom,
+            node,
+            anchorDom instanceof HTMLElement ? anchorDom : null,
+            column,
+          );
+          work.push({ node, dom, geometry });
+        });
+        for (const { node, dom, geometry } of work) {
           if (isFreeNode(node)) {
             clearOverlapLayout(dom);
             clearFlowDepth(dom);
-            applyFreeLayout(dom, node, domAt(anchors.get(offset) ?? null));
-          } else if (isFreeCapable(node) && isOverlap(textConditionOf(node))) {
+            applyFreeLayout(dom, node, geometry);
+          } else if (isOverlap(textConditionOf(node))) {
             // Overlap in the flow: leaves the page flow but keeps its place.
             clearFreeLayout(dom);
             clearFlowDepth(dom);
-            applyOverlapLayout(dom, node);
-          } else if (isFreeCapable(node)) {
+            applyOverlapLayout(dom, node, geometry);
+          } else {
             // In-flow image/figure/box: paint its depth so the Layers order is
             // effective here too (no layout move, only the stacking).
             clearFreeLayout(dom);
@@ -288,12 +302,8 @@ export function createFreeLayoutPlugin(): Plugin {
               const w = freeElementWidth(node);
               dom.style.width = w != null ? `${w}px` : "";
             }
-          } else {
-            clearFreeLayout(dom);
-            clearOverlapLayout(dom);
-            clearFlowDepth(dom);
           }
-        });
+        }
       };
 
       const schedule = (): void => {
