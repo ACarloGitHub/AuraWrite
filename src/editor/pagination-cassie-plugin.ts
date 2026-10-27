@@ -237,11 +237,19 @@ export function measureDomBands(
   // offset INSIDE the block and would put every anchor one step off.
   const elsByPos = new Map<number, HTMLElement>();
   const freeEls = new Map<number, HTMLElement>();
+  // The anchor of every free element, computed ONCE: asking `freeLayoutMap` for
+  // each picture walked the whole document once per picture (266 walks on the
+  // test book), which the 26-10 profile counted as document traversals.
+  const anchorByPos = new Map<number, number | null>();
+  for (const entry of freeLayoutMap(view.state.doc)) anchorByPos.set(entry.pos, entry.anchorPos);
   view.state.doc.forEach((childNode, offset) => {
+    const isFree = parseFreeSpec((childNode.attrs as Record<string, unknown> | undefined)?.free) !== null;
+    const isTextBlock = childNode.type.name === "paragraph" || childNode.type.name === "heading";
+    if (!isFree && !isTextBlock) return;
     const el = elementOf(view, childNode, offset);
     if (!el) return;
     if (/^P$|^H[1-6]$/.test(el.tagName)) elsByPos.set(offset, el);
-    if (el.dataset?.awFree === "1") freeEls.set(offset, el);
+    if (isFree) freeEls.set(offset, el);
   });
   if (elsByPos.size === 0 || freeEls.size === 0) {
     diagnosis?.push({ fermo: "paragrafi o elementi liberi non trovati nel documento",
@@ -363,7 +371,7 @@ export function measureDomBands(
     //    the paper wrap at different points when the two rulers disagree (41
     //    lines against the 99 the browser really draws), so the index points at
     //    the wrong character.
-    const anchorPos = freeLayoutMap(view.state.doc).find((e) => e.pos === pos)?.anchorPos ?? null;
+    const anchorPos = anchorByPos.get(pos) ?? null;
     if (anchorPos === null) {
       diagnosis?.push({ pos, fermo: "nessun paragrafo a cui appoggiare l'elemento" });
       continue;
@@ -493,6 +501,18 @@ export function refreshFreeWrapBands(view: EditorView, options?: { force?: boole
   // gesture, new margins) can always force one.
   const fresh = view.state.doc !== measuredDoc;
   if (!options?.force && !fresh && !allowOneMore) return;
+  // Un tasto dopo l'ultima foto non puo' spostare nessuno spazio riservato: gli
+  // spazi dipendono dagli ancoraggi, e gli ancoraggi stanno tutti prima. Quindi la
+  // passata intera si salta - e' la fetta piu' cara del tasto (profilo 26-10).
+  if (!options?.force && fresh && lastEditStart !== null) {
+    const lastFree = lastFreePos(view.state.doc);
+    if (lastFree !== null && lastEditStart > lastFree) {
+      measuredDoc = view.state.doc;
+      allowOneMore = false;
+      withheld = false;
+      return;
+    }
+  }
   measuredDoc = view.state.doc;
   allowOneMore = false;
   const override = flightBox ? new Map([[flightBox.pos, flightBox.box]]) : undefined;
@@ -660,6 +680,24 @@ let bandsVersion = 0;
 /** The document, format, margins and band version the last closing pass saw. */
 let closedDoc: PMNode | null = null;
 let closedKey = "";
+let closedLayoutKey = "";
+let closedBandsVersion = -1;
+/** Where the last document change starts (null when the document did not change). */
+let lastEditStart: number | null = null;
+
+/** Start position of the LAST free element of the document, or null. */
+function lastFreePos(doc: PMNode): number | null {
+  let end: number | null = null;
+  doc.forEach((node, offset) => {
+    if (parseFreeSpec((node.attrs as Record<string, unknown> | undefined)?.free) !== null) {
+      // The END, not the start: editing the last picture's own caption changes
+      // its height and therefore its space, so only a change strictly AFTER the
+      // whole element can leave every band untouched.
+      end = offset + node.nodeSize;
+    }
+  });
+  return end;
+}
 
 /**
  * Contatori di sola lettura (17-09). Servono allo strumento di verifica per
@@ -910,6 +948,30 @@ export function closePageHeights(view: EditorView): void {
     `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}:${bandsVersion}`;
   if (view.state.doc === closedDoc && closeKey === closedKey) return;
 
+  // Un tasto cambia solo cio' che sta DALLA SUA PAGINA IN Giu': le pagine sopra
+  // sono gia' chiuse e il loro contenuto non si e' mosso, quindi si leggono solo
+  // i divisori da li' in poi. La riga di partenza si ricava dal punto modificato
+  // con l'aritmetica delle pagine (il passo delle pagine e' esatto per
+  // costruzione), non rileggendo i divisori per trovarne la pagina.
+  // Un cambio di formato, di margini o di spazi pubblicati invece riguarda tutto.
+  const layoutKey = `${format.id}:${format.widthPx}/${format.heightPx}:` +
+    `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}`;
+  const layoutChanged = layoutKey !== closedLayoutKey;
+  const bandsChanged = bandsVersion !== closedBandsVersion;
+  let firstPage = 2;
+  if (!layoutChanged && !bandsChanged && lastEditStart !== null) {
+    try {
+      const c = view.coordsAtPos(lastEditStart);
+      if (c) {
+        const y = (c.top - hostTop) / scale - padTop;
+        const index = Math.max(0, Math.floor(y / format.heightPx));
+        firstPage = Math.max(2, index + 2);
+      }
+    } catch {
+      firstPage = 2;
+    }
+  }
+
   // ---- pass 1: read everything (one layout, no writes in between) --------
   // Two rectangles per divider (the whole widget and its top spacer): `rest`
   // comes out exact by subtraction, where summing five `offsetHeight`s would
@@ -918,6 +980,7 @@ export function closePageHeights(view: EditorView): void {
   for (const el of dividers) {
     const page = Number(el.dataset.page || "0");
     if (!page || page < 2) continue;
+    if (page < firstPage) continue; // above the edit: already closed, nothing moved
     let spacer: HTMLElement | null = null;
     for (const child of Array.from(el.children) as HTMLElement[]) {
       if (child.classList.contains("aw-page-break-margin-top")) {
@@ -971,9 +1034,16 @@ export function closePageHeights(view: EditorView): void {
       applied,
     });
   }
-  lastPageGeometry = out;
+  // Le righe sopra il punto modificato tengono i numeri di prima: descrivono
+  // pagine il cui contenuto non si e' mosso.
+  const kept = firstPage > 2
+    ? lastPageGeometry.filter((r) => r.page < firstPage)
+    : [];
+  lastPageGeometry = kept.concat(out);
   closedDoc = view.state.doc;
   closedKey = closeKey;
+  closedLayoutKey = layoutKey;
+  closedBandsVersion = bandsVersion;
 }
 
 export function createCassiePaginationPlugin(
@@ -1002,6 +1072,7 @@ export function createCassiePaginationPlugin(
         domBands = [];
         measuredDoc = null;
         allowOneMore = false;
+        lastEditStart = null;
         republishLeft = REPUBLISH_BUDGET;
         return buildDecorations(state.doc, options.enabled(), getCassiePagedMode(), editorDom);
       },
@@ -1013,6 +1084,10 @@ export function createCassiePaginationPlugin(
           return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode(), editorDom);
         }
         if (!tr.docChanged) return old;
+        // Dove inizia il cambiamento: serve alla regola "un tasto dopo l'ultima
+        // foto non muove nessuno spazio riservato". Costa una discesa, non una
+        // passata sul documento.
+        lastEditStart = newState.doc.content.findDiffStart(_oldState.doc.content);
         republishLeft = REPUBLISH_BUDGET; // a new edit gets its own allowance
         return buildDecorations(newState.doc, options.enabled(), getCassiePagedMode(), editorDom);
       },
