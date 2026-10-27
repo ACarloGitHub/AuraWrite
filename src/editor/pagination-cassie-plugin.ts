@@ -7,7 +7,7 @@ import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
 import { calculatePageBreaks, getPageFormat } from "./pagination-cassie";
-import { syncEditorMetricsFromDom } from "./text-metrics";
+import { syncEditorMetricsFromDom, getMetricsGeneration } from "./text-metrics";
 import { appliedScale } from "./editor-zoom";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
 
@@ -945,7 +945,7 @@ export function closePageHeights(view: EditorView): void {
   // due rettangoli per ognuno degli 874 divisori, e il profilo del 26-10 la
   // vedeva partire a ogni aggiornamento.
   const closeKey = `${format.id}:${format.widthPx}/${format.heightPx}:` +
-    `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}:${bandsVersion}`;
+    `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}:${bandsVersion}:${getMetricsGeneration()}`;
   if (view.state.doc === closedDoc && closeKey === closedKey) return;
 
   // Un tasto cambia solo cio' che sta DALLA SUA PAGINA IN Giu': le pagine sopra
@@ -955,7 +955,7 @@ export function closePageHeights(view: EditorView): void {
   // costruzione), non rileggendo i divisori per trovarne la pagina.
   // Un cambio di formato, di margini o di spazi pubblicati invece riguarda tutto.
   const layoutKey = `${format.id}:${format.widthPx}/${format.heightPx}:` +
-    `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}`;
+    `${margins.top}/${margins.right}/${margins.bottom}/${margins.left}:${getMetricsGeneration()}`;
   const layoutChanged = layoutKey !== closedLayoutKey;
   const bandsChanged = bandsVersion !== closedBandsVersion;
   let firstPage = 2;
