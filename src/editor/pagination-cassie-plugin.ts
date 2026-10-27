@@ -258,11 +258,19 @@ export function measureDomBands(
   }
   // The text blocks with their top on that same axis, in document order (which is
   // the order they are painted in): the carrier of a piece is the last block that
-  // starts at or above the piece's top.
-  const blockTops = Array.from(elsByPos.entries()).map(([pos, el]) => ({
-    pos,
-    top: (el.getBoundingClientRect().top - hostRect.top) / scale,
-  }));
+  // starts at or above the piece's top. Read only when a reservation actually
+  // crosses a page edge: the rest of the time nobody asks for these positions,
+  // and on a book they are 4.267 rectangles per pass (profile of 26-10).
+  let blockTopsCache: { pos: number; top: number }[] | null = null;
+  const blockTops = (): { pos: number; top: number }[] => {
+    if (!blockTopsCache) {
+      blockTopsCache = Array.from(elsByPos.entries()).map(([pos, el]) => ({
+        pos,
+        top: (el.getBoundingClientRect().top - hostRect.top) / scale,
+      }));
+    }
+    return blockTopsCache;
+  };
 
   for (const [pos, pic] of freeEls) {
     const node = view.state.doc.nodeAt(pos);
@@ -406,20 +414,23 @@ export function measureDomBands(
     }
     const heightPx = Math.max(1, Math.round(height / scale) + Math.round(extent.y));
     const bandTop = (lineTopClient - hostRect.top) / scale;
+    const anchorTop = (anchorTopClient - hostRect.top) / scale;
     const full = condition === "unwrapped";
     // The pieces are what the sheets get. The screen keeps painting its own
     // single spacer from the fields below (anchor block, anchor margin, full
     // height) - one continuous flow needs no split, and that is the behaviour
     // the six concordant documents were verified with.
+    const crossesPage = pageOfArea(pageAreas, anchorTop) !== pageOfArea(pageAreas, bandTop + heightPx - 1);
     const pieces = bandPieces({
-      anchor: { pos: anchorPos, top: (anchorTopClient - hostRect.top) / scale },
+      anchor: { pos: anchorPos, top: anchorTop },
       top: bandTop,
       bottom: bandTop + heightPx,
       side,
       widthPx,
       full,
       areas: pageAreas,
-      blocks: blockTops,
+      // Only a reservation that crosses a page edge needs the blocks' positions.
+      blocks: crossesPage ? blockTops() : [],
     });
     if (pieces.length === 0) {
       diagnosis?.push({ pos, fermo: "la riserva non tocca righe di nessuna pagina" });

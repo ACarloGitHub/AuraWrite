@@ -805,6 +805,59 @@ function cursorOffsetOf(
 interface LaidLine { off: number; y: number; h: number; }
 
 /**
+ * Le righe di un paragrafo accanto a una foto si possono riusare.
+ *
+ * La forma delle righe dipende solo da CHE COSA c'e' attorno al paragrafo,
+ * espresso relativamente al suo inizio: se scrivi altrove, paragrafo e figure
+ * si spostano insieme e il profilo relativo non cambia, quindi le spezzature
+ * sono identiche. Il profilo e' l'elenco degli ostacoli (foto e strisce solide)
+ * che stanno dal paragrafo in giu', con le altezze misurate a partire dal
+ * paragrafo stesso. Se coincide, si riusa; altrimenti si rifa'.
+ *
+ * Profilo del 26-10: le righe attorno alle foto erano 1.140 ms su sei battute,
+ * il pezzo singolo piu' caro del tasto.
+ */
+interface ShapedLines {
+  key: string;
+  /** Le righe con y relativa all'inizio del paragrafo. */
+  lines: LaidLine[];
+}
+const SHAPED_CACHE = new WeakMap<PMNode, ShapedLines>();
+
+function floatProfile(
+  obstacles: readonly Obstacle[],
+  strips: readonly SolidStrip[],
+  startY: number,
+  columnWidth: number,
+  extra: string,
+): string {
+  // FNV-1a a 32 bit: una chiave numerica invece di una stringa da centinaia di
+  // pezzi. Il profilo del 26-10 contava 63 ms su sei battute solo per costruire
+  // le stringhe del profilo.
+  let h = 2166136261;
+  const mix = (n: number): void => {
+    h ^= n | 0;
+    h = Math.imul(h, 16777619);
+  };
+  mix(columnWidth);
+  for (let i = 0; i < extra.length; i++) mix(extra.charCodeAt(i));
+  for (const o of obstacles) {
+    if (o.y1 <= startY - 1) continue;
+    mix(Math.round(o.y0 - startY));
+    mix(Math.round(o.y1 - startY));
+    mix(o.side === "left" ? 1 : 2);
+    mix(o.widthPx);
+  }
+  for (const z of strips) {
+    if (z.y1 <= startY - 1) continue;
+    mix(3);
+    mix(Math.round(z.y0 - startY));
+    mix(Math.round(z.y1 - startY));
+  }
+  return String(h >>> 0);
+}
+
+/**
  * Lay out one text run line by line (layoutNextLine: width may change per
  * line), tracking absolute y through float-affected widths.
  */
@@ -1462,10 +1515,25 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
           if (e.relMixed && !overlapsFloat(sy, sy + heightPx)) {
             return e.relMixed.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
           }
+          const key = floatProfile(obstacles, obstacleSet.solid, sy, contentWidth,
+            `m:${e.style.font}:${e.style.linePx}`);
+          const hit = SHAPED_CACHE.get(node);
+          if (hit && hit.key === key) {
+            return hit.lines.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
+          }
           const rel = mixedParagraphLines(node, (relY) => widthAt(sy + relY), baseMetricsFor(node));
+          SHAPED_CACHE.set(node, { key, lines: rel.map((l) => ({ off: l.off, y: l.y, h: l.h })) });
           return rel.map((l) => ({ ...l, y: sy + l.y }));
         }
-        return walkParagraphLines(node, style, sy, widthAt);
+        const key = floatProfile(obstacles, obstacleSet.solid, sy, contentWidth,
+          `u:${style.font}:${style.linePx}`);
+        const hit = SHAPED_CACHE.get(node);
+        if (hit && hit.key === key) {
+          return hit.lines.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
+        }
+        const rel = walkParagraphLines(node, style, 0, (relY) => widthAt(sy + relY));
+        SHAPED_CACHE.set(node, { key, lines: rel.map((l) => ({ off: l.off, y: l.y, h: l.h })) });
+        return rel.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
       };
 
       let lines = pushPastSolidLines(computeLines(startY), startY);
