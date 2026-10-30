@@ -18,7 +18,9 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "prosemirror-view";
-import { applyDocumentJson } from "./document-loader";
+import { applyDocumentJson, installDocument } from "./document-loader";
+import { parseHTML } from "./editor";
+import { fromDocx } from "../formats/docx";
 import { freeAnchorState } from "./free-layout-plugin";
 import { freeWrapDiagnosis, freeWrapState, pageGeometry } from "./pagination-cassie-plugin";
 import { calculatePageBreaks, getPageFormat, setPageFormat, PAGE_FORMATS } from "./pagination-cassie";
@@ -34,6 +36,8 @@ export interface HookResult {
 export interface TestHooks {
   /** Read a stored document (ProseMirror JSON) from `path` and open it. */
   openDocument(path: string): Promise<HookResult>;
+  /** Read a DOCX from `path`, convert it with the same importer as File > Open, and open it. */
+  openDocx(path: string): Promise<HookResult>;
   /**
    * The numbers as they are right now: the reservation pieces the screen has
    * measured and painted, and the ones the engine books (page breaks and the
@@ -62,6 +66,24 @@ export function installTestHooks(view: EditorView): void {
       try {
         const text = await invoke<string>("load_document", { path });
         applyDocumentJson(view, text);
+        return {
+          ok: true,
+          blocks: view.state.doc.childCount,
+          words: view.state.doc.textContent.trim().split(/\s+/).filter(Boolean).length,
+        };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    async openDocx(path: string): Promise<HookResult> {
+      try {
+        const b64 = await invoke<string>("load_binary_file", { path });
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const html = await fromDocx(bytes.buffer);
+        installDocument(view, parseHTML(html));
         return {
           ok: true,
           blocks: view.state.doc.childCount,
