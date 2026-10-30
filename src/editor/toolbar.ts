@@ -17,6 +17,7 @@ import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
 import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
 import { getSelectedElement } from "./element-commands";
+import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
 import { applyDocumentJson, installDocument, installEmptyDocument } from "./document-loader";
 import { freeElementWidth, freeLeftPx, parseFreeSpec } from "./free-layout";
 import { textColumn } from "./free-style";
@@ -2337,7 +2338,7 @@ function setupImageToolbar(view: EditorView): void {
  */
 export function syncSecondaryToolbar(view: EditorView): void {
   const bar = document.getElementById("image-toolbar");
-  const info = getSelectedElement(view, ["image", "figure", "styled_box"]);
+  const info = getSelectedElement(view, ELEMENT_KINDS);
   // These run on every transaction, also when the selection LEAVES an element.
   void import("./layers-panel").then((m) => m.syncLayersPanel(view));
   void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
@@ -2348,11 +2349,13 @@ export function syncSecondaryToolbar(view: EditorView): void {
     return;
   }
   bar.classList.add("image-toolbar--visible");
-  const isBox = info.node.type.name === "styled_box";
+  // Which block of controls the bar shows comes from the element table: the
+  // image/figure section or the box section (the shape will bring its own).
+  const section = elementTypeOf(info.node)?.toolbarSection ?? "image";
   const imageControls = document.getElementById("image-controls");
   const boxControls = document.getElementById("box-controls");
-  if (imageControls) imageControls.hidden = isBox;
-  if (boxControls) boxControls.hidden = !isBox;
+  if (imageControls) imageControls.hidden = section !== "image";
+  if (boxControls) boxControls.hidden = section !== "box";
 }
 
 export function updateImageToolbar(view: EditorView): void {

@@ -35,6 +35,7 @@ import {
   type FreeXFrom,
 } from "./free-layout";
 import { freeElementWidth } from "./free-style";
+import { ELEMENT_TYPES, elementTypeOf } from "./element-types";
 import { calculatePageBreaks, type FreeGeometry, type PageMargins } from "./pagination-cassie";
 import { getMargins } from "./pagination-state";
 
@@ -324,9 +325,9 @@ export function freeElement(view: EditorView, spec?: Partial<FreeSpec>): boolean
     zLevel: freeLevelAboveText(),
   };
   const measured = renderedWidthOf(view, target);
-  if (measured !== null && freeElementWidth(target.node) === null) {
-    if (target.node.type.name === "styled_box") attrs.widthPx = measured;
-    else attrs.width = measured;
+  const type = elementTypeOf(target.node);
+  if (measured !== null && freeElementWidth(target.node) === null && type) {
+    attrs[type.widthAttr] = measured;
   }
   // One transaction: the anchor line (when the document had none) and the
   // element's new state, so a single undo gives back the previous document.
@@ -474,16 +475,9 @@ function readableName(value: string): string {
   return clean;
 }
 
-/** The word the list shows for the element kind. */
+/** The word the list shows for the element kind, from the table. */
 function kindName(node: PMNode): string {
-  switch (node.type.name) {
-    case "figure":
-      return "Figure";
-    case "styled_box":
-      return "Box";
-    default:
-      return "Image";
-  }
+  return elementTypeOf(node)?.layerName ?? "Image";
 }
 
 /** `images/1723-My Photo.png` -> `My Photo`; empty when there is no real name. */
@@ -514,7 +508,7 @@ export function originalNameOf(src: string): string {
 export function labelWithDedup(entries: FreeEntry[]): FreeEntry[] {
   const kindCount = new Map<string, number>();
   const seen = new Map<string, number>();
-  const kinds = new Set(["Image", "Figure", "Box"]);
+  const kinds: Set<string> = new Set(Object.values(ELEMENT_TYPES).map((type) => type.layerName));
   return entries.map((entry) => {
     if (kinds.has(entry.label)) {
       const n = (kindCount.get(entry.label) ?? 0) + 1;

@@ -29,6 +29,7 @@
 import type { Node as PMNode } from "prosemirror-model";
 import { bandOfRect } from "./text-obstacles";
 import { isOverlap, textConditionOf } from "./element-condition";
+import { ELEMENT_KINDS, ELEMENT_TYPES, elementTypeOf } from "./element-types";
 
 /** Which edge of the text column the horizontal offset is measured from. */
 export type FreeXFrom = "left" | "center" | "right";
@@ -44,8 +45,13 @@ export interface FreeSpec {
   g: string;
 }
 
-/** Nodes that can leave the flow. Text blocks cannot: they have no depth data. */
-export const FREE_CAPABLE_TYPES: readonly string[] = ["image", "figure", "styled_box"];
+/**
+ * Nodes that can leave the flow, derived from the element-type table so there
+ * is no second list to forget (TT). Text blocks cannot: they have no depth data.
+ */
+export const FREE_CAPABLE_TYPES: readonly string[] = ELEMENT_KINDS.filter(
+  (kind) => ELEMENT_TYPES[kind].freeCapable
+);
 
 /**
  * Blocks an element can hang from: the text itself. Contract §2.3 makes the
@@ -166,7 +172,8 @@ export function freeLayoutMap(doc: PMNode): { pos: number; anchorPos: number | n
 
 /** True when the node type can be taken out of the flow. */
 export function isFreeCapable(node: PMNode | null | undefined): boolean {
-  return !!node && FREE_CAPABLE_TYPES.includes(node.type.name);
+  const type = elementTypeOf(node);
+  return !!type && type.freeCapable;
 }
 
 /** True when the node is a block element sitting outside the text flow. */
@@ -237,10 +244,12 @@ export function freeTopPx(anchorTop: number, spec: FreeSpec): number {
   return anchorTop + spec.yOff;
 }
 
-/** Width a free element must keep, from its own attrs (image/figure/box). */
+/** Width a free element must keep, from the attribute the table names. */
 export function freeElementWidth(node: PMNode): number | null {
+  const type = elementTypeOf(node);
+  if (!type) return null;
   const attrs = node.attrs as Record<string, unknown>;
-  const raw = node.type.name === "styled_box" ? attrs.widthPx : attrs.width;
+  const raw = attrs[type.widthAttr];
   const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
   return isFinite(n) && n > 0 ? Math.round(n) : null;
 }

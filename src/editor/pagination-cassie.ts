@@ -39,6 +39,7 @@ import {
 } from "./free-layout";
 import { isOverlap, isUnwrapped, isWrapping, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
+import { assertNeverKind, elementTypeOf } from "./element-types";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -355,14 +356,18 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
     return { heightPx: metrics().body.linePx, lineCount: 1 };
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
-  if (node.type.name === "styled_box") {
-    return measureBoxNode(node, contentWidth);
-  }
-  if (node.type.name === "figure") {
-    return measureFigureNode(node, contentWidth);
-  }
-  if (node.type.name === "image") {
-    return measureImageNode(node);
+  const element = elementTypeOf(node);
+  if (element) {
+    switch (element.kind) {
+      case "styled_box":
+        return measureBoxNode(node, contentWidth);
+      case "figure":
+        return measureFigureNode(node, contentWidth);
+      case "image":
+        return measureImageNode(node);
+      default:
+        return assertNeverKind(element.kind);
+    }
   }
   // R-b/v2b: paragraphs and headings are measured through the line model
   // (hard breaks split runs, mixed styles measure word by word).
@@ -737,6 +742,9 @@ function paragraphLineOffsets(node: PMNode, contentWidth: number, style: TextMet
 
 function spacingFor(node: PMNode): BlockSpacing {
   const sp = metrics().spacing;
+  // Elements take their row from the table: one fact, one place (TT).
+  const element = elementTypeOf(node);
+  if (element) return sp[element.spacingKey];
   switch (node.type.name) {
     case "paragraph": return sp.paragraph;
     case "heading": {
@@ -746,8 +754,6 @@ function spacingFor(node: PMNode): BlockSpacing {
         : undefined;
       return per ?? sp.heading;
     }
-    case "image": return sp.image;
-    case "figure": return sp.figure;
     case "code_block": return sp.code;
     default: return sp.other;
   }
@@ -755,10 +761,8 @@ function spacingFor(node: PMNode): BlockSpacing {
 
 function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } | null {
   if (!isWrapping(textConditionOf(node))) return null;
-  // U3: the box joins the same float rule as the image and the figure.
-  if (node.type.name !== "image" && node.type.name !== "figure" && node.type.name !== "styled_box") {
-    return null;
-  }
+  // U3: every element in the type table joins the same float rule (TT).
+  if (!elementTypeOf(node)) return null;
   const align = String(node.attrs.align ?? "");
   if (align !== "left" && align !== "right") return null;
   // ONE definition of the element's own width, shared with the free bands.

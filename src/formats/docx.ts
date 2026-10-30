@@ -26,6 +26,7 @@ import { getPageFormat } from "../editor/pagination-cassie";
 import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
+import { assertNeverKind, elementTypeOf } from "../editor/element-types";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
@@ -1043,6 +1044,30 @@ function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
 }
 
 function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBreakBefore: boolean = false): any[] {
+  // The element table decides what each element becomes in Word (TT): a
+  // picture run for the photo, its own text for figure and box today. A new
+  // kind must declare its case here or the switch stops compiling.
+  const element = elementTypeOf(node);
+  if (element) {
+    switch (element.kind) {
+      case "image": {
+        const bytes = imageCache.get(node.attrs?.src || "");
+        if (!bytes) return [];
+        return [
+          new Paragraph({
+            children: [buildImageRun(node, bytes)],
+            alignment: paragraphAlignFromAttr(node.attrs?.align),
+            pageBreakBefore,
+          }),
+        ];
+      }
+      case "figure":
+      case "styled_box":
+        return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
+      default:
+        return assertNeverKind(element.kind);
+    }
+  }
   switch (node.type.name) {
     case "table":
       return [tableNodeToDocx(node)];
@@ -1088,16 +1113,6 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBrea
           pageBreakBefore,
         }),
       ];
-    case "image": {
-      const bytes = imageCache.get(node.attrs?.src || "");
-      if (!bytes) return [];
-      const imgParagraph = new Paragraph({
-        children: [buildImageRun(node, bytes)],
-        alignment: paragraphAlignFromAttr(node.attrs?.align),
-        pageBreakBefore,
-      });
-      return [imgParagraph];
-    }
     case "page":
       return contentToArray(node.content).flatMap((child: any) => nodeToChildren(child, imageCache));
     default:

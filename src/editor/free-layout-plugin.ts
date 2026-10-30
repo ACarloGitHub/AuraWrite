@@ -48,6 +48,7 @@ import {
   type PaintGeometry,
 } from "./free-style";
 import { isOverlap, textConditionOf } from "./element-condition";
+import { elementTypeOf } from "./element-types";
 
 // The anchor-page rule (`free-anchor-page.ts`) is NOT invoked here any more.
 // It moved the picture's block 900 ms after every paint whenever the picture was
@@ -296,9 +297,10 @@ export function createFreeLayoutPlugin(): Plugin {
             clearOverlapLayout(dom);
             applyFlowDepth(dom, layerLevelOf(node));
             // The clears drop the inline width the free/overlap paint had
-            // written. A box owns its width in its attrs, so put it back: a
-            // box coming back from Overlap otherwise stayed full-line.
-            if (node.type.name === "styled_box") {
+            // written. An element that owns its width on its own box (the box)
+            // gets it back: coming back from Overlap it otherwise stayed
+            // full-line. The table says which types those are.
+            if (elementTypeOf(node)?.widthOnOwnBox) {
               const w = freeElementWidth(node);
               dom.style.width = w != null ? `${w}px` : "";
             }

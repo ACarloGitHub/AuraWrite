@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { bearingToOffset, normalizeImageStyle } from "./image-style";
+import { elementTypeByName } from "./element-types";
 
 export interface DecorationExtent {
   /** Extra horizontal room needed, in px (one side). */
@@ -36,12 +37,13 @@ export function elementDecorationExtent(
   attrs: Record<string, unknown> | undefined,
   typeName: string | undefined,
 ): DecorationExtent {
-  const imageLike = typeName === "image" || typeName === "figure";
-  const box = typeName === "styled_box";
-  if (!imageLike && !box) return ZERO;
+  const type = elementTypeByName(typeName);
+  if (!type) return ZERO;
   const s = normalizeImageStyle(attrs ?? {});
   const borderWidth = s.borderWidth > 0 && s.borderStyle !== "none" ? s.borderWidth : 0;
-  const frame = imageLike ? borderWidth : 0;
+  // The table says where the frame sits: outside the element (photo, figure:
+  // an outline that claims room) or inside its own box (the box border).
+  const frame = type.frameInside ? 0 : borderWidth;
   let x = frame;
   let y = frame;
   if (s.shadowEnabled) {

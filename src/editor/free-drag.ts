@@ -42,6 +42,7 @@ import {
 } from "./free-layout";
 import { ensureAnchorParagraph } from "./free-commands";
 import { freeElementWidth, textColumn } from "./free-style";
+import { elementTypeOf } from "./element-types";
 import { setFreeWrapFlightBox } from "./pagination-cassie-plugin";
 import { appliedScale } from "./editor-zoom";
 
@@ -588,10 +589,11 @@ function applyDrop(view: EditorView, getPos: () => number | undefined, drop: Dro
     zLevel: wasFree ? (node.attrs?.zLevel ?? freeLevelAboveText()) : freeLevelAboveText(),
   };
   // A box without an explicit width would collapse once it leaves the column,
-  // so the size it had on screen is recorded (contract §5).
-  if (freeElementWidth(node) === null) {
-    if (node.type.name === "styled_box") attrs.widthPx = drawnWidth;
-    else attrs.width = drawnWidth;
+  // so the size it had on screen is recorded (contract §5) in the attribute the
+  // element-type table names for it.
+  const elementType = elementTypeOf(node);
+  if (freeElementWidth(node) === null && elementType) {
+    attrs[elementType.widthAttr] = drawnWidth;
   }
 
   let tr = state.tr;
