@@ -95,12 +95,6 @@ export function setupShapeToolbar(view: EditorView): void {
     void setShapeAttrs(view, { headSize: value });
   });
 
-  el("shape-shadow")?.addEventListener("click", () => {
-    const info = getSelectedShape(view);
-    if (!info) return;
-    void setShapeAttrs(view, { shadowEnabled: !info.node.attrs.shadowEnabled });
-  });
-
   const bodyHeight = el<HTMLInputElement>("shape-body-height");
   bodyHeight?.addEventListener("change", () => {
     const value = intOrNaN(bodyHeight.value);
@@ -165,5 +159,4 @@ export function syncShapeToolbar(view: EditorView): void {
   if (head) head.value = closed ? String(params.headSize) : "";
   const body = el<HTMLInputElement>("shape-body-height");
   if (body) body.value = closed ? String(params.bodyHeight) : "";
-  el("shape-shadow")?.classList.toggle("image-toolbar__btn--active", !!attrs.shadowEnabled);
 }

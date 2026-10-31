@@ -338,6 +338,18 @@
         <button id="elem-delete" class="image-toolbar__btn" title="Delete">🗑</button>
         <div class="image-toolbar__separator"></div>
         </span>
+        <!-- SHADOW: one block, shared by every element whose bar shows it (box, shape) -->
+        <span id="element-shadow-controls" hidden>
+        <button id="sh-toggle" class="image-toolbar__btn" title="Toggle drop shadow">Shadow</button>
+        <span id="sh-fields" hidden>
+          <label class="image-toolbar__field" title="Shadow distance in pixels">Dist <input id="sh-distance" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field" title="Shadow blur in pixels">Blur <input id="sh-blur" type="number" min="0" max="100" step="1" value="" placeholder="px" /></label>
+          <label class="image-toolbar__field" title="Shadow opacity percent">Opa <input id="sh-opacity" type="number" min="0" max="100" step="5" value="" placeholder="35" /></label>
+          <input id="sh-color" type="color" class="image-toolbar__color" title="Shadow color (pick a lighter tone on dark backgrounds)" value="#000000" />
+          <label class="image-toolbar__field" title="Light direction: 0=top, 90=right, 180=bottom, 270=left (shadow falls opposite)">Light <input id="sh-angle" type="number" min="0" max="359" step="15" value="" placeholder="315" /></label>
+        </span>
+        <div class="image-toolbar__separator"></div>
+        </span>
         <span id="image-controls">
         <label class="image-toolbar__field" title="Image width in pixels">W <input id="img-width" type="number" min="20" step="10" value="" placeholder="px" /></label>
         <label class="image-toolbar__field" title="Image height in pixels">H <input id="img-height" type="number" min="20" step="10" value="" placeholder="px" /></label>
@@ -408,15 +420,6 @@
         <input id="box-border-color" type="color" class="image-toolbar__color" title="Border color" value="#999999" />
         <label class="image-toolbar__field" title="Corner rounding in pixels">R <input id="box-radius" type="number" min="0" max="100" step="2" value="" placeholder="px" /></label>
         <label class="image-toolbar__field" title="Box width in pixels; empty = full column">Width <input id="box-width" type="number" min="60" max="4000" step="10" value="" placeholder="full" /></label>
-        <div class="image-toolbar__separator"></div>
-        <button id="box-shadow-toggle" class="image-toolbar__btn" title="Toggle drop shadow">Shadow</button>
-        <span id="box-shadow-fields" hidden>
-          <label class="image-toolbar__field" title="Shadow distance in pixels">Dist <input id="box-shadow-distance" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
-          <label class="image-toolbar__field" title="Shadow blur in pixels">Blur <input id="box-shadow-blur" type="number" min="0" max="100" step="1" value="" placeholder="px" /></label>
-          <label class="image-toolbar__field" title="Shadow opacity percent">Opa <input id="box-shadow-opacity" type="number" min="0" max="100" step="5" value="" placeholder="35" /></label>
-          <input id="box-shadow-color" type="color" class="image-toolbar__color" title="Shadow color (pick a lighter tone on dark backgrounds)" value="#000000" />
-          <label class="image-toolbar__field" title="Light direction: 0=top, 90=right, 180=bottom, 270=left (shadow falls opposite)">Light <input id="box-shadow-angle" type="number" min="0" max="359" step="15" value="" placeholder="315" /></label>
-        </span>
         </span>
         <!-- SHAPE CONTROLS (chapter A, S1, U4): same bar, shown only for a drawn shape -->
         <span id="shape-controls" hidden>
@@ -443,7 +446,6 @@
         <label id="shape-head-field" class="image-toolbar__field" title="Length of the arrow head in pixels" hidden>Head <input id="shape-head-size" type="number" min="4" max="200" step="2" value="" placeholder="px" /></label>
         <label id="shape-body-field" class="image-toolbar__field" title="Height of the body rectangle in pixels" hidden>Body <input id="shape-body-height" type="number" min="1" max="200" step="1" value="" placeholder="px" /></label>
         <label id="shape-curve-field" class="image-toolbar__field" title="Bend of the curved arrow in pixels" hidden>Curve <input id="shape-curve" type="number" min="-400" max="400" step="4" value="" placeholder="px" /></label>
-        <button id="shape-shadow" class="image-toolbar__btn" title="Toggle drop shadow on the drawing">Shadow</button>
         </span>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">

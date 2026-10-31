@@ -2261,6 +2261,7 @@ function setupImageToolbar(view: EditorView): void {
   void import("./image-style-toolbar").then((m) => m.setupImageStyleToolbar(view));
   // The commands every element shares, bound once for the whole bar.
   void import("./element-bar").then((m) => m.setupElementBar(view));
+  void import("./element-shadow").then((m) => m.setupElementShadow(view));
 }
 
 /**
@@ -2273,6 +2274,7 @@ export function syncSecondaryToolbar(view: EditorView): void {
   // These run on every transaction, also when the selection LEAVES an element.
   void import("./layers-panel").then((m) => m.syncLayersPanel(view));
   void import("./element-bar").then((m) => m.syncElementBar(view));
+  void import("./element-shadow").then((m) => m.syncElementShadow(view));
   void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
   void import("./shape-toolbar").then((m) => m.syncShapeToolbar(view));
   updateImageToolbar(view);

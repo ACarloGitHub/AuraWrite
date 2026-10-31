@@ -155,6 +155,11 @@ export function shapeBoxSize(attrs: Record<string, unknown> | undefined): ShapeB
   const params = normalizeShapeParams(a);
   const width = clampInt(a.width, DEFAULT_SHAPE_WIDTH_PX, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   if (params.kind === "line") return { width, height: params.strokeWidth };
+  if (params.kind === "arrow_curve") {
+    // The head is its own height (the `Head` number) and the room above it is the
+    // bend: the box is DERIVED, so moving the bend cannot deform the head.
+    return { width, height: params.headSize + Math.abs(params.curve) + params.strokeWidth };
+  }
   const height = clampInt(a.height, defaultHeightOf(params), MIN_STROKE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   return { width, height };
 }

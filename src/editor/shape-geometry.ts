@@ -86,15 +86,15 @@ function headLengthOf(params: ShapeParams, box: ShapeBox, inset: number): number
  * The head's own height and the line it is centred on, in the box.
  *
  * For the straight shapes the head is as tall as the box. For the curved one the
- * room above it belongs to the bend, so the head is what is left and it sits at
- * the bottom (bend upwards) or at the top (bend downwards).
+ * head keeps its OWN height (the `Head` number) and the room above it belongs to
+ * the bend, so bending cannot deform it. It sits at the bottom when the bend goes
+ * up and at the top when it goes down.
  */
 function headOf(params: ShapeParams, box: ShapeBox, inset: number): { height: number; centreY: number } {
   if (params.kind !== "arrow_curve") {
     return { height: Math.max(2, box.height - inset * 2), centreY: box.height / 2 };
   }
-  const bend = Math.abs(params.curve);
-  const headHeight = Math.max(6, box.height - inset * 2 - bend);
+  const headHeight = Math.min(Math.max(6, params.headSize), Math.max(6, box.height - inset * 2));
   const centreY = params.curve >= 0 ? box.height - inset - headHeight / 2 : inset + headHeight / 2;
   return { height: headHeight, centreY };
 }
@@ -436,11 +436,8 @@ export function dragShapeBend(start: ShapeState, dy: number): ShapeDrag {
     return { ...start, shiftX: 0, shiftY: 0 };
   }
   const inset = shapeStrokeInset(start.params, start.box);
-  const headHeight = Math.max(6, start.box.height - 2 * inset - Math.abs(start.params.curve));
   const curve = clamp(Math.round(start.params.curve - dy), -MAX_CURVE_PX, MAX_CURVE_PX);
-  const height = headHeight + Math.abs(curve) + 2 * inset;
-  // Bending upwards grows the box at the top, so its corner moves up with it and
-  // the head stays where it is; bending downwards grows at the bottom.
+  const height = start.params.headSize + Math.abs(curve) + 2 * inset;
   const shiftY = curve >= 0 ? -(height - start.box.height) : 0;
   return {
     box: { width: start.box.width, height: Math.round(height) },

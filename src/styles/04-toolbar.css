@@ -552,6 +552,7 @@ body.reader-mode .toolbar {
    the block. A wrapper left as a plain inline span would box its controls inside
    the bar and break the layout (chapter A, S1). */
 #element-common-controls,
+#element-shadow-controls,
 #image-controls,
 #box-controls,
 #shape-controls {
@@ -559,6 +560,7 @@ body.reader-mode .toolbar {
 }
 
 #element-common-controls[hidden],
+#element-shadow-controls[hidden],
 #image-controls[hidden],
 #box-controls[hidden],
 #shape-controls[hidden] {
