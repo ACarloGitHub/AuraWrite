@@ -43,16 +43,16 @@ export function buildShapeSvg(params: ShapeParams, box: ShapeBox): SVGSVGElement
     line.setAttribute("stroke-linecap", "round");
     svg.appendChild(line);
   }
-  if (geometry.head) {
-    const head = document.createElementNS(SVG_NS, "polygon");
-    head.setAttribute("points", geometry.head.map(([x, y]) => `${x},${y}`).join(" "));
-    head.setAttribute("fill", params.fill || params.strokeColor);
-    // The contour is drawn even when the inside is filled with something else,
-    // so a white fill still reads as an arrow instead of vanishing on paper.
-    head.setAttribute("stroke", params.strokeColor);
-    head.setAttribute("stroke-width", String(params.strokeWidth));
-    head.setAttribute("stroke-linejoin", "round");
-    svg.appendChild(head);
+  if (geometry.outline) {
+    // One closed outline: body and head together. The inside is the fill, the
+    // contour is the stroke — the two are independent of each other.
+    const polygon = document.createElementNS(SVG_NS, "polygon");
+    polygon.setAttribute("points", geometry.outline.map(([x, y]) => `${x},${y}`).join(" "));
+    polygon.setAttribute("fill", params.fill || params.strokeColor);
+    polygon.setAttribute("stroke", params.strokeColor);
+    polygon.setAttribute("stroke-width", String(params.strokeWidth));
+    polygon.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(polygon);
   }
   return svg;
 }
@@ -71,5 +71,6 @@ export function shapePaintKey(params: ShapeParams, box: ShapeBox): string {
     params.strokeColor,
     params.fill,
     params.headSize,
+    params.bodyHeight,
   ].join("|");
 }

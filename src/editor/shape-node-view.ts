@@ -49,9 +49,11 @@ import {
   dragShapeHead,
   dragShapeTip,
   shapeHandleAnchors,
+  type ShapeDrag,
   type ShapeState,
 } from "./shape-geometry";
 import { setShapeAttrs } from "./shape-commands";
+import { clampFreeOffset, parseFreeSpec } from "./free-layout";
 
 /** Smallest grabbing area a shape offers, so a tiny arrow can still be caught. */
 const MIN_HIT_PX = 26;
@@ -197,29 +199,61 @@ export class ShapeNodeView implements NodeView {
     const start: ShapeState = { params: normalizeShapeParams(attrs), box: shapeBoxSize(attrs) };
     if (start.params.kind !== "arrow") return;
     this.selectShape();
+
+    // The body handle moves the REAR end: the shape must stay attached by its
+    // tip, so the box's own corner travels with the hand. Only a free element has
+    // a position to move (in the flow the box's corner is where the text put it).
+    const freeSpec = parseFreeSpec(attrs.free);
+    const rotation = (Number(attrs.rotation) || 0) * (Math.PI / 180);
+    const originLeft = parseFloat(this.dom.style.left) || 0;
+    const originTop = parseFloat(this.dom.style.top) || 0;
+
+    const shiftFor = (shift: number): { sx: number; sy: number } => ({
+      sx: shift * Math.cos(rotation),
+      sy: shift * Math.sin(rotation),
+    });
+
     startShapePartDrag({
       view: this.view,
       getPos: this.getPos,
       event: e,
-      onMove: (dx, dy) => this.paintState(this.partState(part, start, dx, dy)),
+      onMove: (dx, dy) => {
+        const drag = this.partState(part, start, dx, dy);
+        this.paintState(drag);
+        if (freeSpec) {
+          const { sx, sy } = shiftFor(drag.shiftX);
+          this.dom.style.left = `${Math.round(originLeft + sx)}px`;
+          this.dom.style.top = `${Math.round(originTop + sy)}px`;
+        }
+      },
       onCommit: (dx, dy) => {
-        const next = this.partState(part, start, dx, dy);
-        setShapeAttrs(this.view, {
-          width: next.box.width,
-          height: next.box.height,
-          strokeWidth: next.params.strokeWidth,
-          headSize: next.params.headSize,
-        });
+        const drag = this.partState(part, start, dx, dy);
+        const patch: Record<string, unknown> = {
+          width: drag.box.width,
+          height: drag.box.height,
+          strokeWidth: drag.params.strokeWidth,
+          headSize: drag.params.headSize,
+          bodyHeight: drag.params.bodyHeight,
+        };
+        if (freeSpec && drag.shiftX !== 0) {
+          const { sx, sy } = shiftFor(drag.shiftX);
+          patch.free = {
+            ...freeSpec,
+            xOff: clampFreeOffset(freeSpec.xOff + sx),
+            yOff: clampFreeOffset(freeSpec.yOff + sy),
+          };
+        }
+        setShapeAttrs(this.view, patch);
       },
     });
   }
 
   /**
-   * What one part's movement means. `base` is the top vertex and `mirror` the
-   * bottom one: both move the head's width, symmetrically, and the sign makes
-   * them behave the same for a hand pulling away from the axis.
+   * What one part's movement means. `base` is the head's top rear corner and
+   * `mirror` its bottom one: both change the head's width, symmetrically, and
+   * the sign makes them behave the same for a hand pulling away from the axis.
    */
-  private partState(part: ShapeHandlePart, start: ShapeState, dx: number, dy: number): ShapeState {
+  private partState(part: ShapeHandlePart, start: ShapeState, dx: number, dy: number): ShapeDrag {
     switch (part) {
       case "tip":
         return dragShapeTip(start, dx);

@@ -79,6 +79,13 @@ export function setupShapeToolbar(view: EditorView): void {
     if (isNaN(value)) return;
     void setShapeAttrs(view, { headSize: value });
   });
+
+  const bodyHeight = el<HTMLInputElement>("shape-body-height");
+  bodyHeight?.addEventListener("change", () => {
+    const value = intOrNaN(bodyHeight.value);
+    if (isNaN(value)) return;
+    void setShapeAttrs(view, { bodyHeight: value });
+  });
 }
 
 /** Refresh the shape's own controls for the current selection. */
@@ -116,10 +123,14 @@ export function syncShapeToolbar(view: EditorView): void {
   if (fillClear) fillClear.hidden = !closed;
   const headField = el("shape-head-field");
   if (headField) headField.hidden = !closed;
+  const bodyField = el("shape-body-field");
+  if (bodyField) bodyField.hidden = !closed;
   const fill = el<HTMLInputElement>("shape-fill");
   // An empty fill means "the contour's colour": the swatch shows that colour,
   // because that is what is painted.
   if (fill) fill.value = params.fill || params.strokeColor;
   const head = el<HTMLInputElement>("shape-head-size");
   if (head) head.value = closed ? String(params.headSize) : "";
+  const body = el<HTMLInputElement>("shape-body-height");
+  if (body) body.value = closed ? String(params.bodyHeight) : "";
 }

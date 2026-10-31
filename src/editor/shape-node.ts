@@ -25,6 +25,7 @@ import { floatGapPx } from "./text-obstacles";
 import { transformStyleOf } from "./element-view";
 import { buildShapeSvg } from "./shape-paint";
 import {
+  DEFAULT_BODY_HEIGHT_PX,
   DEFAULT_HEAD_SIZE_PX,
   DEFAULT_SHAPE_WIDTH_PX,
   DEFAULT_STROKE_COLOR,
@@ -66,6 +67,8 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     // Inside of the closed part; empty = the contour's own colour.
     fill: { default: "" },
     headSize: { default: DEFAULT_HEAD_SIZE_PX },
+    // Height of the body rectangle, independent of the head's width.
+    bodyHeight: { default: DEFAULT_BODY_HEIGHT_PX },
     // A drawn shape is never aspect-locked: the width is its length and the
     // height is its stroke (line) or its head's width (arrow) - two free axes.
     aspectLocked: { default: false },
@@ -94,6 +97,7 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
           strokeColor: dom.getAttribute("data-stroke-color") || DEFAULT_STROKE_COLOR,
           fill: dom.getAttribute("data-fill") || "",
           headSize: markerNumber(dom, "data-head-size", DEFAULT_HEAD_SIZE_PX),
+          bodyHeight: markerNumber(dom, "data-body-height", DEFAULT_BODY_HEIGHT_PX),
           align: oneOfAlign(dom.getAttribute("data-align")),
           wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
           opacity: markerNumber(dom, "data-opacity", 100),
@@ -126,6 +130,9 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     if (params.fill) attrs["data-fill"] = params.fill;
     if (params.headSize !== DEFAULT_HEAD_SIZE_PX) {
       attrs["data-head-size"] = String(params.headSize);
+    }
+    if (params.bodyHeight !== DEFAULT_BODY_HEIGHT_PX) {
+      attrs["data-body-height"] = String(params.bodyHeight);
     }
     const wrapMarker = textConditionMarker(condition);
     if (wrapMarker !== null) attrs["data-wrap"] = wrapMarker;

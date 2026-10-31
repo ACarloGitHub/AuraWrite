@@ -45,6 +45,16 @@ export const MAX_SHAPE_WIDTH_PX = 20000;
 /** Shortest free body a head may leave in front of itself, in px. */
 export const MIN_SHAPE_BODY_PX = 4;
 
+/**
+ * Height of the arrow's BODY (the rectangle behind the head), in px.
+ *
+ * It is a measure of the drawing, not of its contour: the head is wider than the
+ * body, which is what makes an arrow read as an arrow. The stroke is only the
+ * outline around it.
+ */
+export const DEFAULT_BODY_HEIGHT_PX = 6;
+export const MIN_BODY_HEIGHT_PX = 1;
+
 export interface ShapeParams {
   kind: ShapeKind;
   /** Thickness of the stroke, in px. */
@@ -55,6 +65,8 @@ export interface ShapeParams {
   fill: string;
   /** Length of the arrow head, in px. */
   headSize: number;
+  /** Height of the body rectangle, in px. */
+  bodyHeight: number;
 }
 
 /** True when the value names one of the shapes this version can draw. */
@@ -84,6 +96,7 @@ export function normalizeShapeParams(attrs: Record<string, unknown> | undefined)
     strokeColor: color || DEFAULT_STROKE_COLOR,
     fill,
     headSize: clampInt(a.headSize, DEFAULT_HEAD_SIZE_PX, MIN_HEAD_SIZE_PX, MAX_HEAD_SIZE_PX),
+    bodyHeight: clampInt(a.bodyHeight, DEFAULT_BODY_HEIGHT_PX, MIN_BODY_HEIGHT_PX, MAX_SHAPE_WIDTH_PX),
   };
 }
 

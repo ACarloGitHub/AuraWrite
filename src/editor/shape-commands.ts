@@ -98,6 +98,9 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
   // inheriting the line's two pixels, which would leave a flat arrow.
   const height = params.kind === "line" ? params.strokeWidth : kindChanged ? params.headSize : merged.height;
   const box = shapeBoxSize({ ...merged, height });
+  // The body must fit inside the head: a number the drawing cannot honour is a
+  // number the bar must not show.
+  const bodyRoom = Math.max(1, box.height - params.strokeWidth);
   return setNodeAttrs(view, info.pos, {
     ...merged,
     shape: params.kind,
@@ -105,6 +108,7 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
     strokeColor: params.strokeColor,
     fill: params.fill,
     headSize: params.headSize,
+    bodyHeight: Math.max(1, Math.min(params.bodyHeight, bodyRoom)),
     width: box.width,
     height: box.height,
   });
