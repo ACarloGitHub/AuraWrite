@@ -27,6 +27,12 @@ export interface ElementCapabilities {
   background: boolean;
   /** The element can turn and mirror (every element). */
   rotation: boolean;
+  /**
+   * True when mirroring the element vertically changes anything. A drawn line
+   * or arrow is symmetric about its own axis, so for them the command would do
+   * nothing: a control that does nothing is not shown (Carlo, 31-10).
+   */
+  flipVertical: boolean;
 }
 
 export interface ElementType {
@@ -68,7 +74,7 @@ export const ELEMENT_TYPES = {
     spacingKey: "image",
     toolbarSection: "image",
     word: "text",
-    capabilities: { caption: false, aspectLock: true, background: false, rotation: true },
+    capabilities: { caption: false, aspectLock: true, background: false, rotation: true, flipVertical: true },
   },
   figure: {
     kind: "figure",
@@ -80,7 +86,7 @@ export const ELEMENT_TYPES = {
     spacingKey: "figure",
     toolbarSection: "image",
     word: "text",
-    capabilities: { caption: true, aspectLock: true, background: false, rotation: true },
+    capabilities: { caption: true, aspectLock: true, background: false, rotation: true, flipVertical: true },
   },
   styled_box: {
     kind: "styled_box",
@@ -92,7 +98,7 @@ export const ELEMENT_TYPES = {
     spacingKey: "other",
     toolbarSection: "box",
     word: "text",
-    capabilities: { caption: false, aspectLock: false, background: true, rotation: true },
+    capabilities: { caption: false, aspectLock: false, background: true, rotation: true, flipVertical: true },
   },
   shape: {
     kind: "shape",
@@ -108,7 +114,7 @@ export const ELEMENT_TYPES = {
     toolbarSection: "shape",
     // Word has no shape of its own; the bitmap copy is step S5 of the chapter.
     word: "none",
-    capabilities: { caption: false, aspectLock: false, background: false, rotation: true },
+    capabilities: { caption: false, aspectLock: false, background: false, rotation: true, flipVertical: false },
   },
 } as const satisfies Record<ElementKind, ElementType>;
 

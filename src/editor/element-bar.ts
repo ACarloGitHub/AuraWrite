@@ -16,7 +16,7 @@
 
 import type { EditorView } from "prosemirror-view";
 import { getSelectedElement, removeSelectedElement, setNodeAttrs } from "./element-commands";
-import { ELEMENT_KINDS } from "./element-types";
+import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
 import { CONDITION_LABEL, isWrapping, nextCondition, textConditionOf } from "./element-condition";
 
 function el<T extends HTMLElement>(id: string): T | null {
@@ -144,5 +144,12 @@ export function syncElementBar(view: EditorView): void {
   const opacity = el<HTMLInputElement>("elem-opacity");
   if (opacity) opacity.value = String(attrs.opacity ?? 100);
   el("elem-flip-h")?.classList.toggle("image-toolbar__btn--active", !!attrs.flipH);
-  el("elem-flip-v")?.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);
+
+  // A command that cannot change anything is not shown: a line and an arrow are
+  // symmetric about their own axis, so mirroring them vertically does nothing.
+  const flipV = el("elem-flip-v");
+  if (flipV) {
+    flipV.hidden = elementTypeOf(target.node)?.capabilities.flipVertical === false;
+    flipV.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);
+  }
 }
