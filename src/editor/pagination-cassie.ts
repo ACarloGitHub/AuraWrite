@@ -33,7 +33,6 @@
 import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLine } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
-import { shapeBoxSize } from "./shape-params";
 import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth, paintedBoxOf,
   type FreeWrapBand,
@@ -366,8 +365,6 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
         return measureFigureNode(node, contentWidth);
       case "image":
         return measureImageNode(node);
-      case "shape":
-        return measureShapeNode(node);
       default:
         return assertNeverKind(element.kind);
     }
@@ -490,16 +487,6 @@ function measureImageNode(node: PMNode): BlockMetrics {
   const h = Number(node.attrs.height);
   const imageHeight = isFinite(h) && h > 0 ? h : FALLBACK_IMAGE_HEIGHT_PX;
   return { heightPx: imageHeight, lineCount: Math.ceil(imageHeight / metrics().body.linePx) };
-}
-
-/**
- * shape: the box HUGS the drawing (§6), so the footprint is the box's own
- * height - the stroke's for a line, the head's for an arrow. Rotation is a CSS
- * transform and does not change the layout box, exactly as for the photo.
- */
-function measureShapeNode(node: PMNode): BlockMetrics {
-  const box = shapeBoxSize(node.attrs as Record<string, unknown>);
-  return { heightPx: Math.max(1, box.height), lineCount: 1 };
 }
 
 /**
