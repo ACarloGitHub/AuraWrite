@@ -94,9 +94,14 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
   const merged = { ...info.node.attrs, ...patch } as Record<string, unknown>;
   const params = normalizeShapeParams(merged);
   const kindChanged = params.kind !== normalizeShapeParams(info.node.attrs as Record<string, unknown>).kind;
-  // A line's height is its stroke; a new arrow gets a head-high box instead of
-  // inheriting the line's two pixels, which would leave a flat arrow.
-  const height = params.kind === "line" ? params.strokeWidth : kindChanged ? params.headSize : merged.height;
+  // A new kind is born with its own height: a line takes its stroke's, an arrow a
+  // head-high box (inheriting the old height would leave a flat arrow), an
+  // ellipse the height it is drawn with.
+  const height = params.kind === "line"
+    ? params.strokeWidth
+    : kindChanged
+      ? defaultShapeBox(params.kind).height
+      : merged.height;
   const box = shapeBoxSize({ ...merged, height });
   // The body must fit inside the head: a number the drawing cannot honour is a
   // number the bar must not show.

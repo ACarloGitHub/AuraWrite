@@ -12,6 +12,9 @@ import { getSelectedShape, setShapeAttrs } from "./shape-commands";
 import {
   MAX_STROKE_WIDTH_PX,
   MIN_STROKE_WIDTH_PX,
+  hasBody,
+  hasHead,
+  isClosedShape,
   normalizeShapeParams,
   shapeBoxSize,
 } from "./shape-params";
@@ -114,17 +117,19 @@ export function syncShapeToolbar(view: EditorView): void {
   const stroke = el<HTMLInputElement>("shape-stroke-width");
   if (stroke) stroke.value = String(params.strokeWidth);
 
-  // Only a closed shape has an inside and a head: on a line these three controls
-  // would offer numbers that cannot be honoured.
-  const closed = params.kind === "arrow";
+  // Each control exists for the kinds that can honour it: a line has no inside
+  // and no head, an ellipse has no head and no body.
+  const closed = isClosedShape(params.kind);
+  const withHead = hasHead(params.kind);
+  const withBody = hasBody(params.kind);
   const fillField = el("shape-fill-field");
   if (fillField) fillField.hidden = !closed;
   const fillClear = el("shape-fill-clear");
   if (fillClear) fillClear.hidden = !closed;
   const headField = el("shape-head-field");
-  if (headField) headField.hidden = !closed;
+  if (headField) headField.hidden = !withHead;
   const bodyField = el("shape-body-field");
-  if (bodyField) bodyField.hidden = !closed;
+  if (bodyField) bodyField.hidden = !withBody;
   const fill = el<HTMLInputElement>("shape-fill");
   // An empty fill means "the contour's colour": the swatch shows that colour,
   // because that is what is painted.

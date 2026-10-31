@@ -10,10 +10,25 @@
 // shape with an impossible size.
 // ============================================================================
 
-/** The shapes of the first block. The other three arrive with S4. */
-export const SHAPE_KINDS = ["line", "arrow"] as const;
+/** The shapes of the first block (the curved arrow and the settings come next). */
+export const SHAPE_KINDS = ["line", "arrow", "arrow_both", "ellipse"] as const;
 
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
+
+/** The kinds that have at least one head, and so a tip to turn around. */
+export function hasHead(kind: ShapeKind): boolean {
+  return kind === "arrow" || kind === "arrow_both";
+}
+
+/** The kinds with a body rectangle behind the head. */
+export function hasBody(kind: ShapeKind): boolean {
+  return kind === "arrow" || kind === "arrow_both";
+}
+
+/** Every kind but the line is a closed outline: it has an inside to fill. */
+export function isClosedShape(kind: ShapeKind): boolean {
+  return kind !== "line";
+}
 
 export const DEFAULT_STROKE_WIDTH_PX = 2;
 export const DEFAULT_STROKE_COLOR = "#333333";
@@ -114,12 +129,16 @@ export interface ShapeBox {
  * the stroke's, always. An arrow is as tall as its head, which IS stored so the
  * box can be made taller or shorter without touching the head's length.
  */
+/** The height an ellipse is born with. */
+export const DEFAULT_ELLIPSE_HEIGHT_PX = 120;
+
 export function shapeBoxSize(attrs: Record<string, unknown> | undefined): ShapeBox {
   const a = attrs ?? {};
   const params = normalizeShapeParams(a);
   const width = clampInt(a.width, DEFAULT_SHAPE_WIDTH_PX, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   if (params.kind === "line") return { width, height: params.strokeWidth };
-  const height = clampInt(a.height, params.headSize, MIN_STROKE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+  const fallback = params.kind === "ellipse" ? DEFAULT_ELLIPSE_HEIGHT_PX : params.headSize;
+  const height = clampInt(a.height, fallback, MIN_STROKE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   return { width, height };
 }
 
@@ -128,7 +147,12 @@ export function defaultShapeBox(kind: ShapeKind): ShapeBox {
   const params = normalizeShapeParams({ shape: kind });
   return {
     width: DEFAULT_SHAPE_WIDTH_PX,
-    height: params.kind === "line" ? params.strokeWidth : params.headSize,
+    height:
+      params.kind === "line"
+        ? params.strokeWidth
+        : params.kind === "ellipse"
+          ? DEFAULT_ELLIPSE_HEIGHT_PX
+          : params.headSize,
   };
 }
 
@@ -136,15 +160,15 @@ export function defaultShapeBox(kind: ShapeKind): ShapeBox {
  * The point a shape turns around, in its own box's coordinates, or null when it
  * turns around the centre like every other element.
  *
- * The LINE turns around its centre (the shared rule). The ARROW turns around its
- * tip: the tip is where an arrow touches what it points at, so it is the point
- * that must stay put (§5, point 3). This is the one exception to L2, and it is
+ * The LINE and the ELLIPSE turn around their centre (the shared rule). A shape
+ * with a tip turns around that tip: it is where the arrow touches what it points
+ * at, so it is what must stay put (§5, point 3). This is the one exception to L2,
  * written here — one place — so the view, the screen's band and the page count
- * all turn the arrow the same way.
+ * all turn the same way.
  */
 export function shapeRotationPivot(attrs: Record<string, unknown> | undefined): { x: number; y: number } | null {
   const params = normalizeShapeParams(attrs);
-  if (params.kind !== "arrow") return null;
+  if (!hasHead(params.kind)) return null;
   const box = shapeBoxSize(attrs);
   // The drawn tip sits half a stroke inside the box, so the stroke's outline
   // does not spill over the edge: the pivot is that same point.

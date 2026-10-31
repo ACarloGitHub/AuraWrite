@@ -31,13 +31,13 @@ import {
   startRotateDrag,
   startShapePartDrag,
   type Corner,
-  type ShapeHandlePart,
 } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { floatGapPx } from "./text-obstacles";
 import { buildShapeSvg, shapePaintKey } from "./shape-paint";
 import {
   MIN_SHAPE_WIDTH_PX,
+  hasHead,
   normalizeShapeParams,
   shapeBoxSize,
   shapeRotationPivot,
@@ -45,11 +45,15 @@ import {
   type ShapeParams,
 } from "./shape-params";
 import {
+  SHAPE_PARTS,
   dragShapeBody,
+  dragShapeEdge,
   dragShapeHead,
+  dragShapeRear,
   dragShapeTip,
   shapeHandleAnchors,
   type ShapeDrag,
+  type ShapePart,
   type ShapeState,
 } from "./shape-geometry";
 import { setShapeAttrs } from "./shape-commands";
@@ -62,9 +66,9 @@ export class ShapeNodeView implements NodeView {
   dom: HTMLElement;
   private hit: HTMLElement;
   private svg: SVGSVGElement | null = null;
-  /** The shared corners (the line) and the shape's own handles (the arrow). */
+  /** The shared corners (the line only) and the shape's own corners. */
   private corners: HTMLElement[] = [];
-  private parts: Record<ShapeHandlePart, HTMLElement> | null = null;
+  private parts: Record<string, HTMLElement> | null = null;
   private rotateHandle: HTMLElement | null = null;
   private paintKey = "";
   /** Last-applied inline style values: idempotent writes, as the other views do. */
@@ -90,24 +94,33 @@ export class ShapeNodeView implements NodeView {
   private createHandles(): void {
     // The line keeps the shared engine exactly as the photo uses it.
     this.corners = createCornerHandles(this.dom, (e, corner) => this.onCornerGrab(e, corner));
-    // The arrow gets its own, on its vertices and its body.
-    this.parts = createShapeHandles(this.dom, (e, part) => this.onPartGrab(e, part));
-    // One rotation handle for both kinds; at press time it decides whether it
-    // turns around the centre (line) or around the tip (arrow).
+    // Every closed shape gets its own handles, on the corners its geometry names.
+    this.parts = createShapeHandles(this.dom, SHAPE_PARTS, (e, part) =>
+      this.onPartGrab(e, part as ShapePart),
+    );
+    // One rotation handle for every kind; at press time it decides whether it
+    // turns around the centre (line, ellipse) or around the tip (an arrow).
     this.rotateHandle = createRotateHandle(
       this.dom,
       (e) => {
-        const arrow = this.kindOf() === "arrow";
+        const withTip = hasHead(normalizeShapeParams(this.currentAttrs()).kind);
         startRotateDrag(
           this.view,
           this.getPos,
           this.dom,
           e,
-          arrow && this.parts ? { pivot: this.parts.tip, relative: true } : {},
+          withTip && this.parts ? { pivot: this.parts.tip, relative: true } : {},
         );
       },
       "Drag to rotate",
     );
+  }
+
+  /** The attributes of the node this view is showing right now. */
+  private currentAttrs(): Record<string, unknown> {
+    const pos = this.getPos();
+    const node = pos == null ? null : this.view.state.doc.nodeAt(pos);
+    return (node?.attrs ?? {}) as Record<string, unknown>;
   }
 
   /** The kind of the node this view is showing right now. */
@@ -188,30 +201,36 @@ export class ShapeNodeView implements NodeView {
     return { box: { width: w, height: h }, params: start.params };
   }
 
-  // ------------------------------------------------------------ the arrow
+  // ------------------------------------------------------- the drawn shape
 
-  private onPartGrab(e: MouseEvent, part: ShapeHandlePart): void {
+  private onPartGrab(e: MouseEvent, part: ShapePart): void {
     const pos = this.getPos();
     if (pos == null) return;
     const node = this.view.state.doc.nodeAt(pos);
     if (!node) return;
     const attrs = node.attrs as Record<string, unknown>;
     const start: ShapeState = { params: normalizeShapeParams(attrs), box: shapeBoxSize(attrs) };
-    if (start.params.kind !== "arrow") return;
+    if (start.params.kind === "line") return;
     this.selectShape();
 
-    // The body handle moves the REAR end: the shape must stay attached by its
-    // tip, so the box's own corner travels with the hand. Only a free element has
-    // a position to move (in the flow the box's corner is where the text put it).
+    // A handle can move the REAR or a SIDE: the part that must not move stays
+    // where it is, so the box's own corner travels with the hand. Only a free
+    // element has a position to move (in the flow the box's corner is where the
+    // text put it).
     const freeSpec = parseFreeSpec(attrs.free);
     const rotation = (Number(attrs.rotation) || 0) * (Math.PI / 180);
     const originLeft = parseFloat(this.dom.style.left) || 0;
     const originTop = parseFloat(this.dom.style.top) || 0;
 
-    const shiftFor = (shift: number): { sx: number; sy: number } => ({
-      sx: shift * Math.cos(rotation),
-      sy: shift * Math.sin(rotation),
-    });
+    /** The shift of the box's corner, turned onto the element's own axes. */
+    const shiftFor = (drag: ShapeDrag): { sx: number; sy: number } => {
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+      return {
+        sx: drag.shiftX * cos - drag.shiftY * sin,
+        sy: drag.shiftX * sin + drag.shiftY * cos,
+      };
+    };
 
     startShapePartDrag({
       view: this.view,
@@ -221,7 +240,7 @@ export class ShapeNodeView implements NodeView {
         const drag = this.partState(part, start, dx, dy);
         this.paintState(drag);
         if (freeSpec) {
-          const { sx, sy } = shiftFor(drag.shiftX);
+          const { sx, sy } = shiftFor(drag);
           this.dom.style.left = `${Math.round(originLeft + sx)}px`;
           this.dom.style.top = `${Math.round(originTop + sy)}px`;
         }
@@ -235,8 +254,8 @@ export class ShapeNodeView implements NodeView {
           headSize: drag.params.headSize,
           bodyHeight: drag.params.bodyHeight,
         };
-        if (freeSpec && drag.shiftX !== 0) {
-          const { sx, sy } = shiftFor(drag.shiftX);
+        if (freeSpec && (drag.shiftX !== 0 || drag.shiftY !== 0)) {
+          const { sx, sy } = shiftFor(drag);
           patch.free = {
             ...freeSpec,
             xOff: clampFreeOffset(freeSpec.xOff + sx),
@@ -249,20 +268,30 @@ export class ShapeNodeView implements NodeView {
   }
 
   /**
-   * What one part's movement means. `base` is the head's top rear corner and
-   * `mirror` its bottom one: both change the head's width, symmetrically, and
-   * the sign makes them behave the same for a hand pulling away from the axis.
+   * What one corner's movement means.
+   *
+   * `base` is the head's top rear corner and `mirror` its bottom one: both change
+   * the head's width, symmetrically, and the sign makes them behave the same for
+   * a hand pulling away from the axis. The ellipse's four extremes move one side
+   * each and leave the opposite one where it is.
    */
-  private partState(part: ShapeHandlePart, start: ShapeState, dx: number, dy: number): ShapeDrag {
+  private partState(part: ShapePart, start: ShapeState, dx: number, dy: number): ShapeDrag {
     switch (part) {
       case "tip":
         return dragShapeTip(start, dx);
+      case "rear":
+        return dragShapeRear(start, dx);
       case "base":
         return dragShapeHead(start, -dy);
       case "mirror":
         return dragShapeHead(start, dy);
       case "body":
         return dragShapeBody(start, dx, dy);
+      case "east":
+      case "west":
+      case "north":
+      case "south":
+        return dragShapeEdge(part, start, dx, dy);
     }
   }
 
@@ -329,13 +358,22 @@ export class ShapeNodeView implements NodeView {
     this.placeHandles(box, params);
   }
 
-  /** Put every handle on the point its geometry names, in the box's coordinates. */
+  /**
+   * Put every handle on the corner its geometry names, and hide the ones this
+   * kind does not have: a handle that cannot change anything is not a handle.
+   */
   private placeHandles(box: ShapeBox, params: ShapeParams): void {
     if (!this.parts) return;
     const anchors = shapeHandleAnchors(params, box);
-    for (const part of Object.keys(anchors) as ShapeHandlePart[]) {
-      const point = anchors[part];
+    for (const part of SHAPE_PARTS) {
       const el = this.parts[part];
+      if (!el) continue;
+      const point = anchors[part];
+      if (!point) {
+        el.style.display = "none";
+        continue;
+      }
+      el.style.display = "";
       el.style.left = `${Math.round(point.x)}px`;
       el.style.top = `${Math.round(point.y)}px`;
     }

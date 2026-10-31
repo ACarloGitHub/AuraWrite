@@ -282,13 +282,8 @@ export function startRotateDrag(
 }
 
 // ---------------------------------------------------------------------------
-// The drawn shape's own handles: its vertices and its body
+// The drawn shape's own handles: its corners
 // ---------------------------------------------------------------------------
-
-/** The parts of a drawn shape a pointer can reshape. */
-export const SHAPE_HANDLE_PARTS = ["tip", "base", "mirror", "body"] as const;
-
-export type ShapeHandlePart = (typeof SHAPE_HANDLE_PARTS)[number];
 
 const SHAPE_HANDLE_CLASS = "aw-shape-handle";
 
@@ -300,14 +295,16 @@ export function isShapeHandle(target: EventTarget | null): boolean {
 /**
  * Create the shape's own handles on `host`; `onGrab` gets each mousedown with the
  * part that was grabbed. Their POSITIONS are the shape's business: the view
- * places them on the vertices its geometry names.
+ * places them on the corners its geometry names, and hides the ones the current
+ * kind does not have.
  */
 export function createShapeHandles(
   host: HTMLElement,
-  onGrab: (event: MouseEvent, part: ShapeHandlePart) => void
-): Record<ShapeHandlePart, HTMLElement> {
-  const handles = {} as Record<ShapeHandlePart, HTMLElement>;
-  for (const part of SHAPE_HANDLE_PARTS) {
+  parts: readonly string[],
+  onGrab: (event: MouseEvent, part: string) => void
+): Record<string, HTMLElement> {
+  const handles: Record<string, HTMLElement> = {};
+  for (const part of parts) {
     const handle = document.createElement("div");
     handle.className = `${SHAPE_HANDLE_CLASS} ${SHAPE_HANDLE_CLASS}--${part}`;
     handle.addEventListener("mousedown", (e) => onGrab(e, part));

@@ -94,18 +94,20 @@
 }
 
 /* A line is a rectangle: its corners are its ends, and the shared engine already
-   does that. An arrow is not: its corners would be a box around it. */
+   does that. Every closed shape is not: its corners would be a box around it. */
 .aw-shape[data-aw-shape="line"] .aw-shape-handle {
   display: none !important;
 }
 
-.aw-shape[data-aw-shape="arrow"] .image-resize-handle {
+.aw-shape:not([data-aw-shape="line"]) .image-resize-handle {
   display: none !important;
 }
 
-/* ... and its turning handle sits above the TAIL, opposite the tip, because the
-   tip is the pivot and must stay where it is. */
-.aw-shape[data-aw-shape="arrow"] .aw-rotate-handle {
+/* An arrow's turning handle sits above the TAIL, opposite the tip, because the
+   tip is the pivot and must stay where it is. An ellipse turns around its
+   centre, so it keeps the shared handle above the middle. */
+.aw-shape[data-aw-shape="arrow"] .aw-rotate-handle,
+.aw-shape[data-aw-shape="arrow_both"] .aw-rotate-handle {
   left: 0;
   top: -30px;
   transform: translateX(-50%);
