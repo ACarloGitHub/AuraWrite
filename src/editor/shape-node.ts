@@ -14,16 +14,18 @@
 import type { NodeSpec } from "prosemirror-model";
 import {
   FREE_LAYOUT_ATTRS,
-  OPACITY_ATTR,
   ROTATION_FLIP_ATTRS,
+  SHARED_EFFECT_ATTRS,
   rotationFlipGetDOM,
   rotationFlipToDOM,
+  sharedEffectGetDOM,
+  sharedEffectToDOM,
 } from "./enriched-schema";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { textConditionFromMarker, textConditionMarker, textConditionOf, isWrapping } from "./element-condition";
 import { floatGapPx } from "./text-obstacles";
 import { transformStyleOf } from "./element-view";
-import { buildShapeSvg } from "./shape-paint";
+import { buildShapeSvg, shapeShadowOf } from "./shape-paint";
 import {
   DEFAULT_BODY_HEIGHT_PX,
   DEFAULT_HEAD_SIZE_PX,
@@ -69,6 +71,9 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     headSize: { default: DEFAULT_HEAD_SIZE_PX },
     // Height of the body rectangle, independent of the head's width.
     bodyHeight: { default: DEFAULT_BODY_HEIGHT_PX },
+    // Pattern of the contour ("solid" when empty), and the bend of the curve.
+    dash: { default: "" },
+    curve: { default: 0 },
     // A drawn shape is never aspect-locked: the width is its length and the
     // height is its stroke (line) or its head's width (arrow) - two free axes.
     aspectLocked: { default: false },
@@ -79,8 +84,9 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     ...FREE_LAYOUT_ATTRS,
     // U5: rotation and mirroring, like every other element.
     ...ROTATION_FLIP_ATTRS,
-    // U1: opacity is shared by every element.
-    ...OPACITY_ATTR,
+    // U1/U7: shadow and transparency are shared by every element. The shadow is
+    // drawn on the drawing itself, not on a box around it.
+    ...SHARED_EFFECT_ATTRS,
   },
   parseDOM: [
     {
@@ -98,12 +104,15 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
           fill: dom.getAttribute("data-fill") || "",
           headSize: markerNumber(dom, "data-head-size", DEFAULT_HEAD_SIZE_PX),
           bodyHeight: markerNumber(dom, "data-body-height", DEFAULT_BODY_HEIGHT_PX),
+          dash: dom.getAttribute("data-dash") || "",
+          curve: markerNumber(dom, "data-curve", NaN),
           align: oneOfAlign(dom.getAttribute("data-align")),
           wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
           opacity: markerNumber(dom, "data-opacity", 100),
           free: layout.free,
           zLevel: layout.zLevel,
           ...rotationFlipGetDOM(dom),
+          ...sharedEffectGetDOM(dom),
         };
       },
     },
@@ -134,10 +143,13 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     if (params.bodyHeight !== DEFAULT_BODY_HEIGHT_PX) {
       attrs["data-body-height"] = String(params.bodyHeight);
     }
+    if (params.dash !== "solid") attrs["data-dash"] = params.dash;
+    if (params.curve !== 0) attrs["data-curve"] = String(params.curve);
     const wrapMarker = textConditionMarker(condition);
     if (wrapMarker !== null) attrs["data-wrap"] = wrapMarker;
     Object.assign(attrs, freeLayoutToDOM(node));
     Object.assign(attrs, rotationFlipToDOM(node));
+    Object.assign(attrs, sharedEffectToDOM(node));
     const opacity = Number(node.attrs.opacity);
     if (isFinite(opacity) && opacity < 100) {
       attrs["data-opacity"] = String(Math.max(0, Math.round(opacity)));
@@ -177,6 +189,6 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     if (pivot) style.push(`transform-origin: ${pivot.x}px ${pivot.y}px`);
     attrs.style = style.join("; ");
 
-    return ["div", attrs, buildShapeSvg(params, box)];
+    return ["div", attrs, buildShapeSvg(params, box, shapeShadowOf(node.attrs as Record<string, unknown>))];
   },
 };

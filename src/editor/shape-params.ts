@@ -10,25 +10,34 @@
 // shape with an impossible size.
 // ============================================================================
 
-/** The shapes of the first block (the curved arrow and the settings come next). */
-export const SHAPE_KINDS = ["line", "arrow", "arrow_both", "ellipse"] as const;
+/** The shapes of the first block. */
+export const SHAPE_KINDS = ["line", "arrow", "arrow_both", "arrow_curve", "ellipse"] as const;
 
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
 /** The kinds that have at least one head, and so a tip to turn around. */
 export function hasHead(kind: ShapeKind): boolean {
-  return kind === "arrow" || kind === "arrow_both";
+  return kind === "arrow" || kind === "arrow_both" || kind === "arrow_curve";
 }
 
 /** The kinds with a body rectangle behind the head. */
 export function hasBody(kind: ShapeKind): boolean {
-  return kind === "arrow" || kind === "arrow_both";
+  return kind === "arrow" || kind === "arrow_both" || kind === "arrow_curve";
 }
 
 /** Every kind but the line is a closed outline: it has an inside to fill. */
 export function isClosedShape(kind: ShapeKind): boolean {
   return kind !== "line";
 }
+
+/** The stroke's pattern. */
+export const SHAPE_DASHES = ["solid", "dashed", "dotted"] as const;
+export type ShapeDash = (typeof SHAPE_DASHES)[number];
+export const DEFAULT_DASH: ShapeDash = "solid";
+
+/** Bend of the curved arrow, in px; positive bulges upwards. */
+export const DEFAULT_CURVE_PX = 26;
+export const MAX_CURVE_PX = 400;
 
 export const DEFAULT_STROKE_WIDTH_PX = 2;
 export const DEFAULT_STROKE_COLOR = "#333333";
@@ -82,6 +91,10 @@ export interface ShapeParams {
   headSize: number;
   /** Height of the body rectangle, in px. */
   bodyHeight: number;
+  /** Pattern of the contour. */
+  dash: ShapeDash;
+  /** Bend of the curved arrow, in px; positive bulges upwards. */
+  curve: number;
 }
 
 /** True when the value names one of the shapes this version can draw. */
@@ -105,6 +118,9 @@ export function normalizeShapeParams(attrs: Record<string, unknown> | undefined)
   const a = attrs ?? {};
   const color = typeof a.strokeColor === "string" ? a.strokeColor.trim() : "";
   const fill = typeof a.fill === "string" ? a.fill.trim() : "";
+  const dash = (SHAPE_DASHES as readonly string[]).includes(String(a.dash))
+    ? (a.dash as ShapeDash)
+    : DEFAULT_DASH;
   return {
     kind: normalizeShapeKind(a.shape),
     strokeWidth: clampInt(a.strokeWidth, DEFAULT_STROKE_WIDTH_PX, MIN_STROKE_WIDTH_PX, MAX_STROKE_WIDTH_PX),
@@ -112,6 +128,8 @@ export function normalizeShapeParams(attrs: Record<string, unknown> | undefined)
     fill,
     headSize: clampInt(a.headSize, DEFAULT_HEAD_SIZE_PX, MIN_HEAD_SIZE_PX, MAX_HEAD_SIZE_PX),
     bodyHeight: clampInt(a.bodyHeight, DEFAULT_BODY_HEIGHT_PX, MIN_BODY_HEIGHT_PX, MAX_SHAPE_WIDTH_PX),
+    dash,
+    curve: clampInt(a.curve, DEFAULT_CURVE_PX, -MAX_CURVE_PX, MAX_CURVE_PX),
   };
 }
 
@@ -137,9 +155,19 @@ export function shapeBoxSize(attrs: Record<string, unknown> | undefined): ShapeB
   const params = normalizeShapeParams(a);
   const width = clampInt(a.width, DEFAULT_SHAPE_WIDTH_PX, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   if (params.kind === "line") return { width, height: params.strokeWidth };
-  const fallback = params.kind === "ellipse" ? DEFAULT_ELLIPSE_HEIGHT_PX : params.headSize;
-  const height = clampInt(a.height, fallback, MIN_STROKE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+  const height = clampInt(a.height, defaultHeightOf(params), MIN_STROKE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   return { width, height };
+}
+
+/**
+ * The height a kind needs at least: an ellipse is drawn in its box, an arrow is
+ * as tall as its head, and a curved arrow is as tall as its head PLUS the room
+ * the bend needs above it.
+ */
+function defaultHeightOf(params: ShapeParams): number {
+  if (params.kind === "ellipse") return DEFAULT_ELLIPSE_HEIGHT_PX;
+  if (params.kind === "arrow_curve") return params.headSize + Math.abs(params.curve);
+  return params.headSize;
 }
 
 /** The box a shape is born with, per kind. */
@@ -147,12 +175,7 @@ export function defaultShapeBox(kind: ShapeKind): ShapeBox {
   const params = normalizeShapeParams({ shape: kind });
   return {
     width: DEFAULT_SHAPE_WIDTH_PX,
-    height:
-      params.kind === "line"
-        ? params.strokeWidth
-        : params.kind === "ellipse"
-          ? DEFAULT_ELLIPSE_HEIGHT_PX
-          : params.headSize,
+    height: params.kind === "line" ? params.strokeWidth : defaultHeightOf(params),
   };
 }
 

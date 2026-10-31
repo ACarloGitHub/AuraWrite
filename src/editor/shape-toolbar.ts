@@ -37,6 +37,18 @@ export function setupShapeToolbar(view: EditorView): void {
     void setShapeAttrs(view, { shape: kind.value });
   });
 
+  const dash = el<HTMLSelectElement>("shape-dash");
+  dash?.addEventListener("change", () => {
+    void setShapeAttrs(view, { dash: dash.value });
+  });
+
+  const curve = el<HTMLInputElement>("shape-curve");
+  curve?.addEventListener("change", () => {
+    const value = intOrNaN(curve.value);
+    if (isNaN(value)) return;
+    void setShapeAttrs(view, { curve: value });
+  });
+
   const width = el<HTMLInputElement>("shape-width");
   width?.addEventListener("change", () => {
     const value = intOrNaN(width.value);
@@ -83,6 +95,12 @@ export function setupShapeToolbar(view: EditorView): void {
     void setShapeAttrs(view, { headSize: value });
   });
 
+  el("shape-shadow")?.addEventListener("click", () => {
+    const info = getSelectedShape(view);
+    if (!info) return;
+    void setShapeAttrs(view, { shadowEnabled: !info.node.attrs.shadowEnabled });
+  });
+
   const bodyHeight = el<HTMLInputElement>("shape-body-height");
   bodyHeight?.addEventListener("change", () => {
     const value = intOrNaN(bodyHeight.value);
@@ -105,12 +123,21 @@ export function syncShapeToolbar(view: EditorView): void {
   const width = el<HTMLInputElement>("shape-width");
   if (width) width.value = String(box.width);
 
-  // A line's height IS its stroke: there is nothing to type, so the field goes
-  // away instead of offering a number that cannot be honoured.
+  // A line's height IS its stroke, and a curved arrow's is its head plus the
+  // bend: there is nothing to type in either case.
+  const heightEditable = params.kind !== "line" && params.kind !== "arrow_curve";
   const heightField = el("shape-height-field");
-  if (heightField) heightField.hidden = params.kind === "line";
+  if (heightField) heightField.hidden = !heightEditable;
   const height = el<HTMLInputElement>("shape-height");
-  if (height) height.value = params.kind === "line" ? "" : String(box.height);
+  if (height) height.value = heightEditable ? String(box.height) : "";
+
+  const dash = el<HTMLSelectElement>("shape-dash");
+  if (dash) dash.value = params.dash;
+
+  const curveField = el("shape-curve-field");
+  if (curveField) curveField.hidden = params.kind !== "arrow_curve";
+  const curve = el<HTMLInputElement>("shape-curve");
+  if (curve) curve.value = params.kind === "arrow_curve" ? String(params.curve) : "";
 
   const color = el<HTMLInputElement>("shape-stroke-color");
   if (color) color.value = params.strokeColor;
@@ -138,4 +165,5 @@ export function syncShapeToolbar(view: EditorView): void {
   if (head) head.value = closed ? String(params.headSize) : "";
   const body = el<HTMLInputElement>("shape-body-height");
   if (body) body.value = closed ? String(params.bodyHeight) : "";
+  el("shape-shadow")?.classList.toggle("image-toolbar__btn--active", !!attrs.shadowEnabled);
 }

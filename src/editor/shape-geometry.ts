@@ -18,6 +18,7 @@
 // ============================================================================
 
 import {
+  MAX_CURVE_PX,
   MAX_SHAPE_WIDTH_PX,
   MIN_BODY_HEIGHT_PX,
   MIN_HEAD_SIZE_PX,
@@ -39,6 +40,7 @@ export const SHAPE_PARTS = [
   "base",
   "mirror",
   "body",
+  "bend",
   "scale",
   "east",
   "west",
@@ -80,6 +82,37 @@ function headLengthOf(params: ShapeParams, box: ShapeBox, inset: number): number
   return clamp(params.headSize, MIN_HEAD_SIZE_PX, Math.min(longest, MAX_SHAPE_WIDTH_PX));
 }
 
+/**
+ * The head's own height and the line it is centred on, in the box.
+ *
+ * For the straight shapes the head is as tall as the box. For the curved one the
+ * room above it belongs to the bend, so the head is what is left and it sits at
+ * the bottom (bend upwards) or at the top (bend downwards).
+ */
+function headOf(params: ShapeParams, box: ShapeBox, inset: number): { height: number; centreY: number } {
+  if (params.kind !== "arrow_curve") {
+    return { height: Math.max(2, box.height - inset * 2), centreY: box.height / 2 };
+  }
+  const bend = Math.abs(params.curve);
+  const headHeight = Math.max(6, box.height - inset * 2 - bend);
+  const centreY = params.curve >= 0 ? box.height - inset - headHeight / 2 : inset + headHeight / 2;
+  return { height: headHeight, centreY };
+}
+
+/** One point of the curved centreline, as a quadratic between the two ends. */
+function curvePoint(params: ShapeParams, box: ShapeBox, inset: number, t: number): ShapePoint {
+  const head = headOf(params, box, inset);
+  const baseX = box.width - inset - headLengthOf(params, box, inset);
+  const x0 = inset;
+  const controlX = (x0 + baseX) / 2;
+  const controlY = head.centreY - 2 * params.curve;
+  const one = 1 - t;
+  return {
+    x: one * one * x0 + 2 * one * t * controlX + t * t * baseX,
+    y: one * one * head.centreY + 2 * one * t * controlY + t * t * head.centreY,
+  };
+}
+
 /** The points of one shape inside its own box. */
 export function shapeGeometry(params: ShapeParams, box: ShapeBox): ShapeGeometry {
   const width = Math.max(1, box.width);
@@ -107,6 +140,39 @@ export function shapeGeometry(params: ShapeParams, box: ShapeBox): ShapeGeometry
 
   const headLength = headLengthOf(params, { width, height }, inset);
   const half = bodyHalfHeight(params, { width, height }, inset);
+
+  if (params.kind === "arrow_curve") {
+    // A ribbon around the curved centreline, closed by the head.
+    const head = headOf(params, { width, height }, inset);
+    const steps = 26;
+    const top: [number, number][] = [];
+    const bottom: [number, number][] = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const point = curvePoint(params, { width, height }, inset, t);
+      const ahead = curvePoint(params, { width, height }, inset, Math.min(1, t + 0.01));
+      const behind = curvePoint(params, { width, height }, inset, Math.max(0, t - 0.01));
+      const dx = ahead.x - behind.x;
+      const dy = ahead.y - behind.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      top.push([point.x + nx * half, point.y + ny * half]);
+      bottom.push([point.x - nx * half, point.y - ny * half]);
+    }
+    const tipX = width - inset;
+    const baseX = tipX - headLength;
+    return {
+      shaft: null,
+      outline: [
+        ...top,
+        [baseX, head.centreY - head.height / 2],
+        [tipX, head.centreY],
+        [baseX, head.centreY + head.height / 2],
+        ...bottom.reverse(),
+      ],
+    };
+  }
 
   if (params.kind === "arrow") {
     const tipX = width - inset;
@@ -179,6 +245,17 @@ export function shapeHandleAnchors(params: ShapeParams, box: ShapeBox): ShapeAnc
       tip: { x: tipX, y: midY },
       base: { x: baseX, y: inset },
       body: { x: width / 2, y: midY - half },
+    };
+  }
+  if (params.kind === "arrow_curve") {
+    const head = headOf(params, { width, height }, inset);
+    const peak = curvePoint(params, { width, height }, inset, 0.5);
+    return {
+      tip: { x: tipX, y: head.centreY },
+      base: { x: baseX, y: head.centreY - head.height / 2 },
+      mirror: { x: baseX, y: head.centreY + head.height / 2 },
+      body: { x: inset, y: head.centreY - half },
+      bend: peak,
     };
   }
   return {
@@ -350,5 +427,25 @@ export function dragShapeScale(start: ShapeState, dx: number, dy: number): Shape
     params: start.params,
     shiftX: (start.box.width - width) / 2,
     shiftY: (start.box.height - height) / 2,
+  };
+}
+
+/** The BEND of a curved arrow: the box grows by what the bend needs. */
+export function dragShapeBend(start: ShapeState, dy: number): ShapeDrag {
+  if (start.params.kind !== "arrow_curve") {
+    return { ...start, shiftX: 0, shiftY: 0 };
+  }
+  const inset = shapeStrokeInset(start.params, start.box);
+  const headHeight = Math.max(6, start.box.height - 2 * inset - Math.abs(start.params.curve));
+  const curve = clamp(Math.round(start.params.curve - dy), -MAX_CURVE_PX, MAX_CURVE_PX);
+  const height = headHeight + Math.abs(curve) + 2 * inset;
+  // Bending upwards grows the box at the top, so its corner moves up with it and
+  // the head stays where it is; bending downwards grows at the bottom.
+  const shiftY = curve >= 0 ? -(height - start.box.height) : 0;
+  return {
+    box: { width: start.box.width, height: Math.round(height) },
+    params: { ...start.params, curve },
+    shiftX: 0,
+    shiftY,
   };
 }

@@ -34,7 +34,7 @@ import {
 } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { floatGapPx } from "./text-obstacles";
-import { buildShapeSvg, shapePaintKey } from "./shape-paint";
+import { buildShapeSvg, shapePaintKey, shapeShadowOf } from "./shape-paint";
 import {
   MIN_SHAPE_WIDTH_PX,
   hasHead,
@@ -46,6 +46,7 @@ import {
 } from "./shape-params";
 import {
   SHAPE_PARTS,
+  dragShapeBend,
   dragShapeBody,
   dragShapeEdge,
   dragShapeHead,
@@ -285,6 +286,8 @@ export class ShapeNodeView implements NodeView {
         return dragShapeHead(start, dy);
       case "body":
         return dragShapeBody(start, dx, dy);
+      case "bend":
+        return dragShapeBend(start, dy);
       case "scale":
         return dragShapeScale(start, dx, dy);
       case "east":
@@ -390,11 +393,12 @@ export class ShapeNodeView implements NodeView {
 
   /** Build (or rebuild) the drawing for one box and one set of parameters. */
   private repaint(box: ShapeBox, params: ShapeParams): void {
-    const key = shapePaintKey(params, box);
+    const shadow = shapeShadowOf(this.currentAttrs());
+    const key = shapePaintKey(params, box, shadow);
     if (key === this.paintKey && this.svg) return;
     this.paintKey = key;
     this.svg?.remove();
-    this.svg = buildShapeSvg(params, box);
+    this.svg = buildShapeSvg(params, box, shadow);
     this.dom.insertBefore(this.svg, this.hit);
   }
 
