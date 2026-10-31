@@ -1,11 +1,10 @@
 // ============================================================================
-// Element commands — shared lookup and patch helpers for the block elements
-// (image, figure, styled_box).
+// Element commands — shared lookup, patch and delete helpers for the block
+// elements (image, figure, styled_box, shape).
 //
-// The three command modules had grown the same two functions each (find the
-// selected/enclosing element, patch its attrs) plus the same "host paragraph"
-// rule at insertion. This module is the ONE definition; corrections land once.
-// Structural extraction only, identical behaviour.
+// The command modules had grown the same functions each (find the selected or
+// enclosing element, patch its attrs, delete it, and the same "host paragraph"
+// rule at insertion). This module is the ONE definition; corrections land once.
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
@@ -64,4 +63,22 @@ export function ensureParagraphAfter(tr: Transaction, endPos: number, schema: Sc
     return tr.insert(endPos, paragraph.create());
   }
   return tr;
+}
+
+/**
+ * Delete the selected element, whatever kind it is. One command for the ONE
+ * delete button of the bar: the element is removed with everything it carries,
+ * and the document never stays without a single text block to put a caret in.
+ */
+export function removeSelectedElement(view: EditorView, names: readonly string[]): boolean {
+  const info = getSelectedElement(view, names);
+  if (!info) return false;
+  const { paragraph } = view.state.schema.nodes;
+  let tr = view.state.tr.delete(info.pos, info.pos + info.node.nodeSize);
+  if (tr.doc.childCount === 0 && paragraph) {
+    tr = tr.insert(0, paragraph.create());
+  }
+  view.dispatch(tr);
+  view.focus();
+  return true;
 }

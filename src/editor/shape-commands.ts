@@ -104,17 +104,3 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
     height: box.height,
   });
 }
-
-/** Remove the selected shape; the document never stays empty of text. */
-export function removeSelectedShape(view: EditorView): boolean {
-  const info = getSelectedShape(view);
-  if (!info) return false;
-  const { paragraph } = view.state.schema.nodes;
-  let tr = view.state.tr.delete(info.pos, info.pos + info.node.nodeSize);
-  if (tr.doc.childCount === 0 && paragraph) {
-    tr = tr.insert(0, paragraph.create());
-  }
-  view.dispatch(tr);
-  view.focus();
-  return true;
-}

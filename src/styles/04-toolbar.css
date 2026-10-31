@@ -547,16 +547,18 @@ body.reader-mode .toolbar {
   display: flex;
 }
 
-/* U4: the image, box and shape sections are transparent wrappers, so their
-   controls stay direct flex items of the ONE bar; [hidden] still removes the
-   section. A section left as a plain inline span would wrap its controls in a
-   single box inside the bar and break the layout (chapter A, S1). */
+/* U4: the common block and the per-type sections are transparent wrappers, so
+   their controls stay direct flex items of the ONE bar; [hidden] still removes
+   the block. A wrapper left as a plain inline span would box its controls inside
+   the bar and break the layout (chapter A, S1). */
+#element-common-controls,
 #image-controls,
 #box-controls,
 #shape-controls {
   display: contents;
 }
 
+#element-common-controls[hidden],
 #image-controls[hidden],
 #box-controls[hidden],
 #shape-controls[hidden] {

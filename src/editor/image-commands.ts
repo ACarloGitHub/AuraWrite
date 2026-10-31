@@ -4,7 +4,6 @@ import { NodeSelection } from "prosemirror-state";
 import { uploadImageFile, resolveImageSrc, type UploadedImage } from "./image-uploader";
 import { showErrorToast } from "../error-boundary";
 import { ensureParagraphAfter, getSelectedElement, setNodeAttrs } from "./element-commands";
-import type { TextCondition } from "./element-condition";
 
 export function createImageNode(
   view: EditorView,
@@ -140,55 +139,6 @@ export async function getSelectedImage(view: EditorView): Promise<SelectedImageI
   return { pos: info.pos, node: info.node, resolvedSrc };
 }
 
-export async function setImageAlignment(
-  view: EditorView,
-  align: "left" | "center" | "right"
-): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  // Contract §2.10-§2.11: wrapping belongs to the element, not to its
-  // alignment. Centring used to switch wrapping off behind the user's back,
-  // which silently destroyed a choice they had made on purpose.
-  return setNodeAttrs(view, info.pos, { ...info.node.attrs, align });
-}
-
-/** Set the text condition (wrapped / unwrapped / overlap) of the element. */
-export async function setImageCondition(
-  view: EditorView,
-  condition: TextCondition
-): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  return setNodeAttrs(view, info.pos, { ...info.node.attrs, wrap: condition });
-}
-
-export async function setImageRotation(
-  view: EditorView,
-  rotation: number
-): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  return setNodeAttrs(view, info.pos, { ...info.node.attrs, rotation });
-}
-
-export async function setImageFlipH(
-  view: EditorView,
-  flipH: boolean
-): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  return setNodeAttrs(view, info.pos, { ...info.node.attrs, flipH });
-}
-
-export async function setImageFlipV(
-  view: EditorView,
-  flipV: boolean
-): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  return setNodeAttrs(view, info.pos, { ...info.node.attrs, flipV });
-}
-
 export async function setImageAspectLocked(
   view: EditorView,
   aspectLocked: boolean
@@ -250,12 +200,4 @@ export async function setImageStyleAttrs(
   const info = await getSelectedImage(view);
   if (!info) return false;
   return setNodeAttrs(view, info.pos, { ...info.node.attrs, ...patch });
-}
-
-export async function removeImage(view: EditorView): Promise<boolean> {
-  const info = await getSelectedImage(view);
-  if (!info) return false;
-  const tr = view.state.tr.delete(info.pos, info.pos + info.node.nodeSize);
-  view.dispatch(tr);
-  return true;
 }

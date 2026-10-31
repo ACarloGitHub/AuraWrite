@@ -84,18 +84,3 @@ export function setBoxAttrs(view: EditorView, patch: Record<string, unknown>): b
   if (!info) return false;
   return setNodeAttrs(view, info.pos, { ...info.node.attrs, ...patch });
 }
-
-/** Remove the selected/enclosing box; keep the caret where it was. */
-export function removeSelectedBox(view: EditorView): boolean {
-  const info = getSelectedBox(view);
-  if (!info) return false;
-  const { paragraph } = view.state.schema.nodes;
-  let tr = view.state.tr.delete(info.pos, info.pos + info.node.nodeSize);
-  // Never leave an empty document: host a paragraph where the box was.
-  if (tr.doc.childCount === 0 && paragraph) {
-    tr = tr.insert(0, paragraph.create());
-  }
-  view.dispatch(tr);
-  view.focus();
-  return true;
-}

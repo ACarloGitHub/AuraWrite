@@ -65,3 +65,22 @@ export function textConditionFromMarker(value: string | null | undefined): TextC
   if (value === null || value === undefined) return "overlap";
   return value === "unwrapped" ? "unwrapped" : "wrapped";
 }
+
+/**
+ * The names the ONE secondary bar shows for the three conditions, and the order
+ * its single button cycles through them.
+ *
+ * They live here because that bar is shared by every element: one list per
+ * section (image, box, shape) was three copies of the same words, which is
+ * exactly the duplication the element engine exists to avoid.
+ */
+export const CONDITION_LABEL: Record<TextCondition, string> = {
+  wrapped: "Wrapped",
+  unwrapped: "Unwrapped",
+  overlap: "Overlap",
+};
+
+/** The condition after this one, in the bar's one order. */
+export function nextCondition(condition: TextCondition): TextCondition {
+  return CONDITIONS[(CONDITIONS.indexOf(condition) + 1) % CONDITIONS.length];
+}

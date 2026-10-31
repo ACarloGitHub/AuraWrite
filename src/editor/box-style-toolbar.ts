@@ -1,20 +1,21 @@
 // ============================================================================
-// Box style toolbar — Phase 1 (G2) wiring for the contextual styled-box
-// panel (#box-toolbar). Loaded dynamically from toolbar.ts (thin hook).
+// Box style toolbar — Phase 1 (G2) wiring for the box's OWN commands.
 //
 // Two exported functions, mirroring the image-toolbar pattern:
 //   - setupBoxToolbar(view): bind listeners once at startup;
-//   - syncBoxToolbar(view): show/hide + refresh values on selection change
-//     (called from updateImageToolbar on every transaction).
+//   - syncBoxToolbar(view): refresh values on selection change (called from
+//     `syncSecondaryToolbar` on every transaction).
 //
-// Selection/drag/resize belong to the node view (box-node-view.ts); this
-// module only drives the panel. Reuses .image-toolbar* classes so the look
-// stays identical to the image bar without new CSS families.
+// Free, alignment, the text condition, rotation, mirroring, opacity and delete
+// are NOT here: they are the shared block of `element-bar.ts`, shown for every
+// element. This module owns what only a box has — variant, colours, border,
+// radius, width, shadow. Selection/drag/resize belong to the node view
+// (box-node-view.ts); reuses the `.image-toolbar*` classes so the look stays
+// identical without new CSS families.
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
-import { getSelectedBox, setBoxAttrs, removeSelectedBox } from "./box-commands";
-import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
+import { getSelectedBox, setBoxAttrs } from "./box-commands";
 import {
   DEFAULT_BOX_STYLE,
   NOTE_PRESET,
@@ -30,42 +31,12 @@ function parseIntOrNaN(v: string): number {
   return parseInt(v, 10);
 }
 
-// U3: the one button cycles through the three text conditions, exactly as the
-// image bar does (same order, same labels).
-const CONDITION_ORDER: TextCondition[] = ["wrapped", "unwrapped", "overlap"];
-const CONDITION_LABEL: Record<TextCondition, string> = {
-  wrapped: "Wrapped",
-  unwrapped: "Unwrapped",
-  overlap: "Overlap",
-};
-
-function nextCondition(condition: TextCondition): TextCondition {
-  return CONDITION_ORDER[(CONDITION_ORDER.indexOf(condition) + 1) % CONDITION_ORDER.length];
-}
-
-/** Bind the box panel controls once. */
+/** Bind the box's own controls once. */
 export function setupBoxToolbar(view: EditorView): void {
   const bar = el("box-controls");
   if (!bar) return;
 
-  // Keep native controls interactive while preventing editor focus loss
-  // (same protection as the image toolbar).
-  bar.addEventListener("mousedown", (e) => {
-    const tag = (e.target as HTMLElement).tagName;
-    if (tag === "INPUT" || tag === "SELECT") return;
-    e.preventDefault();
-  });
-  bar.addEventListener("keydown", (e) => {
-    const tag = (e.target as HTMLElement).tagName;
-    if (tag === "INPUT" || tag === "SELECT") {
-      e.stopPropagation();
-    }
-  });
-
   const variant = el<HTMLSelectElement>("box-variant");
-  const alignLeft = el("box-align-left");
-  const alignCenter = el("box-align-center");
-  const alignRight = el("box-align-right");
   const bg = el<HTMLInputElement>("box-bg");
   const bgClear = el("box-bg-clear");
   const borderStyle = el<HTMLSelectElement>("box-border-style");
@@ -73,7 +44,6 @@ export function setupBoxToolbar(view: EditorView): void {
   const borderColor = el<HTMLInputElement>("box-border-color");
   const radius = el<HTMLInputElement>("box-radius");
   const width = el<HTMLInputElement>("box-width");
-  const deleteBtn = el("box-delete");
 
   // Variant switch applies the FULL preset (background, border, radius,
   // width) merged over the defaults and normalized — not just the variant
@@ -86,49 +56,6 @@ export function setupBoxToolbar(view: EditorView): void {
       ? normalizeBoxStyle(info.node.attrs as Record<string, unknown>)
       : null;
     void setBoxAttrs(view, { ...style, align: current ? current.align : style.align });
-  });
-
-  alignLeft?.addEventListener("click", () => void setBoxAttrs(view, { align: "left" }));
-  alignCenter?.addEventListener("click", () => void setBoxAttrs(view, { align: "center" }));
-  alignRight?.addEventListener("click", () => void setBoxAttrs(view, { align: "right" }));
-
-  // U3: same condition command as the image bar, via the shared element state.
-  el("box-condition")?.addEventListener("click", () => {
-    const info = getSelectedBox(view);
-    if (!info) return;
-    void setBoxAttrs(view, { wrap: nextCondition(textConditionOf(info.node)) });
-  });
-
-  // U5: rotation, mirroring and the single Opacity command.
-  const rotation = el<HTMLInputElement>("box-rotation");
-  rotation?.addEventListener("change", () => {
-    const v = parseIntOrNaN(rotation.value);
-    if (isNaN(v)) return;
-    void setBoxAttrs(view, { rotation: (((v % 360) + 360) % 360) });
-  });
-  const rotateBy = (delta: number): void => {
-    const info = getSelectedBox(view);
-    if (!info) return;
-    const current = Number(info.node.attrs.rotation) || 0;
-    void setBoxAttrs(view, { rotation: ((((current + delta) % 360) + 360) % 360) });
-  };
-  el("box-rotate-left")?.addEventListener("click", () => rotateBy(-90));
-  el("box-rotate-right")?.addEventListener("click", () => rotateBy(90));
-  el("box-flip-h")?.addEventListener("click", () => {
-    const info = getSelectedBox(view);
-    if (!info) return;
-    void setBoxAttrs(view, { flipH: !info.node.attrs.flipH });
-  });
-  el("box-flip-v")?.addEventListener("click", () => {
-    const info = getSelectedBox(view);
-    if (!info) return;
-    void setBoxAttrs(view, { flipV: !info.node.attrs.flipV });
-  });
-  const opacity = el<HTMLInputElement>("box-opacity");
-  opacity?.addEventListener("change", () => {
-    const v = parseIntOrNaN(opacity.value);
-    if (isNaN(v)) return;
-    void setBoxAttrs(view, { opacity: Math.max(0, Math.min(100, v)) });
   });
 
   // The same shadow commands as the image bar, on the shared effect attrs.
@@ -209,20 +136,9 @@ export function setupBoxToolbar(view: EditorView): void {
     // Empty field = full column (null).
     void setBoxAttrs(view, { widthPx: isNaN(v) || v < 60 ? null : v });
   });
-
-  deleteBtn?.addEventListener("click", () => {
-    removeSelectedBox(view);
-  });
-
-  // F3.a: free / back into the flow. The same command the image bar uses, so
-  // every free-capable element behaves identically.
-  el("box-free")?.addEventListener("click", async () => {
-    const { toggleElementFree } = await import("./free-commands");
-    toggleElementFree(view);
-  });
 }
 
-/** Show/hide the box panel and refresh its values for the current selection. */
+/** Refresh the box's own controls for the current selection. */
 export function syncBoxToolbar(view: EditorView): void {
   const info = getSelectedBox(view);
   if (!info) {
@@ -241,39 +157,6 @@ export function syncBoxToolbar(view: EditorView): void {
 
   const variant = el<HTMLSelectElement>("box-variant");
   if (variant) variant.value = a.variant;
-
-  const alignButtons: Record<string, HTMLElement | null> = {
-    left: el("box-align-left"),
-    center: el("box-align-center"),
-    right: el("box-align-right"),
-  };
-  for (const [value, btn] of Object.entries(alignButtons)) {
-    btn?.classList.toggle("image-toolbar__btn--active", a.align === value);
-  }
-  // In Free the horizontal is decided by the mouse: hide Left/Center/Right.
-  const isFree = !!info.node.attrs.free;
-  for (const btn of Object.values(alignButtons)) {
-    if (btn) btn.hidden = isFree;
-  }
-  const alignSeparator = el("box-align-separator");
-  if (alignSeparator) alignSeparator.hidden = isFree;
-
-  // U3: show the current text condition (same wording as the image bar).
-  const condition = textConditionOf(info.node);
-  const conditionBtn = el<HTMLButtonElement>("box-condition");
-  if (conditionBtn) {
-    conditionBtn.textContent = CONDITION_LABEL[condition];
-    conditionBtn.title = `Text around this element: ${CONDITION_LABEL[condition]}`;
-    conditionBtn.classList.toggle("image-toolbar__btn--active", isWrapping(condition));
-  }
-
-  // U5: rotation, mirroring and opacity values.
-  const rotation = el<HTMLInputElement>("box-rotation");
-  if (rotation) rotation.value = String(Number(info.node.attrs.rotation) || 0);
-  const opacity = el<HTMLInputElement>("box-opacity");
-  if (opacity) opacity.value = String(info.node.attrs.opacity ?? 100);
-  el("box-flip-h")?.classList.toggle("image-toolbar__btn--active", !!info.node.attrs.flipH);
-  el("box-flip-v")?.classList.toggle("image-toolbar__btn--active", !!info.node.attrs.flipV);
 
   // The same shadow commands as the image bar: state and values from the node.
   const shadowEnabled = !!info.node.attrs.shadowEnabled;
@@ -310,16 +193,4 @@ export function syncBoxToolbar(view: EditorView): void {
 
   const width = el<HTMLInputElement>("box-width");
   if (width) width.value = a.widthPx != null ? String(a.widthPx) : "";
-
-  // F3.a: the free button always reads as the action it performs.
-  const freeBtn = el<HTMLButtonElement>("box-free");
-  if (freeBtn) {
-    const free = !!info.node.attrs.free;
-    // The button shows the element's CURRENT state, not the action.
-    freeBtn.textContent = free ? "Free" : "In flow";
-    freeBtn.title = free
-      ? "Put this box back between the paragraphs"
-      : "Take this box out of the text flow";
-    freeBtn.classList.toggle("image-toolbar__btn--active", free);
-  }
 }

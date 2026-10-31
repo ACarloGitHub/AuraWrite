@@ -316,30 +316,35 @@
         <button id="find-close" class="find-bar__btn" title="Close (Escape)">✕</button>
       </div>
       <div id="image-toolbar" class="image-toolbar">
+        <!-- THE COMMON COMMANDS: one copy for every element (element-bar.ts).
+             Each section below keeps only the commands that are its own. -->
+        <span id="element-common-controls" hidden>
+        <button id="elem-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
+        <div class="image-toolbar__separator"></div>
+        <button id="elem-align-left" class="image-toolbar__btn" title="Align Left">Left</button>
+        <button id="elem-align-center" class="image-toolbar__btn image-toolbar__btn--active" title="Align Center">Center</button>
+        <button id="elem-align-right" class="image-toolbar__btn" title="Align Right">Right</button>
+        <div id="elem-align-separator" class="image-toolbar__separator"></div>
+        <button id="elem-condition" class="image-toolbar__btn" title="Text around this element">Wrapped</button>
+        <div class="image-toolbar__separator"></div>
+        <label class="image-toolbar__field" title="Rotation in degrees">Rot <input id="elem-rotation" type="number" min="0" max="360" step="15" value="" placeholder="deg" /></label>
+        <button id="elem-rotate-left" class="image-toolbar__btn" title="Rotate Left 90°">↺90</button>
+        <button id="elem-rotate-right" class="image-toolbar__btn" title="Rotate Right 90°">↻90</button>
+        <div class="image-toolbar__separator"></div>
+        <button id="elem-flip-h" class="image-toolbar__btn" title="Flip Horizontal">↔</button>
+        <button id="elem-flip-v" class="image-toolbar__btn" title="Flip Vertical">↕</button>
+        <label class="image-toolbar__field" title="Opacity percent (whole element)">Opa <input id="elem-opacity" type="number" min="0" max="100" step="5" value="" placeholder="100" /></label>
+        <div class="image-toolbar__separator"></div>
+        <button id="elem-delete" class="image-toolbar__btn" title="Delete">🗑</button>
+        <div class="image-toolbar__separator"></div>
+        </span>
         <span id="image-controls">
-        <!-- F3.a: free distribution first, then the horizontal alignment -->
-        <button id="img-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
-        <div id="img-free-separator" class="image-toolbar__separator"></div>
-        <button id="img-align-left" class="image-toolbar__btn" title="Align Left">Left</button>
-        <button id="img-align-center" class="image-toolbar__btn image-toolbar__btn--active" title="Align Center">Center</button>
-        <button id="img-align-right" class="image-toolbar__btn" title="Align Right">Right</button>
-        <div class="image-toolbar__separator"></div>
-        <button id="img-toggle-wrap" class="image-toolbar__btn" title="Toggle Text Wrap">Wrap</button>
-        <div class="image-toolbar__separator"></div>
         <label class="image-toolbar__field" title="Image width in pixels">W <input id="img-width" type="number" min="20" step="10" value="" placeholder="px" /></label>
         <label class="image-toolbar__field" title="Image height in pixels">H <input id="img-height" type="number" min="20" step="10" value="" placeholder="px" /></label>
         <label id="img-x-field" class="image-toolbar__field" title="Horizontal position in pixels from the left of the text column (Free only)" hidden>X <input id="img-x" type="number" step="1" value="" placeholder="px" /></label>
         <label id="img-y-field" class="image-toolbar__field" title="Vertical position in pixels below the anchor paragraph (Free only)" hidden>Y <input id="img-y" type="number" step="1" value="" placeholder="px" /></label>
         <div class="image-toolbar__separator"></div>
-        <label class="image-toolbar__field" title="Rotation in degrees">Rot <input id="img-rotation" type="number" min="0" max="360" step="15" value="" placeholder="deg" /></label>
-        <button id="img-rotate-left" class="image-toolbar__btn" title="Rotate Left 90°">↺90</button>
-        <button id="img-rotate-right" class="image-toolbar__btn" title="Rotate Right 90°">↻90</button>
-        <div class="image-toolbar__separator"></div>
-        <button id="img-flip-h" class="image-toolbar__btn" title="Flip Horizontal">↔</button>
-        <button id="img-flip-v" class="image-toolbar__btn" title="Flip Vertical">↕</button>
-        <div class="image-toolbar__separator"></div>
         <button id="img-aspect-lock" class="image-toolbar__btn image-toolbar__btn--active" title="Lock Aspect Ratio">🔒</button>
-        <label class="image-toolbar__field" title="Opacity percent (whole element)">Opa <input id="img-opacity" type="number" min="0" max="100" step="5" value="" placeholder="100" /></label>
         <div class="image-toolbar__separator"></div>
         <!-- Phase 1 enrichment: image style (radius / border / frame effect / shadow) -->
         <span class="image-toolbar__label">Style</span>
@@ -381,29 +386,13 @@
           <label class="image-toolbar__field image-toolbar__field--caption-pad" title="Space between the caption text and the frame">Below <input id="img-caption-pad-bottom" type="number" min="0" max="60" step="1" value="" placeholder="px" /></label>
           <button id="img-remove-caption" class="image-toolbar__btn" title="Remove the caption">Remove Caption</button>
         </span>
-        <div class="image-toolbar__separator"></div>
-        <button id="img-delete" class="image-toolbar__btn" title="Delete Image">🗑</button>
         </span>
         <!-- BOX CONTROLS (U4): same bar as the image, shown only for a styled box -->
         <span id="box-controls" hidden>
-        <button id="box-free" class="image-toolbar__btn" title="Take this element out of the text flow">Free</button>
-        <div class="image-toolbar__separator"></div>
         <select id="box-variant" class="image-toolbar__select" title="Box kind">
           <option value="text">Text Box</option>
           <option value="note">Note</option>
         </select>
-        <button id="box-align-left" class="image-toolbar__btn" title="Align Box Left">Left</button>
-        <button id="box-align-center" class="image-toolbar__btn" title="Center Box">Center</button>
-        <button id="box-align-right" class="image-toolbar__btn" title="Align Box Right">Right</button>
-        <div id="box-align-separator" class="image-toolbar__separator"></div>
-        <button id="box-condition" class="image-toolbar__btn" title="Text around this element">Wrapped</button>
-        <div class="image-toolbar__separator"></div>
-        <label class="image-toolbar__field" title="Rotation in degrees">Rot <input id="box-rotation" type="number" min="0" max="360" step="15" value="" placeholder="deg" /></label>
-        <button id="box-rotate-left" class="image-toolbar__btn" title="Rotate Left 90°">↺90</button>
-        <button id="box-rotate-right" class="image-toolbar__btn" title="Rotate Right 90°">↻90</button>
-        <button id="box-flip-h" class="image-toolbar__btn" title="Flip Horizontal">↔</button>
-        <button id="box-flip-v" class="image-toolbar__btn" title="Flip Vertical">↕</button>
-        <label class="image-toolbar__field" title="Opacity percent (whole element, text included)">Opa <input id="box-opacity" type="number" min="0" max="100" step="5" value="" placeholder="100" /></label>
         <div class="image-toolbar__separator"></div>
         <label class="image-toolbar__field" title="Background fill">BG <input id="box-bg" type="color" class="image-toolbar__color" value="#fef6d8" /></label>
         <button id="box-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No background (transparent)">×</button>
@@ -428,38 +417,19 @@
           <input id="box-shadow-color" type="color" class="image-toolbar__color" title="Shadow color (pick a lighter tone on dark backgrounds)" value="#000000" />
           <label class="image-toolbar__field" title="Light direction: 0=top, 90=right, 180=bottom, 270=left (shadow falls opposite)">Light <input id="box-shadow-angle" type="number" min="0" max="359" step="15" value="" placeholder="315" /></label>
         </span>
-        <div class="image-toolbar__separator"></div>
-        <button id="box-delete" class="image-toolbar__btn" title="Delete Box">Delete</button>
         </span>
         <!-- SHAPE CONTROLS (chapter A, S1, U4): same bar, shown only for a drawn shape -->
         <span id="shape-controls" hidden>
-        <button id="shape-free" class="image-toolbar__btn" title="Take this shape out of the text flow">Free</button>
-        <div class="image-toolbar__separator"></div>
         <select id="shape-kind" class="image-toolbar__select" title="Shape">
           <option value="line">Line</option>
           <option value="arrow">Arrow</option>
         </select>
-        <button id="shape-align-left" class="image-toolbar__btn" title="Align Shape Left">Left</button>
-        <button id="shape-align-center" class="image-toolbar__btn image-toolbar__btn--active" title="Center Shape">Center</button>
-        <button id="shape-align-right" class="image-toolbar__btn" title="Align Shape Right">Right</button>
-        <div id="shape-align-separator" class="image-toolbar__separator"></div>
-        <button id="shape-condition" class="image-toolbar__btn" title="Text around this element">Wrapped</button>
         <div class="image-toolbar__separator"></div>
         <label class="image-toolbar__field" title="Shape width in pixels">W <input id="shape-width" type="number" min="24" step="10" value="" placeholder="px" /></label>
         <label id="shape-height-field" class="image-toolbar__field" title="Shape height in pixels (the head's width for an arrow)">H <input id="shape-height" type="number" min="2" step="2" value="" placeholder="px" /></label>
         <div class="image-toolbar__separator"></div>
-        <label class="image-toolbar__field" title="Rotation in degrees">Rot <input id="shape-rotation" type="number" min="0" max="360" step="15" value="" placeholder="deg" /></label>
-        <button id="shape-rotate-left" class="image-toolbar__btn" title="Rotate Left 90°">↺90</button>
-        <button id="shape-rotate-right" class="image-toolbar__btn" title="Rotate Right 90°">↻90</button>
-        <div class="image-toolbar__separator"></div>
-        <button id="shape-flip-h" class="image-toolbar__btn" title="Flip Horizontal">↔</button>
-        <button id="shape-flip-v" class="image-toolbar__btn" title="Flip Vertical">↕</button>
-        <label class="image-toolbar__field" title="Opacity percent (whole element)">Opa <input id="shape-opacity" type="number" min="0" max="100" step="5" value="" placeholder="100" /></label>
-        <div class="image-toolbar__separator"></div>
         <input id="shape-stroke-color" type="color" class="image-toolbar__color" title="Line colour" value="#333333" />
         <label class="image-toolbar__field" title="Line thickness in pixels">Th <input id="shape-stroke-width" type="number" min="1" max="24" step="1" value="" placeholder="px" /></label>
-        <div class="image-toolbar__separator"></div>
-        <button id="shape-delete" class="image-toolbar__btn" title="Delete Shape">🗑</button>
         </span>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">

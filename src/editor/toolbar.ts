@@ -14,8 +14,7 @@ import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
 import { populateUserFontsInToolbar } from "./fonts-ui";
-import { insertImageFromFile, getSelectedImage, setImageAlignment, setImageRotation, setImageFlipH, setImageFlipV, setImageAspectLocked, setImageWidth, setImageHeight, removeImage } from "./image-commands";
-import { isWrapping, textConditionOf, type TextCondition } from "./element-condition";
+import { insertImageFromFile, getSelectedImage, setImageAspectLocked, setImageWidth, setImageHeight } from "./image-commands";
 import { getSelectedElement } from "./element-commands";
 import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
 import { applyDocumentJson, installDocument, installEmptyDocument } from "./document-loader";
@@ -2191,18 +2190,11 @@ function createProxyButton(original: HTMLElement): HTMLElement | null {
   return null;
 }
 
-/** The one button cycles through the three text conditions, in this order. */
-const CONDITION_ORDER: TextCondition[] = ["wrapped", "unwrapped", "overlap"];
-const CONDITION_LABEL: Record<TextCondition, string> = {
-  wrapped: "Wrapped",
-  unwrapped: "Unwrapped",
-  overlap: "Overlap",
-};
-
-function nextCondition(condition: TextCondition): TextCondition {
-  return CONDITION_ORDER[(CONDITION_ORDER.indexOf(condition) + 1) % CONDITION_ORDER.length];
-}
-
+/**
+ * The image/figure section of the ONE secondary bar: the commands that are the
+ * photo's own (size, aspect lock, the hand-set X/Y of a free element, style,
+ * caption). The commands every element shares live in `element-bar.ts`.
+ */
 function setupImageToolbar(view: EditorView): void {
   const toolbar = document.getElementById("image-toolbar");
   if (!toolbar) return;
@@ -2220,72 +2212,16 @@ function setupImageToolbar(view: EditorView): void {
     }
   });
 
-  const btnAlignLeft = document.getElementById("img-align-left");
-  const btnAlignCenter = document.getElementById("img-align-center");
-  const btnAlignRight = document.getElementById("img-align-right");
-  const btnToggleWrap = document.getElementById("img-toggle-wrap");
-  const btnRotateLeft = document.getElementById("img-rotate-left");
-  const btnRotateRight = document.getElementById("img-rotate-right");
-  const btnFlipH = document.getElementById("img-flip-h");
-  const btnFlipV = document.getElementById("img-flip-v");
   const btnAspectLock = document.getElementById("img-aspect-lock");
-  const btnDelete = document.getElementById("img-delete");
   const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
   const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;
-  const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
   const inputX = document.getElementById("img-x") as HTMLInputElement | null;
   const inputY = document.getElementById("img-y") as HTMLInputElement | null;
 
-  btnAlignLeft?.addEventListener("click", () => {
-    void setImageAlignment(view, "left");
-  });
-  btnAlignCenter?.addEventListener("click", () => {
-    void setImageAlignment(view, "center");
-  });
-  btnAlignRight?.addEventListener("click", () => {
-    void setImageAlignment(view, "right");
-  });
-  btnToggleWrap?.addEventListener("click", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    const { setImageCondition } = await import("./image-commands");
-    void setImageCondition(view, nextCondition(textConditionOf(info.node)));
-  });
-  // F3.a: take the element out of the flow / put it back. The label is synced
-  // with the state in updateImageToolbar, so it always reads as the action.
-  document.getElementById("img-free")?.addEventListener("click", async () => {
-    const { toggleElementFree } = await import("./free-commands");
-    if (toggleElementFree(view)) void import("./layers-panel").then((m) => m.syncLayersPanel(view));
-  });
-  btnRotateLeft?.addEventListener("click", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    const current = (info.node.attrs.rotation as number) || 0;
-    void setImageRotation(view, (current - 90 + 360) % 360);
-  });
-  btnRotateRight?.addEventListener("click", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    const current = (info.node.attrs.rotation as number) || 0;
-    void setImageRotation(view, (current + 90) % 360);
-  });
-  btnFlipH?.addEventListener("click", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    void setImageFlipH(view, !info.node.attrs.flipH);
-  });
-  btnFlipV?.addEventListener("click", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    void setImageFlipV(view, !info.node.attrs.flipV);
-  });
   btnAspectLock?.addEventListener("click", async () => {
     const info = await getSelectedImage(view);
     if (!info) return;
     void setImageAspectLocked(view, !info.node.attrs.aspectLocked);
-  });
-  btnDelete?.addEventListener("click", () => {
-    void removeImage(view);
   });
 
   inputWidth?.addEventListener("change", () => {
@@ -2297,23 +2233,6 @@ function setupImageToolbar(view: EditorView): void {
     const val = parseInt(inputHeight.value, 10);
     if (isNaN(val) || val < 20) return;
     void setImageHeight(view, val);
-  });
-  inputRotation?.addEventListener("change", () => {
-    let val = parseInt(inputRotation.value, 10);
-    if (isNaN(val)) return;
-    val = ((val % 360) + 360) % 360;
-    void setImageRotation(view, val);
-  });
-
-  // U5: the single Opacity command, on the whole element (image/figure).
-  const inputOpacity = document.getElementById("img-opacity") as HTMLInputElement | null;
-  inputOpacity?.addEventListener("change", async () => {
-    const info = await getSelectedImage(view);
-    if (!info) return;
-    const v = parseInt(inputOpacity.value, 10);
-    if (isNaN(v)) return;
-    const { setNodeAttrs } = await import("./element-commands");
-    setNodeAttrs(view, info.pos, { ...info.node.attrs, opacity: Math.max(0, Math.min(100, v)) });
   });
 
   // T1.5: X/Y position a FREE element by hand. X is the left edge measured
@@ -2340,18 +2259,20 @@ function setupImageToolbar(view: EditorView): void {
 
   // Phase 1 (enrichment): wire the "Style" section (dynamic, anti-bloat hook)
   void import("./image-style-toolbar").then((m) => m.setupImageStyleToolbar(view));
+  // The commands every element shares, bound once for the whole bar.
+  void import("./element-bar").then((m) => m.setupElementBar(view));
 }
 
 /**
- * U4: the ONE secondary bar. It shows only the commands valid for the selected
- * element: the image/figure section, the box section, or nothing. The two value
- * syncs below still own their own controls; visibility lives here only.
+ * U4: the ONE secondary bar. It shows the common block plus the section of the
+ * selected element's type; each module syncs the controls it owns.
  */
 export function syncSecondaryToolbar(view: EditorView): void {
   const bar = document.getElementById("image-toolbar");
   const info = getSelectedElement(view, ELEMENT_KINDS);
   // These run on every transaction, also when the selection LEAVES an element.
   void import("./layers-panel").then((m) => m.syncLayersPanel(view));
+  void import("./element-bar").then((m) => m.syncElementBar(view));
   void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
   void import("./shape-toolbar").then((m) => m.syncShapeToolbar(view));
   updateImageToolbar(view);
@@ -2382,55 +2303,15 @@ export function updateImageToolbar(view: EditorView): void {
     const info = await getSelectedImage(view);
     if (!info) return;
     const attrs = info.node.attrs;
-    const align = (attrs.align as string) || "center";
-
-    const btnAlignLeft = document.getElementById("img-align-left");
-    const btnAlignCenter = document.getElementById("img-align-center");
-    const btnAlignRight = document.getElementById("img-align-right");
-    const btnToggleWrap = document.getElementById("img-toggle-wrap");
-    const btnFlipH = document.getElementById("img-flip-h");
-    const btnFlipV = document.getElementById("img-flip-v");
-    const btnAspectLock = document.getElementById("img-aspect-lock");
-    const inputOpacity = document.getElementById("img-opacity") as HTMLInputElement | null;
-
-    btnAlignLeft?.classList.toggle("image-toolbar__btn--active", align === "left");
-    btnAlignCenter?.classList.toggle("image-toolbar__btn--active", align === "center");
-    btnAlignRight?.classList.toggle("image-toolbar__btn--active", align === "right");
-    // In Free the horizontal is decided by the mouse: hide Left/Center/Right.
+    // The shared commands (Free, alignment, condition, rotation, mirroring,
+    // opacity, delete) are synced by `element-bar.ts`; here only what is the
+    // photo's own.
     const isFree = !!attrs.free;
-    for (const btn of [btnAlignLeft, btnAlignCenter, btnAlignRight]) {
-      if (btn instanceof HTMLElement) btn.hidden = isFree;
-    }
-    const freeSeparator = document.getElementById("img-free-separator");
-    if (freeSeparator instanceof HTMLElement) freeSeparator.hidden = isFree;
-    const condition = textConditionOf(info.node);
-    if (btnToggleWrap instanceof HTMLButtonElement) {
-      btnToggleWrap.textContent = CONDITION_LABEL[condition];
-      btnToggleWrap.title = `Text around this element: ${CONDITION_LABEL[condition]}`;
-      btnToggleWrap.classList.toggle("image-toolbar__btn--active", isWrapping(condition));
-    }
-    // F3.a: wrapping is the born-default (contract §2.10) and is a property of
-    // the element, not of its alignment: centring must never silently turn it
-    // off, so the control stays available and shows the stored state.
-
-    const btnFree = document.getElementById("img-free");
-    if (btnFree instanceof HTMLButtonElement) {
-      const free = !!attrs.free;
-      // The button shows the element's CURRENT state, not the action.
-      btnFree.textContent = free ? "Free" : "In flow";
-      btnFree.title = free
-        ? "Put this element back between the paragraphs"
-        : "Take this element out of the text flow";
-      btnFree.classList.toggle("image-toolbar__btn--active", free);
-    }
-    btnFlipH?.classList.toggle("image-toolbar__btn--active", !!attrs.flipH);
-    btnFlipV?.classList.toggle("image-toolbar__btn--active", !!attrs.flipV);
+    const btnAspectLock = document.getElementById("img-aspect-lock");
     btnAspectLock?.classList.toggle("image-toolbar__btn--active", attrs.aspectLocked !== false);
-    if (inputOpacity) inputOpacity.value = String(attrs.opacity ?? 100);
 
     const inputWidth = document.getElementById("img-width") as HTMLInputElement | null;
     const inputHeight = document.getElementById("img-height") as HTMLInputElement | null;
-  const inputRotation = document.getElementById("img-rotation") as HTMLInputElement | null;
 
     if (inputWidth) {
       const w = attrs.width as number | null;
@@ -2439,10 +2320,6 @@ export function updateImageToolbar(view: EditorView): void {
     if (inputHeight) {
       const h = attrs.height as number | null;
       inputHeight.value = h ? String(h) : "";
-    }
-    if (inputRotation) {
-      const r = (attrs.rotation as number) || 0;
-      inputRotation.value = r ? String(r) : "";
     }
 
     // T1.5: X/Y fields exist only in Free; they show the element's own position.
