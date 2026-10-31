@@ -1,5 +1,5 @@
 // ============================================================================
-// Shape parameters (chapter A, step S1) — the NUMBERS a drawn shape carries.
+// Shape parameters — the NUMBERS a drawn shape carries, and nothing else.
 //
 // The document stores numbers, not a drawing (drawn-shapes-project §2): the
 // view on screen and the markup on the sheet both paint them through
@@ -20,6 +20,13 @@ export const DEFAULT_STROKE_COLOR = "#333333";
 export const MIN_STROKE_WIDTH_PX = 1;
 export const MAX_STROKE_WIDTH_PX = 24;
 
+/**
+ * Colour of the INSIDE of the closed part (the arrow's head). Empty means "no
+ * separate colour": the inside takes the stroke's colour, which is how a plain
+ * black arrow has always looked.
+ */
+export const DEFAULT_FILL_COLOR = "";
+
 /** Length of the arrow head, in px — independent of the box width (§6). */
 export const DEFAULT_HEAD_SIZE_PX = 16;
 export const MIN_HEAD_SIZE_PX = 4;
@@ -35,12 +42,17 @@ export const MIN_SHAPE_WIDTH_PX = 24;
  */
 export const MAX_SHAPE_WIDTH_PX = 20000;
 
+/** Shortest free body a head may leave in front of itself, in px. */
+export const MIN_SHAPE_BODY_PX = 4;
+
 export interface ShapeParams {
   kind: ShapeKind;
   /** Thickness of the stroke, in px. */
   strokeWidth: number;
-  /** Colour of the stroke (and of a filled head). */
+  /** Colour of the stroke (the contour of the drawing). */
   strokeColor: string;
+  /** Colour of the inside of the closed part; empty = the stroke's colour. */
+  fill: string;
   /** Length of the arrow head, in px. */
   headSize: number;
 }
@@ -65,10 +77,12 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
 export function normalizeShapeParams(attrs: Record<string, unknown> | undefined): ShapeParams {
   const a = attrs ?? {};
   const color = typeof a.strokeColor === "string" ? a.strokeColor.trim() : "";
+  const fill = typeof a.fill === "string" ? a.fill.trim() : "";
   return {
     kind: normalizeShapeKind(a.shape),
     strokeWidth: clampInt(a.strokeWidth, DEFAULT_STROKE_WIDTH_PX, MIN_STROKE_WIDTH_PX, MAX_STROKE_WIDTH_PX),
     strokeColor: color || DEFAULT_STROKE_COLOR,
+    fill,
     headSize: clampInt(a.headSize, DEFAULT_HEAD_SIZE_PX, MIN_HEAD_SIZE_PX, MAX_HEAD_SIZE_PX),
   };
 }
@@ -99,5 +113,28 @@ export function shapeBoxSize(attrs: Record<string, unknown> | undefined): ShapeB
 /** The box a shape is born with, per kind. */
 export function defaultShapeBox(kind: ShapeKind): ShapeBox {
   const params = normalizeShapeParams({ shape: kind });
-  return { width: DEFAULT_SHAPE_WIDTH_PX, height: params.kind === "line" ? params.strokeWidth : params.headSize };
+  return {
+    width: DEFAULT_SHAPE_WIDTH_PX,
+    height: params.kind === "line" ? params.strokeWidth : params.headSize,
+  };
+}
+
+/**
+ * The point a shape turns around, in its own box's coordinates, or null when it
+ * turns around the centre like every other element.
+ *
+ * The LINE turns around its centre (the shared rule). The ARROW turns around its
+ * tip: the tip is where an arrow touches what it points at, so it is the point
+ * that must stay put (§5, point 3). This is the one exception to L2, and it is
+ * written here — one place — so the view, the screen's band and the page count
+ * all turn the arrow the same way.
+ */
+export function shapeRotationPivot(attrs: Record<string, unknown> | undefined): { x: number; y: number } | null {
+  const params = normalizeShapeParams(attrs);
+  if (params.kind !== "arrow") return null;
+  const box = shapeBoxSize(attrs);
+  // The drawn tip sits half a stroke inside the box, so the stroke's outline
+  // does not spill over the edge: the pivot is that same point.
+  const pad = Math.min(params.strokeWidth / 2, Math.min(box.width, box.height) / 2);
+  return { x: box.width - pad, y: box.height / 2 };
 }

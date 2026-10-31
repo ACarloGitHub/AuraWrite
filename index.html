@@ -428,8 +428,11 @@
         <label class="image-toolbar__field" title="Shape width in pixels">W <input id="shape-width" type="number" min="24" step="10" value="" placeholder="px" /></label>
         <label id="shape-height-field" class="image-toolbar__field" title="Shape height in pixels (the head's width for an arrow)">H <input id="shape-height" type="number" min="2" step="2" value="" placeholder="px" /></label>
         <div class="image-toolbar__separator"></div>
-        <input id="shape-stroke-color" type="color" class="image-toolbar__color" title="Line colour" value="#333333" />
-        <label class="image-toolbar__field" title="Line thickness in pixels">Th <input id="shape-stroke-width" type="number" min="1" max="24" step="1" value="" placeholder="px" /></label>
+        <input id="shape-stroke-color" type="color" class="image-toolbar__color" title="Colour of the contour" value="#333333" />
+        <label class="image-toolbar__field" title="Thickness of the contour, in pixels">Th <input id="shape-stroke-width" type="number" min="1" max="24" step="1" value="" placeholder="px" /></label>
+        <label id="shape-fill-field" class="image-toolbar__field" title="Colour of the inside (the arrow's head)" hidden>Fill <input id="shape-fill" type="color" class="image-toolbar__color" value="#333333" /></label>
+        <button id="shape-fill-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No separate fill: the inside takes the contour's colour" hidden>×</button>
+        <label id="shape-head-field" class="image-toolbar__field" title="Length of the arrow head in pixels" hidden>Head <input id="shape-head-size" type="number" min="4" max="200" step="2" value="" placeholder="px" /></label>
         </span>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">

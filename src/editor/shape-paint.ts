@@ -1,11 +1,14 @@
 // ============================================================================
-// Shape paint (chapter A, step S1) — the ONE place that turns shape numbers into
-// a drawing.
+// Shape paint — the ONE place that turns shape numbers into a drawing.
 //
 // The node view on screen and the node's own markup (print sheet, HTML export,
-// native file) both call this function, so a shape cannot be a line in the editor
-// and an arrow on paper. Vector, not bitmap: the sheet keeps the printer's
-// resolution (drawn-shapes-project §8).
+// native file) both call this function, so a shape cannot be a line in the
+// editor and an arrow on paper. Vector, not bitmap: the sheet keeps the
+// printer's resolution (drawn-shapes-project §8).
+//
+// Two colours, as in any vector drawing: the STROKE is the contour, the FILL is
+// the inside of the closed part. An empty fill means "the inside takes the
+// contour's colour", which is the plain black arrow.
 // ============================================================================
 
 import { shapeGeometry } from "./shape-geometry";
@@ -43,7 +46,12 @@ export function buildShapeSvg(params: ShapeParams, box: ShapeBox): SVGSVGElement
   if (geometry.head) {
     const head = document.createElementNS(SVG_NS, "polygon");
     head.setAttribute("points", geometry.head.map(([x, y]) => `${x},${y}`).join(" "));
-    head.setAttribute("fill", params.strokeColor);
+    head.setAttribute("fill", params.fill || params.strokeColor);
+    // The contour is drawn even when the inside is filled with something else,
+    // so a white fill still reads as an arrow instead of vanishing on paper.
+    head.setAttribute("stroke", params.strokeColor);
+    head.setAttribute("stroke-width", String(params.strokeWidth));
+    head.setAttribute("stroke-linejoin", "round");
     svg.appendChild(head);
   }
   return svg;
@@ -55,5 +63,13 @@ export function buildShapeSvg(params: ShapeParams, box: ShapeBox): SVGSVGElement
  * work.
  */
 export function shapePaintKey(params: ShapeParams, box: ShapeBox): string {
-  return [params.kind, box.width, box.height, params.strokeWidth, params.strokeColor, params.headSize].join("|");
+  return [
+    params.kind,
+    box.width,
+    box.height,
+    params.strokeWidth,
+    params.strokeColor,
+    params.fill,
+    params.headSize,
+  ].join("|");
 }

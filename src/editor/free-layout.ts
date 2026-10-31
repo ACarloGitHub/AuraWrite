@@ -350,38 +350,61 @@ export function freeWrapBand(input: {
  * The rectangle a turned element actually PAINTS, and how far it sits outside the
  * element's own box.
  *
- * The rotation pivots on the centre, so the painted rectangle keeps the centre of the
- * own box and grows (or shrinks) symmetrically: `leftShift`/`topShift` are how far its
- * edges move outwards. At zero degrees this returns the input unchanged, which is what
- * keeps the whole F1 pagination chain identical for every document that never turns
- * anything - the control test of the plan is satisfied by construction, not by luck.
+ * `leftShift`/`topShift` are how far the painted rectangle's top-left corner sits
+ * BEFORE the own box's: the callers place the claim at `own - shift`, so a centre
+ * pivot grows symmetrically and a pivot at a vertex grows on one side only.
  *
- * Why the calculator needs it: the screen measured the painted box from the DOM since
- * F3.2b, but the page count and the print sheets were built from the stored size, so a
- * free element with text around it reserved two different rectangles in the two places
- * (defect 12, proven by Carlo on 2026-09-14).
+ * The pivot defaults to the centre, which is the rule for every element (L2). The
+ * drawn arrow is the one exception: it turns around its tip, and it passes that
+ * point explicitly, so the screen, the page count and the paper keep agreeing
+ * without any of them learning a second formula.
+ *
+ * At zero degrees this returns the input unchanged, which is what keeps the whole
+ * F1 pagination chain identical for every document that never turns anything - the
+ * control test of the plan is satisfied by construction, not by luck.
  */
 export function paintedBoxOf(
   widthPx: number,
   heightPx: number,
-  rotationDeg: number
+  rotationDeg: number,
+  pivot?: { x: number; y: number }
 ): { widthPx: number; heightPx: number; leftShift: number; topShift: number } {
   const deg = ((rotationDeg || 0) % 360 + 360) % 360;
   if (!deg || widthPx <= 0 || heightPx <= 0) {
     return { widthPx, heightPx, leftShift: 0, topShift: 0 };
   }
+  const cx = pivot?.x ?? widthPx / 2;
+  const cy = pivot?.y ?? heightPx / 2;
   const rad = (deg * Math.PI) / 180;
-  const cos = Math.abs(Math.cos(rad));
-  const sin = Math.abs(Math.sin(rad));
-  const width = widthPx * cos + heightPx * sin;
-  const height = widthPx * sin + heightPx * cos;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of [
+    [0, 0],
+    [widthPx, 0],
+    [0, heightPx],
+    [widthPx, heightPx],
+  ]) {
+    const dx = x - cx;
+    const dy = y - cy;
+    const rx = dx * cos - dy * sin;
+    const ry = dx * sin + dy * cos;
+    if (rx < minX) minX = rx;
+    if (rx > maxX) maxX = rx;
+    if (ry < minY) minY = ry;
+    if (ry > maxY) maxY = ry;
+  }
   return {
-    widthPx: width,
-    heightPx: height,
-    leftShift: (width - widthPx) / 2,
-    topShift: (height - heightPx) / 2,
+    widthPx: maxX - minX,
+    heightPx: maxY - minY,
+    leftShift: -minX,
+    topShift: -minY,
   };
 }
+
 
 /** A box with a top and a bottom, in whatever ruler the caller measured it with. */
 export interface FlatRect {

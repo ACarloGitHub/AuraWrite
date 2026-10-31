@@ -1,10 +1,10 @@
 /* ============================================================================
-   Shapes (chapter A, step S1) — the drawn element on the editor's page.
+   Shapes — the drawn element on the editor's page.
 
    The drawing itself is inline SVG (see shape-paint.ts), so nothing here
-   describes the shape: these rules only place it in the page and make it
-   grabbable. The print sheet and the exported HTML carry their own inline
-   styles, because they have no stylesheet.
+   describes the shape: these rules place it in the page, make it grabbable, and
+   show the handles that belong to its kind. The print sheet and the exported
+   HTML carry their own inline styles, because they have no stylesheet.
    ============================================================================ */
 
 .ProseMirror .aw-shape {
@@ -50,12 +50,12 @@
   display: block;
 }
 
-/* A line two pixels thick cannot be caught with the pointer. The soft area sits
-   OUTSIDE the box (absolute with a negative inset), so it never inflates the
-   room the text keeps clear (§7). */
+/* The grabbing area. A line two pixels thick could not be caught with the
+   pointer, and a tiny arrow could not either: the view sizes this box to the
+   drawing PLUS a margin, with a minimum. It is absolutely positioned, so it never
+   inflates the room the text keeps clear (§7). */
 .aw-shape__hit {
   position: absolute;
-  inset: -6px;
   cursor: move;
 }
 
@@ -67,9 +67,46 @@
 
 /* The four corner handles and the rotation handle are the SHARED ones
    (`element-handles.ts`), hidden until the shape is selected - exactly as the
-   photo, the figure and the box show theirs. The box HUGS the shape, so on a
-   thin line the corners sit a hair above and below it: still reachable. */
+   photo, the figure and the box show theirs. */
 .aw-shape--selected .image-resize-handle,
 .aw-shape--selected .aw-rotate-handle {
   display: block;
+}
+
+/* --- The arrow's own handles: on its vertices, not on a box ----------------- */
+
+.aw-shape-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px; /* centred on the point it marks */
+  background: #fff;
+  border: 2px solid var(--color-primary, #4a90d9);
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: none;
+  z-index: 11;
+  cursor: crosshair;
+}
+
+.aw-shape--selected .aw-shape-handle {
+  display: block;
+}
+
+/* A line is a rectangle: its corners are its ends, and the shared engine already
+   does that. An arrow is not: its corners would be a box around it. */
+.aw-shape[data-aw-shape="line"] .aw-shape-handle {
+  display: none !important;
+}
+
+.aw-shape[data-aw-shape="arrow"] .image-resize-handle {
+  display: none !important;
+}
+
+/* ... and its turning handle sits above the TAIL, opposite the tip, because the
+   tip is the pivot and must stay where it is. */
+.aw-shape[data-aw-shape="arrow"] .aw-rotate-handle {
+  left: 0;
+  top: -30px;
+  transform: translateX(-50%);
 }

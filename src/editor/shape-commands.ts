@@ -93,12 +93,17 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
   if (!info) return false;
   const merged = { ...info.node.attrs, ...patch } as Record<string, unknown>;
   const params = normalizeShapeParams(merged);
-  const box = shapeBoxSize({ ...merged, height: params.kind === "line" ? params.strokeWidth : merged.height });
+  const kindChanged = params.kind !== normalizeShapeParams(info.node.attrs as Record<string, unknown>).kind;
+  // A line's height is its stroke; a new arrow gets a head-high box instead of
+  // inheriting the line's two pixels, which would leave a flat arrow.
+  const height = params.kind === "line" ? params.strokeWidth : kindChanged ? params.headSize : merged.height;
+  const box = shapeBoxSize({ ...merged, height });
   return setNodeAttrs(view, info.pos, {
     ...merged,
     shape: params.kind,
     strokeWidth: params.strokeWidth,
     strokeColor: params.strokeColor,
+    fill: params.fill,
     headSize: params.headSize,
     width: box.width,
     height: box.height,

@@ -1,5 +1,5 @@
 // ============================================================================
-// Shape node (chapter A, step S1) — the drawn shape inside the document.
+// Shape node — the drawn shape inside the document.
 //
 // It is an element exactly like the photo, the figure and the box: it leaves the
 // text flow, hangs from a paragraph, turns, has a depth in the Layers window. All
@@ -32,6 +32,7 @@ import {
   isShapeKind,
   normalizeShapeParams,
   shapeBoxSize,
+  shapeRotationPivot,
 } from "./shape-params";
 
 const SHAPE_ALIGNS = ["left", "center", "right"] as const;
@@ -62,6 +63,8 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     height: { default: DEFAULT_HEAD_SIZE_PX },
     strokeWidth: { default: DEFAULT_STROKE_WIDTH_PX },
     strokeColor: { default: DEFAULT_STROKE_COLOR },
+    // Inside of the closed part; empty = the contour's own colour.
+    fill: { default: "" },
     headSize: { default: DEFAULT_HEAD_SIZE_PX },
     // A drawn shape is never aspect-locked: the width is its length and the
     // height is its stroke (line) or its head's width (arrow) - two free axes.
@@ -89,6 +92,7 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
           height: markerNumber(dom, "data-height", DEFAULT_HEAD_SIZE_PX),
           strokeWidth: markerNumber(dom, "data-stroke-width", DEFAULT_STROKE_WIDTH_PX),
           strokeColor: dom.getAttribute("data-stroke-color") || DEFAULT_STROKE_COLOR,
+          fill: dom.getAttribute("data-fill") || "",
           headSize: markerNumber(dom, "data-head-size", DEFAULT_HEAD_SIZE_PX),
           align: oneOfAlign(dom.getAttribute("data-align")),
           wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
@@ -119,6 +123,7 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     if (params.strokeColor.toLowerCase() !== DEFAULT_STROKE_COLOR) {
       attrs["data-stroke-color"] = params.strokeColor;
     }
+    if (params.fill) attrs["data-fill"] = params.fill;
     if (params.headSize !== DEFAULT_HEAD_SIZE_PX) {
       attrs["data-head-size"] = String(params.headSize);
     }
@@ -158,6 +163,11 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     if (isFinite(opacity) && opacity < 100) style.push(`opacity: ${Math.max(0, opacity) / 100}`);
     const transform = transformStyleOf(node.attrs as Record<string, unknown>);
     if (transform) style.push(`transform: ${transform}`);
+    // L2's one exception: an arrow turns around its tip, not around the box's
+    // centre, so the point of the arrow stays where it was. The number is the
+    // same one the view and the page count use (`shapeRotationPivot`).
+    const pivot = shapeRotationPivot(node.attrs as Record<string, unknown>);
+    if (pivot) style.push(`transform-origin: ${pivot.x}px ${pivot.y}px`);
     attrs.style = style.join("; ");
 
     return ["div", attrs, buildShapeSvg(params, box)];

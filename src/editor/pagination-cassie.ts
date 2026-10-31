@@ -33,7 +33,7 @@
 import { prepare, layout, prepareWithSegments, layoutWithLines, layoutNextLine } from "@chenglou/pretext";
 import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
-import { shapeBoxSize } from "./shape-params";
+import { shapeBoxSize, shapeRotationPivot } from "./shape-params";
 import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth, paintedBoxOf,
   type FreeWrapBand,
@@ -1322,7 +1322,11 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         // editor and the paper. The element is still POSITIONED by its own box (law L1);
         // only what the text must keep clear follows the turn.
         const rotation = Number(node.attrs?.rotation) || 0;
-        const painted = paintedBoxOf(w, h, rotation);
+        // The arrow turns around its tip (L2's one exception); every other
+        // element turns around its centre. One pivot function, shared with the
+        // screen: `shapeRotationPivot` answers null for "the centre".
+        const pivot = shapeRotationPivot(node.attrs as Record<string, unknown>) ?? undefined;
+        const painted = paintedBoxOf(w, h, rotation, pivot);
         const paintedTop = top - painted.topShift;
         let next: FreeWrapBand | null = null;
         let full = false;

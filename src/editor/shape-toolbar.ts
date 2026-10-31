@@ -61,6 +61,24 @@ export function setupShapeToolbar(view: EditorView): void {
       strokeWidth: Math.max(MIN_STROKE_WIDTH_PX, Math.min(MAX_STROKE_WIDTH_PX, value)),
     });
   });
+
+  // Fill: the inside of the closed part (the arrow's head). Empty means "the
+  // inside takes the contour's colour", which is what the × clears it back to.
+  const fill = el<HTMLInputElement>("shape-fill");
+  fill?.addEventListener("input", () => {
+    if (!fill.value) return;
+    void setShapeAttrs(view, { fill: fill.value });
+  });
+  el("shape-fill-clear")?.addEventListener("click", () => {
+    void setShapeAttrs(view, { fill: "" });
+  });
+
+  const headSize = el<HTMLInputElement>("shape-head-size");
+  headSize?.addEventListener("change", () => {
+    const value = intOrNaN(headSize.value);
+    if (isNaN(value)) return;
+    void setShapeAttrs(view, { headSize: value });
+  });
 }
 
 /** Refresh the shape's own controls for the current selection. */
@@ -88,4 +106,20 @@ export function syncShapeToolbar(view: EditorView): void {
   if (color) color.value = params.strokeColor;
   const stroke = el<HTMLInputElement>("shape-stroke-width");
   if (stroke) stroke.value = String(params.strokeWidth);
+
+  // Only a closed shape has an inside and a head: on a line these three controls
+  // would offer numbers that cannot be honoured.
+  const closed = params.kind === "arrow";
+  const fillField = el("shape-fill-field");
+  if (fillField) fillField.hidden = !closed;
+  const fillClear = el("shape-fill-clear");
+  if (fillClear) fillClear.hidden = !closed;
+  const headField = el("shape-head-field");
+  if (headField) headField.hidden = !closed;
+  const fill = el<HTMLInputElement>("shape-fill");
+  // An empty fill means "the contour's colour": the swatch shows that colour,
+  // because that is what is painted.
+  if (fill) fill.value = params.fill || params.strokeColor;
+  const head = el<HTMLInputElement>("shape-head-size");
+  if (head) head.value = closed ? String(params.headSize) : "";
 }

@@ -1,16 +1,23 @@
 // ============================================================================
 // Element handles — the ONE place where a pointer reshapes an element.
 //
-// Two gestures live here, because each of them used to be written twice, once
+// Three gestures live here, because each of them used to be written twice, once
 // per node view, and a rule written twice drifts:
 //
 //  - TURNING an element (`startRotateDrag`, created 2026-09-15 for voice U7.1):
 //    the image and the figure each had ~50 identical lines, and the box had no
-//    handle at all, so giving the box one meant a third copy.
+//    handle at all, so giving the box one meant a third copy. An arrow passes a
+//    pivot element and turns RELATIVE to the grab, because its pivot is its tip
+//    and its handle sits above the tail, not above the centre.
 //  - RESIZING from a corner (`startCornerResize`, voice U7.3, the same day):
 //    reading the two copies side by side showed they had ALREADY drifted - see
 //    "the drift" below. That is the whole argument for this file, stated as a
 //    fact instead of a warning.
+//  - RESIZING a drawn shape from its own vertices (`startShapePartDrag`): an
+//    arrow is not a rectangle, so its handles sit on the tip, on the two base
+//    vertices and on the body, and they write the shape's parameters rather than
+//    the box's measure. The gesture is shared (L4's helper and the measured
+//    zoom); what each part means belongs to the shape's own modules.
 //
 // What is deliberately NOT here: which element each view paints and which
 // attributes the size or the angle is written into. The gesture is shared; the
@@ -197,12 +204,22 @@ export function createRotateHandle(
  * painted on the element that already carries the transform (law L3 - one place,
  * not a wrapper too), and it reaches the document only when the pointer is
  * released, in whole degrees normalised to 0-359.
+ *
+ * Two options exist for the one element whose pivot is not the centre:
+ *  - `pivot`: the DOM element that marks the pivot (the arrow's tip handle). Its
+ *    centre is read from the DOM, so the angle is right at any zoom and after the
+ *    element has turned.
+ *  - `relative`: the angle is the one the element HAD plus how far the hand has
+ *    moved around the pivot. Needed when the handle does not sit above the pivot
+ *    at rest (the arrow's handle is above the tail), where the absolute reading
+ *    would snap the element to the pointer on the first move.
  */
 export function startRotateDrag(
   view: EditorView,
   getPos: () => number | undefined,
   painted: HTMLElement,
-  event: MouseEvent
+  event: MouseEvent,
+  options: { pivot?: HTMLElement | null; relative?: boolean } = {}
 ): void {
   event.preventDefault();
   event.stopPropagation();
@@ -212,13 +229,31 @@ export function startRotateDrag(
   if (!node) return;
 
   const rect = painted.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
+  const pivotRect = options.pivot?.getBoundingClientRect();
+  const centerX = pivotRect ? pivotRect.left + pivotRect.width / 2 : rect.left + rect.width / 2;
+  const centerY = pivotRect ? pivotRect.top + pivotRect.height / 2 : rect.top + rect.height / 2;
 
-  /** The pointer's bearing from the centre, in whole degrees, 0-359. */
+  /** The pointer's bearing from the pivot, in degrees. */
+  const bearing = (ev: MouseEvent): number =>
+    (Math.atan2(ev.clientY - centerY, ev.clientX - centerX) * 180) / Math.PI;
+  const normalise = (deg: number): number => ((Math.round(deg) % 360) + 360) % 360;
+
+  const startRotation = Number(node.attrs.rotation) || 0;
+  const grabBearing = bearing(event);
+
+  /**
+   * How far the hand has gone round, folded into -180..180. Without the fold a
+   * drag across the ±180 boundary would read as a jump of a full turn.
+   */
+  const deltaFromGrab = (ev: MouseEvent): number =>
+    ((bearing(ev) - grabBearing + 540) % 360) - 180;
+
+  /** The angle to paint for this pointer position. */
   const computeRotation = (ev: MouseEvent): number => {
-    const angle = Math.atan2(ev.clientY - centerY, ev.clientX - centerX) * (180 / Math.PI) + 90;
-    return ((Math.round(angle) % 360) + 360) % 360;
+    if (options.relative) {
+      return normalise(startRotation + deltaFromGrab(ev));
+    }
+    return normalise(bearing(ev) + 90);
   };
 
   const onMove = (ev: MouseEvent) => {
@@ -245,3 +280,90 @@ export function startRotateDrag(
   document.addEventListener("mousemove", onMove);
   document.addEventListener("mouseup", onUp);
 }
+
+// ---------------------------------------------------------------------------
+// The drawn shape's own handles: its vertices and its body
+// ---------------------------------------------------------------------------
+
+/** The parts of a drawn shape a pointer can reshape. */
+export const SHAPE_HANDLE_PARTS = ["tip", "base", "mirror", "body"] as const;
+
+export type ShapeHandlePart = (typeof SHAPE_HANDLE_PARTS)[number];
+
+const SHAPE_HANDLE_CLASS = "aw-shape-handle";
+
+/** True when a pointer event lands on one of the shape's own handles. */
+export function isShapeHandle(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.classList.contains(SHAPE_HANDLE_CLASS);
+}
+
+/**
+ * Create the shape's own handles on `host`; `onGrab` gets each mousedown with the
+ * part that was grabbed. Their POSITIONS are the shape's business: the view
+ * places them on the vertices its geometry names.
+ */
+export function createShapeHandles(
+  host: HTMLElement,
+  onGrab: (event: MouseEvent, part: ShapeHandlePart) => void
+): Record<ShapeHandlePart, HTMLElement> {
+  const handles = {} as Record<ShapeHandlePart, HTMLElement>;
+  for (const part of SHAPE_HANDLE_PARTS) {
+    const handle = document.createElement("div");
+    handle.className = `${SHAPE_HANDLE_CLASS} ${SHAPE_HANDLE_CLASS}--${part}`;
+    handle.addEventListener("mousedown", (e) => onGrab(e, part));
+    host.appendChild(handle);
+    handles[part] = handle;
+  }
+  return handles;
+}
+
+export interface ShapePartDrag {
+  view: EditorView;
+  getPos: () => number | undefined;
+  event: MouseEvent;
+  /** Every move, in the element's own axes and in page units. */
+  onMove: (dx: number, dy: number) => void;
+  /** Once, at release, with the final run. */
+  onCommit: (dx: number, dy: number) => void;
+}
+
+/**
+ * Drag one of a shape's own handles.
+ *
+ * L4 and L5 apply exactly as they do for the corners: the pointer's run is
+ * divided by the magnified size actually applied to the page and then turned
+ * onto the element's own axes, so a turned arrow reshapes along its own
+ * direction and a zoomed page does not make the shape grow faster.
+ */
+export function startShapePartDrag(opts: ShapePartDrag): void {
+  const { view, getPos, event, onMove, onCommit } = opts;
+  event.preventDefault();
+  event.stopPropagation();
+  const pos = getPos();
+  if (pos == null) return;
+  const node = view.state.doc.nodeAt(pos);
+  if (!node) return;
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const zoom = appliedScale(view.dom) || 1;
+  const rotation = (node.attrs.rotation as number) || 0;
+
+  const turnedRun = (ev: MouseEvent): { dx: number; dy: number } =>
+    pointerInElementAxes((ev.clientX - startX) / zoom, (ev.clientY - startY) / zoom, rotation);
+
+  const onPointerMove = (ev: MouseEvent): void => {
+    const { dx, dy } = turnedRun(ev);
+    onMove(dx, dy);
+  };
+  const onPointerUp = (ev: MouseEvent): void => {
+    document.removeEventListener("mousemove", onPointerMove);
+    document.removeEventListener("mouseup", onPointerUp);
+    const { dx, dy } = turnedRun(ev);
+    onCommit(dx, dy);
+  };
+
+  document.addEventListener("mousemove", onPointerMove);
+  document.addEventListener("mouseup", onPointerUp);
+}
+

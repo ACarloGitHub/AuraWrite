@@ -10,6 +10,7 @@ import { calculatePageBreaks, getPageFormat } from "./pagination-cassie";
 import { syncEditorMetricsFromDom, getMetricsGeneration } from "./text-metrics";
 import { appliedScale } from "./editor-zoom";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
+import { shapeRotationPivot } from "./shape-params";
 
 export const cassiePaginationPluginKey = new PluginKey("cassiePagination");
 
@@ -307,7 +308,10 @@ export function measureDomBands(
     // rectangle replaces the measured one for the VERTICAL; the claim's size stays the
     // element's own box, because that is the unit that turns.
     const flying = override?.get(pos);
-    const painted = paintedBoxOf(ownWidthCss, ownHeightCss, rotationDeg);
+    // The arrow turns around its tip, every other element around its centre: the
+    // same pivot function the page count uses, so the two cannot disagree.
+    const pivot = shapeRotationPivot(node.attrs as Record<string, unknown>) ?? undefined;
+    const painted = paintedBoxOf(ownWidthCss, ownHeightCss, rotationDeg, pivot);
     // The band's vertical start and the claim's horizontal position. At rest both come
     // from what is painted and registered; while the element flies, the copy is not in
     // the document to be measured, so its painted rectangle is DERIVED from its own box
