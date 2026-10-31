@@ -1064,6 +1064,12 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBrea
       case "figure":
       case "styled_box":
         return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
+      case "shape":
+        // Step S5 of the chapter: Word receives a bitmap copy next to the vector
+        // drawing (the library supports an svg run with a fallback image). Until
+        // then the shape is left out, deliberately, instead of turning into an
+        // empty paragraph nobody would understand.
+        return [];
       default:
         return assertNeverKind(element.kind);
     }

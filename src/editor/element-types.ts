@@ -1,19 +1,19 @@
 // ============================================================================
 // Element types (TT) — the ONE table of the block elements that live in the
-// document: photo, figure, styled box (and, tomorrow, the drawn shape).
+// document: photo, figure, styled box and the drawn shape.
 //
 // Every part of the program that has to know WHAT an element is asks here
 // instead of keeping its own little list of names. A new type adds one row;
 // the places that still decide per type switch over `ElementKind`, so a
 // forgotten branch does not compile (see `assertNeverKind`).
 //
-// Behaviour is unchanged for the three types that exist today: the table only
-// states what the code already did, one fact in one place.
+// Behaviour is unchanged for the three types that existed before: the table
+// only states what the code already did, one fact in one place.
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
 
-export const ELEMENT_KINDS = ["image", "figure", "styled_box"] as const;
+export const ELEMENT_KINDS = ["image", "figure", "styled_box", "shape"] as const;
 
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
@@ -51,9 +51,9 @@ export interface ElementType {
   /** Which measured block spacing follows the element in the page count. */
   spacingKey: "image" | "figure" | "other";
   /** Which section of the secondary toolbar the element shows. */
-  toolbarSection: "image" | "box";
+  toolbarSection: "image" | "box" | "shape";
   /** How the Word export treats the element today. */
-  word: "text";
+  word: "text" | "none";
   capabilities: ElementCapabilities;
 }
 
@@ -93,6 +93,22 @@ export const ELEMENT_TYPES = {
     toolbarSection: "box",
     word: "text",
     capabilities: { caption: false, aspectLock: false, background: true, rotation: true },
+  },
+  shape: {
+    kind: "shape",
+    layerName: "Shape",
+    // The shape owns its box, like the box, but keeps the common width name so
+    // the free engine and the page count read it with no extra branch.
+    widthAttr: "width",
+    widthOnOwnBox: true,
+    freeCapable: true,
+    // No frame of its own: the drawn stroke IS the outline, inside the box.
+    frameInside: true,
+    spacingKey: "other",
+    toolbarSection: "shape",
+    // Word has no shape of its own; the bitmap copy is step S5 of the chapter.
+    word: "none",
+    capabilities: { caption: false, aspectLock: false, background: false, rotation: true },
   },
 } as const satisfies Record<ElementKind, ElementType>;
 
