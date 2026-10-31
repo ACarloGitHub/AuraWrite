@@ -49,7 +49,7 @@ import {
   dragShapeBody,
   dragShapeEdge,
   dragShapeHead,
-  dragShapeRear,
+  dragShapeScale,
   dragShapeTip,
   shapeHandleAnchors,
   type ShapeDrag,
@@ -279,19 +279,23 @@ export class ShapeNodeView implements NodeView {
     switch (part) {
       case "tip":
         return dragShapeTip(start, dx);
-      case "rear":
-        return dragShapeRear(start, dx);
       case "base":
         return dragShapeHead(start, -dy);
       case "mirror":
         return dragShapeHead(start, dy);
       case "body":
         return dragShapeBody(start, dx, dy);
+      case "scale":
+        return dragShapeScale(start, dx, dy);
       case "east":
       case "west":
       case "north":
       case "south":
         return dragShapeEdge(part, start, dx, dy);
+      default:
+        // A part this kind does not have: its handle is hidden, so no hand can
+        // reach it. The document keeps the numbers it had.
+        return { ...start, shiftX: 0, shiftY: 0 };
     }
   }
 

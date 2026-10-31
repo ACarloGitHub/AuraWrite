@@ -33,7 +33,18 @@ export interface ShapePoint {
 }
 
 /** The parts of a drawing a pointer can reshape, one name per corner it has. */
-export const SHAPE_PARTS = ["tip", "rear", "base", "mirror", "body", "east", "west", "north", "south"] as const;
+export const SHAPE_PARTS = [
+  "tip",
+  "rear",
+  "base",
+  "mirror",
+  "body",
+  "scale",
+  "east",
+  "west",
+  "north",
+  "south",
+] as const;
 
 export type ShapePart = (typeof SHAPE_PARTS)[number];
 
@@ -151,6 +162,9 @@ export function shapeHandleAnchors(params: ShapeParams, box: ShapeBox): ShapeAnc
       west: { x: inset, y: midY },
       north: { x: width / 2, y: inset },
       south: { x: width / 2, y: height - inset },
+      // A corner of the box: it grows and shrinks both axes together, which is
+      // how an ellipse becomes a circle and a circle stays one.
+      scale: { x: width - inset, y: inset },
     };
   }
 
@@ -158,14 +172,21 @@ export function shapeHandleAnchors(params: ShapeParams, box: ShapeBox): ShapeAnc
   const half = bodyHalfHeight(params, { width, height }, inset);
   const tipX = width - inset;
   const baseX = tipX - headLength;
-  const anchors: ShapeAnchors = {
+  if (params.kind === "arrow_both") {
+    // The drawing is symmetric, so its handles are: one tip, one head corner and
+    // the body's handle in the middle, equidistant from the two tips.
+    return {
+      tip: { x: tipX, y: midY },
+      base: { x: baseX, y: inset },
+      body: { x: width / 2, y: midY - half },
+    };
+  }
+  return {
     tip: { x: tipX, y: midY },
     base: { x: baseX, y: inset },
     mirror: { x: baseX, y: height - inset },
     body: { x: inset, y: midY - half },
   };
-  if (params.kind === "arrow_both") anchors.rear = { x: inset, y: midY };
-  return anchors;
 }
 
 /** One shape's numbers after a gesture. */
@@ -195,10 +216,24 @@ function fit(state: ShapeState): ShapeState {
   return { params: { ...state.params, headSize, bodyHeight }, box: state.box };
 }
 
-/** The TIP: longer or shorter head; the box's right edge travels with it. */
+/**
+ * The TIP: longer or shorter head. On the single arrow the box's right edge
+ * travels with it; on the double arrow the head at the other end grows the same
+ * way, so the shape gets longer on both sides and the box's corner travels half
+ * the change.
+ */
 export function dragShapeTip(start: ShapeState, dx: number): ShapeDrag {
-  const width = clamp(start.box.width + dx, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   const headSize = Math.round(start.params.headSize + dx);
+  if (start.params.kind === "arrow_both") {
+    const width = clamp(start.box.width + 2 * dx, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+    const grown = width - start.box.width;
+    const state = fit({
+      box: { width: Math.round(width), height: start.box.height },
+      params: { ...start.params, headSize },
+    });
+    return { ...state, shiftX: -Math.round(grown / 2), shiftY: 0 };
+  }
+  const width = clamp(start.box.width + dx, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   const state = fit({
     box: { width: Math.round(width), height: start.box.height },
     params: { ...start.params, headSize },
@@ -206,12 +241,12 @@ export function dragShapeTip(start: ShapeState, dx: number): ShapeDrag {
   return { ...state, shiftX: 0, shiftY: 0 };
 }
 
-/** The REAR tip (double arrow): the rear end moves, the front tip stays. */
-export function dragShapeRear(start: ShapeState, dx: number): ShapeDrag {
-  const width = clamp(start.box.width - dx, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
-  const state = fit({ box: { width: Math.round(width), height: start.box.height }, params: start.params });
-  return { ...state, shiftX: start.box.width - state.box.width, shiftY: 0 };
-}
+/**
+ * The REAR tip was removed on Carlo's request (31-10): the double arrow is
+ * symmetric, so the one handle on the right tip carries both. `dragShapeRear`
+ * no longer exists on purpose — a second grab point for the same gesture is a
+ * duplication, not a help.
+ */
 
 /** The HEAD's rear corners: the head widens or narrows symmetrically. */
 export function dragShapeHead(start: ShapeState, outward: number): ShapeDrag {
@@ -224,8 +259,25 @@ export function dragShapeHead(start: ShapeState, outward: number): ShapeDrag {
   return { ...state, shiftX: 0, shiftY: 0 };
 }
 
-/** The BODY's rear corner: height of the body, length of the shape. */
+/**
+ * The BODY: height of the body on the vertical axis, and on the horizontal the
+ * shape gets longer or shorter.
+ *
+ * On the double arrow everything happens symmetrically about the middle — the
+ * handle sits in the middle, equidistant from the two tips — so the box grows on
+ * both sides and its own corner travels half the change, without moving the
+ * centre.
+ */
 export function dragShapeBody(start: ShapeState, dx: number, dy: number): ShapeDrag {
+  if (start.params.kind === "arrow_both") {
+    const width = clamp(start.box.width + 2 * dx, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+    const grown = width - start.box.width;
+    const state = fit({
+      box: { width: Math.round(width), height: start.box.height },
+      params: { ...start.params, bodyHeight: Math.round(start.params.bodyHeight - 2 * dy) },
+    });
+    return { ...state, shiftX: -Math.round(grown / 2), shiftY: 0 };
+  }
   const width = clamp(start.box.width - dx, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   const state = fit({
     box: { width: Math.round(width), height: start.box.height },
@@ -277,5 +329,26 @@ export function dragShapeEdge(
     params: start.params,
     shiftX: 0,
     shiftY: 0,
+  };
+}
+
+/**
+ * The ELLIPSE's corner: both axes grow or shrink by the same factor, so a
+ * circle stays a circle and anything else becomes one. The centre does not
+ * move, which is why the box's corner travels half of each change.
+ */
+export function dragShapeScale(start: ShapeState, dx: number, dy: number): ShapeDrag {
+  const inset = shapeStrokeInset(start.params, start.box);
+  const rx = Math.max(1, start.box.width / 2 - inset);
+  const ry = Math.max(1, start.box.height / 2 - inset);
+  const reach = Math.hypot(rx, ry) || 1;
+  const factor = Math.max(0.1, Math.hypot(rx + dx, ry + dy) / reach);
+  const width = clamp(start.box.width * factor, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+  const height = clamp(start.box.height * factor, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+  return {
+    box: { width: Math.round(width), height: Math.round(height) },
+    params: start.params,
+    shiftX: (start.box.width - width) / 2,
+    shiftY: (start.box.height - height) / 2,
   };
 }

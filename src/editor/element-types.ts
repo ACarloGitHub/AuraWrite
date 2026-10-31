@@ -114,7 +114,7 @@ export const ELEMENT_TYPES = {
     toolbarSection: "shape",
     // Word has no shape of its own; the bitmap copy is step S5 of the chapter.
     word: "none",
-    capabilities: { caption: false, aspectLock: false, background: false, rotation: true, flipVertical: false },
+    capabilities: { caption: false, aspectLock: false, background: false, rotation: true, flipVertical: true },
   },
 } as const satisfies Record<ElementKind, ElementType>;
 
