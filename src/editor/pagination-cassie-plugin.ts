@@ -153,7 +153,14 @@ function bandPieces(input: {
     out.push({
       page,
       insertPos: carrier.pos + 1,
-      marginTop: Math.max(0, Math.round(lo - carrier.top)),
+      // Quando il blocco che porta il pezzo comincia PRIMA di questa pagina
+      // (paragrafo spezzato fra due fogli), sul foglio il suo inizio non c'e':
+      // il margine va misurato dal bordo alto della PAGINA, non dalla cima del
+      // blocco che sta sul foglio prima (difetto 27).
+      marginTop: Math.max(
+        0,
+        Math.round(lo - (carrier.top >= areas[page].top - 0.5 ? carrier.top : areas[page].top)),
+      ),
       side,
       widthPx,
       heightPx: Math.max(1, Math.round(hi - lo)),

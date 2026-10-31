@@ -120,10 +120,27 @@ export function buildPrintPages(
     // suo bordo alto. Mappare i pezzi per identita' del nodo li faceva cadere nel
     // vuoto - ed e' il perche', dopo la build delle 06:56, la distribuzione del
     // testo di A20 era peggiore di prima: non era accorciata da nessuna parte.
+    // Le posizioni VERE nel documento dei blocchi che questo foglio stampa: gli
+    // offset della fetta non coincidono con le posizioni del documento quando il
+    // foglio comincia a meta' paragrafo (openStart), e il pezzo di fascia indica
+    // il blocco con la posizione del documento.
+    const nodiDelDocumento: { pos: number; end: number }[] = [];
+    {
+      let p = 0;
+      doc.forEach((n) => {
+        nodiDelDocumento.push({ pos: p, end: p + n.nodeSize });
+        p += n.nodeSize;
+      });
+    }
+    const delFoglio = nodiDelDocumento.filter((t) => t.pos < cuts[i + 1] && t.end > cuts[i]);
     const iniziDelFoglio = new Set<number>();
-    slice.content.forEach((node, offsetInSlice) => {
-      if (inFlow(node)) iniziDelFoglio.add(cuts[i] + offsetInSlice);
-    });
+    {
+      let k = 0;
+      slice.content.forEach((node) => {
+        if (inFlow(node) && delFoglio[k]) iniziDelFoglio.add(delFoglio[k].pos);
+        k++;
+      });
+    }
     const primoBlocco = iniziDelFoglio.size > 0 ? Math.min(...iniziDelFoglio) : null;
     const fascePerInizio = new Map<number, BandPiece[]>();
     // Due elementi liberi appesi allo stesso paragrafo (le due immagini
@@ -140,7 +157,10 @@ export function buildPrintPages(
         let pz = pezzo;
         if (!iniziDelFoglio.has(pz.insertPos - 1)) {
           if (primoBlocco === null) continue;
-          pz = { ...pz, insertPos: primoBlocco + 1, marginTop: 0 };
+          // Il margine NON si azzera: per un pezzo che continua dal foglio prima
+          // e' gia' misurato dal bordo alto di questa pagina (bandPieces), ed e'
+          // quello che tiene la fascia all'altezza giusta.
+          pz = { ...pz, insertPos: primoBlocco + 1 };
         }
         const lista = fascePerInizio.get(pz.insertPos - 1);
         if (lista) lista.push(pz);
@@ -163,12 +183,15 @@ export function buildPrintPages(
       else bySpacerBlock.set(owner.node, [geo]);
     }
     const placed = new Set<FreeGeometry>();
+    let indiceBlocco = 0;
     slice.content.forEach((node, offsetInSlice) => {
+      const docStart = delFoglio[indiceBlocco]?.pos ?? cuts[i] + offsetInSlice;
+      indiceBlocco++;
       if (!inFlow(node)) return;
       const el = serializer.serializeNode(node, {}) as HTMLElement;
       // Il blocco porta la sua posizione nel documento: all'anteprima serve per
       // ritrovare il paragrafo a cui un elemento libero e' appeso.
-      el.dataset.awPos = String(cuts[i] + offsetInSlice);
+      el.dataset.awPos = String(docStart);
       if (isOverlap(textConditionOf(node))) {
         // Overlap in the flow: out of the page flow but keeping the place it
         // already had, exactly as on screen (free-style.applyOverlapLayout).
@@ -190,7 +213,7 @@ export function buildPrintPages(
       // La fascia MISURATA sulla pagina dell'editor ha la precedenza: stessi
       // numeri, stesso punto, quindi stesso testo. Senza misura, la fascia del
       // calcolo (strada di prima).
-      const mioInizio = cuts[i] + offsetInSlice;
+      const mioInizio = docStart;
       for (const m of fascePerInizio.get(mioInizio) ?? []) {
         // The piece is already clipped to its page by the editor; the sheet's own
         // content box is the last word, because a reserved area taller than the
