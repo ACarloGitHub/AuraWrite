@@ -187,6 +187,11 @@ function wrapInHTMLDocument(bodyContent: string): string {
     figure[data-aw-figure][data-align="right"] { margin-left: auto; margin-right: 0; }
     figure[data-aw-figure] img { display: block; }
     figcaption { font-size: 12px; font-style: italic; color: #666; }
+    /* Drawn shapes: the size, the alignment and the air travel inline in the
+       markup (the file stands on its own); these two rules only make the box
+       behave like the block it is in the editor. */
+    .aw-shape { display: block; box-sizing: border-box; max-width: 100%; }
+    .aw-shape svg { display: block; }
     .page-break-before {
       page-break-before: always;
       break-before: page;

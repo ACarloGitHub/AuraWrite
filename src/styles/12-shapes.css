@@ -1,0 +1,75 @@
+/* ============================================================================
+   Shapes (chapter A, step S1) — the drawn element on the editor's page.
+
+   The drawing itself is inline SVG (see shape-paint.ts), so nothing here
+   describes the shape: these rules only place it in the page and make it
+   grabbable. The print sheet and the exported HTML carry their own inline
+   styles, because they have no stylesheet.
+   ============================================================================ */
+
+.ProseMirror .aw-shape {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  user-select: none;
+  /* No vertical margin, IN the editor or on the sheet: the space the shape takes
+     is decided by the page count (one rule, not two). Horizontal margins are the
+     alignment's, and they travel inline in the markup as well. */
+  margin: 0;
+}
+
+.ProseMirror .aw-shape[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.ProseMirror .aw-shape[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ProseMirror .aw-shape[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* In flow, Wrapped and beside the text: the same float and the same air as the
+   photo. The air comes from `floatGapPx`, which the node view writes into the
+   variable — one number for screen, page count and paper. */
+.ProseMirror .aw-shape[data-wrap=""][data-align="left"] {
+  float: left;
+  margin: 0 var(--aw-float-gap, 12px) 0 0;
+}
+
+.ProseMirror .aw-shape[data-wrap=""][data-align="right"] {
+  float: right;
+  margin: 0 0 0 var(--aw-float-gap, 12px);
+}
+
+.aw-shape svg {
+  display: block;
+}
+
+/* A line two pixels thick cannot be caught with the pointer. The soft area sits
+   OUTSIDE the box (absolute with a negative inset), so it never inflates the
+   room the text keeps clear (§7). */
+.aw-shape__hit {
+  position: absolute;
+  inset: -6px;
+  cursor: move;
+}
+
+.aw-shape--selected {
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
+  cursor: move;
+}
+
+/* The four corner handles and the rotation handle are the SHARED ones
+   (`element-handles.ts`), hidden until the shape is selected - exactly as the
+   photo, the figure and the box show theirs. The box HUGS the shape, so on a
+   thin line the corners sit a hair above and below it: still reachable. */
+.aw-shape--selected .image-resize-handle,
+.aw-shape--selected .aw-rotate-handle {
+  display: block;
+}

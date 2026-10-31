@@ -1077,6 +1077,8 @@ function setupFormattingButtons(): void {
   const btnImage = document.getElementById("btn-image");
   const btnNote = document.getElementById("btn-note");
   const btnTextBox = document.getElementById("btn-textbox");
+  const btnLine = document.getElementById("btn-line");
+  const btnArrow = document.getElementById("btn-arrow");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
@@ -1091,10 +1093,19 @@ function setupFormattingButtons(): void {
   btnTextBox?.addEventListener("click", () => {
     void import("./box-commands").then((m) => m.insertStyledBox(editorView, "text"));
   });
+  // Chapter A (S1): the drawn shapes are inserted from the bar and then moved
+  // with the mouse, like every other element (drawn-shapes-project §5).
+  btnLine?.addEventListener("click", () => {
+    void import("./shape-commands").then((m) => m.insertShape(editorView, "line"));
+  });
+  btnArrow?.addEventListener("click", () => {
+    void import("./shape-commands").then((m) => m.insertShape(editorView, "arrow"));
+  });
 
   setupTableToolbar(editorView);
   setupImageToolbar(editorView);
   void import("./box-style-toolbar").then((m) => m.setupBoxToolbar(editorView));
+  void import("./shape-toolbar").then((m) => m.setupShapeToolbar(editorView));
   void import("./figure-toolbar").then((m) => m.setupFigureToolbar(editorView));
   // F3: the layers window belongs with the other floating surfaces, and it is
   // opened from the status bar - not from the main toolbar (contract §2.12).
@@ -2342,6 +2353,7 @@ export function syncSecondaryToolbar(view: EditorView): void {
   // These run on every transaction, also when the selection LEAVES an element.
   void import("./layers-panel").then((m) => m.syncLayersPanel(view));
   void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
+  void import("./shape-toolbar").then((m) => m.syncShapeToolbar(view));
   updateImageToolbar(view);
   if (!bar) return;
   if (!info) {
@@ -2350,12 +2362,14 @@ export function syncSecondaryToolbar(view: EditorView): void {
   }
   bar.classList.add("image-toolbar--visible");
   // Which block of controls the bar shows comes from the element table: the
-  // image/figure section or the box section (the shape will bring its own).
+  // image/figure section, the box section or the shape section.
   const section = elementTypeOf(info.node)?.toolbarSection ?? "image";
   const imageControls = document.getElementById("image-controls");
   const boxControls = document.getElementById("box-controls");
+  const shapeControls = document.getElementById("shape-controls");
   if (imageControls) imageControls.hidden = section !== "image";
   if (boxControls) boxControls.hidden = section !== "box";
+  if (shapeControls) shapeControls.hidden = section !== "shape";
 }
 
 export function updateImageToolbar(view: EditorView): void {

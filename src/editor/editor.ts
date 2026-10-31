@@ -30,6 +30,8 @@ import { FigureNodeView } from "./figure-node-view";
 import { IMAGE_STYLE_ATTRS, OPACITY_ATTR, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
+import { SHAPE_NODE_SPEC } from "./shape-node";
+import { ShapeNodeView } from "./shape-node-view";
 import { createAtomicElementGuardPlugin, transformStyleOf } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
 import { isWrapping, textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
@@ -553,6 +555,7 @@ nodes = nodes
     image: imageSpec,
     styled_box: STYLED_BOX_NODE_SPEC,
     figure: FIGURE_NODE_SPEC,
+    shape: SHAPE_NODE_SPEC,
     ...tableNodeSpecs,
   });
 
@@ -743,6 +746,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
       styled_box: (node, view, getPos) => new StyledBoxNodeView(node, view, getPos),
       figure: (node, view, getPos) => new FigureNodeView(node, view, getPos),
+      shape: (node, view, getPos) => new ShapeNodeView(node, view, getPos),
     },
     handleScrollToSelection(view) {
       scrollSelectionIntoView(view);
