@@ -27,6 +27,7 @@ import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 import { assertNeverKind, elementTypeOf } from "../editor/element-types";
+import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
@@ -895,6 +896,9 @@ async function loadImageBytes(src: string): Promise<Uint8Array | null> {
   }
 }
 
+/** The pictures of the drawn shapes, for the duration of one export. */
+let shapeBitmaps: Map<unknown, ShapeBitmap> | null = null;
+
 export async function toDocx(doc: any): Promise<Document> {
   const sources = new Set<string>();
   await collectImageSources(doc, sources);
@@ -905,6 +909,20 @@ export async function toDocx(doc: any): Promise<Document> {
       if (bytes) imageCache.set(src, bytes);
     })
   );
+
+  // The drawn shapes become pictures here, once, before the walk: Word has no
+  // shapes of ours, and a picture is what the format can carry.
+  shapeBitmaps = new Map();
+  const rasterTasks: Promise<void>[] = [];
+  doc.descendants((node: any) => {
+    if (node.type?.name !== "shape") return;
+    rasterTasks.push(
+      shapeBitmap(node).then((bitmap) => {
+        if (bitmap) shapeBitmaps?.set(node, bitmap);
+      }),
+    );
+  });
+  await Promise.all(rasterTasks);
 
   const margins = getMargins();
   const page = getPageFormat();
@@ -1064,12 +1082,28 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBrea
       case "figure":
       case "styled_box":
         return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
-      case "shape":
-        // Step S5 of the chapter: Word receives a bitmap copy next to the vector
-        // drawing (the library supports an svg run with a fallback image). Until
-        // then the shape is left out, deliberately, instead of turning into an
-        // empty paragraph nobody would understand.
-        return [];
+      case "shape": {
+        // Word cannot carry our shapes, so the drawing travels as a picture,
+        // painted once before the walk. The format decides; there is no button.
+        const bitmap = shapeBitmaps?.get(node);
+        if (!bitmap) return [];
+        const transformation: any = { width: bitmap.widthPx, height: bitmap.heightPx };
+        const rotation = Number(node.attrs?.rotation) || 0;
+        if (rotation) transformation.rotation = rotation;
+        if (node.attrs?.flipH || node.attrs?.flipV) {
+          transformation.flip = {
+            horizontal: node.attrs?.flipH || undefined,
+            vertical: node.attrs?.flipV || undefined,
+          };
+        }
+        return [
+          new Paragraph({
+            children: [new ImageRun({ type: "png", data: bitmap.bytes, transformation })],
+            alignment: paragraphAlignFromAttr(node.attrs?.align),
+            pageBreakBefore,
+          }),
+        ];
+      }
       default:
         return assertNeverKind(element.kind);
     }
