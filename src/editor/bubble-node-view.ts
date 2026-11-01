@@ -126,6 +126,8 @@ export class BubbleNodeView implements NodeView {
     if (this.pendingPaint) return;
     this.pendingPaint = requestAnimationFrame(() => {
       this.pendingPaint = 0;
+      // A drag may have started between the measurement and this frame.
+      if (this.dragging) return;
       const layout = this.layoutNow();
       const box = `${layout.boxW}x${layout.boxH}`;
       if (box === this.lastBox) return;
