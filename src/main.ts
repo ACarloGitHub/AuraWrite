@@ -2,6 +2,7 @@ import { createEditor, syncDocumentPaginationState } from "./editor/editor";
 import { applyDocumentJson, clearEditorDocument } from "./editor/document-loader";
 import { installTestHooks } from "./editor/test-hooks";
 import { setupToolbar } from "./editor/toolbar";
+import { initUserFonts } from "./editor/fonts-ui";
 import { setupAIPanel, resetChatChunks } from "./ai-panel/chat";
 import { setupMCPPanel } from "./ai-panel/mcp-panel";
 import { setContextFooterModel, updateContextFooter } from "./ai-panel/context-footer";
@@ -210,6 +211,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   invoke("workspace_init").catch(() => {});
   const prefs = getPreferences();
   applyPreferences(prefs);
+
+  // User fonts: read the folder's names (it opens no file) and declare the
+  // faces the stored preferences already use, before the editor is built. The
+  // full list is built by the font selectors when someone opens them.
+  await initUserFonts({
+    editor: prefs.fontEditor,
+    ui: prefs.fontUi,
+    useBundled: prefs.fontsUseBundled !== false,
+  });
 
   const editorElement = document.getElementById("editor");
   if (!editorElement) {

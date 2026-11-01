@@ -9,7 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openPath as openLocalPath } from "@tauri-apps/plugin-opener";
 import { showErrorToast } from "../error-boundary";
-import { populateUserFontsInToolbar, setupFontsReloadListener } from "../editor/fonts-ui";
+import { ensureFontOption, fillUserFontOptions, reloadUserFonts } from "../editor/fonts-ui";
 import { getEffectiveProviderName, getCachedApiKey, preloadApiKey } from "../ai-panel/ai-manager";
 import { PROVIDER_BASE_URLS } from "../ai-panel/providers";
 import {
@@ -156,13 +156,17 @@ export function openPreferencesModal(): void {
   (
     document.getElementById("pref-updates-check-enabled") as HTMLInputElement
   ).checked = prefs.updatesCheckEnabled !== false;
-  (
-    document.getElementById("pref-fonts-use-bundled") as HTMLInputElement
-  ).checked = prefs.fontsUseBundled !== false;
-  (document.getElementById("pref-fonts-editor") as HTMLSelectElement).value =
-    prefs.fontEditor || "Lora";
-  (document.getElementById("pref-fonts-ui") as HTMLSelectElement).value =
-    prefs.fontUi || "Inter";
+  (document.getElementById("pref-fonts-use-bundled") as HTMLInputElement).checked =
+    prefs.fontsUseBundled !== false;
+  // The user font list is built when the Fonts tab is opened. Until then the
+  // stored family is kept as an option of its own, because the form below
+  // saves what the select says: a missing option would reset the writer's font.
+  const editorFont = document.getElementById("pref-fonts-editor") as HTMLSelectElement;
+  ensureFontOption(editorFont, prefs.fontEditor || "Lora");
+  editorFont.value = prefs.fontEditor || "Lora";
+  const uiFont = document.getElementById("pref-fonts-ui") as HTMLSelectElement;
+  ensureFontOption(uiFont, prefs.fontUi || "Inter");
+  uiFont.value = prefs.fontUi || "Inter";
   (
     document.getElementById("pref-agent-planner") as HTMLInputElement
   ).checked = prefs.plannerEnabled !== false;
@@ -250,7 +254,16 @@ function makeModalDraggable(): void {
   });
 }
 
-function loadUserFonts(): void {
+/**
+ * The folder list: every file is opened to check it and its size is read, so it
+ * costs a few hundred milliseconds on a big folder and is built once, when the
+ * Fonts tab is opened. `force` is the Reload button, which exists exactly for
+ * when the folder has changed.
+ */
+let userFontsListLoaded = false;
+
+function loadUserFonts(force = false): void {
+  if (userFontsListLoaded && !force) return;
   const listEl = document.getElementById("pref-fonts-user-list");
   const dirEl = document.getElementById("pref-fonts-user-dir");
   if (!listEl || !dirEl) {
@@ -268,6 +281,7 @@ function loadUserFonts(): void {
       const fonts = await invoke<
         { path: string; filename: string; family_guess: string; size_bytes: number }[]
       >("list_user_fonts");
+      userFontsListLoaded = true;
 
       if (fonts.length === 0) {
         listEl.innerHTML =
@@ -309,6 +323,17 @@ function switchPreferencesTab(tabName: string): void {
     if (!el) {
       console.error("[prefs] Fonts tab is in the tab bar but the content is missing from the DOM");
     }
+
+    // This is the tab that looks at the folder: the folder list (which opens
+    // every file) and the two font selects are built now, not at startup.
+    const prefs = getPreferences();
+    const editorFont = document.getElementById("pref-fonts-editor") as HTMLSelectElement;
+    fillUserFontOptions(editorFont);
+    editorFont.value = prefs.fontEditor || "Lora";
+    const uiFont = document.getElementById("pref-fonts-ui") as HTMLSelectElement;
+    fillUserFontOptions(uiFont);
+    uiFont.value = prefs.fontUi || "Inter";
+    loadUserFonts();
   }
 }
 
@@ -432,13 +457,9 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
   });
   const fontsReload = document.getElementById("pref-fonts-reload");
   fontsReload?.addEventListener("click", () => {
-    void loadUserFonts();
-    void populateUserFontsInToolbar();
-    window.dispatchEvent(new CustomEvent("aurawrite:fonts-reloaded"));
+    loadUserFonts(true);
+    reloadUserFonts();
   });
-  void loadUserFonts(); // initial load
-  void populateUserFontsInToolbar(); // initial toolbar population
-  setupFontsReloadListener();
 
   // Maintenance tab: clean orphan links (v0.4.2+)
   const btnCleanLinks = document.getElementById("pref-maintenance-clean-links");

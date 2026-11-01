@@ -1441,6 +1441,7 @@ pub fn run() {
             check_for_updates,
             // Fonts (v0.4.0+)
             get_user_fonts_dir,
+            list_user_font_files,
             list_user_fonts,
             // Resources (v0.7.0+ — local embeddings: llama.cpp + nomic GGUF)
             resources_get_status,

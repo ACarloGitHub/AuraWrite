@@ -27,6 +27,7 @@ import type { EditorView } from "prosemirror-view";
 import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { syncDocumentPaginationState } from "./editor";
 import { refreshFreeWrapBands } from "./pagination-cassie-plugin";
+import { registerDocumentFontFaces } from "./fonts-ui";
 
 /** Stored text (ProseMirror JSON) → the node, with the legacy shape migrated. */
 export function documentNodeFromJson(view: EditorView, text: string): PMNode {
@@ -41,6 +42,11 @@ export function documentNodeFromJson(view: EditorView, text: string): PMNode {
  * caller should ever have to remember to say it.
  */
 export function installDocument(view: EditorView, doc: PMNode): void {
+  // The fonts this document formats with have to be declared before its text is
+  // laid out, or the runs in a user font flash (and are measured, and are
+  // paginated) in the fallback face. Declaring a face opens no file: the file
+  // is fetched when the browser needs it.
+  registerDocumentFontFaces(doc);
   view.updateState(
     EditorState.create({
       schema: view.state.schema,

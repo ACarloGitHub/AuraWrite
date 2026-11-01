@@ -13,7 +13,6 @@ import { setLoading as setLoadingState, isLoading as isLoadingState } from "../l
 import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
-import { populateUserFontsInToolbar } from "./fonts-ui";
 import { insertImageFromFile, getSelectedImage, setImageAspectLocked, setImageWidth, setImageHeight } from "./image-commands";
 import { getSelectedElement } from "./element-commands";
 import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
@@ -1407,7 +1406,6 @@ function updateAlignMenuSelection(): void {
 // ============================================================================
 
 async function setupStyleControls(): Promise<void> {
-  await populateUserFontsInToolbar();
   const selFont = document.getElementById("sel-font-family") as HTMLSelectElement | null;
   const selSize = document.getElementById("sel-font-size") as HTMLSelectElement | null;
   const btnTextColor = document.getElementById("btn-text-color") as HTMLInputElement | null;
