@@ -239,6 +239,11 @@ function nodeToMarkdown(node: any, opts: MarkdownRewriteOptions = {}): string {
         .trim();
       return caption ? `${img}\n\n${caption}\n\n` : `${img}\n\n`;
     }
+    case "shape":
+      // A drawn shape has no text and Markdown has no drawing: it leaves NOTHING,
+      // deliberately. The fallback below would turn it into an empty paragraph,
+      // and a blank line nobody asked for is worse than a silence.
+      return "";
     default:
       if (node.isBlock) {
         return nodeToMarkdown({ ...node, type: { name: "paragraph" } }, opts);
