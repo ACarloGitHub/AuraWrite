@@ -102,7 +102,12 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
     : kindChanged
       ? defaultShapeBox(params.kind).height
       : merged.height;
-  const box = shapeBoxSize({ ...merged, height });
+  // A brace is born with its own narrow box: inheriting an arrow's width would
+  // give it arms a hundred pixels long and a cusp in a corner.
+  const width = kindChanged && params.kind === "brace"
+    ? defaultShapeBox("brace").width
+    : merged.width;
+  const box = shapeBoxSize({ ...merged, width, height });
   // The body must fit inside the head: a number the drawing cannot honour is a
   // number the bar must not show.
   const bodyRoom = Math.max(1, box.height - params.strokeWidth);
@@ -118,6 +123,8 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
     curve: params.curve,
     points: params.points,
     depth: params.depth,
+    opening: params.opening,
+    cusp: params.cusp,
     width: box.width,
     height: box.height,
   });

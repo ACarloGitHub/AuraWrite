@@ -52,6 +52,7 @@ import {
   dragShapeHead,
   dragShapeScale,
   dragShapeTip,
+  dragBraceCusp,
   shapeHandleAnchors,
   type ShapeDrag,
   type ShapePart,
@@ -254,6 +255,7 @@ export class ShapeNodeView implements NodeView {
           strokeWidth: drag.params.strokeWidth,
           headSize: drag.params.headSize,
           bodyHeight: drag.params.bodyHeight,
+          cusp: drag.params.cusp,
         };
         if (freeSpec && (drag.shiftX !== 0 || drag.shiftY !== 0)) {
           const { sx, sy } = shiftFor(drag);
@@ -295,6 +297,8 @@ export class ShapeNodeView implements NodeView {
       case "north":
       case "south":
         return dragShapeEdge(part, start, dx, dy);
+      case "cusp":
+        return dragBraceCusp(start, dx);
       default:
         // A part this kind does not have: its handle is hidden, so no hand can
         // reach it. The document keeps the numbers it had.

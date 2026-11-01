@@ -28,6 +28,7 @@ import { transformStyleOf } from "./element-view";
 import { buildShapeSvg, shapeShadowOf } from "./shape-paint";
 import {
   DEFAULT_BODY_HEIGHT_PX,
+  DEFAULT_CUSP_PX,
   DEFAULT_HEAD_SIZE_PX,
   DEFAULT_SHAPE_WIDTH_PX,
   DEFAULT_STROKE_COLOR,
@@ -77,6 +78,10 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     curve: { default: 0 },
     points: { default: 5 },
     depth: { default: 55 },
+    // A brace opens right ("{") or left ("}"), and its cusp is how far it
+    // sticks out of the stem.
+    opening: { default: "right" },
+    cusp: { default: DEFAULT_CUSP_PX },
     // A drawn shape is never aspect-locked: the width is its length and the
     // height is its stroke (line) or its head's width (arrow) - two free axes.
     aspectLocked: { default: false },
@@ -111,6 +116,8 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
           curve: markerNumber(dom, "data-curve", NaN),
           points: markerNumber(dom, "data-points", 5),
           depth: markerNumber(dom, "data-depth", 55),
+          opening: dom.getAttribute("data-opening") === "left" ? "left" : "right",
+          cusp: markerNumber(dom, "data-cusp", DEFAULT_CUSP_PX),
           align: oneOfAlign(dom.getAttribute("data-align")),
           wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
           opacity: markerNumber(dom, "data-opacity", 100),
@@ -152,6 +159,8 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     if (params.curve !== 0) attrs["data-curve"] = String(params.curve);
     if (params.points !== 5) attrs["data-points"] = String(params.points);
     if (params.depth !== 55) attrs["data-depth"] = String(params.depth);
+    if (params.opening !== "right") attrs["data-opening"] = params.opening;
+    if (params.cusp !== DEFAULT_CUSP_PX) attrs["data-cusp"] = String(params.cusp);
     const wrapMarker = textConditionMarker(condition);
     if (wrapMarker !== null) attrs["data-wrap"] = wrapMarker;
     Object.assign(attrs, freeLayoutToDOM(node));

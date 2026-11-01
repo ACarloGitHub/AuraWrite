@@ -99,7 +99,10 @@
   display: none !important;
 }
 
-.aw-shape:not([data-aw-shape="line"]) .image-resize-handle {
+/* A line and a brace are drawn as an open stroke: their box is a real frame, so
+   they keep the four shared corners. Every other kind is shaped by its own
+   handles, because a box around it would be a box around the drawing. */
+.aw-shape:not([data-aw-shape="line"]):not([data-aw-shape="brace"]) .image-resize-handle {
   display: none !important;
 }
 

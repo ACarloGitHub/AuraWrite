@@ -19,8 +19,10 @@
 
 import {
   MAX_CURVE_PX,
+  MAX_CUSP_PX,
   MAX_SHAPE_WIDTH_PX,
   MIN_BODY_HEIGHT_PX,
+  MIN_CUSP_PX,
   MIN_HEAD_SIZE_PX,
   MIN_SHAPE_BODY_PX,
   MIN_SHAPE_WIDTH_PX,
@@ -46,6 +48,7 @@ export const SHAPE_PARTS = [
   "west",
   "north",
   "south",
+  "cusp",
 ] as const;
 
 export type ShapePart = (typeof SHAPE_PARTS)[number];
@@ -57,6 +60,8 @@ export interface ShapeGeometry {
   shaft: { x1: number; y1: number; x2: number; y2: number } | null;
   /** The closed outline; null for a plain line. */
   outline: [number, number][] | null;
+  /** A stroked path (curves), for the kinds that are not a polygon: the brace. */
+  path?: string;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -113,6 +118,39 @@ function curvePoint(params: ShapeParams, box: ShapeBox, inset: number, t: number
   };
 }
 
+/** One tenth of a pixel is enough resolution for a drawn curve. */
+function round10(n: number): string {
+  return (Math.round(n * 10) / 10).toString();
+}
+
+/**
+ * The brace's drawing: two hooks, a straight stem and the central cusp, as ONE
+ * stroked path (it has no inside, so it is never a polygon). `opening` says
+ * which way it opens — "right" is "{".
+ */
+function bracePath(params: ShapeParams, width: number, height: number, inset: number): string {
+  const midY = height / 2;
+  const xL = inset;
+  const xR = width - inset;
+  // The hooks' rounding, kept small on a short brace.
+  const r = Math.max(2, Math.min(14, (height - inset * 2) / 6));
+  // The cusp's tip is always on the box's edge; `cusp` is how far the stem is
+  // from it. The arms' reach is what the box keeps.
+  const cusp = Math.max(MIN_CUSP_PX, Math.min(params.cusp, width - inset * 2 - 8));
+  const stemX = xL + cusp;
+  const flip = (x: number): number => (params.opening === "left" ? width - x : x);
+  const p = (x: number, y: number): string => `${round10(flip(x))} ${round10(y)}`;
+  return [
+    `M ${p(xR, inset)}`,
+    `Q ${p(stemX, inset)} ${p(stemX, inset + r)}`,
+    `L ${p(stemX, midY - r)}`,
+    `Q ${p(stemX, midY)} ${p(xL, midY)}`,
+    `Q ${p(stemX, midY)} ${p(stemX, midY + r)}`,
+    `L ${p(stemX, height - inset - r)}`,
+    `Q ${p(stemX, height - inset)} ${p(xR, height - inset)}`,
+  ].join(" ");
+}
+
 /** The points of one shape inside its own box. */
 export function shapeGeometry(params: ShapeParams, box: ShapeBox): ShapeGeometry {
   const width = Math.max(1, box.width);
@@ -122,6 +160,10 @@ export function shapeGeometry(params: ShapeParams, box: ShapeBox): ShapeGeometry
 
   if (params.kind === "line") {
     return { shaft: { x1: inset, y1: midY, x2: width - inset, y2: midY }, outline: null };
+  }
+
+  if (params.kind === "brace") {
+    return { shaft: null, outline: null, path: bracePath(params, width, height, inset) };
   }
 
   if (params.kind === "ellipse" || params.kind === "star") {
@@ -232,6 +274,11 @@ export function shapeHandleAnchors(params: ShapeParams, box: ShapeBox): ShapeAnc
 
   if (params.kind === "line") return {};
 
+  if (params.kind === "brace") {
+    const tipX = params.opening === "left" ? width - inset : inset;
+    return { cusp: { x: tipX, y: midY } };
+  }
+
   if (params.kind === "ellipse" || params.kind === "star") {
     return {
       east: { x: width - inset, y: midY },
@@ -294,7 +341,9 @@ export interface ShapeDrag extends ShapeState {
 
 /** Keep head and body inside the box after any change. */
 function fit(state: ShapeState): ShapeState {
-  if (state.params.kind === "line" || state.params.kind === "ellipse") return state;
+  if (state.params.kind === "line" || state.params.kind === "ellipse" || state.params.kind === "brace") {
+    return state;
+  }
   const inset = shapeStrokeInset(state.params, state.box);
   const headSize = headLengthOf(state.params, state.box, inset);
   const room = Math.max(MIN_BODY_HEIGHT_PX, state.box.height - 2 * inset);
@@ -326,6 +375,26 @@ export function dragShapeTip(start: ShapeState, dx: number): ShapeDrag {
     params: { ...start.params, headSize },
   });
   return { ...state, shiftX: 0, shiftY: 0 };
+}
+
+/**
+ * The brace's CUSP: how far it sticks out of the stem. Pulling it outward
+ * deepens it and lengthens the box; the arms stay where they are, so the box's
+ * origin travels with the cusp (opening right) or stays with the arms (opening
+ * left).
+ */
+export function dragBraceCusp(start: ShapeState, dx: number): ShapeDrag {
+  const opening = start.params.opening;
+  const outward = opening === "right" ? -dx : dx;
+  const cusp = clamp(start.params.cusp + outward, MIN_CUSP_PX, MAX_CUSP_PX);
+  const grown = cusp - start.params.cusp;
+  const width = clamp(start.box.width + grown, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
+  return {
+    params: { ...start.params, cusp: Math.round(cusp) },
+    box: { width: Math.round(width), height: start.box.height },
+    shiftX: opening === "right" ? Math.round(dx) : 0,
+    shiftY: 0,
+  };
 }
 
 /**

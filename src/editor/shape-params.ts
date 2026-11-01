@@ -11,7 +11,7 @@
 // ============================================================================
 
 /** The shapes of the first block. */
-export const SHAPE_KINDS = ["line", "arrow", "arrow_both", "arrow_curve", "ellipse", "star"] as const;
+export const SHAPE_KINDS = ["line", "brace", "arrow", "arrow_both", "arrow_curve", "ellipse", "star"] as const;
 
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
@@ -25,9 +25,9 @@ export function hasBody(kind: ShapeKind): boolean {
   return kind === "arrow" || kind === "arrow_both" || kind === "arrow_curve";
 }
 
-/** Every kind but the line is a closed outline: it has an inside to fill. */
+/** Every kind but the line and the brace is a closed outline: it has an inside to fill. */
 export function isClosedShape(kind: ShapeKind): boolean {
-  return kind !== "line";
+  return kind !== "line" && kind !== "brace";
 }
 
 /** The stroke's pattern. */
@@ -44,6 +44,17 @@ export const DEFAULT_STAR_DEPTH = 55;
 /** Bend of the curved arrow, in px; positive bulges upwards. */
 export const DEFAULT_CURVE_PX = 26;
 export const MAX_CURVE_PX = 400;
+
+/** Which way a brace opens: right = the cusp points left, like "{". */
+export const SHAPE_OPENINGS = ["right", "left"] as const;
+export type ShapeOpening = (typeof SHAPE_OPENINGS)[number];
+
+/** A brace is born narrow and tall, with its cusp in proportion. */
+export const DEFAULT_BRACE_WIDTH_PX = 44;
+export const DEFAULT_BRACE_HEIGHT_PX = 120;
+export const DEFAULT_CUSP_PX = 18;
+export const MIN_CUSP_PX = 2;
+export const MAX_CUSP_PX = 200;
 
 export const DEFAULT_STROKE_WIDTH_PX = 2;
 export const DEFAULT_STROKE_COLOR = "#333333";
@@ -104,6 +115,10 @@ export interface ShapeParams {
   /** Points of a star and how deep its notches go (0-100). */
   points: number;
   depth: number;
+  /** Which way a brace opens. */
+  opening: ShapeOpening;
+  /** How far a brace's cusp sticks out of its stem, in px. */
+  cusp: number;
 }
 
 /** True when the value names one of the shapes this version can draw. */
@@ -141,6 +156,10 @@ export function normalizeShapeParams(attrs: Record<string, unknown> | undefined)
     curve: clampInt(a.curve, DEFAULT_CURVE_PX, -MAX_CURVE_PX, MAX_CURVE_PX),
     points: clampInt(a.points, DEFAULT_STAR_POINTS, MIN_STAR_POINTS, MAX_STAR_POINTS),
     depth: clampInt(a.depth, DEFAULT_STAR_DEPTH, 0, 100),
+    opening: (SHAPE_OPENINGS as readonly string[]).includes(String(a.opening))
+      ? (a.opening as ShapeOpening)
+      : "right",
+    cusp: clampInt(a.cusp, DEFAULT_CUSP_PX, MIN_CUSP_PX, MAX_CUSP_PX),
   };
 }
 
@@ -182,6 +201,7 @@ export function shapeBoxSize(attrs: Record<string, unknown> | undefined): ShapeB
  */
 function defaultHeightOf(params: ShapeParams): number {
   if (params.kind === "ellipse") return DEFAULT_ELLIPSE_HEIGHT_PX;
+  if (params.kind === "brace") return DEFAULT_BRACE_HEIGHT_PX;
   if (params.kind === "arrow_curve") return params.headSize + Math.abs(params.curve);
   return params.headSize;
 }
@@ -189,6 +209,9 @@ function defaultHeightOf(params: ShapeParams): number {
 /** The box a shape is born with, per kind. */
 export function defaultShapeBox(kind: ShapeKind): ShapeBox {
   const params = normalizeShapeParams({ shape: kind });
+  if (params.kind === "brace") {
+    return { width: DEFAULT_BRACE_WIDTH_PX, height: DEFAULT_BRACE_HEIGHT_PX };
+  }
   return {
     width: DEFAULT_SHAPE_WIDTH_PX,
     height: params.kind === "line" ? params.strokeWidth : defaultHeightOf(params),

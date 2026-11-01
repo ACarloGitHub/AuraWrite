@@ -113,6 +113,18 @@ export function buildShapeSvg(params: ShapeParams, box: ShapeBox, shadow?: Shape
     }
     layer.appendChild(polygon);
   }
+  if (geometry.path) {
+    // A stroked path: the brace has no inside, so nothing is filled.
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", geometry.path);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", params.strokeColor);
+    path.setAttribute("stroke-width", String(params.strokeWidth));
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    if (dashArray) path.setAttribute("stroke-dasharray", dashArray);
+    layer.appendChild(path);
+  }
   return svg;
 }
 
@@ -139,6 +151,8 @@ export function shapePaintKey(
     params.curve,
     params.points,
     params.depth,
+    params.opening,
+    params.cusp,
     shadow ? `${shadow.dx},${shadow.dy},${shadow.blur},${shadow.color},${shadow.opacity}` : "",
   ].join("|");
 }
