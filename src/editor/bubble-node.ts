@@ -74,7 +74,6 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     tailOut: { default: BUBBLE_TAIL_DEFAULT_OUT },
     tailAlong: { default: BUBBLE_TAIL_DEFAULT_ALONG },
     base: { default: BUBBLE_BASE_DEFAULT },
-    bgColor: { default: "" },
     borderWidth: { default: BUBBLE_STROKE_DEFAULT },
     borderColor: { default: BUBBLE_STROKE_COLOR_DEFAULT },
     borderStyle: { default: "solid" },
@@ -98,7 +97,6 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
           tailOut: markerNumber(dom, "data-tail-out", BUBBLE_TAIL_DEFAULT_OUT),
           tailAlong: markerNumber(dom, "data-tail-along", BUBBLE_TAIL_DEFAULT_ALONG),
           base: markerNumber(dom, "data-base", BUBBLE_BASE_DEFAULT),
-          bgColor: dom.getAttribute("data-bg") || "",
           borderWidth: markerNumber(dom, "data-border-width", BUBBLE_STROKE_DEFAULT),
           borderColor: dom.getAttribute("data-border-color") || BUBBLE_STROKE_COLOR_DEFAULT,
           borderStyle: oneOf(dom.getAttribute("data-border-style") || "", ["solid", "dashed", "dotted"] as const, "solid"),
@@ -130,7 +128,6 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     if (params.tailOut !== BUBBLE_TAIL_DEFAULT_OUT) attrs["data-tail-out"] = String(params.tailOut);
     if (params.tailAlong !== BUBBLE_TAIL_DEFAULT_ALONG) attrs["data-tail-along"] = String(params.tailAlong);
     if (params.base !== BUBBLE_BASE_DEFAULT) attrs["data-base"] = String(params.base);
-    if (params.fill) attrs["data-bg"] = params.fill;
     if (params.strokeWidth !== BUBBLE_STROKE_DEFAULT) {
       attrs["data-border-width"] = String(params.strokeWidth);
     }

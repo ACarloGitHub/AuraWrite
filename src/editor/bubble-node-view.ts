@@ -61,6 +61,9 @@ export class BubbleNodeView implements NodeView {
   /** Its own cache: the text frame and the element are different boxes. */
   private contentApplied: Record<string, string | undefined> = {};
   private observer: ResizeObserver | null = null;
+  /** Scheduled repaint after a measurement, and what the last one drew. */
+  private pendingPaint = 0;
+  private lastBox = "";
 
   constructor(
     node: PMNode,
@@ -93,10 +96,26 @@ export class BubbleNodeView implements NodeView {
 
     // The text changes height on its own (a typed line, a narrower width): the
     // body must follow it, or the balloon would be drawn around yesterday's text.
+    // The repaint is DEFERRED to the next frame and skipped when the box would
+    // not change: doing the layout inside the observer's own callback is what
+    // makes the browser complain ("ResizeObserver loop completed with undelivered
+    // notifications"), and the complaint is not harmless, it is a second pass.
     if (typeof ResizeObserver !== "undefined") {
-      this.observer = new ResizeObserver(() => this.paint(this.layoutNow(), this.currentAttrs()));
+      this.observer = new ResizeObserver(() => this.scheduleRepaint());
       this.observer.observe(this.contentDOM);
     }
+  }
+
+  /** Repaint after a measurement, once per frame, only if the box moved. */
+  private scheduleRepaint(): void {
+    if (this.pendingPaint) return;
+    this.pendingPaint = requestAnimationFrame(() => {
+      this.pendingPaint = 0;
+      const layout = this.layoutNow();
+      const box = `${layout.boxW}x${layout.boxH}`;
+      if (box === this.lastBox) return;
+      this.paint(layout, this.currentAttrs());
+    });
   }
 
   // ------------------------------------------------------------- the node
@@ -148,6 +167,7 @@ export class BubbleNodeView implements NodeView {
   /** Everything the DOM shows for one geometry. */
   private paint(layout: BubbleLayout, attrs: Record<string, unknown>): void {
     const params = layout.params;
+    this.lastBox = `${layout.boxW}x${layout.boxH}`;
     setStyleCached(this.applied, this.dom, "width", `${layout.boxW}px`);
     setStyleCached(this.applied, this.dom, "height", `${layout.boxH}px`);
 
@@ -332,6 +352,8 @@ export class BubbleNodeView implements NodeView {
   destroy(): void {
     this.observer?.disconnect();
     this.observer = null;
+    if (this.pendingPaint) cancelAnimationFrame(this.pendingPaint);
+    this.pendingPaint = 0;
     this.svg = null;
     this.handles = null;
   }

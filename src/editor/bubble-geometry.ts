@@ -24,8 +24,6 @@ export type BubbleDash = "solid" | "dashed" | "dotted";
 export interface BubbleParams {
   /** Shape of the body. */
   body: BubbleBody;
-  /** Inside of the body; empty = no fill at all. */
-  fill: string;
   strokeColor: string;
   strokeWidth: number;
   /** Pattern of the contour. */
@@ -107,7 +105,6 @@ export function normalizeBubbleParams(
   const dash: BubbleDash = dashRaw === "dashed" || dashRaw === "dotted" ? dashRaw : "solid";
   return {
     body,
-    fill: color(attrs.bgColor, ""),
     strokeColor: color(attrs.borderColor, BUBBLE_STROKE_COLOR_DEFAULT),
     strokeWidth: num(attrs.borderWidth, BUBBLE_STROKE_DEFAULT, 0, BUBBLE_STROKE_MAX),
     dash,
@@ -403,21 +400,31 @@ function clampTail(params: BubbleParams): { out: number; along: number } {
   return { out, along };
 }
 
-/** The ring's points from arc position `from` forward to `to` (`to` may wrap). */
+/**
+ * The ring's points from arc position `from` forward to `to` (`to` may wrap).
+ *
+ * The points must come out IN ARC ORDER: the ring is a closed list and the walk
+ * starts in the middle of a segment, so a plain index scan would take the points
+ * before the start first and cut across the body with a straight chord (seen on
+ * screen, 01-11: a diagonal line through the balloon). The walk therefore starts
+ * at the point AFTER the start and wraps around the list once.
+ */
 function ringSlice(ring: Pt[], at: number[], total: number, from: number, to: number): Pt[] {
   const span = total > 0 ? total : 1;
   const f = ((from % span) + span) % span;
   let t = to;
   while (t <= f) t += span;
-  const out: Pt[] = [];
-  const start = ringPointAt(ring, at, total, f).point;
-  out.push(start);
-  for (let i = 0; i < ring.length; i++) {
-    const s = at[i];
-    const sNorm = ((s % span) + span) % span;
-    // Points whose arc position lies strictly inside (f, t).
-    const shifted = sNorm <= f ? sNorm + span : sNorm;
-    if (shifted > f && shifted < t) out.push(ring[i]);
+  const n = ring.length;
+  const out: Pt[] = [ringPointAt(ring, at, total, f).point];
+  // The segment `f` falls in: at[i0] <= f < at[i0 + 1].
+  let i0 = 0;
+  while (i0 < n - 1 && at[i0 + 1] <= f) i0++;
+  for (let k = 1; k <= n; k++) {
+    const j = i0 + k;
+    const wraps = Math.floor(j / n);
+    const pos = at[j - wraps * n] + wraps * span;
+    if (pos >= t) break;
+    out.push(ring[j % n]);
   }
   out.push(ringPointAt(ring, at, total, t).point);
   return out;

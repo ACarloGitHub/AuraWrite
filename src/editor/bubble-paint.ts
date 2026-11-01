@@ -58,10 +58,9 @@ export function buildBubbleSvg(
 
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("d", bubblePathData(layout));
-  // An empty fill means a transparent body: the tail is then an outline that
-  // leaves the body and comes back, with nothing painted inside.
-  path.setAttribute("fill", params.fill || "none");
-  path.setAttribute("fill-rule", "nonzero");
+  // A balloon is a CONTOUR, like a drawn line: no fill at all, so nothing is
+  // painted inside and the page shows through. (Carlo, 01-11.)
+  path.setAttribute("fill", "none");
   if (params.strokeWidth > 0) {
     path.setAttribute("stroke", params.strokeColor);
     path.setAttribute("stroke-width", String(params.strokeWidth));
@@ -103,7 +102,6 @@ export function bubblePaintKey(
   const p = layout.params;
   return [
     p.body,
-    p.fill,
     p.strokeColor,
     p.strokeWidth,
     p.dash,

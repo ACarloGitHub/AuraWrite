@@ -49,15 +49,6 @@ export function setupBubbleToolbar(view: EditorView): void {
     void setBubbleAttrs(view, { widthPx: Math.max(BUBBLE_WIDTH_MIN, Math.min(BUBBLE_WIDTH_MAX, value)) });
   });
 
-  const bg = el<HTMLInputElement>("bubble-bg");
-  bg?.addEventListener("input", () => {
-    if (!bg.value) return;
-    void setBubbleAttrs(view, { bgColor: bg.value });
-  });
-  el("bubble-bg-clear")?.addEventListener("click", () => {
-    void setBubbleAttrs(view, { bgColor: "" });
-  });
-
   const style = el<HTMLSelectElement>("bubble-border-style");
   style?.addEventListener("change", () => {
     void setBubbleAttrs(view, { borderStyle: style.value });
@@ -98,9 +89,6 @@ export function syncBubbleToolbar(view: EditorView): void {
 
   const width = el<HTMLInputElement>("bubble-width");
   if (width) width.value = String(params.width);
-
-  const bg = el<HTMLInputElement>("bubble-bg");
-  if (bg && params.fill) bg.value = params.fill;
 
   const style = el<HTMLSelectElement>("bubble-border-style");
   if (style) style.value = params.dash;
