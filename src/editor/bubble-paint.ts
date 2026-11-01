@@ -58,9 +58,10 @@ export function buildBubbleSvg(
 
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("d", bubblePathData(layout));
-  // A balloon is a CONTOUR, like a drawn line: no fill at all, so nothing is
-  // painted inside and the page shows through. (Carlo, 01-11.)
-  path.setAttribute("fill", "none");
+  // The body is painted inside, like the note's background; an empty fill
+  // leaves the contour alone. The drawing sits BEHIND the text, so the paint
+  // never covers the words.
+  path.setAttribute("fill", params.fill || "none");
   if (params.strokeWidth > 0) {
     path.setAttribute("stroke", params.strokeColor);
     path.setAttribute("stroke-width", String(params.strokeWidth));
@@ -102,6 +103,7 @@ export function bubblePaintKey(
   const p = layout.params;
   return [
     p.body,
+    p.fill,
     p.strokeColor,
     p.strokeWidth,
     p.dash,

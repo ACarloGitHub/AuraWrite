@@ -16,6 +16,8 @@ import { type NodeSpec } from "prosemirror-model";
 import {
   BUBBLE_AT_DEFAULT,
   BUBBLE_BASE_DEFAULT,
+  BUBBLE_FILL_DEFAULT,
+  BUBBLE_HEIGHT_DEFAULT,
   BUBBLE_PAD_X,
   BUBBLE_PAD_Y,
   BUBBLE_RADIUS_DEFAULT,
@@ -63,6 +65,12 @@ function markerNumber(dom: HTMLElement, name: string, fallback: number): number 
   return isFinite(n) ? n : fallback;
 }
 
+/** The body's fill from its marker: absent = the default paper, "none" = transparent. */
+function bubbleFillFromMarker(raw: string | null): string {
+  if (raw == null) return BUBBLE_FILL_DEFAULT;
+  return raw === "none" ? "" : raw;
+}
+
 export const BUBBLE_NODE_SPEC: NodeSpec = {
   content: "block+",
   group: "block",
@@ -74,11 +82,15 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     tailOut: { default: BUBBLE_TAIL_DEFAULT_OUT },
     tailAlong: { default: BUBBLE_TAIL_DEFAULT_ALONG },
     base: { default: BUBBLE_BASE_DEFAULT },
+    bgColor: { default: BUBBLE_FILL_DEFAULT },
     borderWidth: { default: BUBBLE_STROKE_DEFAULT },
     borderColor: { default: BUBBLE_STROKE_COLOR_DEFAULT },
     borderStyle: { default: "solid" },
     cornerRadius: { default: BUBBLE_RADIUS_DEFAULT },
     widthPx: { default: BUBBLE_WIDTH_DEFAULT },
+    heightPx: { default: BUBBLE_HEIGHT_DEFAULT },
+    // Two free axes: the four corners change width and height independently.
+    aspectLocked: { default: false },
     align: { default: "center" },
     wrap: { default: "wrapped" },
     ...FREE_LAYOUT_ATTRS,
@@ -97,11 +109,13 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
           tailOut: markerNumber(dom, "data-tail-out", BUBBLE_TAIL_DEFAULT_OUT),
           tailAlong: markerNumber(dom, "data-tail-along", BUBBLE_TAIL_DEFAULT_ALONG),
           base: markerNumber(dom, "data-base", BUBBLE_BASE_DEFAULT),
+          bgColor: bubbleFillFromMarker(dom.getAttribute("data-bg")),
           borderWidth: markerNumber(dom, "data-border-width", BUBBLE_STROKE_DEFAULT),
           borderColor: dom.getAttribute("data-border-color") || BUBBLE_STROKE_COLOR_DEFAULT,
           borderStyle: oneOf(dom.getAttribute("data-border-style") || "", ["solid", "dashed", "dotted"] as const, "solid"),
           cornerRadius: markerNumber(dom, "data-radius", BUBBLE_RADIUS_DEFAULT),
           widthPx: markerNumber(dom, "data-width", BUBBLE_WIDTH_DEFAULT),
+          heightPx: markerNumber(dom, "data-height", BUBBLE_HEIGHT_DEFAULT),
           align: oneOf(dom.getAttribute("data-align") || "", ALIGNS, "center"),
           wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
           opacity: markerNumber(dom, "data-opacity", 100),
@@ -123,11 +137,14 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
       "data-aw-bubble": params.body,
       "data-align": align,
       "data-width": String(params.width),
+      "data-height": String(params.height),
     };
     if (params.at !== BUBBLE_AT_DEFAULT) attrs["data-at"] = String(params.at);
     if (params.tailOut !== BUBBLE_TAIL_DEFAULT_OUT) attrs["data-tail-out"] = String(params.tailOut);
     if (params.tailAlong !== BUBBLE_TAIL_DEFAULT_ALONG) attrs["data-tail-along"] = String(params.tailAlong);
     if (params.base !== BUBBLE_BASE_DEFAULT) attrs["data-base"] = String(params.base);
+    if (params.fill === "") attrs["data-bg"] = "none";
+    else if (params.fill.toLowerCase() !== BUBBLE_FILL_DEFAULT) attrs["data-bg"] = params.fill;
     if (params.strokeWidth !== BUBBLE_STROKE_DEFAULT) {
       attrs["data-border-width"] = String(params.strokeWidth);
     }
@@ -147,9 +164,10 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     }
 
     // D10 rule 1: the markup stands on its own — sizes, air and turn travel inline.
+    // The element's box is the BODY; the drawing is placed around it.
     const style: string[] = [
-      `width: ${layout.boxW}px`,
-      `height: ${layout.boxH}px`,
+      `width: ${layout.bodyW}px`,
+      `height: ${layout.bodyH}px`,
       "position: relative",
       "display: flow-root",
       "box-sizing: border-box",
@@ -170,13 +188,20 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     attrs.style = style.join("; ");
 
     const svg = buildBubbleSvg(layout, bubbleShadowOf(node.attrs as Record<string, unknown>));
-    svg.setAttribute("style", "position: absolute; left: 0; top: 0; pointer-events: none");
+    // The drawing's rectangle starts where the body starts, minus the tail's
+    // reach: outside the box on purpose, so the contour can leave it.
+    svg.setAttribute(
+      "style",
+      `position: absolute; left: ${-layout.bodyLeft}px; top: ${-layout.bodyTop}px; pointer-events: none`,
+    );
 
     const contentStyle = [
-      `width: ${layout.wrapperW}px`,
-      `margin: ${layout.bodyTop + layout.insetY}px 0 0 ${layout.bodyLeft + layout.insetX}px`,
+      `width: ${layout.frameW}px`,
+      `height: ${layout.frameH}px`,
+      `margin: ${layout.insetY}px 0 0 ${layout.insetX}px`,
       `padding: ${BUBBLE_PAD_Y}px ${BUBBLE_PAD_X}px`,
       "box-sizing: border-box",
+      "position: relative",
     ].join("; ");
 
     return ["div", attrs, svg, ["div", { class: "aw-bubble__content", style: contentStyle }, 0]];

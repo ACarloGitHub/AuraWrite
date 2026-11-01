@@ -24,6 +24,8 @@ export type BubbleDash = "solid" | "dashed" | "dotted";
 export interface BubbleParams {
   /** Shape of the body. */
   body: BubbleBody;
+  /** Inside of the body; empty = transparent (only the contour is painted). */
+  fill: string;
   strokeColor: string;
   strokeWidth: number;
   /** Pattern of the contour. */
@@ -32,7 +34,11 @@ export interface BubbleParams {
   radius: number;
   /** Width of the BODY (what the bar calls W). */
   width: number;
-  /** Height of the BODY: the text's height plus its air. */
+  /**
+   * Height of the BODY, chosen by the author like the width. It is NOT the
+   * text's height: the words can overflow the balloon, and that is a decision
+   * the document records, not a defect to heal (Carlo, 01-11).
+   */
   height: number;
   /** Where the tail leaves the body, 0..100 along the outline. */
   at: number;
@@ -57,6 +63,9 @@ export interface Pt {
 export const BUBBLE_WIDTH_MIN = 80;
 export const BUBBLE_WIDTH_MAX = 1600;
 export const BUBBLE_WIDTH_DEFAULT = 320;
+export const BUBBLE_HEIGHT_MIN = 40;
+export const BUBBLE_HEIGHT_MAX = 2000;
+export const BUBBLE_HEIGHT_DEFAULT = 100;
 export const BUBBLE_AT_DEFAULT = 62.5;
 export const BUBBLE_TAIL_DEFAULT_OUT = 64;
 export const BUBBLE_TAIL_DEFAULT_ALONG = 28;
@@ -71,6 +80,8 @@ export const BUBBLE_STROKE_MIN = 1;
 export const BUBBLE_STROKE_MAX = 24;
 export const BUBBLE_STROKE_DEFAULT = 1;
 export const BUBBLE_STROKE_COLOR_DEFAULT = "#333333";
+/** The balloon's inside: a sheet of paper, so the page cannot show through. */
+export const BUBBLE_FILL_DEFAULT = "#ffffff";
 export const BUBBLE_RADIUS_DEFAULT = 8;
 export const BUBBLE_RADIUS_MAX = 120;
 /** Air between the text and the body's edge: the box's own padding (box.css). */
@@ -78,14 +89,13 @@ export const BUBBLE_PAD_X = 16;
 export const BUBBLE_PAD_Y = 14;
 /**
  * How much of the body the text may use when the body is an ellipse: the
- * rectangle inscribed in it (1/sqrt(2) of each side). The text never crosses
- * the curve, and the body grows around it.
+ * rectangle inscribed in it (1/sqrt(2) of each side), so the words stay clear
+ * of the curve.
  */
 export const BUBBLE_ELLIPSE_INSET = Math.SQRT1_2;
 
-const BUBBLE_DEFAULT_HEIGHT = 100;
-
-function num(raw: unknown, fallback: number, min: number, max: number): number {  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+function num(raw: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
   if (!isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
@@ -96,21 +106,19 @@ function color(raw: unknown, fallback: string): string {
 }
 
 /** Read the node's attributes into a complete, clamped set of numbers. */
-export function normalizeBubbleParams(
-  attrs: Record<string, unknown>,
-  bodyHeight?: number,
-): BubbleParams {
+export function normalizeBubbleParams(attrs: Record<string, unknown>): BubbleParams {
   const body: BubbleBody = attrs.body === "ellipse" ? "ellipse" : "rect";
   const dashRaw = String(attrs.borderStyle ?? "solid");
   const dash: BubbleDash = dashRaw === "dashed" || dashRaw === "dotted" ? dashRaw : "solid";
   return {
     body,
+    fill: color(attrs.bgColor, BUBBLE_FILL_DEFAULT),
     strokeColor: color(attrs.borderColor, BUBBLE_STROKE_COLOR_DEFAULT),
     strokeWidth: num(attrs.borderWidth, BUBBLE_STROKE_DEFAULT, 0, BUBBLE_STROKE_MAX),
     dash,
     radius: num(attrs.cornerRadius, BUBBLE_RADIUS_DEFAULT, 0, BUBBLE_RADIUS_MAX),
     width: num(attrs.widthPx, BUBBLE_WIDTH_DEFAULT, BUBBLE_WIDTH_MIN, BUBBLE_WIDTH_MAX),
-    height: bodyHeight != null ? Math.max(1, bodyHeight) : BUBBLE_DEFAULT_HEIGHT,
+    height: num(attrs.heightPx, BUBBLE_HEIGHT_DEFAULT, BUBBLE_HEIGHT_MIN, BUBBLE_HEIGHT_MAX),
     at: num(attrs.at, BUBBLE_AT_DEFAULT, 0, 100),
     tailOut: num(attrs.tailOut, BUBBLE_TAIL_DEFAULT_OUT, -BUBBLE_TAIL_MAX, BUBBLE_TAIL_MAX),
     tailAlong: num(attrs.tailAlong, BUBBLE_TAIL_DEFAULT_ALONG, -BUBBLE_TAIL_MAX, BUBBLE_TAIL_MAX),
@@ -118,34 +126,28 @@ export function normalizeBubbleParams(
   };
 }
 
-/**
- * Width the text may use inside the body: the body's inner width, or the
- * inscribed rectangle's for an ellipse, minus the air on both sides.
- */
-export function bubbleInnerWidth(params: BubbleParams): number {
-  const frame = params.body === "ellipse" ? params.width * BUBBLE_ELLIPSE_INSET : params.width;
-  return Math.max(40, Math.round(frame - BUBBLE_PAD_X * 2));
-}
-
-/** Width of the frame the text sits in (the body for a rectangle). */
-export function bubbleWrapperWidth(params: BubbleParams): number {
-  return params.body === "ellipse"
-    ? Math.round(params.width * BUBBLE_ELLIPSE_INSET)
-    : params.width;
+export interface BubbleFrame {
+  /** The rectangle the text lives in: the body, or the one inscribed in an ellipse. */
+  w: number;
+  h: number;
+  /** Where that rectangle sits inside the body. */
+  insetX: number;
+  insetY: number;
 }
 
 /**
- * Height of the BODY from the height of its text: the text plus its air, and
- * for an ellipse the body grows so that the inscribed rectangle holds it.
+ * The frame the text lives in. A rectangle holds the whole body; an ellipse
+ * holds the rectangle inscribed in it, so the words never cross the curve.
  */
-export function bubbleBodyHeight(params: BubbleParams, textHeight: number): number {
-  return bubbleBodyHeightFromWrapper(params, Math.max(8, textHeight) + BUBBLE_PAD_Y * 2);
-}
-
-/** The same, from the height of the text's frame (text + air already inside). */
-export function bubbleBodyHeightFromWrapper(params: BubbleParams, wrapperHeight: number): number {
-  const wrapper = Math.max(8, wrapperHeight);
-  return params.body === "ellipse" ? Math.round(wrapper / BUBBLE_ELLIPSE_INSET) : Math.round(wrapper);
+export function bubbleFrame(params: BubbleParams): BubbleFrame {
+  const w = params.body === "ellipse" ? Math.round(params.width * BUBBLE_ELLIPSE_INSET) : params.width;
+  const h = params.body === "ellipse" ? Math.round(params.height * BUBBLE_ELLIPSE_INSET) : params.height;
+  return {
+    w,
+    h,
+    insetX: Math.max(0, Math.round((params.width - w) / 2)),
+    insetY: Math.max(0, Math.round((params.height - h) / 2)),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -287,15 +289,19 @@ export interface BubbleLayout {
   params: BubbleParams;
   bodyW: number;
   bodyH: number;
-  /** The element's box: body plus whatever the tail reaches beyond it. */
+  /**
+   * The drawing's own rectangle: the body plus whatever the tail reaches
+   * beyond it. The element's box is the BODY; this rectangle only says how far
+   * the drawing leaves it, so the view (and the markup) can place the SVG.
+   */
   boxW: number;
   boxH: number;
-  /** Where the body sits inside the element's box. */
+  /** Where the body sits inside the drawing's rectangle. */
   bodyLeft: number;
   bodyTop: number;
   /** The frame the text lives in: the body for a rectangle, its inscribed rectangle for an ellipse. */
-  wrapperW: number;
-  wrapperH: number;
+  frameW: number;
+  frameH: number;
   /** Where the text's frame sits inside the body. */
   insetX: number;
   insetY: number;
@@ -314,8 +320,8 @@ export interface BubbleLayout {
 }
 
 /**
- * Build the balloon. `params.height` is the body's height, which depends on the
- * text: the node view measures it, the page count estimates it the same way.
+ * Build the balloon. `params.width` and `params.height` are the body's, chosen
+ * by the author: nothing here measures the text.
  */
 export function bubbleLayout(params: BubbleParams): BubbleLayout {
   const bodyW = Math.max(1, Math.round(params.width));
@@ -354,11 +360,7 @@ export function bubbleLayout(params: BubbleParams): BubbleLayout {
   const attach = { x: A.x + bodyLeft, y: A.y + bodyTop };
   const tip = { x: tipBody.x + bodyLeft, y: tipBody.y + bodyTop };
 
-  const wrapperW = bubbleWrapperWidth(params.body === "ellipse" ? { ...params, width: bodyW } : params);
-  const wrapperH =
-    params.body === "ellipse" ? Math.round(bodyH * BUBBLE_ELLIPSE_INSET) : bodyH;
-  const insetX = Math.max(0, (bodyW - wrapperW) / 2);
-  const insetY = Math.max(0, (bodyH - wrapperH) / 2);
+  const frame = bubbleFrame({ ...params, width: bodyW, height: bodyH });
 
   return {
     params: { ...params, width: bodyW, height: bodyH },
@@ -368,10 +370,10 @@ export function bubbleLayout(params: BubbleParams): BubbleLayout {
     boxH: Math.round(boxH),
     bodyLeft: Math.round(bodyLeft),
     bodyTop: Math.round(bodyTop),
-    wrapperW,
-    wrapperH,
-    insetX: Math.round(insetX),
-    insetY: Math.round(insetY),
+    frameW: frame.w,
+    frameH: frame.h,
+    insetX: frame.insetX,
+    insetY: frame.insetY,
     outline,
     bodyRing: ring.map((p) => ({ x: p.x + bodyLeft, y: p.y + bodyTop })),
     attach,
@@ -428,16 +430,6 @@ function ringSlice(ring: Pt[], at: number[], total: number, from: number, to: nu
   }
   out.push(ringPointAt(ring, at, total, t).point);
   return out;
-}
-
-/**
- * Width the element's box takes: the body plus the tail's horizontal reach.
- * It does not depend on the body's height (the tail leaves the outline at a
- * point whose x is fixed by the body's width), which is why the free engine can
- * ask for it without knowing the text's height.
- */
-export function bubbleBoxWidth(params: BubbleParams): number {
-  return bubbleLayout({ ...params, height: 100 }).boxW;
 }
 
 // ---------------------------------------------------------------------------

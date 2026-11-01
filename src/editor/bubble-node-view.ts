@@ -1,41 +1,43 @@
 // ============================================================================
 // Bubble node view — the speech balloon on screen.
 //
+// The model is the note's: a box with its own width and height, real text
+// inside, and the main toolbar's commands working on that text. What the bubble
+// adds is the tail: a drawing that leaves the box, so the box keeps the
+// author's measure and the hand can pull the four corners like an image's.
+//
 // What it does NOT do: position, depth and anchoring. Those live in the free
 // engine and reach this DOM exactly as they reach a photo's.
 //
-// What lives here: the drawing (through `bubble-paint.ts`, the same function the
-// markup uses), the text's frame inside the body, the grip, and the two handles
-// that shape the tail. The MEANING of each handle is arithmetic and lives in
-// `bubble-geometry.ts`; the pointer-to-numbers rule is shared and lives in
-// `element-handles.ts`.
-//
-// The one thing this view knows that the page count cannot: the text's real
-// height. The body grows around it on screen; the page count estimates the same
-// height from the words and the metrics (pagination-cassie.ts), so the two
-// numbers agree with the font the page is being written in.
+// The drawing lives in an SVG placed around the box (the tail may leave it) and
+// BEHIND the text: the text frame is positioned, so it paints after the
+// drawing and the fill can never cover the words.
 // ============================================================================
 
 import { Node as PMNode } from "prosemirror-model";
-import { NodeView, EditorView, type ViewMutationRecord } from "prosemirror-view";
+import { NodeView, EditorView } from "prosemirror-view";
 import { applyWrapMarker, selectNodeAt, setStyleCached, transformStyleOf } from "./element-view";
 import {
+  createCornerHandles,
   createRotateHandle,
   createShapeHandles,
+  isCornerHandle,
   isRotateHandle,
   isShapeHandle,
+  startCornerResize,
   startRotateDrag,
   startShapePartDrag,
+  type Corner,
 } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { floatGapPx } from "./text-obstacles";
 import { buildBubbleSvg, bubblePaintKey, bubbleShadowOf } from "./bubble-paint";
 import {
+  BUBBLE_HEIGHT_MIN,
   BUBBLE_PAD_X,
   BUBBLE_PAD_Y,
-  bubbleBodyHeightFromWrapper,
+  BUBBLE_WIDTH_MIN,
   bubbleLayout,
-  bubbleWrapperWidth,
   dragBubbleBase,
   dragBubbleTip,
   normalizeBubbleParams,
@@ -54,16 +56,13 @@ export class BubbleNodeView implements NodeView {
   contentDOM: HTMLElement;
 
   private grip: HTMLElement;
+  private corners: HTMLElement[] = [];
   private handles: Record<string, HTMLElement> | null = null;
   private svg: SVGSVGElement | null = null;
   private paintKey = "";
   private applied: Record<string, string | undefined> = {};
   /** Its own cache: the text frame and the element are different boxes. */
   private contentApplied: Record<string, string | undefined> = {};
-  private observer: ResizeObserver | null = null;
-  /** Scheduled repaint after a measurement, and what the last one drew. */
-  private pendingPaint = 0;
-  private lastBox = "";
 
   constructor(
     node: PMNode,
@@ -82,6 +81,10 @@ export class BubbleNodeView implements NodeView {
 
     this.dom.append(this.contentDOM, this.grip);
 
+    // The image's own four corners: the balloon has a width and a height of its
+    // own, so both axes are the hand's to pull.
+    this.corners = createCornerHandles(this.dom, (e, corner) => this.onCornerGrab(e, corner));
+    // The tail's two handles ride on the same look and the same gestures.
     this.handles = createShapeHandles(this.dom, PARTS, (e, part) =>
       this.onHandleGrab(e, part as BubblePart),
     );
@@ -93,29 +96,6 @@ export class BubbleNodeView implements NodeView {
 
     this.applyNode(node);
     this.bindEvents();
-
-    // The text changes height on its own (a typed line, a narrower width): the
-    // body must follow it, or the balloon would be drawn around yesterday's text.
-    // The repaint is DEFERRED to the next frame and skipped when the box would
-    // not change: doing the layout inside the observer's own callback is what
-    // makes the browser complain ("ResizeObserver loop completed with undelivered
-    // notifications"), and the complaint is not harmless, it is a second pass.
-    if (typeof ResizeObserver !== "undefined") {
-      this.observer = new ResizeObserver(() => this.scheduleRepaint());
-      this.observer.observe(this.contentDOM);
-    }
-  }
-
-  /** Repaint after a measurement, once per frame, only if the box moved. */
-  private scheduleRepaint(): void {
-    if (this.pendingPaint) return;
-    this.pendingPaint = requestAnimationFrame(() => {
-      this.pendingPaint = 0;
-      const layout = this.layoutNow();
-      const box = `${layout.boxW}x${layout.boxH}`;
-      if (box === this.lastBox) return;
-      this.paint(layout, this.currentAttrs());
-    });
   }
 
   // ------------------------------------------------------------- the node
@@ -126,11 +106,9 @@ export class BubbleNodeView implements NodeView {
     return (node?.attrs ?? {}) as Record<string, unknown>;
   }
 
-  /** The ballon's geometry right now: the text's measured height is the body's. */
+  /** The balloon's geometry right now: the body's measure is the author's. */
   private layoutNow(attrs?: Record<string, unknown>): BubbleLayout {
-    const base = normalizeBubbleParams(attrs ?? this.currentAttrs());
-    const wrapperH = Math.max(1, this.contentDOM.offsetHeight);
-    return bubbleLayout({ ...base, height: bubbleBodyHeightFromWrapper(base, wrapperH) });
+    return bubbleLayout(normalizeBubbleParams(attrs ?? this.currentAttrs()));
   }
 
   private applyNode(node: PMNode): void {
@@ -154,10 +132,7 @@ export class BubbleNodeView implements NodeView {
       !attrs.free && isWrapping(parseTextCondition(attrs.wrap)) && (align === "left" || align === "right");
     setStyleCached(this.applied, this.dom, "--aw-float-gap", floating ? `${floatGapPx(attrs, "bubble")}px` : null);
 
-    // The text's own frame: its width is fixed by the body, its padding is the
-    // bubble's air. Both travel as inline style so the exported markup and the
-    // screen cannot disagree.
-    setStyleCached(this.contentApplied, this.contentDOM, "width", `${bubbleWrapperWidth(base)}px`);
+    // The text's air: the same padding the note has.
     setStyleCached(this.contentApplied, this.contentDOM, "padding", `${BUBBLE_PAD_Y}px ${BUBBLE_PAD_X}px`);
     setStyleCached(this.contentApplied, this.contentDOM, "box-sizing", "border-box");
 
@@ -167,23 +142,16 @@ export class BubbleNodeView implements NodeView {
   /** Everything the DOM shows for one geometry. */
   private paint(layout: BubbleLayout, attrs: Record<string, unknown>): void {
     const params = layout.params;
-    this.lastBox = `${layout.boxW}x${layout.boxH}`;
-    setStyleCached(this.applied, this.dom, "width", `${layout.boxW}px`);
-    setStyleCached(this.applied, this.dom, "height", `${layout.boxH}px`);
+    // The element's box IS the body.
+    setStyleCached(this.applied, this.dom, "width", `${layout.bodyW}px`);
+    setStyleCached(this.applied, this.dom, "height", `${layout.bodyH}px`);
 
-    // The text's frame sits where the body sits, inside the element's box.
-    setStyleCached(
-      this.contentApplied,
-      this.contentDOM,
-      "margin",
-      `${layout.bodyTop + layout.insetY}px 0 0 ${layout.bodyLeft + layout.insetX}px`,
-    );
-
-    // The grip lives in the body's own top padding, where the text does not go.
-    if (this.grip) {
-      this.grip.style.left = `${layout.bodyLeft + 12}px`;
-      this.grip.style.top = `${layout.bodyTop + 4}px`;
-    }
+    // The text's frame: the body for a rectangle, its inscribed rectangle for an
+    // ellipse, so the words never cross the curve.
+    setStyleCached(this.contentApplied, this.contentDOM, "left", `${layout.insetX}px`);
+    setStyleCached(this.contentApplied, this.contentDOM, "top", `${layout.insetY}px`);
+    setStyleCached(this.contentApplied, this.contentDOM, "width", `${layout.frameW}px`);
+    setStyleCached(this.contentApplied, this.contentDOM, "height", `${layout.frameH}px`);
 
     if (this.dom.getAttribute("data-aw-bubble") !== params.body) {
       this.dom.setAttribute("data-aw-bubble", params.body);
@@ -195,11 +163,12 @@ export class BubbleNodeView implements NodeView {
       this.paintKey = key;
       this.svg?.remove();
       this.svg = buildBubbleSvg(layout, shadow);
-      // Behind the text and out of the pointer's way: the balloon is dragged
-      // from the element's surface, not from its drawing.
+      // The drawing's rectangle: the body's box, moved by how far the tail
+      // reaches beyond it. It never takes the pointer: the balloon is dragged
+      // from the box's surface.
       this.svg.style.position = "absolute";
-      this.svg.style.left = "0";
-      this.svg.style.top = "0";
+      this.svg.style.left = `${-layout.bodyLeft}px`;
+      this.svg.style.top = `${-layout.bodyTop}px`;
       this.svg.style.pointerEvents = "none";
       this.dom.insertBefore(this.svg, this.dom.firstChild);
     }
@@ -208,15 +177,17 @@ export class BubbleNodeView implements NodeView {
 
   private placeHandles(layout: BubbleLayout): void {
     if (!this.handles) return;
+    // The tail's handles are placed in the box's own coordinates: the layout
+    // works from the drawing's corner, the box starts `bodyLeft` inside it.
     const tip = this.handles.tip;
     if (tip) {
-      tip.style.left = `${Math.round(layout.handles.tip.x)}px`;
-      tip.style.top = `${Math.round(layout.handles.tip.y)}px`;
+      tip.style.left = `${Math.round(layout.handles.tip.x - layout.bodyLeft)}px`;
+      tip.style.top = `${Math.round(layout.handles.tip.y - layout.bodyTop)}px`;
     }
     const base = this.handles.base;
     if (base) {
-      base.style.left = `${Math.round(layout.handles.base.x)}px`;
-      base.style.top = `${Math.round(layout.handles.base.y)}px`;
+      base.style.left = `${Math.round(layout.handles.base.x - layout.bodyLeft)}px`;
+      base.style.top = `${Math.round(layout.handles.base.y - layout.bodyTop)}px`;
     }
   }
 
@@ -227,10 +198,10 @@ export class BubbleNodeView implements NodeView {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
       // Every handle runs its own gesture and never starts a free drag.
-      if (isRotateHandle(target) || isShapeHandle(target)) return;
-      // Pressing the balloon's surface (the grip, the tail's area, the body's
-      // edge) selects it and moves it with the hand, the same gesture the photo
-      // and the box use. A press on the text falls through to normal editing.
+      if (isCornerHandle(target) || isRotateHandle(target) || isShapeHandle(target)) return;
+      // Pressing the balloon's surface (the grip, the box's air, the tail's
+      // area) selects it and moves it with the hand. A press on the text falls
+      // through to normal editing.
       if (target !== this.grip && target !== this.dom) return;
       e.preventDefault();
       e.stopPropagation();
@@ -243,7 +214,7 @@ export class BubbleNodeView implements NodeView {
 
   stopEvent(e: Event): boolean {
     if (e.target === this.grip) return true;
-    if (isRotateHandle(e.target) || isShapeHandle(e.target)) return true;
+    if (isCornerHandle(e.target) || isRotateHandle(e.target) || isShapeHandle(e.target)) return true;
     if (e.type === "mousedown" && e.target === this.dom) return true;
     return false;
   }
@@ -252,6 +223,37 @@ export class BubbleNodeView implements NodeView {
     const pos = this.getPos();
     if (pos == null) return;
     selectNodeAt(this.view, pos);
+  }
+
+  // ------------------------------------------------------- the four corners
+
+  private onCornerGrab(e: MouseEvent, corner: Corner): void {
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node || node.type.name !== "bubble") return;
+    const attrs = node.attrs as Record<string, unknown>;
+    const base = normalizeBubbleParams(attrs);
+    this.selectBubble();
+
+    startCornerResize({
+      view: this.view,
+      getPos: this.getPos,
+      event: e,
+      corner,
+      startWidth: base.width,
+      startHeight: base.height,
+      naturalRatio: base.height / base.width,
+      minWidthPx: BUBBLE_WIDTH_MIN,
+      minHeightPx: BUBBLE_HEIGHT_MIN,
+      paint: (width, height) => {
+        const params: BubbleParams = { ...base, width, height };
+        this.paint(bubbleLayout(params), attrs);
+      },
+      commit: (width, height) => {
+        setBubbleAttrs(this.view, { widthPx: width, heightPx: height });
+      },
+    });
   }
 
   // ----------------------------------------------------- the tail handles
@@ -272,7 +274,7 @@ export class BubbleNodeView implements NodeView {
     const originLeft = parseFloat(this.dom.style.left) || 0;
     const originTop = parseFloat(this.dom.style.top) || 0;
 
-    /** The shift of the element's box, turned onto the element's own axes. */
+    /** The shift of the box, turned onto the element's own axes. */
     const shiftFor = (sx: number, sy: number): { sx: number; sy: number } => {
       const cos = Math.cos(rotation);
       const sin = Math.sin(rotation);
@@ -280,11 +282,10 @@ export class BubbleNodeView implements NodeView {
     };
 
     /** The geometry the hand is asking for, at the drag's current run. */
-    const stateFor = (dx: number, dy: number): { params: BubbleParams; layout: BubbleLayout } => {
+    const stateFor = (dx: number, dy: number): BubbleLayout => {
       const next =
         part === "tip" ? dragBubbleTip(startParams, dx, dy) : dragBubbleBase(startParams, dx, dy);
-      const params: BubbleParams = { ...startParams, ...next };
-      return { params, layout: bubbleLayout(params) };
+      return bubbleLayout({ ...startParams, ...next });
     };
 
     startShapePartDrag({
@@ -292,7 +293,7 @@ export class BubbleNodeView implements NodeView {
       getPos: this.getPos,
       event: e,
       onMove: (dx, dy) => {
-        const { layout } = stateFor(dx, dy);
+        const layout = stateFor(dx, dy);
         this.paint(layout, attrs);
         if (freeSpec) {
           const { sx, sy } = shiftFor(
@@ -304,8 +305,13 @@ export class BubbleNodeView implements NodeView {
         }
       },
       onCommit: (dx, dy) => {
-        const { params, layout } = stateFor(dx, dy);
-        const patch: Record<string, unknown> = { tailOut: params.tailOut, tailAlong: params.tailAlong, base: params.base };
+        const layout = stateFor(dx, dy);
+        const params = layout.params;
+        const patch: Record<string, unknown> = {
+          tailOut: params.tailOut,
+          tailAlong: params.tailAlong,
+          base: params.base,
+        };
         if (freeSpec) {
           const { sx, sy } = shiftFor(
             startLayout.bodyLeft - layout.bodyLeft,
@@ -341,7 +347,7 @@ export class BubbleNodeView implements NodeView {
   }
 
   /** Never re-parse our own attribute writes; always track content changes. */
-  ignoreMutation(m: ViewMutationRecord): boolean {
+  ignoreMutation(m: { type: string; target: Node }): boolean {
     if (m.type === "selection") return false;
     const target = m.target as Node;
     const inContent =
@@ -350,11 +356,8 @@ export class BubbleNodeView implements NodeView {
   }
 
   destroy(): void {
-    this.observer?.disconnect();
-    this.observer = null;
-    if (this.pendingPaint) cancelAnimationFrame(this.pendingPaint);
-    this.pendingPaint = 0;
     this.svg = null;
+    this.corners = [];
     this.handles = null;
   }
 }

@@ -119,11 +119,10 @@ export const ELEMENT_TYPES = {
   bubble: {
     kind: "bubble",
     layerName: "Bubble",
-    // The attribute carries the BODY's width (the bar's W); the element's box is
-    // the body plus whatever the tail reaches, so it is the view that sizes the
-    // DOM, not this number.
+    // The box IS the body: the attributes carry its width and height (the bar's
+    // W and H), and the drawing's tail leaves the box without claiming room.
     widthAttr: "widthPx",
-    widthOnOwnBox: false,
+    widthOnOwnBox: true,
     freeCapable: true,
     // The contour is drawn inside the element's box, like the shape's stroke.
     frameInside: true,

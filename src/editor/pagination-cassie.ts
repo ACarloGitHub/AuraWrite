@@ -35,8 +35,6 @@ import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
 import { shapeBoxSize, shapeRotationPivot } from "./shape-params";
 import {
-  bubbleBodyHeight,
-  bubbleInnerWidth,
   bubbleLayout,
   normalizeBubbleParams,
   type BubbleLayout,
@@ -512,39 +510,19 @@ function measureShapeNode(node: PMNode): BlockMetrics {
 }
 
 /**
- * bubble: the body is a frame around real text (the box's inner measurement),
- * and the element's box also holds whatever the tail reaches beyond it. The
- * tail's reach depends on the body's height, so the two are computed together:
- * text at the body's inner width, then the balloon's own geometry.
+ * bubble: the body's box is the author's (width and height from the attrs),
+ * exactly like a shape's. The text inside does not move the balloon: if it
+ * outgrows it, that is the document's choice. The block's footprint is the body
+ * alone — the tail is a drawing that leaves the box.
  */
-function bubbleMeasure(node: PMNode): { layout: BubbleLayout; lines: number } {
-  const base = normalizeBubbleParams(node.attrs as Record<string, unknown>);
-  const innerWidth = bubbleInnerWidth(base);
-  let height = 0;
-  let lines = 0;
-  node.forEach((child) => {
-    const m = child.type.name === "paragraph"
-      ? measureParagraph(child, innerWidth, metrics().body)
-      : measureTextBlock(child, innerWidth);
-    height += m.heightPx;
-    lines += m.lineCount;
-  });
-  if (lines === 0) {
-    height += metrics().body.linePx;
-    lines = 1;
-  }
-  const params = { ...base, height: bubbleBodyHeight(base, height) };
-  return { layout: bubbleLayout(params), lines };
-}
-
-/** The balloon's geometry as the page count and the markup measure it. */
-export function bubbleLayoutOf(node: PMNode): BubbleLayout {
-  return bubbleMeasure(node).layout;
-}
-
 function measureBubbleNode(node: PMNode): BlockMetrics {
-  const { layout, lines } = bubbleMeasure(node);
-  return { heightPx: Math.max(1, layout.boxH), lineCount: Math.max(1, lines) };
+  const params = normalizeBubbleParams(node.attrs as Record<string, unknown>);
+  return { heightPx: Math.max(1, params.height), lineCount: 1 };
+}
+
+/** The balloon's geometry for the markup, from the same numbers the view uses. */
+export function bubbleLayoutOf(node: PMNode): BubbleLayout {
+  return bubbleLayout(normalizeBubbleParams(node.attrs as Record<string, unknown>));
 }
 
 /**
