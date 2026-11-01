@@ -16,7 +16,6 @@ import { type NodeSpec } from "prosemirror-model";
 import {
   BUBBLE_AT_DEFAULT,
   BUBBLE_BASE_DEFAULT,
-  BUBBLE_FILL_DEFAULT,
   BUBBLE_PAD_X,
   BUBBLE_PAD_Y,
   BUBBLE_RADIUS_DEFAULT,
@@ -64,12 +63,6 @@ function markerNumber(dom: HTMLElement, name: string, fallback: number): number 
   return isFinite(n) ? n : fallback;
 }
 
-/** The body's fill from its marker: absent = the default paper, "none" = transparent. */
-function bubbleFillFromMarker(raw: string | null): string {
-  if (raw == null) return BUBBLE_FILL_DEFAULT;
-  return raw === "none" ? "" : raw;
-}
-
 export const BUBBLE_NODE_SPEC: NodeSpec = {
   content: "block+",
   group: "block",
@@ -81,7 +74,6 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     tailOut: { default: BUBBLE_TAIL_DEFAULT_OUT },
     tailAlong: { default: BUBBLE_TAIL_DEFAULT_ALONG },
     base: { default: BUBBLE_BASE_DEFAULT },
-    bgColor: { default: BUBBLE_FILL_DEFAULT },
     borderWidth: { default: BUBBLE_STROKE_DEFAULT },
     borderColor: { default: BUBBLE_STROKE_COLOR_DEFAULT },
     borderStyle: { default: "solid" },
@@ -105,8 +97,6 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
           tailOut: markerNumber(dom, "data-tail-out", BUBBLE_TAIL_DEFAULT_OUT),
           tailAlong: markerNumber(dom, "data-tail-along", BUBBLE_TAIL_DEFAULT_ALONG),
           base: markerNumber(dom, "data-base", BUBBLE_BASE_DEFAULT),
-          // `data-bg="none"` is the transparent body: the contour alone.
-          bgColor: bubbleFillFromMarker(dom.getAttribute("data-bg")),
           borderWidth: markerNumber(dom, "data-border-width", BUBBLE_STROKE_DEFAULT),
           borderColor: dom.getAttribute("data-border-color") || BUBBLE_STROKE_COLOR_DEFAULT,
           borderStyle: oneOf(dom.getAttribute("data-border-style") || "", ["solid", "dashed", "dotted"] as const, "solid"),
@@ -138,10 +128,6 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     if (params.tailOut !== BUBBLE_TAIL_DEFAULT_OUT) attrs["data-tail-out"] = String(params.tailOut);
     if (params.tailAlong !== BUBBLE_TAIL_DEFAULT_ALONG) attrs["data-tail-along"] = String(params.tailAlong);
     if (params.base !== BUBBLE_BASE_DEFAULT) attrs["data-base"] = String(params.base);
-    // The paper is the default; a cleared fill and a chosen colour are the two
-    // cases the markup has to state.
-    if (params.fill === "") attrs["data-bg"] = "none";
-    else if (params.fill.toLowerCase() !== BUBBLE_FILL_DEFAULT) attrs["data-bg"] = params.fill;
     if (params.strokeWidth !== BUBBLE_STROKE_DEFAULT) {
       attrs["data-border-width"] = String(params.strokeWidth);
     }
