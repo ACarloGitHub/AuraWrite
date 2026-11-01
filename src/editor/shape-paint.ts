@@ -151,7 +151,6 @@ export function shapePaintKey(
     params.curve,
     params.points,
     params.depth,
-    params.opening,
     params.cusp,
     shadow ? `${shadow.dx},${shadow.dy},${shadow.blur},${shadow.color},${shadow.opacity}` : "",
   ].join("|");

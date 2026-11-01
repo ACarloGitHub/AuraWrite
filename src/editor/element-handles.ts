@@ -129,6 +129,11 @@ export function startCornerResize(opts: CornerResize): void {
   const ratio = startHeight / startWidth || naturalRatio;
   const zoom = appliedScale(view.dom) || 1;
   const rotation = (node.attrs.rotation as number) || 0;
+  // A mirrored element draws its handles on the other side: the hand's run must
+  // be mirrored back, or the box grows the wrong way (the brace flipped to "}"
+  // is the everyday case).
+  const flipH = !!node.attrs.flipH;
+  const flipV = !!node.attrs.flipV;
 
   const computeNewSize = (ev: MouseEvent): { width: number; height: number } => {
     // Divided by the zoom FIRST, then turned onto the element's own axes (defect 13).
@@ -137,9 +142,11 @@ export function startCornerResize(opts: CornerResize): void {
       (ev.clientY - startY) / zoom,
       rotation
     );
+    const dx = flipH ? -turned.dx : turned.dx;
+    const dy = flipV ? -turned.dy : turned.dy;
     // After these two signs, both numbers mean "bigger", whichever corner is held.
-    const growX = corner === "tl" || corner === "bl" ? -turned.dx : turned.dx;
-    const growY = corner === "tl" || corner === "tr" ? -turned.dy : turned.dy;
+    const growX = corner === "tl" || corner === "bl" ? -dx : dx;
+    const growY = corner === "tl" || corner === "tr" ? -dy : dy;
     const width = Math.max(minWidth, startWidth + growX);
     const height = Math.max(minHeight, startHeight + growY);
     if (!aspectLocked) return { width, height };
@@ -345,9 +352,15 @@ export function startShapePartDrag(opts: ShapePartDrag): void {
   const startY = event.clientY;
   const zoom = appliedScale(view.dom) || 1;
   const rotation = (node.attrs.rotation as number) || 0;
+  // Mirrored, the drawing's handles are on the other side: the run is mirrored
+  // back so a handle still follows the hand.
+  const flipH = !!node.attrs.flipH;
+  const flipV = !!node.attrs.flipV;
 
-  const turnedRun = (ev: MouseEvent): { dx: number; dy: number } =>
-    pointerInElementAxes((ev.clientX - startX) / zoom, (ev.clientY - startY) / zoom, rotation);
+  const turnedRun = (ev: MouseEvent): { dx: number; dy: number } => {
+    const turned = pointerInElementAxes((ev.clientX - startX) / zoom, (ev.clientY - startY) / zoom, rotation);
+    return { dx: flipH ? -turned.dx : turned.dx, dy: flipV ? -turned.dy : turned.dy };
+  };
 
   const onPointerMove = (ev: MouseEvent): void => {
     const { dx, dy } = turnedRun(ev);

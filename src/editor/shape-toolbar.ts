@@ -109,11 +109,6 @@ export function setupShapeToolbar(view: EditorView): void {
     void setShapeAttrs(view, { depth: value });
   });
 
-  const opening = el<HTMLSelectElement>("shape-opening");
-  opening?.addEventListener("change", () => {
-    void setShapeAttrs(view, { opening: opening.value });
-  });
-
   const bodyHeight = el<HTMLInputElement>("shape-body-height");
   bodyHeight?.addEventListener("change", () => {
     const value = intOrNaN(bodyHeight.value);
@@ -161,13 +156,6 @@ export function syncShapeToolbar(view: EditorView): void {
   if (curveField) curveField.hidden = params.kind !== "arrow_curve";
   const curve = el<HTMLInputElement>("shape-curve");
   if (curve) curve.value = params.kind === "arrow_curve" ? String(params.curve) : "";
-
-  // A brace is the one kind that opens a way: right or left.
-  const brace = params.kind === "brace";
-  const openingField = el("shape-opening-field");
-  if (openingField) openingField.hidden = !brace;
-  const opening = el<HTMLSelectElement>("shape-opening");
-  if (opening) opening.value = params.opening;
 
   const color = el<HTMLInputElement>("shape-stroke-color");
   if (color) color.value = params.strokeColor;

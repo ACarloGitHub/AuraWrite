@@ -125,8 +125,9 @@ function round10(n: number): string {
 
 /**
  * The brace's drawing: two hooks, a straight stem and the central cusp, as ONE
- * stroked path (it has no inside, so it is never a polygon). `opening` says
- * which way it opens — "right" is "{".
+ * stroked path (it has no inside, so it is never a polygon). It opens to the
+ * right, like "{": the other way round is the element's own horizontal mirror,
+ * not a second shape.
  */
 function bracePath(params: ShapeParams, width: number, height: number, inset: number): string {
   const midY = height / 2;
@@ -138,8 +139,7 @@ function bracePath(params: ShapeParams, width: number, height: number, inset: nu
   // from it. The arms' reach is what the box keeps.
   const cusp = Math.max(MIN_CUSP_PX, Math.min(params.cusp, width - inset * 2 - 8));
   const stemX = xL + cusp;
-  const flip = (x: number): number => (params.opening === "left" ? width - x : x);
-  const p = (x: number, y: number): string => `${round10(flip(x))} ${round10(y)}`;
+  const p = (x: number, y: number): string => `${round10(x)} ${round10(y)}`;
   return [
     `M ${p(xR, inset)}`,
     `Q ${p(stemX, inset)} ${p(stemX, inset + r)}`,
@@ -275,8 +275,7 @@ export function shapeHandleAnchors(params: ShapeParams, box: ShapeBox): ShapeAnc
   if (params.kind === "line") return {};
 
   if (params.kind === "brace") {
-    const tipX = params.opening === "left" ? width - inset : inset;
-    return { cusp: { x: tipX, y: midY } };
+    return { cusp: { x: inset, y: midY } };
   }
 
   if (params.kind === "ellipse" || params.kind === "star") {
@@ -380,19 +379,17 @@ export function dragShapeTip(start: ShapeState, dx: number): ShapeDrag {
 /**
  * The brace's CUSP: how far it sticks out of the stem. Pulling it outward
  * deepens it and lengthens the box; the arms stay where they are, so the box's
- * origin travels with the cusp (opening right) or stays with the arms (opening
- * left).
+ * origin travels with the cusp.
  */
 export function dragBraceCusp(start: ShapeState, dx: number): ShapeDrag {
-  const opening = start.params.opening;
-  const outward = opening === "right" ? -dx : dx;
+  const outward = -dx;
   const cusp = clamp(start.params.cusp + outward, MIN_CUSP_PX, MAX_CUSP_PX);
   const grown = cusp - start.params.cusp;
   const width = clamp(start.box.width + grown, MIN_SHAPE_WIDTH_PX, MAX_SHAPE_WIDTH_PX);
   return {
     params: { ...start.params, cusp: Math.round(cusp) },
     box: { width: Math.round(width), height: start.box.height },
-    shiftX: opening === "right" ? Math.round(dx) : 0,
+    shiftX: Math.round(dx),
     shiftY: 0,
   };
 }

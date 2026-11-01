@@ -123,7 +123,6 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
     curve: params.curve,
     points: params.points,
     depth: params.depth,
-    opening: params.opening,
     cusp: params.cusp,
     width: box.width,
     height: box.height,

@@ -45,10 +45,6 @@ export const DEFAULT_STAR_DEPTH = 55;
 export const DEFAULT_CURVE_PX = 26;
 export const MAX_CURVE_PX = 400;
 
-/** Which way a brace opens: right = the cusp points left, like "{". */
-export const SHAPE_OPENINGS = ["right", "left"] as const;
-export type ShapeOpening = (typeof SHAPE_OPENINGS)[number];
-
 /** A brace is born narrow and tall, with its cusp in proportion. */
 export const DEFAULT_BRACE_WIDTH_PX = 44;
 export const DEFAULT_BRACE_HEIGHT_PX = 120;
@@ -115,8 +111,6 @@ export interface ShapeParams {
   /** Points of a star and how deep its notches go (0-100). */
   points: number;
   depth: number;
-  /** Which way a brace opens. */
-  opening: ShapeOpening;
   /** How far a brace's cusp sticks out of its stem, in px. */
   cusp: number;
 }
@@ -156,9 +150,6 @@ export function normalizeShapeParams(attrs: Record<string, unknown> | undefined)
     curve: clampInt(a.curve, DEFAULT_CURVE_PX, -MAX_CURVE_PX, MAX_CURVE_PX),
     points: clampInt(a.points, DEFAULT_STAR_POINTS, MIN_STAR_POINTS, MAX_STAR_POINTS),
     depth: clampInt(a.depth, DEFAULT_STAR_DEPTH, 0, 100),
-    opening: (SHAPE_OPENINGS as readonly string[]).includes(String(a.opening))
-      ? (a.opening as ShapeOpening)
-      : "right",
     cusp: clampInt(a.cusp, DEFAULT_CUSP_PX, MIN_CUSP_PX, MAX_CUSP_PX),
   };
 }
