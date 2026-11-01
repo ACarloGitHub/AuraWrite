@@ -13,7 +13,7 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 
-export const ELEMENT_KINDS = ["image", "figure", "styled_box", "shape"] as const;
+export const ELEMENT_KINDS = ["image", "figure", "styled_box", "shape", "bubble"] as const;
 
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
@@ -57,7 +57,7 @@ export interface ElementType {
   /** Which measured block spacing follows the element in the page count. */
   spacingKey: "image" | "figure" | "other";
   /** Which section of the secondary toolbar the element shows. */
-  toolbarSection: "image" | "box" | "shape";
+  toolbarSection: "image" | "box" | "shape" | "bubble";
   /** How the Word export treats the element today. */
   word: "text" | "none";
   capabilities: ElementCapabilities;
@@ -115,6 +115,24 @@ export const ELEMENT_TYPES = {
     // Word has no shape of its own; the bitmap copy is step S5 of the chapter.
     word: "none",
     capabilities: { caption: false, aspectLock: false, background: false, rotation: true, flipVertical: true },
+  },
+  bubble: {
+    kind: "bubble",
+    layerName: "Bubble",
+    // The attribute carries the BODY's width (the bar's W); the element's box is
+    // the body plus whatever the tail reaches, so it is the view that sizes the
+    // DOM, not this number.
+    widthAttr: "widthPx",
+    widthOnOwnBox: false,
+    freeCapable: true,
+    // The contour is drawn inside the element's box, like the shape's stroke.
+    frameInside: true,
+    spacingKey: "other",
+    toolbarSection: "bubble",
+    // Word keeps the words inside the balloon; the tail is a drawing (declared
+    // limit, same family as the shapes' pictures).
+    word: "text",
+    capabilities: { caption: false, aspectLock: false, background: true, rotation: true, flipVertical: true },
   },
 } as const satisfies Record<ElementKind, ElementType>;
 

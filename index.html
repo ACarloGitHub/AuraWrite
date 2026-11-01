@@ -143,6 +143,9 @@
           <button id="btn-shapes" class="toolbar__btn toolbar__btn--with-text" title="Insert a shape">
             <span class="toolbar__btn-text">Shapes</span>
           </button>
+          <button id="btn-bubble" class="toolbar__btn toolbar__btn--with-text" title="Insert a speech balloon">
+            <span class="toolbar__btn-text">Bubble</span>
+          </button>
           <button id="btn-image" class="toolbar__btn" title="Insert Image">
             <span class="toolbar__btn-icon">🖼</span>
           </button>
@@ -446,6 +449,29 @@
         <label id="shape-curve-field" class="image-toolbar__field" title="Bend of the curved arrow in pixels" hidden>Curve <input id="shape-curve" type="number" min="-400" max="400" step="4" value="" placeholder="px" /></label>
         <label id="shape-points-field" class="image-toolbar__field" title="How many points the star has" hidden>Points <input id="shape-points" type="number" min="3" max="24" step="1" value="" placeholder="5" /></label>
         <label id="shape-depth-field" class="image-toolbar__field" title="How deep the notches go: 0 round, 100 spiky" hidden>Depth <input id="shape-depth" type="number" min="0" max="100" step="5" value="" placeholder="55" /></label>
+        </span>
+        <!-- BUBBLE CONTROLS (chapter A, S6): the balloon's own numbers. Free,
+             alignment, condition, turn, mirroring, opacity, shadow and delete
+             are the shared block above. -->
+        <span id="bubble-controls" hidden>
+        <select id="bubble-body" class="image-toolbar__select" title="Shape of the body">
+          <option value="rect">Rectangle</option>
+          <option value="ellipse">Ellipse</option>
+        </select>
+        <label class="image-toolbar__field" title="Where the tail leaves the body: 0 top-left, 12 top, 37 right, 62 bottom, 87 left">At <input id="bubble-at" type="number" min="0" max="100" step="1" value="" placeholder="62" /></label>
+        <div class="image-toolbar__separator"></div>
+        <label class="image-toolbar__field" title="Width of the body in pixels">W <input id="bubble-width" type="number" min="80" max="1600" step="10" value="" placeholder="px" /></label>
+        <div class="image-toolbar__separator"></div>
+        <label class="image-toolbar__field" title="Background fill">BG <input id="bubble-bg" type="color" class="image-toolbar__color" value="#ffffff" /></label>
+        <button id="bubble-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No background (transparent)">×</button>
+        <select id="bubble-border-style" class="image-toolbar__select" title="Pattern of the contour">
+          <option value="solid">Solid</option>
+          <option value="dashed">Dashed</option>
+          <option value="dotted">Dotted</option>
+        </select>
+        <label class="image-toolbar__field" title="Thickness of the contour, in pixels">Th <input id="bubble-border-width" type="number" min="0" max="24" step="1" value="" placeholder="px" /></label>
+        <input id="bubble-border-color" type="color" class="image-toolbar__color" title="Colour of the contour" value="#333333" />
+        <label id="bubble-radius-field" class="image-toolbar__field" title="Corner rounding in pixels">R <input id="bubble-radius" type="number" min="0" max="120" step="2" value="" placeholder="px" /></label>
         </span>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">

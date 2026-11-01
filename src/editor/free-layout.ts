@@ -27,6 +27,7 @@
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
+import { bubbleBoxWidth, normalizeBubbleParams } from "./bubble-geometry";
 import { bandOfRect } from "./text-obstacles";
 import { isOverlap, textConditionOf } from "./element-condition";
 import { ELEMENT_KINDS, ELEMENT_TYPES, elementTypeOf } from "./element-types";
@@ -249,6 +250,13 @@ export function freeElementWidth(node: PMNode): number | null {
   const type = elementTypeOf(node);
   if (!type) return null;
   const attrs = node.attrs as Record<string, unknown>;
+  // The bubble's attribute is the BODY's width; what the text must keep clear of
+  // is the whole balloon (body plus the tail's reach), and that is what the free
+  // band reserves. The reach does not depend on the body's height, so the page
+  // count and the painter agree on it before the text is weighed.
+  if (type.kind === "bubble") {
+    return Math.round(bubbleBoxWidth(normalizeBubbleParams(attrs)));
+  }
   const raw = attrs[type.widthAttr];
   const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
   return isFinite(n) && n > 0 ? Math.round(n) : null;

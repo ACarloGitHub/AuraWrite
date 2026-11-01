@@ -1077,6 +1077,7 @@ function setupFormattingButtons(): void {
   const btnNote = document.getElementById("btn-note");
   const btnTextBox = document.getElementById("btn-textbox");
   const btnShapes = document.getElementById("btn-shapes");
+  const btnBubble = document.getElementById("btn-bubble");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
@@ -1098,11 +1099,17 @@ function setupFormattingButtons(): void {
   btnShapes?.addEventListener("click", () => {
     void import("./shape-commands").then((m) => m.insertShape(editorView, "arrow"));
   });
+  // Chapter A, S6: the speech balloon is an element of its own, with text
+  // inside — not an option of the box (Carlo's contract).
+  btnBubble?.addEventListener("click", () => {
+    void import("./bubble-commands").then((m) => m.insertBubble(editorView));
+  });
 
   setupTableToolbar(editorView);
   setupImageToolbar(editorView);
   void import("./box-style-toolbar").then((m) => m.setupBoxToolbar(editorView));
   void import("./shape-toolbar").then((m) => m.setupShapeToolbar(editorView));
+  void import("./bubble-toolbar").then((m) => m.setupBubbleToolbar(editorView));
   void import("./figure-toolbar").then((m) => m.setupFigureToolbar(editorView));
   // F3: the layers window belongs with the other floating surfaces, and it is
   // opened from the status bar - not from the main toolbar (contract §2.12).
@@ -2275,6 +2282,7 @@ export function syncSecondaryToolbar(view: EditorView): void {
   void import("./element-shadow").then((m) => m.syncElementShadow(view));
   void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
   void import("./shape-toolbar").then((m) => m.syncShapeToolbar(view));
+  void import("./bubble-toolbar").then((m) => m.syncBubbleToolbar(view));
   updateImageToolbar(view);
   if (!bar) return;
   if (!info) {
@@ -2288,9 +2296,11 @@ export function syncSecondaryToolbar(view: EditorView): void {
   const imageControls = document.getElementById("image-controls");
   const boxControls = document.getElementById("box-controls");
   const shapeControls = document.getElementById("shape-controls");
+  const bubbleControls = document.getElementById("bubble-controls");
   if (imageControls) imageControls.hidden = section !== "image";
   if (boxControls) boxControls.hidden = section !== "box";
   if (shapeControls) shapeControls.hidden = section !== "shape";
+  if (bubbleControls) bubbleControls.hidden = section !== "bubble";
 }
 
 export function updateImageToolbar(view: EditorView): void {

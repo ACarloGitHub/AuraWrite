@@ -1081,6 +1081,9 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBrea
       }
       case "figure":
       case "styled_box":
+      case "bubble":
+        // Word keeps the words. The balloon's tail is a drawing and has no Word
+        // counterpart: the declared limit shared with the shapes' pictures.
         return [new Paragraph({ children: [new TextRun({ text: getTextContent(node) })] })];
       case "shape": {
         // Word cannot carry our shapes, so the drawing travels as a picture,

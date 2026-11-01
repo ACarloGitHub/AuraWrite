@@ -35,6 +35,13 @@ import type { Node as PMNode } from "prosemirror-model";
 import { normalizeBoxStyle } from "./box-style";
 import { shapeBoxSize, shapeRotationPivot } from "./shape-params";
 import {
+  bubbleBodyHeight,
+  bubbleInnerWidth,
+  bubbleLayout,
+  normalizeBubbleParams,
+  type BubbleLayout,
+} from "./bubble-geometry";
+import {
   isAnchorBlock, isFreeNode, parseFreeSpec, zLevelOf, freeWrapBand, freeElementWidth, paintedBoxOf,
   type FreeWrapBand,
 } from "./free-layout";
@@ -368,6 +375,8 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
         return measureImageNode(node);
       case "shape":
         return measureShapeNode(node);
+      case "bubble":
+        return measureBubbleNode(node);
       default:
         return assertNeverKind(element.kind);
     }
@@ -500,6 +509,42 @@ function measureImageNode(node: PMNode): BlockMetrics {
 function measureShapeNode(node: PMNode): BlockMetrics {
   const box = shapeBoxSize(node.attrs as Record<string, unknown>);
   return { heightPx: Math.max(1, box.height), lineCount: 1 };
+}
+
+/**
+ * bubble: the body is a frame around real text (the box's inner measurement),
+ * and the element's box also holds whatever the tail reaches beyond it. The
+ * tail's reach depends on the body's height, so the two are computed together:
+ * text at the body's inner width, then the balloon's own geometry.
+ */
+function bubbleMeasure(node: PMNode): { layout: BubbleLayout; lines: number } {
+  const base = normalizeBubbleParams(node.attrs as Record<string, unknown>);
+  const innerWidth = bubbleInnerWidth(base);
+  let height = 0;
+  let lines = 0;
+  node.forEach((child) => {
+    const m = child.type.name === "paragraph"
+      ? measureParagraph(child, innerWidth, metrics().body)
+      : measureTextBlock(child, innerWidth);
+    height += m.heightPx;
+    lines += m.lineCount;
+  });
+  if (lines === 0) {
+    height += metrics().body.linePx;
+    lines = 1;
+  }
+  const params = { ...base, height: bubbleBodyHeight(base, height) };
+  return { layout: bubbleLayout(params), lines };
+}
+
+/** The balloon's geometry as the page count and the markup measure it. */
+export function bubbleLayoutOf(node: PMNode): BubbleLayout {
+  return bubbleMeasure(node).layout;
+}
+
+function measureBubbleNode(node: PMNode): BlockMetrics {
+  const { layout, lines } = bubbleMeasure(node);
+  return { heightPx: Math.max(1, layout.boxH), lineCount: Math.max(1, lines) };
 }
 
 /**

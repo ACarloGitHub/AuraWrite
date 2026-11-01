@@ -14,14 +14,14 @@ import { getSelectedElement, setNodeAttrs } from "./element-commands";
 import { elementTypeOf } from "./element-types";
 
 /** The element kinds whose bar shows this block. */
-const SHADOW_SECTIONS = new Set(["box", "shape"]);
+const SHADOW_SECTIONS = new Set(["box", "shape", "bubble"]);
 
 function el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
 
 function selected(view: EditorView) {
-  const info = getSelectedElement(view, ["styled_box", "shape"]);
+  const info = getSelectedElement(view, ["styled_box", "shape", "bubble"]);
   return info;
 }
 

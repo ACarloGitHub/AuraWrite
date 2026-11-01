@@ -1,0 +1,96 @@
+/* ============================================================================
+   Bubble — the speech balloon on the editor's page.
+
+   The drawing is inline SVG (bubble-paint.ts), so nothing here describes the
+   balloon: these rules place it, make it grabbable, and show the handles that
+   belong to its tail. The print sheet and the exported HTML carry their own
+   inline styles, because they have no stylesheet.
+   ============================================================================ */
+
+.ProseMirror .aw-bubble {
+  position: relative;
+  /* flow-root so the text frame's margins stay INSIDE the element's box: the
+     box is measured, its height is explicit, and collapsed margins would put
+     the text at the element's top instead of at the body's top. */
+  display: flow-root;
+  box-sizing: border-box;
+  /* The same spacing as the box: the balloon is a block that carries text. */
+  margin: 0 0 10px 0;
+}
+
+/* In flow, Wrapped and beside the text: the same float and the same air as the
+   photo. The air comes from `floatGapPx`, which the node view writes into the
+   variable — one number for screen, page count and paper. */
+.ProseMirror .aw-bubble[data-wrap=""][data-align="left"] {
+  float: left;
+  margin: 0 var(--aw-float-gap, 12px) 0 0;
+}
+
+.ProseMirror .aw-bubble[data-wrap=""][data-align="right"] {
+  float: right;
+  margin: 0 0 0 var(--aw-float-gap, 12px);
+}
+
+.ProseMirror .aw-bubble[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.ProseMirror .aw-bubble[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ProseMirror .aw-bubble[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* The text's frame. Its width, margins and padding are written inline by the
+   view, from the same numbers the drawing uses: nothing to describe here but
+   the cursors. */
+.aw-bubble__content {
+  cursor: auto;
+}
+
+.aw-bubble__content :where(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre) {
+  cursor: auto;
+}
+
+/* The grip: the same one the box has, shown only while the balloon is
+   selected. It sits in the body's top padding, where the text does not go. */
+.aw-bubble__grip {
+  position: absolute;
+  width: 34px;
+  height: 9px;
+  border-radius: 5px;
+  cursor: grab;
+  background-color: var(--color-border);
+  background-image: radial-gradient(circle, var(--color-text) 1.4px, transparent 1.7px);
+  background-size: 7px 5px;
+  background-position: center;
+  opacity: 0.9;
+  display: none;
+  z-index: 11;
+}
+
+.aw-bubble--selected .aw-bubble__grip {
+  display: block;
+}
+
+.aw-bubble__grip:hover {
+  background-color: var(--color-primary);
+  opacity: 1;
+}
+
+.aw-bubble--selected {
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
+}
+
+/* The two tail handles ride on the shared shape handles (same look, same
+   gestures), and the turning handle is the shared one too. */
+.aw-bubble--selected .aw-shape-handle,
+.aw-bubble--selected .aw-rotate-handle {
+  display: block;
+}

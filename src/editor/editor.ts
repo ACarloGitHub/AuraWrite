@@ -32,6 +32,8 @@ import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { SHAPE_NODE_SPEC } from "./shape-node";
 import { ShapeNodeView } from "./shape-node-view";
+import { BUBBLE_NODE_SPEC } from "./bubble-node";
+import { BubbleNodeView } from "./bubble-node-view";
 import { createAtomicElementGuardPlugin, transformStyleOf } from "./element-view";
 import { createFreeLayoutPlugin, createElementTypeGuardPlugin } from "./free-layout-plugin";
 import { isWrapping, textConditionFromMarker, textConditionMarker, textConditionOf } from "./element-condition";
@@ -556,6 +558,7 @@ nodes = nodes
     styled_box: STYLED_BOX_NODE_SPEC,
     figure: FIGURE_NODE_SPEC,
     shape: SHAPE_NODE_SPEC,
+    bubble: BUBBLE_NODE_SPEC,
     ...tableNodeSpecs,
   });
 
@@ -717,6 +720,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       createTableMonitorPlugin(),
       createAtomicElementGuardPlugin("styled_box"),
       createAtomicElementGuardPlugin("figure"),
+      createAtomicElementGuardPlugin("bubble"),
       // F3: paints the free elements and enforces the anchoring rule.
       createFreeLayoutPlugin(),
       // F3: typing with an image or a figure selected writes next to it
@@ -747,6 +751,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       styled_box: (node, view, getPos) => new StyledBoxNodeView(node, view, getPos),
       figure: (node, view, getPos) => new FigureNodeView(node, view, getPos),
       shape: (node, view, getPos) => new ShapeNodeView(node, view, getPos),
+      bubble: (node, view, getPos) => new BubbleNodeView(node, view, getPos),
     },
     handleScrollToSelection(view) {
       scrollSelectionIntoView(view);
