@@ -1077,7 +1077,6 @@ function setupFormattingButtons(): void {
   const btnNote = document.getElementById("btn-note");
   const btnTextBox = document.getElementById("btn-textbox");
   const btnShapes = document.getElementById("btn-shapes");
-  const shapeMenu = document.getElementById("shape-menu");
 
   btnBold?.addEventListener("click", () => toggleMarkWithStored("strong"));
   btnItalic?.addEventListener("click", () => toggleMarkWithStored("em"));
@@ -1094,26 +1093,10 @@ function setupFormattingButtons(): void {
   });
 
   // Chapter A: the drawn shapes are inserted from the bar and then moved with
-  // the mouse, like every other element (drawn-shapes-project §5). One entry,
-  // with the shapes it can insert: arrows are no longer the only ones.
-  btnShapes?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    shapeMenu?.classList.toggle("hidden");
-  });
-  shapeMenu?.addEventListener("click", (e) => {
-    const item = (e.target as HTMLElement).closest<HTMLElement>("[data-shape]");
-    if (!item) return;
-    const kind = item.dataset.shape;
-    if (!kind) return;
-    shapeMenu.classList.add("hidden");
-    void import("./shape-commands").then((m) =>
-      m.insertShape(editorView, kind as Parameters<typeof m.insertShape>[1]),
-    );
-  });
-  document.addEventListener("click", (e) => {
-    if (!btnShapes?.contains(e.target as Node) && !shapeMenu?.contains(e.target as Node)) {
-      shapeMenu?.classList.add("hidden");
-    }
+  // the mouse, like every other element (drawn-shapes-project §5). One button,
+  // no menu: which shape it is gets chosen in the second bar after the insert.
+  btnShapes?.addEventListener("click", () => {
+    void import("./shape-commands").then((m) => m.insertShape(editorView, "arrow"));
   });
 
   setupTableToolbar(editorView);
