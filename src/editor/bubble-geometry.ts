@@ -80,8 +80,6 @@ export const BUBBLE_STROKE_MIN = 1;
 export const BUBBLE_STROKE_MAX = 24;
 export const BUBBLE_STROKE_DEFAULT = 1;
 export const BUBBLE_STROKE_COLOR_DEFAULT = "#333333";
-/** The balloon's inside: a sheet of paper, so the page cannot show through. */
-export const BUBBLE_FILL_DEFAULT = "#ffffff";
 export const BUBBLE_RADIUS_DEFAULT = 8;
 export const BUBBLE_RADIUS_MAX = 120;
 /** Air between the text and the body's edge: the box's own padding (box.css). */
@@ -112,7 +110,8 @@ export function normalizeBubbleParams(attrs: Record<string, unknown>): BubblePar
   const dash: BubbleDash = dashRaw === "dashed" || dashRaw === "dotted" ? dashRaw : "solid";
   return {
     body,
-    fill: color(attrs.bgColor, BUBBLE_FILL_DEFAULT),
+    // No fill unless the author picks one: the balloon starts as a contour.
+    fill: color(attrs.bgColor, ""),
     strokeColor: color(attrs.borderColor, BUBBLE_STROKE_COLOR_DEFAULT),
     strokeWidth: num(attrs.borderWidth, BUBBLE_STROKE_DEFAULT, 0, BUBBLE_STROKE_MAX),
     dash,

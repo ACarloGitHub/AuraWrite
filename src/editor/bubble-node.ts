@@ -16,7 +16,6 @@ import { type NodeSpec } from "prosemirror-model";
 import {
   BUBBLE_AT_DEFAULT,
   BUBBLE_BASE_DEFAULT,
-  BUBBLE_FILL_DEFAULT,
   BUBBLE_HEIGHT_DEFAULT,
   BUBBLE_PAD_X,
   BUBBLE_PAD_Y,
@@ -65,10 +64,10 @@ function markerNumber(dom: HTMLElement, name: string, fallback: number): number 
   return isFinite(n) ? n : fallback;
 }
 
-/** The body's fill from its marker: absent = the default paper, "none" = transparent. */
+/** The body's fill from its marker: "none" (or nothing) = no fill at all. */
 function bubbleFillFromMarker(raw: string | null): string {
-  if (raw == null) return BUBBLE_FILL_DEFAULT;
-  return raw === "none" ? "" : raw;
+  if (raw == null || raw === "none") return "";
+  return raw;
 }
 
 export const BUBBLE_NODE_SPEC: NodeSpec = {
@@ -82,7 +81,7 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     tailOut: { default: BUBBLE_TAIL_DEFAULT_OUT },
     tailAlong: { default: BUBBLE_TAIL_DEFAULT_ALONG },
     base: { default: BUBBLE_BASE_DEFAULT },
-    bgColor: { default: BUBBLE_FILL_DEFAULT },
+    bgColor: { default: "" },
     borderWidth: { default: BUBBLE_STROKE_DEFAULT },
     borderColor: { default: BUBBLE_STROKE_COLOR_DEFAULT },
     borderStyle: { default: "solid" },
@@ -143,8 +142,8 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     if (params.tailOut !== BUBBLE_TAIL_DEFAULT_OUT) attrs["data-tail-out"] = String(params.tailOut);
     if (params.tailAlong !== BUBBLE_TAIL_DEFAULT_ALONG) attrs["data-tail-along"] = String(params.tailAlong);
     if (params.base !== BUBBLE_BASE_DEFAULT) attrs["data-base"] = String(params.base);
-    if (params.fill === "") attrs["data-bg"] = "none";
-    else if (params.fill.toLowerCase() !== BUBBLE_FILL_DEFAULT) attrs["data-bg"] = params.fill;
+    // Only a chosen colour is worth a marker: no fill is the default.
+    if (params.fill) attrs["data-bg"] = params.fill;
     if (params.strokeWidth !== BUBBLE_STROKE_DEFAULT) {
       attrs["data-border-width"] = String(params.strokeWidth);
     }

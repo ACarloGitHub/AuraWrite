@@ -10,7 +10,6 @@
 import type { EditorView } from "prosemirror-view";
 import { getSelectedBubble, setBubbleAttrs } from "./bubble-commands";
 import {
-  BUBBLE_FILL_DEFAULT,
   BUBBLE_HEIGHT_MAX,
   BUBBLE_HEIGHT_MIN,
   BUBBLE_RADIUS_MAX,
@@ -112,8 +111,9 @@ export function syncBubbleToolbar(view: EditorView): void {
   const height = el<HTMLInputElement>("bubble-height");
   if (height) height.value = String(params.height);
 
+  // The swatch cannot be empty: white stands for "no fill", which the × sets.
   const bg = el<HTMLInputElement>("bubble-bg");
-  if (bg) bg.value = params.fill || BUBBLE_FILL_DEFAULT;
+  if (bg) bg.value = params.fill || "#ffffff";
 
   const style = el<HTMLSelectElement>("bubble-border-style");
   if (style) style.value = params.dash;
