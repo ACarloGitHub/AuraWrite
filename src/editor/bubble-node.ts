@@ -168,6 +168,9 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
     const style: string[] = [
       `width: ${layout.bodyW}px`,
       `height: ${layout.bodyH}px`,
+      // The box's air, on the BOX: the frame band still belongs to the balloon,
+      // so a press there selects it (the note's own rule).
+      `padding: ${layout.insetY + BUBBLE_PAD_Y}px ${layout.insetX + BUBBLE_PAD_X}px`,
       "position: relative",
       "display: flow-root",
       "box-sizing: border-box",
@@ -195,15 +198,13 @@ export const BUBBLE_NODE_SPEC: NodeSpec = {
       `position: absolute; left: ${-layout.bodyLeft}px; top: ${-layout.bodyTop}px; pointer-events: none`,
     );
 
-    const contentStyle = [
-      `width: ${layout.frameW}px`,
-      `height: ${layout.frameH}px`,
-      `margin: ${layout.insetY}px 0 0 ${layout.insetX}px`,
-      `padding: ${BUBBLE_PAD_Y}px ${BUBBLE_PAD_X}px`,
-      "box-sizing: border-box",
-      "position: relative",
-    ].join("; ");
-
-    return ["div", attrs, svg, ["div", { class: "aw-bubble__content", style: contentStyle }, 0]];
+    // The text's frame is the box's inner space; only its stacking is stated, so
+    // it paints after the drawing and the fill never covers the words.
+    return [
+      "div",
+      attrs,
+      svg,
+      ["div", { class: "aw-bubble__content", style: "position: relative" }, 0],
+    ];
   },
 };

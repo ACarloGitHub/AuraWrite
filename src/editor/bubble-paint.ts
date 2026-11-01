@@ -93,27 +93,34 @@ export function bubbleShadowOf(attrs: Record<string, unknown> | undefined): Shap
 }
 
 /**
- * A short signature of everything the drawing depends on: the view redraws only
- * when it changes.
+ * Move the drawing to a new geometry WITHOUT rebuilding it.
+ *
+ * A hand dragging a corner must see the balloon follow it, not a drawing that
+ * disappears and comes back (Carlo, 01-11). Only the numbers of the path and
+ * the rectangle of the SVG change here; the filter and the stroke stay.
  */
-export function bubblePaintKey(
-  layout: BubbleLayout,
-  shadow?: ShapeShadow | null,
-): string {
-  const p = layout.params;
+export function updateBubbleSvg(svg: SVGSVGElement, layout: BubbleLayout): void {
+  const width = Math.max(1, layout.boxW);
+  const height = Math.max(1, layout.boxH);
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const path = svg.querySelector("path");
+  if (path) path.setAttribute("d", bubblePathData(layout));
+}
+
+/**
+ * A short signature of the drawing's STYLE: when this changes the SVG is built
+ * again (filter, stroke, fill); when only the geometry changes, the view updates
+ * the existing path instead.
+ */
+export function bubbleStyleKey(params: BubbleLayout["params"], shadow?: ShapeShadow | null): string {
   return [
-    p.body,
-    p.fill,
-    p.strokeColor,
-    p.strokeWidth,
-    p.dash,
-    p.radius,
-    layout.boxW,
-    layout.boxH,
-    p.at,
-    p.tailOut,
-    p.tailAlong,
-    p.base,
+    params.body,
+    params.fill,
+    params.strokeColor,
+    params.strokeWidth,
+    params.dash,
     shadow ? `${shadow.dx},${shadow.dy},${shadow.blur},${shadow.color},${shadow.opacity}` : "",
   ].join("|");
 }

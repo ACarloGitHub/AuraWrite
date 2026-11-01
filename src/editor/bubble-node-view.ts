@@ -31,7 +31,7 @@ import {
 } from "./element-handles";
 import { isWrapping, parseTextCondition } from "./element-condition";
 import { floatGapPx } from "./text-obstacles";
-import { buildBubbleSvg, bubblePaintKey, bubbleShadowOf } from "./bubble-paint";
+import { buildBubbleSvg, bubbleShadowOf, bubbleStyleKey, updateBubbleSvg } from "./bubble-paint";
 import {
   BUBBLE_HEIGHT_MIN,
   BUBBLE_PAD_X,
@@ -59,10 +59,8 @@ export class BubbleNodeView implements NodeView {
   private corners: HTMLElement[] = [];
   private handles: Record<string, HTMLElement> | null = null;
   private svg: SVGSVGElement | null = null;
-  private paintKey = "";
+  private styleKey = "";
   private applied: Record<string, string | undefined> = {};
-  /** Its own cache: the text frame and the element are different boxes. */
-  private contentApplied: Record<string, string | undefined> = {};
 
   constructor(
     node: PMNode,
@@ -132,9 +130,8 @@ export class BubbleNodeView implements NodeView {
       !attrs.free && isWrapping(parseTextCondition(attrs.wrap)) && (align === "left" || align === "right");
     setStyleCached(this.applied, this.dom, "--aw-float-gap", floating ? `${floatGapPx(attrs, "bubble")}px` : null);
 
-    // The text's air: the same padding the note has.
-    setStyleCached(this.contentApplied, this.contentDOM, "padding", `${BUBBLE_PAD_Y}px ${BUBBLE_PAD_X}px`);
-    setStyleCached(this.contentApplied, this.contentDOM, "box-sizing", "border-box");
+    // The text's air and the ellipse's inset are applied with the geometry, in
+    // `paint`: they follow the box's measure.
 
     this.paint(this.layoutNow(attrs), attrs);
   }
@@ -145,33 +142,40 @@ export class BubbleNodeView implements NodeView {
     // The element's box IS the body.
     setStyleCached(this.applied, this.dom, "width", `${layout.bodyW}px`);
     setStyleCached(this.applied, this.dom, "height", `${layout.bodyH}px`);
+    // The text's air, on the BOX (the note's rule: the frame band belongs to the
+    // element, so a press there selects it), plus the ellipse's inset.
+    setStyleCached(
+      this.applied,
+      this.dom,
+      "padding",
+      `${layout.insetY + BUBBLE_PAD_Y}px ${layout.insetX + BUBBLE_PAD_X}px`,
+    );
 
-    // The text's frame: the body for a rectangle, its inscribed rectangle for an
-    // ellipse, so the words never cross the curve.
-    setStyleCached(this.contentApplied, this.contentDOM, "left", `${layout.insetX}px`);
-    setStyleCached(this.contentApplied, this.contentDOM, "top", `${layout.insetY}px`);
-    setStyleCached(this.contentApplied, this.contentDOM, "width", `${layout.frameW}px`);
-    setStyleCached(this.contentApplied, this.contentDOM, "height", `${layout.frameH}px`);
-
+    // The text's frame is the box's inner space: its width comes from the box's
+    // padding, its height from the text (which may leave the balloon).
     if (this.dom.getAttribute("data-aw-bubble") !== params.body) {
       this.dom.setAttribute("data-aw-bubble", params.body);
     }
 
     const shadow = bubbleShadowOf(attrs);
-    const key = bubblePaintKey(layout, shadow);
-    if (key !== this.paintKey || !this.svg) {
-      this.paintKey = key;
+    const styleKey = bubbleStyleKey(params, shadow);
+    if (styleKey !== this.styleKey || !this.svg) {
+      this.styleKey = styleKey;
       this.svg?.remove();
       this.svg = buildBubbleSvg(layout, shadow);
       // The drawing's rectangle: the body's box, moved by how far the tail
       // reaches beyond it. It never takes the pointer: the balloon is dragged
       // from the box's surface.
       this.svg.style.position = "absolute";
-      this.svg.style.left = `${-layout.bodyLeft}px`;
-      this.svg.style.top = `${-layout.bodyTop}px`;
       this.svg.style.pointerEvents = "none";
       this.dom.insertBefore(this.svg, this.dom.firstChild);
+    } else {
+      // A hand resizing the balloon must see it follow: the path is moved, not
+      // rebuilt (a rebuilt drawing disappears for a frame and comes back).
+      updateBubbleSvg(this.svg, layout);
     }
+    this.svg.style.left = `${-layout.bodyLeft}px`;
+    this.svg.style.top = `${-layout.bodyTop}px`;
     this.placeHandles(layout);
   }
 

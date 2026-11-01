@@ -46,11 +46,11 @@
 }
 
 /* The text's frame: positioned, so it paints AFTER the drawing and the fill can
-   never cover the words. Its place and size come inline, from the same numbers
-   the drawing uses. Text that does not fit leaves the balloon: the author's
+   never cover the words. Its width comes from the box's padding; its height is
+   the text's, and text that does not fit leaves the balloon — the author's
    choice, not something to clip. */
 .aw-bubble__content {
-  position: absolute;
+  position: relative;
   overflow: visible;
   cursor: auto;
 }
