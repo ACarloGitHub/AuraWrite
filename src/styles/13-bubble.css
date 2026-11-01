@@ -88,6 +88,29 @@
   outline-offset: 2px;
 }
 
+/* The width handle: the box's own, on the body's right edge. The balloon's
+   height is the text's, so width is the one measure the hand can pull. */
+.aw-bubble__resize-handle {
+  position: absolute;
+  margin-left: -5px;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 44px;
+  border-radius: 5px;
+  background: var(--color-primary);
+  opacity: 0.45;
+  cursor: ew-resize;
+  display: none;
+}
+
+.aw-bubble--selected .aw-bubble__resize-handle {
+  display: block;
+}
+
+.aw-bubble__resize-handle:hover {
+  opacity: 0.95;
+}
+
 /* The two tail handles ride on the shared shape handles (same look, same
    gestures), and the turning handle is the shared one too. */
 .aw-bubble--selected .aw-shape-handle,

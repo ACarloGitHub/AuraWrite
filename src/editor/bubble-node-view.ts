@@ -18,7 +18,7 @@
 
 import { Node as PMNode } from "prosemirror-model";
 import { NodeView, EditorView, type ViewMutationRecord } from "prosemirror-view";
-import { applyWrapMarker, selectNodeAt, setStyleCached, transformStyleOf } from "./element-view";
+import { applyWrapMarker, pointerInElementAxes, selectNodeAt, setStyleCached, transformStyleOf } from "./element-view";
 import {
   createRotateHandle,
   createShapeHandles,
@@ -33,6 +33,8 @@ import { buildBubbleSvg, bubblePaintKey, bubbleShadowOf } from "./bubble-paint";
 import {
   BUBBLE_PAD_X,
   BUBBLE_PAD_Y,
+  BUBBLE_WIDTH_MAX,
+  BUBBLE_WIDTH_MIN,
   bubbleBodyHeightFromWrapper,
   bubbleLayout,
   bubbleWrapperWidth,
@@ -44,6 +46,7 @@ import {
 } from "./bubble-geometry";
 import { setBubbleAttrs } from "./bubble-commands";
 import { clampFreeOffset, parseFreeSpec } from "./free-layout";
+import { appliedScale } from "./editor-zoom";
 
 /** The two handles the balloon's tail has. */
 const PARTS = ["tip", "base"] as const;
@@ -54,6 +57,7 @@ export class BubbleNodeView implements NodeView {
   contentDOM: HTMLElement;
 
   private grip: HTMLElement;
+  private resizeHandle: HTMLElement;
   private handles: Record<string, HTMLElement> | null = null;
   private svg: SVGSVGElement | null = null;
   private paintKey = "";
@@ -64,6 +68,8 @@ export class BubbleNodeView implements NodeView {
   /** Scheduled repaint after a measurement, and what the last one drew. */
   private pendingPaint = 0;
   private lastBox = "";
+  /** True while a hand is shaping the balloon: the preview must not be undone. */
+  private dragging = false;
 
   constructor(
     node: PMNode,
@@ -80,7 +86,13 @@ export class BubbleNodeView implements NodeView {
     this.grip.className = "aw-bubble__grip";
     this.grip.title = "Drag to move";
 
-    this.dom.append(this.contentDOM, this.grip);
+    // The same width handle the box has: the balloon's height is the text's, so
+    // the one measure the hand can pull is the body's width.
+    this.resizeHandle = document.createElement("div");
+    this.resizeHandle.className = "aw-bubble__resize-handle";
+    this.resizeHandle.title = "Drag to resize width";
+
+    this.dom.append(this.contentDOM, this.grip, this.resizeHandle);
 
     this.handles = createShapeHandles(this.dom, PARTS, (e, part) =>
       this.onHandleGrab(e, part as BubblePart),
@@ -108,6 +120,9 @@ export class BubbleNodeView implements NodeView {
 
   /** Repaint after a measurement, once per frame, only if the box moved. */
   private scheduleRepaint(): void {
+    // A gesture paints its own preview: letting the measurement repaint from the
+    // document would put the balloon back to yesterday's numbers mid-drag.
+    if (this.dragging) return;
     if (this.pendingPaint) return;
     this.pendingPaint = requestAnimationFrame(() => {
       this.pendingPaint = 0;
@@ -218,6 +233,11 @@ export class BubbleNodeView implements NodeView {
       base.style.left = `${Math.round(layout.handles.base.x)}px`;
       base.style.top = `${Math.round(layout.handles.base.y)}px`;
     }
+    // The width handle rides on the body's right edge, halfway up it.
+    if (this.resizeHandle) {
+      this.resizeHandle.style.left = `${Math.round(layout.bodyLeft + layout.bodyW)}px`;
+      this.resizeHandle.style.top = `${Math.round(layout.bodyTop + layout.bodyH / 2)}px`;
+    }
   }
 
   // ------------------------------------------------------------- events
@@ -226,6 +246,12 @@ export class BubbleNodeView implements NodeView {
     this.dom.addEventListener("mousedown", (e: MouseEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
+      if (target === this.resizeHandle) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.startWidthDrag(e);
+        return;
+      }
       // Every handle runs its own gesture and never starts a free drag.
       if (isRotateHandle(target) || isShapeHandle(target)) return;
       // Pressing the balloon's surface (the grip, the tail's area, the body's
@@ -242,7 +268,7 @@ export class BubbleNodeView implements NodeView {
   }
 
   stopEvent(e: Event): boolean {
-    if (e.target === this.grip) return true;
+    if (e.target === this.grip || e.target === this.resizeHandle) return true;
     if (isRotateHandle(e.target) || isShapeHandle(e.target)) return true;
     if (e.type === "mousedown" && e.target === this.dom) return true;
     return false;
@@ -252,6 +278,61 @@ export class BubbleNodeView implements NodeView {
     const pos = this.getPos();
     if (pos == null) return;
     selectNodeAt(this.view, pos);
+  }
+
+  // ---------------------------------------------------- the width handle
+
+  /**
+   * Pull the body's width with the hand, the same gesture the box has. The
+   * height is the text's, so width is the only measure a drag can change; the
+   * words reflow while the hand moves, and the document is written once, at
+   * release.
+   */
+  private startWidthDrag(e: MouseEvent): void {
+    const pos = this.getPos();
+    if (pos == null) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node || node.type.name !== "bubble") return;
+    const attrs = node.attrs as Record<string, unknown>;
+    const base = normalizeBubbleParams(attrs);
+    const startWidth = base.width;
+    const rotation = Number(attrs.rotation) || 0;
+    // Visual pixels in, page units out: measured on the page, never assumed.
+    const scale = appliedScale(this.view.dom) || 1;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    this.selectBubble();
+    this.dragging = true;
+
+    const widthAt = (ev: MouseEvent): number => {
+      const turned = pointerInElementAxes(
+        (ev.clientX - startX) / scale,
+        (ev.clientY - startY) / scale,
+        rotation,
+      );
+      return Math.round(
+        Math.min(BUBBLE_WIDTH_MAX, Math.max(BUBBLE_WIDTH_MIN, startWidth + turned.dx)),
+      );
+    };
+
+    const onMove = (ev: MouseEvent): void => {
+      const width = widthAt(ev);
+      setStyleCached(
+        this.contentApplied,
+        this.contentDOM,
+        "width",
+        `${bubbleWrapperWidth({ ...base, width })}px`,
+      );
+      this.paint(this.layoutNow({ ...attrs, widthPx: width }), attrs);
+    };
+    const onUp = (ev: MouseEvent): void => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      this.dragging = false;
+      setBubbleAttrs(this.view, { widthPx: widthAt(ev) });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   }
 
   // ----------------------------------------------------- the tail handles
@@ -266,6 +347,7 @@ export class BubbleNodeView implements NodeView {
     const startLayout = this.layoutNow(attrs);
     const startParams: BubbleParams = { ...base, height: startLayout.bodyH };
     this.selectBubble();
+    this.dragging = true;
 
     const freeSpec = parseFreeSpec(attrs.free);
     const rotation = (Number(attrs.rotation) || 0) * (Math.PI / 180);
@@ -319,6 +401,7 @@ export class BubbleNodeView implements NodeView {
             };
           }
         }
+        this.dragging = false;
         setBubbleAttrs(this.view, patch);
       },
     });
