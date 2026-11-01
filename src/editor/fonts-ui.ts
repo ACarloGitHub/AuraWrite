@@ -11,11 +11,19 @@
  * wait for a list nobody has asked to see.
  *
  * Three moments ask for fonts, and each gets only what it needs:
- *  - a font select is opened   -> its options are filled, once (3.5k options
- *                                 cost their 90-240 ms there, not at startup);
+ *  - a font select is opened   -> its options are copied in from the list built
+ *                                 once (3.5k options cost their layout there,
+ *                                 not at startup, and no second opening pays
+ *                                 for building them again);
  *  - a family is applied       -> its `@font-face` is declared (toolbar,
  *                                 Preferences editor/UI font);
  *  - a document is installed   -> the faces of the families it formats with.
+ *
+ * The rows carry no font of their own: a `<select>` of thousands of rows drawn
+ * each in its own face had the browser resolve (and try to fetch) a font per
+ * row at every opening, and after the faces became lazy that preview was
+ * showing the fallback anyway. The preview next to the toolbar select shows the
+ * chosen font in its own face, which is where a preview is worth reading.
  *
  * The catalogue itself is a list of names: `list_user_font_files` reads the
  * folder entries and opens nothing (~2 ms on the same 3.471 files). The faces
@@ -81,21 +89,37 @@ function declareFace(family: string): void {
   style.textContent += `@font-face { font-family: "${family}"; src: url("${convertFileSrc(path)}"); font-display: swap; }\n`;
 }
 
+/**
+ * The list, built once per session and copied wherever it is needed. Copies are
+ * the point: the overflow menu clones the toolbar's select every time it opens
+ * (`recalcOverflow` empties and rebuilds its proxies), and a fresh clone must
+ * inherit the list, not rebuild it. `null` until the first select asks.
+ */
+let optionCache: HTMLOptionElement[] | null = null;
+
+function buildOptions(): HTMLOptionElement[] {
+  const options: HTMLOptionElement[] = [];
+  for (const family of filesByFamily?.keys() ?? []) {
+    const option = document.createElement("option");
+    option.value = family;
+    option.textContent = `\u{1F4C1} ${family}`;
+    option.dataset.userFont = "true";
+    options.push(option);
+  }
+  return options;
+}
+
 /** One `<option>` per user font, in the folder's order, added once. */
 export function fillUserFontOptions(select: HTMLSelectElement): void {
   if (!filesByFamily || select.dataset.userFonts === "filled") return;
   select.dataset.userFonts = "filled";
 
+  if (!optionCache) optionCache = buildOptions();
   const present = new Set(Array.from(select.options, (option) => option.value));
   const fragment = document.createDocumentFragment();
-  for (const family of filesByFamily.keys()) {
-    if (present.has(family)) continue;
-    const option = document.createElement("option");
-    option.value = family;
-    option.textContent = `\u{1F4C1} ${family}`;
-    option.style.fontFamily = `"${family}", sans-serif`;
-    option.dataset.userFont = "true";
-    fragment.appendChild(option);
+  for (const option of optionCache) {
+    if (present.has(option.value)) continue;
+    fragment.appendChild(option.cloneNode(true));
   }
   select.appendChild(fragment);
 }
@@ -188,6 +212,7 @@ export async function initUserFonts(fonts: {
 export function reloadUserFonts(): void {
   filesByFamily = null;
   loading = null;
+  optionCache = null;
 
   for (const select of fontSelects()) {
     const current = select.value;
