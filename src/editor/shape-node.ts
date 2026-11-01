@@ -71,9 +71,12 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     headSize: { default: DEFAULT_HEAD_SIZE_PX },
     // Height of the body rectangle, independent of the head's width.
     bodyHeight: { default: DEFAULT_BODY_HEIGHT_PX },
-    // Pattern of the contour ("solid" when empty), and the bend of the curve.
+    // Pattern of the contour ("solid" when empty), the bend of the curve, and a
+    // star's points with the depth of its notches.
     dash: { default: "" },
     curve: { default: 0 },
+    points: { default: 5 },
+    depth: { default: 55 },
     // A drawn shape is never aspect-locked: the width is its length and the
     // height is its stroke (line) or its head's width (arrow) - two free axes.
     aspectLocked: { default: false },
@@ -106,6 +109,8 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
           bodyHeight: markerNumber(dom, "data-body-height", DEFAULT_BODY_HEIGHT_PX),
           dash: dom.getAttribute("data-dash") || "",
           curve: markerNumber(dom, "data-curve", NaN),
+          points: markerNumber(dom, "data-points", 5),
+          depth: markerNumber(dom, "data-depth", 55),
           align: oneOfAlign(dom.getAttribute("data-align")),
           wrap: textConditionFromMarker(dom.getAttribute("data-wrap")),
           opacity: markerNumber(dom, "data-opacity", 100),
@@ -145,6 +150,8 @@ export const SHAPE_NODE_SPEC: NodeSpec = {
     }
     if (params.dash !== "solid") attrs["data-dash"] = params.dash;
     if (params.curve !== 0) attrs["data-curve"] = String(params.curve);
+    if (params.points !== 5) attrs["data-points"] = String(params.points);
+    if (params.depth !== 55) attrs["data-depth"] = String(params.depth);
     const wrapMarker = textConditionMarker(condition);
     if (wrapMarker !== null) attrs["data-wrap"] = wrapMarker;
     Object.assign(attrs, freeLayoutToDOM(node));

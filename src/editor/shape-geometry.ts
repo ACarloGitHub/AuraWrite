@@ -124,12 +124,22 @@ export function shapeGeometry(params: ShapeParams, box: ShapeBox): ShapeGeometry
     return { shaft: { x1: inset, y1: midY, x2: width - inset, y2: midY }, outline: null };
   }
 
-  if (params.kind === "ellipse") {
+  if (params.kind === "ellipse" || params.kind === "star") {
     const cx = width / 2;
     const cy = height / 2;
     const rx = Math.max(0.5, width / 2 - inset);
     const ry = Math.max(0.5, height / 2 - inset);
     const points: [number, number][] = [];
+    if (params.kind === "star") {
+      const spokes = Math.max(3, Math.min(24, Math.round(params.points)));
+      const inner = 0.85 - (params.depth / 100) * 0.7;
+      for (let i = 0; i < spokes * 2; i++) {
+        const angle = -Math.PI / 2 + (i * Math.PI) / spokes;
+        const k = i % 2 === 0 ? 1 : inner;
+        points.push([cx + rx * k * Math.cos(angle), cy + ry * k * Math.sin(angle)]);
+      }
+      return { shaft: null, outline: points };
+    }
     const steps = 72;
     for (let i = 0; i < steps; i++) {
       const angle = (i / steps) * Math.PI * 2;
@@ -222,7 +232,7 @@ export function shapeHandleAnchors(params: ShapeParams, box: ShapeBox): ShapeAnc
 
   if (params.kind === "line") return {};
 
-  if (params.kind === "ellipse") {
+  if (params.kind === "ellipse" || params.kind === "star") {
     return {
       east: { x: width - inset, y: midY },
       west: { x: inset, y: midY },

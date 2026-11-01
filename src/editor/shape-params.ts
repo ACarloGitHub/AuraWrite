@@ -11,7 +11,7 @@
 // ============================================================================
 
 /** The shapes of the first block. */
-export const SHAPE_KINDS = ["line", "arrow", "arrow_both", "arrow_curve", "ellipse"] as const;
+export const SHAPE_KINDS = ["line", "arrow", "arrow_both", "arrow_curve", "ellipse", "star"] as const;
 
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
@@ -34,6 +34,12 @@ export function isClosedShape(kind: ShapeKind): boolean {
 export const SHAPE_DASHES = ["solid", "dashed", "dotted"] as const;
 export type ShapeDash = (typeof SHAPE_DASHES)[number];
 export const DEFAULT_DASH: ShapeDash = "solid";
+
+/** Number of points of a star, and how deep its notches go (0-100). */
+export const DEFAULT_STAR_POINTS = 5;
+export const MIN_STAR_POINTS = 3;
+export const MAX_STAR_POINTS = 24;
+export const DEFAULT_STAR_DEPTH = 55;
 
 /** Bend of the curved arrow, in px; positive bulges upwards. */
 export const DEFAULT_CURVE_PX = 26;
@@ -95,6 +101,9 @@ export interface ShapeParams {
   dash: ShapeDash;
   /** Bend of the curved arrow, in px; positive bulges upwards. */
   curve: number;
+  /** Points of a star and how deep its notches go (0-100). */
+  points: number;
+  depth: number;
 }
 
 /** True when the value names one of the shapes this version can draw. */
@@ -130,6 +139,8 @@ export function normalizeShapeParams(attrs: Record<string, unknown> | undefined)
     bodyHeight: clampInt(a.bodyHeight, DEFAULT_BODY_HEIGHT_PX, MIN_BODY_HEIGHT_PX, MAX_SHAPE_WIDTH_PX),
     dash,
     curve: clampInt(a.curve, DEFAULT_CURVE_PX, -MAX_CURVE_PX, MAX_CURVE_PX),
+    points: clampInt(a.points, DEFAULT_STAR_POINTS, MIN_STAR_POINTS, MAX_STAR_POINTS),
+    depth: clampInt(a.depth, DEFAULT_STAR_DEPTH, 0, 100),
   };
 }
 

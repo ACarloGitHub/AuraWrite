@@ -95,6 +95,20 @@ export function setupShapeToolbar(view: EditorView): void {
     void setShapeAttrs(view, { headSize: value });
   });
 
+  const points = el<HTMLInputElement>("shape-points");
+  points?.addEventListener("change", () => {
+    const value = intOrNaN(points.value);
+    if (isNaN(value)) return;
+    void setShapeAttrs(view, { points: value });
+  });
+
+  const depth = el<HTMLInputElement>("shape-depth");
+  depth?.addEventListener("change", () => {
+    const value = intOrNaN(depth.value);
+    if (isNaN(value)) return;
+    void setShapeAttrs(view, { depth: value });
+  });
+
   const bodyHeight = el<HTMLInputElement>("shape-body-height");
   bodyHeight?.addEventListener("change", () => {
     const value = intOrNaN(bodyHeight.value);
@@ -127,6 +141,16 @@ export function syncShapeToolbar(view: EditorView): void {
 
   const dash = el<HTMLSelectElement>("shape-dash");
   if (dash) dash.value = params.dash;
+
+  const star = params.kind === "star";
+  const pointsField = el("shape-points-field");
+  if (pointsField) pointsField.hidden = !star;
+  const depthField = el("shape-depth-field");
+  if (depthField) depthField.hidden = !star;
+  const pointsInput = el<HTMLInputElement>("shape-points");
+  if (pointsInput) pointsInput.value = star ? String(params.points) : "";
+  const depthInput = el<HTMLInputElement>("shape-depth");
+  if (depthInput) depthInput.value = star ? String(params.depth) : "";
 
   const curveField = el("shape-curve-field");
   if (curveField) curveField.hidden = params.kind !== "arrow_curve";

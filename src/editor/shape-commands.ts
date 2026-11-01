@@ -116,6 +116,8 @@ export function setShapeAttrs(view: EditorView, patch: Record<string, unknown>):
     bodyHeight: Math.max(1, Math.min(params.bodyHeight, bodyRoom)),
     dash: params.dash,
     curve: params.curve,
+    points: params.points,
+    depth: params.depth,
     width: box.width,
     height: box.height,
   });
