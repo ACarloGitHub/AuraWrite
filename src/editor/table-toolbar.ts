@@ -4,25 +4,91 @@
 // The commands that change a table (rows, columns, merge, split, header,
 // delete) live in the secondary bar, `table-menu.ts`, which appears while the
 // caret is inside a table. One command, one place.
+//
+// How a size is chosen: the grid is the quick gesture (8 rows by 10 columns,
+// the block under the pointer lights up), the two fields are the free one, the
+// way EdenText's TablePicker does it. The fields are clamped: more than 20
+// columns does not fit the text column, and 50 rows are already a table that
+// spans page after page.
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
 
+const GRID_ROWS = 8;
+const GRID_COLS = 10;
+const MAX_ROWS = 50;
+const MAX_COLS = 20;
+
 let dropdownEl: HTMLElement | null = null;
+let labelEl: HTMLElement | null = null;
+let gridEl: HTMLElement | null = null;
+let rowsInput: HTMLInputElement | null = null;
+let colsInput: HTMLInputElement | null = null;
+
+function clamp(value: string, min: number, max: number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+function createGrid(): HTMLElement {
+  const grid = document.createElement("div");
+  grid.className = "table-picker-grid";
+  for (let rows = 1; rows <= GRID_ROWS; rows++) {
+    const line = document.createElement("div");
+    line.className = "table-picker-grid__row";
+    for (let cols = 1; cols <= GRID_COLS; cols++) {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "table-picker-grid__cell";
+      cell.dataset.rows = String(rows);
+      cell.dataset.cols = String(cols);
+      cell.setAttribute("aria-label", `${cols} × ${rows}`);
+      line.appendChild(cell);
+    }
+    grid.appendChild(line);
+  }
+  return grid;
+}
+
+/** Light up the block from the top-left corner to the cell under the pointer. */
+function highlight(rows: number, cols: number): void {
+  if (!gridEl) return;
+  for (const cell of gridEl.querySelectorAll<HTMLElement>(".table-picker-grid__cell")) {
+    const r = Number(cell.dataset.rows);
+    const c = Number(cell.dataset.cols);
+    cell.classList.toggle("is-hot", r <= rows && c <= cols);
+  }
+  if (labelEl) {
+    labelEl.textContent = rows > 0 && cols > 0 ? `${cols} × ${rows}` : "Insert table";
+  }
+}
 
 function createDropdown(): HTMLElement {
   if (dropdownEl) return dropdownEl;
 
   dropdownEl = document.createElement("div");
   dropdownEl.className = "table-dropdown hidden";
-  dropdownEl.innerHTML = `
-    <div class="table-dropdown__section">Insert</div>
-    <button class="table-dropdown__item" data-action="insert-3x3">Table 3×3</button>
-    <button class="table-dropdown__item" data-action="insert-4x4">Table 4×4</button>
-    <button class="table-dropdown__item" data-action="insert-5x5">Table 5×5</button>
-  `;
+
+  labelEl = document.createElement("div");
+  labelEl.className = "table-picker-label";
+  labelEl.textContent = "Insert table";
+  dropdownEl.appendChild(labelEl);
+
+  gridEl = createGrid();
+  dropdownEl.appendChild(gridEl);
+
+  const manual = document.createElement("div");
+  manual.className = "table-picker-manual";
+  manual.innerHTML =
+    '<label class="table-picker-field">Rows <input id="table-insert-rows" type="text" inputmode="numeric" value="3" /></label>' +
+    '<label class="table-picker-field">Cols <input id="table-insert-cols" type="text" inputmode="numeric" value="3" /></label>' +
+    '<button id="table-insert-apply" type="button" class="table-picker-apply">Insert</button>';
+  dropdownEl.appendChild(manual);
 
   document.body.appendChild(dropdownEl);
+  rowsInput = dropdownEl.querySelector<HTMLInputElement>("#table-insert-rows");
+  colsInput = dropdownEl.querySelector<HTMLInputElement>("#table-insert-cols");
   return dropdownEl;
 }
 
@@ -74,35 +140,54 @@ function createTable(rows: number, cols: number, view: EditorView): void {
 export function setupTableToolbar(view: EditorView): void {
   const dropdown = createDropdown();
 
+  const insert = (rows: number, cols: number) => {
+    createTable(rows, cols, view);
+    hideDropdown();
+  };
+
+  // The grid: hovering lights the block up, a click inserts that size.
+  dropdown.addEventListener("mouseover", (e: MouseEvent) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".table-picker-grid__cell");
+    if (!cell) return;
+    highlight(Number(cell.dataset.rows), Number(cell.dataset.cols));
+  });
+  dropdown.addEventListener("mouseleave", () => highlight(0, 0));
+
   dropdown.addEventListener("click", (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    const item = target.closest(".table-dropdown__item") as HTMLElement;
-    if (!item) return;
 
-    const action = item.dataset.action;
-    if (!action) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    switch (action) {
-      case "insert-3x3":
-        createTable(3, 3, view);
-        break;
-      case "insert-4x4":
-        createTable(4, 4, view);
-        break;
-      case "insert-5x5":
-        createTable(5, 5, view);
-        break;
+    const cell = target.closest<HTMLElement>(".table-picker-grid__cell");
+    if (cell) {
+      e.preventDefault();
+      insert(Number(cell.dataset.rows), Number(cell.dataset.cols));
+      return;
     }
 
-    hideDropdown();
+    if (target.closest("#table-insert-apply")) {
+      e.preventDefault();
+      insert(
+        clamp(rowsInput?.value ?? "3", 1, MAX_ROWS),
+        clamp(colsInput?.value ?? "3", 1, MAX_COLS),
+      );
+    }
   });
+
+  // Enter in either field inserts, as in the picker both word processors show.
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    insert(
+      clamp(rowsInput?.value ?? "3", 1, MAX_ROWS),
+      clamp(colsInput?.value ?? "3", 1, MAX_COLS),
+    );
+  };
+  rowsInput?.addEventListener("keydown", onKey);
+  colsInput?.addEventListener("keydown", onKey);
 }
 
 export function showTableDropdown(): void {
   const dropdown = createDropdown();
+  highlight(0, 0);
 
   const btn = document.getElementById("btn-table");
   if (btn) {
