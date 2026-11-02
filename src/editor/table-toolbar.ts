@@ -13,6 +13,7 @@
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
+import { TextSelection } from "prosemirror-state";
 
 const GRID_ROWS = 8;
 const GRID_COLS = 10;
@@ -134,6 +135,11 @@ function createTable(rows: number, cols: number, view: EditorView): void {
     console.error("[table] FAILED: insert did not change doc size");
     return;
   }
+  // The caret goes into the first cell, as both word processors do — and that is
+  // also what makes the new table lay itself out once: without a view update after
+  // the insert, a wide table kept the width it measured before the column had one
+  // (780px for twenty columns, until the first click).
+  tr.setSelection(TextSelection.near(tr.doc.resolve(insertPos + 4)));
   view.dispatch(tr);
 }
 
