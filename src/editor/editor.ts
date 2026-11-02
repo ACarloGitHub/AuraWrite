@@ -714,7 +714,14 @@ export function createEditor(element: HTMLElement): EditorViewType {
       linkPopoverPlugin,
       createImageDropPlugin(),
       createImagePastePlugin(),
-      columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
+      // `cellMinWidth` is the floor a DRAG may push a column to (25px, the same
+      // floor the split respects). `defaultCellMinWidth` used to be 100, and that
+      // was also a `min-width` on every cell without an explicit width: a table of
+      // more than six columns could not shrink to the text column and pushed a
+      // horizontal scrollbar into the page. The table is `width: 100%`: its
+      // columns share what there is, and 25px each still fits twenty of them into
+      // the 602px column.
+      columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 25 }),
       tableEditing(),
       createAtomicElementGuardPlugin("styled_box"),
       createAtomicElementGuardPlugin("figure"),
