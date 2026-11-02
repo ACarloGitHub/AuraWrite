@@ -440,6 +440,7 @@ function measureCellContent(cell: PMNode, width: number): number {
  */
 function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
   const rows: TableCellRef[][] = [];
+  const rowNodes: PMNode[] = [];
   let columns = 1;
   node.forEach((row) => {
     const cells: TableCellRef[] = [];
@@ -452,6 +453,7 @@ function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
     });
     columns = Math.max(columns, col);
     rows.push(cells);
+    rowNodes.push(row);
   });
 
   const widths = tableColumnWidths(rows, columns, contentWidth);
@@ -477,6 +479,13 @@ function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
         });
       }
     }
+  });
+
+  // A row may ask for a minimum height (the line under it, dragged): the row is at
+  // least that tall, and its cells cannot make it shorter.
+  rows.forEach((_cells, index) => {
+    const min = Number(rowNodes[index]?.attrs?.rowHeight);
+    if (Number.isFinite(min) && min > 0) heights[index] = Math.max(heights[index], min);
   });
 
   for (const span of spanning) {

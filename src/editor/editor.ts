@@ -17,6 +17,7 @@ import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-li
 import { tableNodes, tableEditing, columnResizing } from "prosemirror-tables";
 import "prosemirror-tables/style/tables.css";
 import { createTrailingBlockPlugin } from "./trailing-block";
+import { createRowHeightPlugin } from "./row-height";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
@@ -598,6 +599,30 @@ const tableNodeSpecs = tableNodes({
   },
 });
 
+// A row's own height: a MINIMUM in px, dragged from the line under it
+// (`row-height.ts`). It is drawn as the row's CSS height and written to the DOCX as
+// `w:trHeight` with the "at least" rule.
+const rowNodeSpec: NodeSpec = {
+  ...tableNodeSpecs.table_row,
+  attrs: { rowHeight: { default: null } },
+  parseDOM: [
+    {
+      tag: "tr",
+      getAttrs: (dom: HTMLElement) => ({
+        rowHeight: Number(dom.getAttribute("data-row-height")) || null,
+      }),
+    },
+  ],
+  toDOM(node) {
+    const attrs: Record<string, string> = {};
+    if (node.attrs.rowHeight) {
+      attrs.style = `height: ${node.attrs.rowHeight}px`;
+      attrs["data-row-height"] = String(node.attrs.rowHeight);
+    }
+    return ["tr", attrs, 0];
+  },
+};
+
 let nodes = basicSchema.spec.nodes.update("paragraph", paragraphWithPageBreak);
 nodes = nodes
   .update("doc", { content: "block+" })
@@ -614,6 +639,7 @@ nodes = nodes
     shape: SHAPE_NODE_SPEC,
     bubble: BUBBLE_NODE_SPEC,
     ...tableNodeSpecs,
+    table_row: rowNodeSpec,
   });
 
 const marks = basicSchema.spec.marks.append({
@@ -778,6 +804,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
       // the 602px column.
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 25 }),
       tableEditing(),
+      // Drag the line under a row to give it a minimum height.
+      createRowHeightPlugin(),
       // A table is isolating: without a block after it the caret has nowhere to go
       // and the document appears to end inside the table.
       createTrailingBlockPlugin(),

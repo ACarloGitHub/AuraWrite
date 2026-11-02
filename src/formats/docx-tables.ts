@@ -21,6 +21,8 @@ export interface ImportedCellParagraph {
 export interface ImportedTable {
   rows: ImportedTableCell[][];
   gridCols?: number[];
+  /** Minimum height of each row, in px, parallel to `rows`; null where the file sets none. */
+  rowHeights?: (number | null)[];
 }
 
 function getDOMParser(): any {
@@ -180,11 +182,26 @@ function readRow(tr: any): ImportedTableCell[] {
   return cells;
 }
 
+/** A row's minimum height: `w:trHeight` in twips, "at least" rule only. */
+function readRowHeight(tr: any): number | null {
+  const trPr = getFirstChildByNS(tr, W_NS, "trPr");
+  if (!trPr) return null;
+  const trHeight = getFirstChildByNS(trPr, W_NS, "trHeight");
+  if (!trHeight) return null;
+  const rule = String(trHeight.getAttribute("w:hRule") || "").toLowerCase();
+  if (rule === "auto") return null;
+  const twips = Number(trHeight.getAttribute("w:val"));
+  if (!Number.isFinite(twips) || twips <= 0) return null;
+  return Math.round(twips / 15);
+}
+
 function readTable(tbl: any): ImportedTable {
   const rows: ImportedTableCell[][] = [];
+  const rowHeights: (number | null)[] = [];
   for (let child = tbl.firstChild; child; child = child.nextSibling) {
     if (child.namespaceURI === W_NS && child.localName === "tr") {
       rows.push(readRow(child));
+      rowHeights.push(readRowHeight(child));
     }
   }
   const tblGrid = getFirstChildByNS(tbl, W_NS, "tblGrid");
@@ -200,7 +217,7 @@ function readTable(tbl: any): ImportedTable {
     }
     if (cols.length > 0) gridCols = cols;
   }
-  return { rows, gridCols };
+  return { rows, gridCols, rowHeights };
 }
 
 export async function extractTablesFromDocx(
@@ -282,12 +299,11 @@ export function tableToHtml(table: ImportedTable): string {
   };
 
   const rowsHtml = table.rows
-    .map(
-      (row, i) =>
-        `<tr>${row
-          .map((c) => cellToHtml(c, i === 0))
-          .join("")}</tr>`
-    )
+    .map((row, i) => {
+      const height = table.rowHeights?.[i];
+      const rowAttrs = height ? ` data-row-height="${height}"` : "";
+      return `<tr${rowAttrs}>${row.map((c) => cellToHtml(c, i === 0)).join("")}</tr>`;
+    })
     .join("");
 
   return `<table data-aw-imported="true">${colgroup}<tbody>${rowsHtml}</tbody></table>`;

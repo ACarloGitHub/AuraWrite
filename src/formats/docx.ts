@@ -15,6 +15,7 @@ import {
   WidthType,
   BorderStyle,
   VerticalAlign,
+  HeightRule,
   ImageRun,
   TextWrappingType,
   TextWrappingSide,
@@ -1320,7 +1321,14 @@ function tableNodeToDocx(tableNode: any): Table {
       cells.push(new TableCell(cellOpts));
     });
 
-    rows.push(new TableRow({ children: cells }));
+    const rowOpts: any = { children: cells };
+    // A row's height is a minimum (w:trHeight with the "at least" rule): the row
+    // grows when its cells need more, which is what the editor draws.
+    const rowHeight = Number(row.attrs?.rowHeight);
+    if (Number.isFinite(rowHeight) && rowHeight > 0) {
+      rowOpts.height = { value: Math.round(rowHeight * 15), rule: HeightRule.ATLEAST };
+    }
+    rows.push(new TableRow(rowOpts));
   });
 
   const totalWidth = colwidths.length > 0
