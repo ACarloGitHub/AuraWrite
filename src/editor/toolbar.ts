@@ -13,6 +13,8 @@ import { setLoading as setLoadingState, isLoading as isLoadingState } from "../l
 import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
+import { setupTableMenu } from "./table-menu";
+import { isInTable } from "prosemirror-tables";
 import { insertImageFromFile, getSelectedImage, setImageAspectLocked, setImageWidth, setImageHeight } from "./image-commands";
 import { getSelectedElement } from "./element-commands";
 import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
@@ -1105,6 +1107,7 @@ function setupFormattingButtons(): void {
   });
 
   setupTableToolbar(editorView);
+  setupTableMenu(editorView);
   setupImageToolbar(editorView);
   void import("./box-style-toolbar").then((m) => m.setupBoxToolbar(editorView));
   void import("./shape-toolbar").then((m) => m.setupShapeToolbar(editorView));
@@ -2274,6 +2277,9 @@ function setupImageToolbar(view: EditorView): void {
 export function syncSecondaryToolbar(view: EditorView): void {
   const bar = document.getElementById("image-toolbar");
   const info = getSelectedElement(view, ELEMENT_KINDS);
+  // A table is not an element: it gets its own block of controls, and it is the
+  // reason the bar can be visible with nothing selected.
+  const inTable = isInTable(view.state);
   // These run on every transaction, also when the selection LEAVES an element.
   void import("./layers-panel").then((m) => m.syncLayersPanel(view));
   void import("./element-bar").then((m) => m.syncElementBar(view));
@@ -2283,22 +2289,25 @@ export function syncSecondaryToolbar(view: EditorView): void {
   void import("./bubble-toolbar").then((m) => m.syncBubbleToolbar(view));
   updateImageToolbar(view);
   if (!bar) return;
-  if (!info) {
+  if (!info && !inTable) {
     bar.classList.remove("image-toolbar--visible");
     return;
   }
   bar.classList.add("image-toolbar--visible");
   // Which block of controls the bar shows comes from the element table: the
-  // image/figure section, the box section or the shape section.
-  const section = elementTypeOf(info.node)?.toolbarSection ?? "image";
+  // image/figure section, the box section or the shape section. Inside a table
+  // there is no element, so no element section is shown.
+  const section = info ? elementTypeOf(info.node)?.toolbarSection ?? "image" : null;
   const imageControls = document.getElementById("image-controls");
   const boxControls = document.getElementById("box-controls");
   const shapeControls = document.getElementById("shape-controls");
   const bubbleControls = document.getElementById("bubble-controls");
+  const tableControls = document.getElementById("table-controls");
   if (imageControls) imageControls.hidden = section !== "image";
   if (boxControls) boxControls.hidden = section !== "box";
   if (shapeControls) shapeControls.hidden = section !== "shape";
   if (bubbleControls) bubbleControls.hidden = section !== "bubble";
+  if (tableControls) tableControls.hidden = !inTable;
 }
 
 export function updateImageToolbar(view: EditorView): void {

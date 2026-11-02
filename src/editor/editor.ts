@@ -16,7 +16,6 @@ import { baseKeymap } from "prosemirror-commands";
 import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
 import { tableNodes, tableEditing, columnResizing } from "prosemirror-tables";
 import "prosemirror-tables/style/tables.css";
-import { createTableMonitorPlugin } from "./table-toolbar";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
@@ -717,7 +716,6 @@ export function createEditor(element: HTMLElement): EditorViewType {
       createImagePastePlugin(),
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 100 }),
       tableEditing(),
-      createTableMonitorPlugin(),
       createAtomicElementGuardPlugin("styled_box"),
       createAtomicElementGuardPlugin("figure"),
       createAtomicElementGuardPlugin("bubble"),

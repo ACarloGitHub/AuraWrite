@@ -556,7 +556,8 @@ body.reader-mode .toolbar {
 #image-controls,
 #box-controls,
 #shape-controls,
-#bubble-controls {
+#bubble-controls,
+#table-controls {
   display: contents;
 }
 
@@ -565,6 +566,7 @@ body.reader-mode .toolbar {
 #image-controls[hidden],
 #box-controls[hidden],
 #shape-controls[hidden],
-#bubble-controls[hidden] {
+#bubble-controls[hidden],
+#table-controls[hidden] {
   display: none;
 }

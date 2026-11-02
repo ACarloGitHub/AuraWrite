@@ -1814,31 +1814,6 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   opacity: 0.95;
 }
 
-/* ============================================================================
-   TABLE WARNING BANNER
-   ============================================================================ */
-
-.table-warning-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 6px;
-  margin: 8px 16px;
-  font-size: 13px;
-  color: #856404;
-}
-
-.table-warning-banner__icon {
-  font-size: 16px;
-}
-
-.table-warning-banner__text {
-  flex: 1;
-}
-
 #download-progress-container {
   position: fixed;
   bottom: 20px;

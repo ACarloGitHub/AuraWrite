@@ -475,6 +475,26 @@
         <input id="bubble-border-color" type="color" class="image-toolbar__color" title="Colour of the contour" value="#333333" />
         <label id="bubble-radius-field" class="image-toolbar__field" title="Corner rounding in pixels">R <input id="bubble-radius" type="number" min="0" max="120" step="2" value="" placeholder="px" /></label>
         </span>
+        <!-- TABLE CONTROLS: the commands that CHANGE a table. The menu on the main
+             bar only creates one; these appear in this bar while the caret is
+             inside a table, so a command lives in one place only. -->
+        <span id="table-controls" hidden>
+        <span class="image-toolbar__label">Row</span>
+        <button id="tbl-row-before" class="image-toolbar__btn" title="Add a row above">Above</button>
+        <button id="tbl-row-after" class="image-toolbar__btn" title="Add a row below">Below</button>
+        <button id="tbl-row-delete" class="image-toolbar__btn" title="Delete this row">Delete row</button>
+        <div class="image-toolbar__separator"></div>
+        <span class="image-toolbar__label">Column</span>
+        <button id="tbl-col-before" class="image-toolbar__btn" title="Add a column on the left">Left</button>
+        <button id="tbl-col-after" class="image-toolbar__btn" title="Add a column on the right">Right</button>
+        <button id="tbl-col-delete" class="image-toolbar__btn" title="Delete this column">Delete col</button>
+        <div class="image-toolbar__separator"></div>
+        <button id="tbl-merge" class="image-toolbar__btn" title="Merge the selected cells into one">Merge</button>
+        <button id="tbl-split" class="image-toolbar__btn" title="Split the cell back into a grid">Split</button>
+        <button id="tbl-header" class="image-toolbar__btn" title="Make the first row the header row">Header</button>
+        <div class="image-toolbar__separator"></div>
+        <button id="tbl-delete" class="image-toolbar__btn" title="Delete the whole table">Delete table</button>
+        </span>
       </div>
       <div id="ocr-bar" class="ocr-bar hidden">
         <button id="ocr-load" class="ocr-bar__btn" title="Load file for OCR">📂 Load</button>
