@@ -13,7 +13,7 @@ import { setLoading as setLoadingState, isLoading as isLoadingState } from "../l
 import { schema } from "./editor";
 import { openLinkPopover } from "./link-plugin";
 import { toggleTableDropdown, setupTableToolbar, hideDropdown as hideTableDropdown } from "./table-toolbar";
-import { setupTableMenu } from "./table-menu";
+import { setupTableMenu, syncTableMenu } from "./table-menu";
 import { isInTable } from "prosemirror-tables";
 import { insertImageFromFile, getSelectedImage, setImageAspectLocked, setImageWidth, setImageHeight } from "./image-commands";
 import { getSelectedElement } from "./element-commands";
@@ -2291,6 +2291,7 @@ export function syncSecondaryToolbar(view: EditorView): void {
   void import("./box-style-toolbar").then((m) => m.syncBoxToolbar(view));
   void import("./shape-toolbar").then((m) => m.syncShapeToolbar(view));
   void import("./bubble-toolbar").then((m) => m.syncBubbleToolbar(view));
+  syncTableMenu(view);
   updateImageToolbar(view);
   if (!bar) return;
   if (!info && !inTable) {

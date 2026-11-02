@@ -12,6 +12,7 @@
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";
+import type { Node as PMNode } from "prosemirror-model";
 import type { Command } from "prosemirror-state";
 import {
   addColumnAfter,
@@ -22,6 +23,7 @@ import {
   deleteRow,
   deleteTable,
   mergeCells,
+  setCellAttr,
   toggleHeaderRow,
 } from "prosemirror-tables";
 import { splitCellInto } from "./table-split";
@@ -44,6 +46,36 @@ function clampCount(value: string): number {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return MIN_SPLIT;
   return Math.max(MIN_SPLIT, Math.min(MAX_SPLIT, n));
+}
+
+/** The cell the caret sits in, if any. */
+function cellAt(view: EditorView): PMNode | null {
+  const { $from } = view.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === "table_cell" || node.type.name === "table_header") return node;
+  }
+  return null;
+}
+
+/**
+ * "#rrggbb" for the colour input. The attribute may hold an `rgb(...)` string:
+ * that is what `prosemirror-tables` reads off a cell that came from markup.
+ */
+function toHex(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  const rgb = value.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (rgb) {
+    const hex = [rgb[1], rgb[2], rgb[3]]
+      .map((n) => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, "0"))
+      .join("");
+    return `#${hex}`;
+  }
+  if (/^#[0-9a-f]{6}$/i.test(value)) return value.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(value)) {
+    return `#${value.slice(1).split("").map((c) => c + c).join("")}`.toLowerCase();
+  }
+  return null;
 }
 
 function ensureSplitPanel(view: EditorView): HTMLElement {
@@ -120,10 +152,30 @@ export function setupTableMenu(view: EditorView): void {
   el("tbl-header")?.addEventListener("click", () => run(view, toggleHeaderRow));
   el("tbl-delete")?.addEventListener("click", () => run(view, deleteTable));
 
+  // The fill of the selected cells: a colour input plus the × that clears it.
+  el("tbl-bg")?.addEventListener("input", (event) => {
+    run(view, setCellAttr("backgroundColor", (event.target as HTMLInputElement).value));
+  });
+  el("tbl-bg-clear")?.addEventListener("click", () => {
+    run(view, setCellAttr("backgroundColor", null));
+  });
+
   el("tbl-split")?.addEventListener("click", (event) => {
     event.preventDefault();
     const button = event.currentTarget as HTMLElement;
     if (splitPanel && !splitPanel.classList.contains("hidden")) hideSplitPanel();
     else openSplitPanel(view, button);
   });
+}
+
+/** Show the fill of the cell under the caret in the bar's swatch. */
+export function syncTableMenu(view: EditorView): void {
+  const input = el<HTMLInputElement>("tbl-bg");
+  const clear = el("tbl-bg-clear");
+  if (!input) return;
+  const cell = cellAt(view);
+  if (!cell) return;
+  const hex = toHex(cell.attrs.backgroundColor);
+  input.value = hex ?? "#ffffff";
+  if (clear) clear.hidden = hex === null;
 }

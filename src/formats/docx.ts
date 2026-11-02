@@ -1302,7 +1302,12 @@ function tableNodeToDocx(tableNode: any): Table {
           right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
         },
       };
-      if (rowIdx === 0 && cell.type.name === "table_header") {
+      // The cell's own fill wins over the header row's default grey: it is what
+      // the editor paints (`backgroundColor`, set from the secondary bar).
+      const cellFill = normalizeColor(cell.attrs?.backgroundColor);
+      if (cellFill) {
+        cellOpts.shading = { fill: cellFill };
+      } else if (rowIdx === 0 && cell.type.name === "table_header") {
         cellOpts.shading = { fill: "F5F5F5" };
       }
       cells.push(new TableCell(cellOpts));

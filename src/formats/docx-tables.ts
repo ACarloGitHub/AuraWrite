@@ -7,6 +7,8 @@ export interface ImportedTableCell {
   colspan: number;
   rowspan: number;
   colwidth?: number;
+  /** The cell's fill, as `#RRGGBB` (`w:shd` in the file). */
+  background?: string;
 }
 
 export interface ImportedCellParagraph {
@@ -120,10 +122,23 @@ function readCellParagraph(p: any): ImportedCellParagraph {
   };
 }
 
+function readCellBackground(tc: any): string | undefined {
+  const tcPr = getFirstChildByNS(tc, W_NS, "tcPr");
+  if (!tcPr) return undefined;
+  const shd = getFirstChildByNS(tcPr, W_NS, "shd");
+  if (!shd) return undefined;
+  const fill = String(shd.getAttribute("w:fill") || "").trim();
+  // "auto" is Word's "no fill", and a white fill is the same nothing here.
+  if (!/^[0-9A-Fa-f]{6}$/.test(fill)) return undefined;
+  if (fill.toUpperCase() === "FFFFFF") return undefined;
+  return `#${fill.toUpperCase()}`;
+}
+
 function readCell(tc: any): ImportedTableCell {
   const colspan = readGridSpan(tc);
   const rowspanStart = readVMerge(tc);
   const colwidth = readTcW(tc);
+  const background = readCellBackground(tc);
   const paragraphs: ImportedCellParagraph[] = [];
   for (let child = tc.firstChild; child; child = child.nextSibling) {
     if (child.namespaceURI === W_NS && child.localName === "p") {
@@ -135,6 +150,7 @@ function readCell(tc: any): ImportedTableCell {
     colspan,
     rowspan: rowspanStart.start ? 1 : 1,
     colwidth,
+    background,
   };
 }
 
@@ -230,6 +246,9 @@ export function tableToHtml(table: ImportedTable): string {
     if (cell.colspan > 1) attrs.push(`colspan="${cell.colspan}"`);
     if (cell.rowspan > 1) attrs.push(`rowspan="${cell.rowspan}"`);
     if (cell.colwidth) attrs.push(`data-colwidth="${cell.colwidth}"`);
+    // The fill goes on the inline style, which is where the cell's parser reads
+    // it back (editor.ts, `backgroundColor`).
+    if (cell.background) attrs.push(`style="background-color: ${cell.background}"`);
     const inner =
       cell.paragraphs.length === 0
         ? "<p></p>"
