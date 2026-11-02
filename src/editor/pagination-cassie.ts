@@ -346,6 +346,146 @@ export interface LineInfo {
   fullText: string;
 }
 
+// ---------------------------------------------------------------------------
+// TABLES
+//
+// The cell box comes from the editor's stylesheet (05-document.css): padding
+// 6px 12px and a 1px border, with `border-collapse: collapse`. The numbers here
+// were measured on a real table (Tests/verifica-concordanza, famiglia T,
+// 2026-11-02): a row of one line is 50px — 22 (line) + 14.67 (space after the
+// paragraph) + 12 (padding) + its share of the border — and four such rows are
+// 200px, which is 4 x 48.67 plus 5 borders: one per row and one for the table,
+// not two per row. An eight-paragraph cell is 306px, so a cell keeps the space
+// after its last block: a cell is a formatting context of its own.
+//
+// NOT counted here: the table's own `margin: 1em 0`. It is the block's spacing,
+// not its height, and it is given by `spacingFor` like every other block.
+// ---------------------------------------------------------------------------
+
+const CELL_PADDING_X_PX = 12;
+const CELL_PADDING_Y_PX = 6;
+const CELL_BORDER_PX = 1;
+
+interface TableCellRef {
+  node: PMNode;
+  col: number;
+  colspan: number;
+  rowspan: number;
+}
+
+/**
+ * The width of every column, from the `colwidth` weights the editor writes.
+ *
+ * `colwidth` is a list of measured widths, so only the ratios between them mean
+ * anything: a column that carries none takes the average of the known ones, and
+ * with no known weight at all the columns are equal. The table fills the text
+ * column (`width: 100%` in the stylesheet).
+ */
+function tableColumnWidths(
+  rows: TableCellRef[][],
+  columns: number,
+  contentWidth: number,
+): number[] {
+  const weights: (number | null)[] = new Array(columns).fill(null);
+  for (const row of rows) {
+    for (const cell of row) {
+      const raw = cell.node.attrs.colwidth;
+      if (!Array.isArray(raw)) continue;
+      for (let i = 0; i < cell.colspan && cell.col + i < columns; i++) {
+        const weight = Number(raw[i]);
+        if (weights[cell.col + i] === null && Number.isFinite(weight) && weight > 0) {
+          weights[cell.col + i] = weight;
+        }
+      }
+    }
+  }
+  const known = weights.reduce<number>((sum, weight) => sum + (weight ?? 0), 0);
+  const missing = weights.filter((weight) => weight === null).length;
+  const fallback = missing === 0 ? 0 : known > 0 ? known / (columns - missing) : 1;
+  const resolved = weights.map((weight) => weight ?? fallback);
+  const total = resolved.reduce((sum, weight) => sum + weight, 0);
+  const scale = total > 0 ? contentWidth / total : 0;
+  return resolved.map((weight) => weight * scale);
+}
+
+/** The height of what a cell holds, measured at the width of the cell's text. */
+function measureCellContent(cell: PMNode, width: number): number {
+  let height = 0;
+  let pendingAfter = 0;
+  cell.forEach((block) => {
+    const measured = block.type.name === "table"
+      ? measureTable(block, width)
+      : block.type.name === "paragraph" || block.type.name === "heading"
+        ? measureParagraph(block, width, baseMetricsFor(block))
+        : measureTextBlock(block, width);
+    const spacing = spacingFor(block);
+    height += Math.max(pendingAfter, spacing.beforePx) + measured.heightPx;
+    pendingAfter = spacing.afterPx;
+  });
+  return height + pendingAfter;
+}
+
+/**
+ * A table, row by row. A row is as tall as its tallest cell; a cell is its
+ * blocks measured at the width of the columns it spans, plus the padding.
+ *
+ * A cell that covers several rows cannot make one single row taller than its
+ * content: the rows it covers must add up to it, and what is missing goes to the
+ * last of them — which is what the browser does when it grows the row the cell
+ * ends in.
+ */
+function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
+  const rows: TableCellRef[][] = [];
+  let columns = 1;
+  node.forEach((row) => {
+    const cells: TableCellRef[] = [];
+    let col = 0;
+    row.forEach((cell) => {
+      const colspan = Math.max(1, Number(cell.attrs.colspan) || 1);
+      const rowspan = Math.max(1, Number(cell.attrs.rowspan) || 1);
+      cells.push({ node: cell, col, colspan, rowspan });
+      col += colspan;
+    });
+    columns = Math.max(columns, col);
+    rows.push(cells);
+  });
+
+  const widths = tableColumnWidths(rows, columns, contentWidth);
+  const heights = rows.map(() => 0);
+  const spanning: { first: number; last: number; needed: number }[] = [];
+
+  rows.forEach((cells, index) => {
+    for (const cell of cells) {
+      let cellWidth = 0;
+      for (let i = 0; i < cell.colspan; i++) cellWidth += widths[cell.col + i] ?? 0;
+      const inner = Math.max(
+        20,
+        cellWidth - 2 * CELL_PADDING_X_PX - 2 * CELL_BORDER_PX,
+      );
+      const needed = measureCellContent(cell.node, inner) + 2 * CELL_PADDING_Y_PX;
+      if (cell.rowspan === 1) {
+        heights[index] = Math.max(heights[index], needed);
+      } else {
+        spanning.push({
+          first: index,
+          last: Math.min(rows.length, index + cell.rowspan) - 1,
+          needed,
+        });
+      }
+    }
+  });
+
+  for (const span of spanning) {
+    let covered = 0;
+    for (let row = span.first; row <= span.last; row++) covered += heights[row];
+    if (covered < span.needed) heights[span.last] += span.needed - covered;
+  }
+
+  const body = heights.reduce((sum, height) => sum + height, 0);
+  // Borders are shared between neighbours: one per row, plus one for the table.
+  return { heightPx: body + (rows.length + 1) * CELL_BORDER_PX, lineCount: rows.length };
+}
+
 /**
  * Measure a single block node's height in CSS pixels using Pretext.
  *
@@ -353,12 +493,12 @@ export interface LineInfo {
  * own attrs (`lineHeight`) and its inline `fontSize` marks (dominant size â€”
  * exact per-run measurement lands with v2b). Composite elements
  * (styled_box, figure, image) are measured structurally from their attrs.
- * Tables and lists keep deliberate simplifications. What matters is that
+ * A table is measured from its own grid, row by row (`measureTable`); lists
+ * keep a deliberate simplification. What matters is that
  * the decision is consistent, follows the document, and does not depend on
  * the browser having laid out the page already.
  */
-export function measureBlock(node: PMNode | null | undefined, margins?: PageMargins): BlockMetrics {
-  if (!node) {
+export function measureBlock(node: PMNode | null | undefined, margins?: PageMargins): BlockMetrics {  if (!node) {
     return { heightPx: metrics().body.linePx, lineCount: 1 };
   }
   const contentWidth = margins ? getContentWidth(margins) : CONTENT_WIDTH_PX;
@@ -383,6 +523,10 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
   // (hard breaks split runs, mixed styles measure word by word).
   if (node.type.name === "paragraph" || node.type.name === "heading") {
     return measureParagraph(node, contentWidth, baseMetricsFor(node));
+  }
+  // A table is measured from its own grid: rows, cells, padding and borders.
+  if (node.type.name === "table") {
+    return measureTable(node, contentWidth);
   }
   return measureTextBlock(node, contentWidth);
 }
@@ -791,6 +935,12 @@ function spacingFor(node: PMNode): BlockSpacing {
       return per ?? sp.heading;
     }
     case "code_block": return sp.code;
+    // The stylesheet gives a table `margin: 1em 0`: 1em is the body size, and
+    // the probe has no entry for a table (it measures text, not grids).
+    case "table": {
+      const em = metrics().body.sizePx;
+      return { beforePx: em, afterPx: em };
+    }
     default: return sp.other;
   }
 }
