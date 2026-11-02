@@ -1237,10 +1237,15 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 }
 
 .ProseMirror th {
-  background: var(--color-table-header-bg, rgba(74, 144, 217, 0.08));
+  /* The header row's own fill: one value, the same the DOCX writes
+     (5% grey, F5F5F5 — what Google Docs paints behind a header row), so the
+     screen and the file cannot disagree. A cell's own BG wins over it. */
+  background: var(--color-table-header-bg, #f5f5f5);
   font-weight: 600;
 }
 
+/* The selection alone: a neutral grey, deliberately NOT the accent colour, so a
+   selected cell cannot be mistaken for a cell with a fill of its own. */
 .ProseMirror .selectedCell:after {
   z-index: 2;
   position: absolute;
@@ -1249,8 +1254,8 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   right: 0;
   top: 0;
   bottom: 0;
-  background: var(--color-primary);
-  opacity: 0.15;
+  background: #808080;
+  opacity: 0.25;
   pointer-events: none;
 }
 
