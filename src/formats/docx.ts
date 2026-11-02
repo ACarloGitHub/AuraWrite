@@ -1269,6 +1269,10 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   return new ImageRun(opts);
 }
 
+/** The header row's fill: the light blue the stylesheet paints (8% of #4A90D9
+ *  over white), so the screen and the file carry the same colour. */
+const HEADER_FILL = "F1F6FC";
+
 function tableNodeToDocx(tableNode: any): Table {
   const rows: TableRow[] = [];
   const colwidths: number[] = [];
@@ -1308,7 +1312,7 @@ function tableNodeToDocx(tableNode: any): Table {
       if (cellFill) {
         cellOpts.shading = { fill: cellFill };
       } else if (rowIdx === 0 && cell.type.name === "table_header") {
-        cellOpts.shading = { fill: "F5F5F5" };
+        cellOpts.shading = { fill: HEADER_FILL };
       }
       cells.push(new TableCell(cellOpts));
     });

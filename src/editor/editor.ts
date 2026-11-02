@@ -16,6 +16,7 @@ import { baseKeymap } from "prosemirror-commands";
 import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
 import { tableNodes, tableEditing, columnResizing } from "prosemirror-tables";
 import "prosemirror-tables/style/tables.css";
+import { createTrailingBlockPlugin } from "./trailing-block";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
@@ -723,6 +724,9 @@ export function createEditor(element: HTMLElement): EditorViewType {
       // the 602px column.
       columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 25 }),
       tableEditing(),
+      // A table is isolating: without a block after it the caret has nowhere to go
+      // and the document appears to end inside the table.
+      createTrailingBlockPlugin(),
       createAtomicElementGuardPlugin("styled_box"),
       createAtomicElementGuardPlugin("figure"),
       createAtomicElementGuardPlugin("bubble"),
