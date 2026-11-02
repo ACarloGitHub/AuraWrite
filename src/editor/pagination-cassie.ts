@@ -349,21 +349,25 @@ export interface LineInfo {
 // ---------------------------------------------------------------------------
 // TABLES
 //
-// The cell box comes from the editor's stylesheet (05-document.css): padding
-// 6px 12px and a 1px border, with `border-collapse: collapse`. The numbers here
-// were measured on a real table (Tests/verifica-concordanza, famiglia T,
-// 2026-11-02): a row of one line is 50px — 22 (line) + 14.67 (space after the
-// paragraph) + 12 (padding) + its share of the border — and four such rows are
-// 200px, which is 4 x 48.67 plus 5 borders: one per row and one for the table,
-// not two per row. An eight-paragraph cell is 306px, so a cell keeps the space
-// after its last block: a cell is a formatting context of its own.
+// The cell box is Word's default, the same one the stylesheet draws
+// (05-document.css): 0.19cm left and right (108 twips), nothing above or below,
+// and a 1px border with `border-collapse: collapse`. The border rule was probed
+// on a real table (Tests/verifica-concordanza, famiglia T, 02-11): with 6px of
+// vertical padding a one-line row measured 50px — 22 (line) + 14.67 (space after
+// the paragraph) + 12 (padding) + its share of the border — and four such rows
+// were 200px, which is 4 x 48.67 plus 5 borders: one per row and one for the
+// table, not two per row. A cell with eight paragraphs measured 306px, so a cell
+// keeps the space after its last block: a cell is a formatting context of its
+// own.
 //
 // NOT counted here: the table's own `margin: 1em 0`. It is the block's spacing,
 // not its height, and it is given by `spacingFor` like every other block.
 // ---------------------------------------------------------------------------
 
-const CELL_PADDING_X_PX = 12;
-const CELL_PADDING_Y_PX = 6;
+const CM_TO_PX = 96 / 2.54;
+/** 0.19 cm, Word's default cell margin — the same number the stylesheet uses. */
+const CELL_PADDING_X_PX = 0.19 * CM_TO_PX;
+const CELL_PADDING_Y_PX = 0;
 const CELL_BORDER_PX = 1;
 
 interface TableCellRef {

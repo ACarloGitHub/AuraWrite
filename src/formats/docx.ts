@@ -1318,6 +1318,10 @@ function tableNodeToDocx(tableNode: any): Table {
   return new Table({
     rows,
     width: { size: totalWidth, type: WidthType.DXA },
+    // Word's default cell margin: 0.19cm left and right (108 twips), nothing
+    // above or below. Without this Word applies its own default silently and the
+    // cells come out narrower than the editor draws them (05-document.css).
+    margins: { top: 0, bottom: 0, left: 108, right: 108 },
   });
 }
 

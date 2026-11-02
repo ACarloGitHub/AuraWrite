@@ -1202,7 +1202,11 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 .ProseMirror td,
 .ProseMirror th {
   border: 1px solid var(--color-border, #ccc);
-  padding: 6px 12px;
+  /* Word's default cell margin: 0.19cm left and right (108 twips), nothing above
+     or below. The same numbers go out in the DOCX (docx.ts, tableNodeToDocx) and
+     into the pagination measure (pagination-cassie.ts, CELL_PADDING_*): one cell
+     box, in one place each. */
+  padding: 0 0.19cm;
   vertical-align: top;
   position: relative;
 }
