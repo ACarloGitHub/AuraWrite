@@ -94,3 +94,48 @@
   max-width: 100%;
   height: auto;
 }
+
+/* ---------------------------------------------------------------------------
+   TABLES
+
+   The sheets carry the same cell box as the editor: without these rules a table
+   arrived on the page with the browser's default padding and no border, so its
+   columns came out narrower than what the editor drew and the paper disagreed with
+   the screen. Values are the editor's (05-document.css): a 1px border, 0.19cm left
+   and right, nothing above or below, the header row's 8% blue.
+   --------------------------------------------------------------------------- */
+.ProseMirror.aw-print-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+.ProseMirror.aw-print-body td,
+.ProseMirror.aw-print-body th {
+  border: 1px solid #ccc;
+  padding: 0 0.19cm;
+  vertical-align: top;
+}
+.ProseMirror.aw-print-body th {
+  background: rgba(74, 144, 217, 0.08);
+  font-weight: 600;
+}
+.ProseMirror.aw-print-body td.aw-no-fill,
+.ProseMirror.aw-print-body th.aw-no-fill {
+  background: transparent !important;
+}
+.ProseMirror.aw-print-body td.aw-v-middle,
+.ProseMirror.aw-print-body th.aw-v-middle {
+  vertical-align: middle !important;
+}
+.ProseMirror.aw-print-body td.aw-v-bottom,
+.ProseMirror.aw-print-body th.aw-v-bottom {
+  vertical-align: bottom !important;
+}
+.ProseMirror.aw-print-body p[data-table-caption] {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #666;
+}
+.ProseMirror.aw-print-body p[data-table-caption="note"] {
+  font-style: italic;
+}
