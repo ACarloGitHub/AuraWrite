@@ -545,6 +545,13 @@ function appendStyle(attrs: Record<string, unknown>, declaration: string): void 
   attrs.style = current ? `${current.replace(/;?\s*$/, "; ")}${declaration}` : declaration;
 }
 
+/** Add a class to a cell without losing the ones already there. */
+function appendClass(attrs: Record<string, unknown>, name: string): void {
+  const current = typeof attrs.class === "string" ? attrs.class.split(/\s+/).filter(Boolean) : [];
+  if (!current.includes(name)) current.push(name);
+  attrs.class = current.join(" ");
+}
+
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
   cellContent: "block+",
@@ -552,23 +559,40 @@ const tableNodeSpecs = tableNodes({
     backgroundColor: {
       default: null,
       getFromDOM(dom) {
+        // An empty string is "no fill, explicitly" — the state the × leaves behind,
+        // which has to survive a reload and beat the header row's default tint.
+        if ((dom as HTMLElement).classList.contains("aw-no-fill")) return "";
         return (dom as HTMLElement).style.backgroundColor || null;
       },
       setDOMAttr(value, attrs) {
+        if (value === "") {
+          appendClass(attrs, "aw-no-fill");
+          return;
+        }
         if (value) appendStyle(attrs, `background-color: ${value}`);
       },
     },
     // Where the text sits inside the cell: Word's `w:vAlign`, ODF's
     // `style:vertical-align`. `top` is the default of both and is stored as null so
     // a document carries only the cells that differ.
+    //
+    // The class is not decoration: the stylesheet sets `vertical-align: top` on every
+    // cell, and the class rule (with !important) is what makes this win even when a
+    // later rule outranks the inline style.
     verticalAlign: {
       default: null,
       getFromDOM(dom) {
-        const value = (dom as HTMLElement).style.verticalAlign;
+        const el = dom as HTMLElement;
+        if (el.classList.contains("aw-v-middle")) return "middle";
+        if (el.classList.contains("aw-v-bottom")) return "bottom";
+        const value = el.style.verticalAlign;
         return value === "middle" || value === "bottom" ? value : null;
       },
       setDOMAttr(value, attrs) {
-        if (value === "middle" || value === "bottom") appendStyle(attrs, `vertical-align: ${value}`);
+        if (value === "middle" || value === "bottom") {
+          appendClass(attrs, value === "middle" ? "aw-v-middle" : "aw-v-bottom");
+          appendStyle(attrs, `vertical-align: ${value}`);
+        }
       },
     },
   },

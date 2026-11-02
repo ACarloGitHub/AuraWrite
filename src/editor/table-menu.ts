@@ -196,7 +196,9 @@ export function setupTableMenu(view: EditorView): void {
     run(view, setCellAttr("backgroundColor", (event.target as HTMLInputElement).value));
   });
   el("tbl-bg-clear")?.addEventListener("click", () => {
-    run(view, setCellAttr("backgroundColor", null));
+    // The empty string is "no fill, explicitly" (the schema's "no colour"), not
+    // "unset": a header cell with no attribute takes the default tint again.
+    run(view, setCellAttr("backgroundColor", ""));
   });
 
   // Where the text sits in the cell: top (the default, stored as null), middle or

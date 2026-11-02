@@ -19,12 +19,6 @@ const GRID_ROWS = 8;
 const GRID_COLS = 10;
 const MAX_ROWS = 50;
 const MAX_COLS = 20;
-/**
- * The header row's tint, given to its cells when the table is inserted. It is a
- * COLOUR, not a stylesheet rule: the × takes it off and selecting the row puts it
- * back with any colour the user likes.
- */
-const HEADER_FILL = "#f1f6fc";
 
 let dropdownEl: HTMLElement | null = null;
 let labelEl: HTMLElement | null = null;
@@ -112,9 +106,7 @@ function createTable(rows: number, cols: number, view: EditorView): void {
   const cellContent = paragraph ? [paragraph.create()] : [];
   let tableNode;
   try {
-    const headerCells = Array.from({ length: cols }, () =>
-      table_header.create({ backgroundColor: HEADER_FILL }, cellContent),
-    );
+    const headerCells = Array.from({ length: cols }, () => table_header.create(null, cellContent));
     const dataCells = Array.from({ length: cols }, () => table_cell.create(null, cellContent));
     const headerRow = table_row.create(null, headerCells);
     const dataRows = Array.from({ length: rows - 1 }, () => table_row.create(null, dataCells));

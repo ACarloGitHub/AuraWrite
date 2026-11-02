@@ -1303,11 +1303,15 @@ function tableNodeToDocx(tableNode: any): Table {
           right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
         },
       };
-      // The cell's own fill is the only fill: a header row that carries none is
-      // exported without one, exactly as the editor draws it.
-      const cellFill = normalizeColor(cell.attrs?.backgroundColor);
+      // The cell's fill. Three states, as on screen: a colour, "no fill" (the empty
+      // string the × leaves), or nothing at all — and a header cell with nothing at
+      // all carries the stylesheet's default tint, so the file gets the same colour.
+      const rawFill = cell.attrs?.backgroundColor;
+      const cellFill = normalizeColor(rawFill);
       if (cellFill) {
         cellOpts.shading = { fill: cellFill };
+      } else if (rawFill !== "" && cell.type.name === "table_header") {
+        cellOpts.shading = { fill: "F1F6FC" };
       }
       // Where the text sits in the cell (Word's w:vAlign). `top` is the default of
       // both formats and is left out.

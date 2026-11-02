@@ -1237,11 +1237,32 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 }
 
 .ProseMirror th {
-  /* No fill of its own: the header row's tint is a background COLOUR on its
-     cells, put there when the table is inserted, so the × can take it off and
-     selecting the row puts it back. A rule here would be a colour nobody can
-     remove. `font-weight` stays: a header cell is bold by nature. */
+  /* The header row's default fill, the colour it has always had. It comes from the
+     stylesheet so that every table has it, including the ones written before this
+     rule; the × sets the cell to "no fill" (`.aw-no-fill`), and a chosen colour goes
+     on the cell's own style, which wins. */
+  background: rgba(74, 144, 217, 0.08);
   font-weight: 600;
+}
+
+/* A cell whose fill was taken off with the ×. `!important` because it has to beat
+   the header row's default above; it is an explicit user choice, not a default. */
+.ProseMirror td.aw-no-fill,
+.ProseMirror th.aw-no-fill {
+  background: transparent !important;
+}
+
+/* Where the text sits in the cell (Word's w:vAlign). The `!important` is the point:
+   the rule above sets `vertical-align: top` on every cell, and a later rule must not
+   be able to outrank the user's choice. */
+.ProseMirror td.aw-v-middle,
+.ProseMirror th.aw-v-middle {
+  vertical-align: middle !important;
+}
+
+.ProseMirror td.aw-v-bottom,
+.ProseMirror th.aw-v-bottom {
+  vertical-align: bottom !important;
 }
 
 /* A table's title and note: ordinary paragraphs marked as such (editor.ts,
