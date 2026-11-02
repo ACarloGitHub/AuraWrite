@@ -1244,6 +1244,19 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   font-weight: 600;
 }
 
+/* A table's title and note: ordinary paragraphs marked as such (editor.ts,
+   `tableCaption`), so they move with the text, export as text and are measured as
+   text. The look is the figure caption's: small and muted, the note in italic. */
+.ProseMirror p[data-table-caption] {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-muted, #666);
+}
+
+.ProseMirror p[data-table-caption="note"] {
+  font-style: italic;
+}
+
 /* The selection alone: a neutral grey, deliberately NOT the accent colour, so a
    selected cell cannot be mistaken for a cell with a fill of its own. */
 .ProseMirror .selectedCell:after {

@@ -524,9 +524,12 @@ export function measureBlock(node: PMNode | null | undefined, margins?: PageMarg
     }
   }
   // R-b/v2b: paragraphs and headings are measured through the line model
-  // (hard breaks split runs, mixed styles measure word by word).
+  // (hard breaks split runs, mixed styles measure word by word). A table's title
+  // and note are small paragraphs (12px in the stylesheet), so they are measured
+  // with the caption's metrics, not the body's.
   if (node.type.name === "paragraph" || node.type.name === "heading") {
-    return measureParagraph(node, contentWidth, baseMetricsFor(node));
+    const base = node.attrs?.tableCaption ? metrics().caption : baseMetricsFor(node);
+    return measureParagraph(node, contentWidth, base);
   }
   // A table is measured from its own grid: rows, cells, padding and borders.
   if (node.type.name === "table") {

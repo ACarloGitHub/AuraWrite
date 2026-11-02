@@ -13,6 +13,7 @@
 
 import type { EditorView } from "prosemirror-view";
 import type { Node as PMNode } from "prosemirror-model";
+import { TextSelection } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
 import {
   addColumnAfter,
@@ -137,6 +138,46 @@ function openSplitPanel(view: EditorView, button: HTMLElement): void {
   cols?.select();
 }
 
+/**
+ * A table's title and note are ordinary paragraphs, before and after the table,
+ * marked with `tableCaption`. That is how the figure's caption works too: a piece
+ * of text that belongs to the object, moves with it and exports as text — no new
+ * node, nothing to keep in step.
+ */
+function ensureCaption(view: EditorView, kind: "title" | "note"): void {
+  const { state } = view;
+  const { $from } = state.selection;
+
+  let depth = -1;
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type.name === "table") { depth = d; break; }
+  }
+  if (depth < 0) return;
+
+  const table = $from.node(depth);
+  const tablePos = $from.before(depth);
+  const paragraph = state.schema.nodes.paragraph;
+  if (!paragraph) return;
+
+  // Already there: the caret goes into it, which is also how it is edited.
+  const neighbour = kind === "title"
+    ? state.doc.resolve(tablePos).nodeBefore
+    : state.doc.resolve(tablePos + table.nodeSize).nodeAfter;
+  if (neighbour && neighbour.type.name === "paragraph" && neighbour.attrs.tableCaption === kind) {
+    const start = kind === "title" ? tablePos - neighbour.nodeSize : tablePos + table.nodeSize;
+    const tr = state.tr.setSelection(TextSelection.near(state.doc.resolve(start + 2)));
+    view.dispatch(tr);
+    view.focus();
+    return;
+  }
+
+  const insertAt = kind === "title" ? tablePos : tablePos + table.nodeSize;
+  const tr = state.tr.insert(insertAt, paragraph.create({ tableCaption: kind }));
+  tr.setSelection(TextSelection.near(tr.doc.resolve(insertAt + 1)));
+  view.dispatch(tr);
+  view.focus();
+}
+
 /** Bind the table's own controls once. */
 export function setupTableMenu(view: EditorView): void {
   el("tbl-row-before")?.addEventListener("click", () => run(view, addRowBefore));
@@ -171,6 +212,9 @@ export function setupTableMenu(view: EditorView): void {
     if (splitPanel && !splitPanel.classList.contains("hidden")) hideSplitPanel();
     else openSplitPanel(view, button);
   });
+
+  el("tbl-title")?.addEventListener("click", () => ensureCaption(view, "title"));
+  el("tbl-note")?.addEventListener("click", () => ensureCaption(view, "note"));
 }
 
 /** Show the fill of the cell under the caret in the bar's swatch. */

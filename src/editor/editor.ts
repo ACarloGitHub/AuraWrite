@@ -53,6 +53,11 @@ const paragraphWithPageBreak: NodeSpec = {
     align: { default: "left" },
     lineHeight: { default: "1.5" },
     pageBreakBefore: { default: false },
+    // The title above a table and the note below it: a paragraph like any other,
+    // so it moves with the text, exports as text and is measured as text. The
+    // value says which of the two it is ("title" | "note"); everything else about
+    // it (font, colour) comes from the stylesheet, as the figure's caption does.
+    tableCaption: { default: null },
     // No depth attribute here: the text sits on ONE fixed level for the whole
     // document (contract §3.1, revised 2026-09-07). A per-paragraph number was
     // the design that failed the review - it put a new attribute on the most
@@ -68,6 +73,7 @@ const paragraphWithPageBreak: NodeSpec = {
           dom.style.lineHeight ||
           "1.5",
         pageBreakBefore: dom.classList.contains("page-break-before"),
+        tableCaption: dom.getAttribute("data-table-caption") || null,
       }),
     },
   ],
@@ -78,6 +84,9 @@ const paragraphWithPageBreak: NodeSpec = {
     };
     if (node.attrs.pageBreakBefore) {
       attrs.class = "page-break-before";
+    }
+    if (node.attrs.tableCaption) {
+      attrs["data-table-caption"] = node.attrs.tableCaption as string;
     }
     return ["p", attrs, 0];
   },

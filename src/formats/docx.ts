@@ -1356,6 +1356,18 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
     });
   }
 
+  // A table's title and note are small italic captions in the editor (12px); in
+  // Word they go out as Word's own caption size, 9pt in half-points, italic.
+  if (node.attrs?.tableCaption) {
+    runs.forEach((r: RunOrLinkOrImage) => {
+      const o: any = (r as any).options;
+      if (o && o.text != null) {
+        o.italics = true;
+        o.size = 18;
+      }
+    });
+  }
+
   const align = alignToDocx(node.attrs?.align) ?? extras.align;
   if (align) opts.alignment = align;
 
