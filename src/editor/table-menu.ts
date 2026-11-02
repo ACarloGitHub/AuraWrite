@@ -158,6 +158,13 @@ export function setupTableMenu(view: EditorView): void {
     run(view, setCellAttr("backgroundColor", null));
   });
 
+  // Where the text sits in the cell: top (the default, stored as null), middle or
+  // bottom — Word's w:vAlign.
+  el("tbl-valign")?.addEventListener("change", (event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    run(view, setCellAttr("verticalAlign", value === "top" ? null : value));
+  });
+
   el("tbl-split")?.addEventListener("click", (event) => {
     event.preventDefault();
     const button = event.currentTarget as HTMLElement;
@@ -170,10 +177,18 @@ export function setupTableMenu(view: EditorView): void {
 export function syncTableMenu(view: EditorView): void {
   const input = el<HTMLInputElement>("tbl-bg");
   const clear = el("tbl-bg-clear");
-  if (!input) return;
+  const align = el<HTMLSelectElement>("tbl-valign");
+  if (!input && !align) return;
   const cell = cellAt(view);
   if (!cell) return;
+
   const hex = toHex(cell.attrs.backgroundColor);
-  input.value = hex ?? "#ffffff";
-  if (clear) clear.hidden = hex === null;
+  if (input) {
+    input.value = hex ?? "#ffffff";
+    if (clear) clear.hidden = hex === null;
+  }
+  if (align) {
+    const value = cell.attrs.verticalAlign;
+    align.value = value === "middle" || value === "bottom" ? value : "top";
+  }
 }

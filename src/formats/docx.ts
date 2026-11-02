@@ -14,6 +14,7 @@ import {
   TableCell,
   WidthType,
   BorderStyle,
+  VerticalAlign,
   ImageRun,
   TextWrappingType,
   TextWrappingSide,
@@ -1308,6 +1309,10 @@ function tableNodeToDocx(tableNode: any): Table {
       if (cellFill) {
         cellOpts.shading = { fill: cellFill };
       }
+      // Where the text sits in the cell (Word's w:vAlign). `top` is the default of
+      // both formats and is left out.
+      if (cell.attrs?.verticalAlign === "middle") cellOpts.verticalAlign = VerticalAlign.CENTER;
+      else if (cell.attrs?.verticalAlign === "bottom") cellOpts.verticalAlign = VerticalAlign.BOTTOM;
       cells.push(new TableCell(cellOpts));
     });
 

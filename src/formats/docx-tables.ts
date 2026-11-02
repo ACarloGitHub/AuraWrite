@@ -9,6 +9,8 @@ export interface ImportedTableCell {
   colwidth?: number;
   /** The cell's fill, as `#RRGGBB` (`w:shd` in the file). */
   background?: string;
+  /** Where the text sits in the cell (`w:vAlign`); `top` is the default and stays absent. */
+  verticalAlign?: "middle" | "bottom";
 }
 
 export interface ImportedCellParagraph {
@@ -134,11 +136,24 @@ function readCellBackground(tc: any): string | undefined {
   return `#${fill.toUpperCase()}`;
 }
 
+function readCellVerticalAlign(tc: any): "middle" | "bottom" | undefined {
+  const tcPr = getFirstChildByNS(tc, W_NS, "tcPr");
+  if (!tcPr) return undefined;
+  const vAlign = getFirstChildByNS(tcPr, W_NS, "vAlign");
+  if (!vAlign) return undefined;
+  const value = String(vAlign.getAttribute("w:val") || "").toLowerCase();
+  // Word's "center" is CSS's "middle"; "top" and "both" are the default here.
+  if (value === "center") return "middle";
+  if (value === "bottom") return "bottom";
+  return undefined;
+}
+
 function readCell(tc: any): ImportedTableCell {
   const colspan = readGridSpan(tc);
   const rowspanStart = readVMerge(tc);
   const colwidth = readTcW(tc);
   const background = readCellBackground(tc);
+  const verticalAlign = readCellVerticalAlign(tc);
   const paragraphs: ImportedCellParagraph[] = [];
   for (let child = tc.firstChild; child; child = child.nextSibling) {
     if (child.namespaceURI === W_NS && child.localName === "p") {
@@ -151,6 +166,7 @@ function readCell(tc: any): ImportedTableCell {
     rowspan: rowspanStart.start ? 1 : 1,
     colwidth,
     background,
+    verticalAlign,
   };
 }
 
@@ -246,9 +262,13 @@ export function tableToHtml(table: ImportedTable): string {
     if (cell.colspan > 1) attrs.push(`colspan="${cell.colspan}"`);
     if (cell.rowspan > 1) attrs.push(`rowspan="${cell.rowspan}"`);
     if (cell.colwidth) attrs.push(`data-colwidth="${cell.colwidth}"`);
-    // The fill goes on the inline style, which is where the cell's parser reads
-    // it back (editor.ts, `backgroundColor`).
-    if (cell.background) attrs.push(`style="background-color: ${cell.background}"`);
+    // The fill and the vertical alignment go on the inline style, which is where
+    // the cell's parser reads them back (editor.ts, `backgroundColor` and
+    // `verticalAlign`).
+    const style: string[] = [];
+    if (cell.background) style.push(`background-color: ${cell.background}`);
+    if (cell.verticalAlign) style.push(`vertical-align: ${cell.verticalAlign}`);
+    if (style.length) attrs.push(`style="${style.join("; ")}"`);
     const inner =
       cell.paragraphs.length === 0
         ? "<p></p>"

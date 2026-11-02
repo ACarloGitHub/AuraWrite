@@ -528,6 +528,14 @@ function rgbToHex(rgb: string): string | null {
 // Build the Extended Schema
 // ============================================================================
 
+// Two cell attributes paint through the same `style` attribute, so both setters
+// APPEND to it: the second one to run must not wipe the first (a cell with a fill
+// and a vertical alignment carried only one of the two).
+function appendStyle(attrs: Record<string, unknown>, declaration: string): void {
+  const current = typeof attrs.style === "string" ? attrs.style : "";
+  attrs.style = current ? `${current.replace(/;?\s*$/, "; ")}${declaration}` : declaration;
+}
+
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
   cellContent: "block+",
@@ -538,7 +546,20 @@ const tableNodeSpecs = tableNodes({
         return (dom as HTMLElement).style.backgroundColor || null;
       },
       setDOMAttr(value, attrs) {
-        if (value) attrs.style = `background-color: ${value}`;
+        if (value) appendStyle(attrs, `background-color: ${value}`);
+      },
+    },
+    // Where the text sits inside the cell: Word's `w:vAlign`, ODF's
+    // `style:vertical-align`. `top` is the default of both and is stored as null so
+    // a document carries only the cells that differ.
+    verticalAlign: {
+      default: null,
+      getFromDOM(dom) {
+        const value = (dom as HTMLElement).style.verticalAlign;
+        return value === "middle" || value === "bottom" ? value : null;
+      },
+      setDOMAttr(value, attrs) {
+        if (value === "middle" || value === "bottom") appendStyle(attrs, `vertical-align: ${value}`);
       },
     },
   },
