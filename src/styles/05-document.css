@@ -1206,6 +1206,13 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   cursor: pointer;
 }
 
+/* "Split cells…": the same panel as the insert menu, laid out as one row. */
+.table-split-panel {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 /* ============================================================================
    TABLE NODE STYLES (ProseMirror)
    ============================================================================ */
