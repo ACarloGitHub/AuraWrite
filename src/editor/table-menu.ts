@@ -24,7 +24,6 @@ import {
   deleteTable,
   mergeCells,
   setCellAttr,
-  toggleHeaderRow,
 } from "prosemirror-tables";
 import { splitCellInto } from "./table-split";
 
@@ -149,7 +148,6 @@ export function setupTableMenu(view: EditorView): void {
   el("tbl-col-delete")?.addEventListener("click", () => run(view, deleteColumn));
 
   el("tbl-merge")?.addEventListener("click", () => run(view, mergeCells));
-  el("tbl-header")?.addEventListener("click", () => run(view, toggleHeaderRow));
   el("tbl-delete")?.addEventListener("click", () => run(view, deleteTable));
 
   // The fill of the selected cells: a colour input plus the × that clears it.

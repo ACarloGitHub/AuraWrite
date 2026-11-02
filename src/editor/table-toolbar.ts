@@ -19,6 +19,12 @@ const GRID_ROWS = 8;
 const GRID_COLS = 10;
 const MAX_ROWS = 50;
 const MAX_COLS = 20;
+/**
+ * The header row's tint, given to its cells when the table is inserted. It is a
+ * COLOUR, not a stylesheet rule: the × takes it off and selecting the row puts it
+ * back with any colour the user likes.
+ */
+const HEADER_FILL = "#f1f6fc";
 
 let dropdownEl: HTMLElement | null = null;
 let labelEl: HTMLElement | null = null;
@@ -106,7 +112,9 @@ function createTable(rows: number, cols: number, view: EditorView): void {
   const cellContent = paragraph ? [paragraph.create()] : [];
   let tableNode;
   try {
-    const headerCells = Array.from({ length: cols }, () => table_header.create(null, cellContent));
+    const headerCells = Array.from({ length: cols }, () =>
+      table_header.create({ backgroundColor: HEADER_FILL }, cellContent),
+    );
     const dataCells = Array.from({ length: cols }, () => table_cell.create(null, cellContent));
     const headerRow = table_row.create(null, headerCells);
     const dataRows = Array.from({ length: rows - 1 }, () => table_row.create(null, dataCells));
@@ -195,14 +203,31 @@ export function showTableDropdown(): void {
   const dropdown = createDropdown();
   highlight(0, 0);
 
-  const btn = document.getElementById("btn-table");
-  if (btn) {
-    const rect = btn.getBoundingClientRect();
-    dropdown.style.left = `${rect.left}px`;
-    dropdown.style.top = `${rect.bottom + 4}px`;
+  // The panel hangs under the button that opened it. At a narrow width the table
+  // button lives in the overflow menu and has no rect of its own (0x0), so the
+  // anchor is the overflow button instead — otherwise the panel opened at the
+  // corner of the window, far from the click.
+  const anchor =
+    visibleRect(document.getElementById("btn-table")) ??
+    visibleRect(document.getElementById("overflow-menu")) ??
+    visibleRect(document.getElementById("btn-overflow-menu"));
+  if (anchor) {
+    // Keep the panel inside the window, whatever it hangs from.
+    const width = dropdown.offsetWidth || 200;
+    const left = Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8));
+    const top = Math.max(8, Math.min(anchor.bottom + 4, window.innerHeight - 60));
+    dropdown.style.left = `${Math.round(left)}px`;
+    dropdown.style.top = `${Math.round(top)}px`;
   }
 
   dropdown.classList.remove("hidden");
+}
+
+/** The element's box, or null when it is not on screen (hidden, or in the overflow). */
+function visibleRect(element: HTMLElement | null): DOMRect | null {
+  if (!element) return null;
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 ? rect : null;
 }
 
 export function hideDropdown(): void {

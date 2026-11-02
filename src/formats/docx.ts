@@ -1269,15 +1269,11 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   return new ImageRun(opts);
 }
 
-/** The header row's fill: the light blue the stylesheet paints (8% of #4A90D9
- *  over white), so the screen and the file carry the same colour. */
-const HEADER_FILL = "F1F6FC";
-
 function tableNodeToDocx(tableNode: any): Table {
   const rows: TableRow[] = [];
   const colwidths: number[] = [];
 
-  contentToArray(tableNode.content).forEach((row: any, rowIdx: number) => {
+  contentToArray(tableNode.content).forEach((row: any) => {
     if (row.type.name !== "table_row") return;
     const cells: TableCell[] = [];
 
@@ -1306,13 +1302,11 @@ function tableNodeToDocx(tableNode: any): Table {
           right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
         },
       };
-      // The cell's own fill wins over the header row's default grey: it is what
-      // the editor paints (`backgroundColor`, set from the secondary bar).
+      // The cell's own fill is the only fill: a header row that carries none is
+      // exported without one, exactly as the editor draws it.
       const cellFill = normalizeColor(cell.attrs?.backgroundColor);
       if (cellFill) {
         cellOpts.shading = { fill: cellFill };
-      } else if (rowIdx === 0 && cell.type.name === "table_header") {
-        cellOpts.shading = { fill: HEADER_FILL };
       }
       cells.push(new TableCell(cellOpts));
     });

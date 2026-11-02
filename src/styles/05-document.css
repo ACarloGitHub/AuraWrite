@@ -1237,11 +1237,10 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 }
 
 .ProseMirror th {
-  /* The header row's own fill: a light blue that reads as a tint on white, not
-     the near-white grey that vanished. The DOCX writes the same colour
-     (docx.ts, `HEADER_FILL`), so screen and file cannot disagree. A cell's own
-     BG wins over it. */
-  background: var(--color-table-header-bg, rgba(74, 144, 217, 0.08));
+  /* No fill of its own: the header row's tint is a background COLOUR on its
+     cells, put there when the table is inserted, so the × can take it off and
+     selecting the row puts it back. A rule here would be a colour nobody can
+     remove. `font-weight` stays: a header cell is bold by nature. */
   font-weight: 600;
 }
 
