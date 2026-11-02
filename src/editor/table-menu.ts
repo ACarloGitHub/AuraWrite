@@ -86,7 +86,7 @@ function ensureSplitPanel(view: EditorView): HTMLElement {
   splitPanel.innerHTML =
     '<label class="table-picker-field">Cols <input id="table-split-cols" type="text" inputmode="numeric" value="2" /></label>' +
     '<label class="table-picker-field">Rows <input id="table-split-rows" type="text" inputmode="numeric" value="1" /></label>' +
-    '<button id="table-split-apply" type="button" class="table-picker-apply">Split</button>';
+    '<button id="table-split-apply" type="button" class="table-picker-apply">Reorganise</button>';
   document.body.appendChild(splitPanel);
 
   const apply = () => {
