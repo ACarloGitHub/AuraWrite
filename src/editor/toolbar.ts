@@ -2276,10 +2276,14 @@ function setupImageToolbar(view: EditorView): void {
  */
 export function syncSecondaryToolbar(view: EditorView): void {
   const bar = document.getElementById("image-toolbar");
+  const tableControls = document.getElementById("table-controls");
   const info = getSelectedElement(view, ELEMENT_KINDS);
   // A table is not an element: it gets its own block of controls, and it is the
   // reason the bar can be visible with nothing selected.
   const inTable = isInTable(view.state);
+  // Set before any early return, so the block is not left shown behind a bar
+  // that has just been hidden.
+  if (tableControls) tableControls.hidden = !inTable;
   // These run on every transaction, also when the selection LEAVES an element.
   void import("./layers-panel").then((m) => m.syncLayersPanel(view));
   void import("./element-bar").then((m) => m.syncElementBar(view));
@@ -2302,12 +2306,10 @@ export function syncSecondaryToolbar(view: EditorView): void {
   const boxControls = document.getElementById("box-controls");
   const shapeControls = document.getElementById("shape-controls");
   const bubbleControls = document.getElementById("bubble-controls");
-  const tableControls = document.getElementById("table-controls");
   if (imageControls) imageControls.hidden = section !== "image";
   if (boxControls) boxControls.hidden = section !== "box";
   if (shapeControls) shapeControls.hidden = section !== "shape";
   if (bubbleControls) bubbleControls.hidden = section !== "bubble";
-  if (tableControls) tableControls.hidden = !inTable;
 }
 
 export function updateImageToolbar(view: EditorView): void {
