@@ -382,10 +382,11 @@ interface TableCellRef {
 /**
  * The width of every column, from the `colwidth` weights the editor writes.
  *
- * `colwidth` is a list of measured widths, so only the ratios between them mean
- * anything: a column that carries none takes the average of the known ones, and
- * with no known weight at all the columns are equal. The table fills the text
- * column (`width: 100%` in the stylesheet).
+ * `colwidth` is a list of WEIGHTS: only the ratios between them mean anything
+ * (table-widths.ts — the view turns the same numbers into percentages). A column
+ * that carries none takes the average of the known ones, and with no known weight
+ * at all the columns are equal. The table fills the text column (`width: 100%` in
+ * the stylesheet).
  */
 function tableColumnWidths(
   rows: TableCellRef[][],

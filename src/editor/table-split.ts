@@ -6,9 +6,8 @@
 // "Split Cells…" instead: the grid is widened and heightened, and the cells
 // that cross the new lines bridge over them, which is what Word does. The shape
 // of the algorithm is EdenText's `tableSplit.ts` (read, not copied); the column
-// weights stay in OUR scale, pixels as `columnResizing` measures them — EdenText
-// normalizes them to basis points, and writing 10000 into our `colwidth` would
-// blow the table out of the page.
+// weights are the same proportions the rest of the editor uses (table-widths.ts):
+// only the ratios matter, so splitting a 20% column into two gives 10% and 10%.
 // ============================================================================
 
 import type { EditorView } from "prosemirror-view";

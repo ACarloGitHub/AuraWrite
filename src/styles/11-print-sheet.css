@@ -108,6 +108,9 @@
   border-collapse: collapse;
   width: 100%;
   margin: 1em 0;
+  /* The same percentages as the editor, honored the same way: the paper must not
+     let a long word widen a column the writer sized. */
+  table-layout: fixed;
 }
 .ProseMirror.aw-print-body td,
 .ProseMirror.aw-print-body th {

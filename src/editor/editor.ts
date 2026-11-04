@@ -5,6 +5,7 @@ import {
   DOMParser as ProseMirrorDOMParser,
   NodeSpec,
   MarkSpec,
+  type DOMOutputSpec,
   type NodeType,
   type MarkType,
   type Node as PMNode,
@@ -14,10 +15,12 @@ import { history, undo, redo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { splitListItem, sinkListItem, liftListItem } from "prosemirror-schema-list";
-import { tableNodes, tableEditing, columnResizing } from "prosemirror-tables";
+import { tableNodes, tableEditing } from "prosemirror-tables";
 import "prosemirror-tables/style/tables.css";
 import { createTrailingBlockPlugin } from "./trailing-block";
 import { createRowHeightPlugin } from "./row-height";
+import { createTableColumnsPlugin } from "./table-columns";
+import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
 import { pageBreakPlugin } from "./page-break-widget";
@@ -657,6 +660,23 @@ const rowNodeSpec: NodeSpec = {
   },
 };
 
+// A table carries its column widths as percentages of the text column
+// (`table-widths.ts`): the colgroup below is what the print sheet and the HTML
+// export get, and it is why the table follows the page format instead of the width
+// it had the day it was resized. The live editor draws the same colgroup from
+// `TableWidthView`, because the node view must keep it in step while dragging.
+const tableNodeSpec: NodeSpec = {
+  ...tableNodeSpecs.table,
+  toDOM(node) {
+    const percents = columnPercents(columnWeights(node));
+    const columns = percents.map((percent) => [
+      "col",
+      { style: `width: ${round2(percent)}%` },
+    ]);
+    return ["table", ["colgroup", ...columns], ["tbody", 0]] as unknown as DOMOutputSpec;
+  },
+};
+
 let nodes = basicSchema.spec.nodes.update("paragraph", paragraphWithPageBreak);
 nodes = nodes
   .update("doc", { content: "block+" })
@@ -673,6 +693,7 @@ nodes = nodes
     shape: SHAPE_NODE_SPEC,
     bubble: BUBBLE_NODE_SPEC,
     ...tableNodeSpecs,
+    table: tableNodeSpec,
     table_row: rowNodeSpec,
   });
 
@@ -829,17 +850,15 @@ export function createEditor(element: HTMLElement): EditorViewType {
       linkPopoverPlugin,
       createImageDropPlugin(),
       createImagePastePlugin(),
-      // `cellMinWidth` is the floor a DRAG may push a column to (25px, the same
-      // floor the split respects). `defaultCellMinWidth` used to be 100, and that
-      // was also a `min-width` on every cell without an explicit width: a table of
-      // more than six columns could not shrink to the text column and pushed a
-      // horizontal scrollbar into the page. The table is `width: 100%`: its
-      // columns share what there is, and 25px each still fits twenty of them into
-      // the 602px column.
-      columnResizing({ cellMinWidth: 25, defaultCellMinWidth: 25 }),
+      // The table's columns are proportions of the text column, and they are
+      // dragged by the border between two of them (`table-columns.ts`). The two
+      // columns trade width; the table is always as wide as the text, so it follows
+      // the page format instead of keeping the width it was dragged to.
       tableEditing(),
       // Drag the line under a row to give it a minimum height.
       createRowHeightPlugin(),
+      // After the row drag: it owns the cursor, and a column border runs after it.
+      createTableColumnsPlugin(),
       // A table is isolating: without a block after it the caret has nowhere to go
       // and the document appears to end inside the table.
       createTrailingBlockPlugin(),
@@ -872,6 +891,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       class: "prosemirror-editor",
     },
     nodeViews: {
+      table: (node) => new TableWidthView(node),
       image: (node, view, getPos) => new ImageNodeView(node, view, getPos),
       styled_box: (node, view, getPos) => new StyledBoxNodeView(node, view, getPos),
       figure: (node, view, getPos) => new FigureNodeView(node, view, getPos),

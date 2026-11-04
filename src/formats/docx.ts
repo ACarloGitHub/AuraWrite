@@ -14,6 +14,7 @@ import {
   TableCell,
   WidthType,
   BorderStyle,
+  TableLayoutType,
   VerticalAlign,
   HeightRule,
   ImageRun,
@@ -30,6 +31,7 @@ import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 import { assertNeverKind, elementTypeOf } from "../editor/element-types";
 import { parseBorder } from "../editor/table-borders";
+import { columnPercents, columnTwips, columnWeights } from "../editor/table-widths";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1292,18 +1294,27 @@ function cellBorderForDocx(value: unknown) {
 
 function tableNodeToDocx(tableNode: any): Table {
   const rows: TableRow[] = [];
-  const colwidths: number[] = [];
+
+  // The columns are proportions of the text column (table-widths.ts). Word wants
+  // lengths, so the proportions are turned into twips against the width the page
+  // gives the text — the same width the editor and the page count use.
+  const margins = getMargins();
+  const page = getPageFormat();
+  const contentPx = Math.max(1, page.widthPx - margins.left - margins.right);
+  const twips = columnTwips(columnPercents(columnWeights(tableNode)), contentPx);
+  const totalTwips = twips.reduce((sum, value) => sum + value, 0) || Math.round(contentPx * 15);
 
   contentToArray(tableNode.content).forEach((row: any) => {
     if (row.type.name !== "table_row") return;
     const cells: TableCell[] = [];
+    let col = 0;
 
     contentToArray(row.content).forEach((cell: any) => {
       if (cell.type.name !== "table_cell" && cell.type.name !== "table_header") return;
       const colspan = Math.max(1, cell.attrs?.colspan || 1);
       const rowspan = Math.max(1, cell.attrs?.rowspan || 1);
-      const colwidth = Array.isArray(cell.attrs?.colwidth) ? cell.attrs.colwidth[0] : null;
-      if (colwidth) colwidths.push(colwidth);
+      const cellTwips = twips.slice(col, col + colspan).reduce((sum, value) => sum + value, 0);
+      col += colspan;
 
       const paragraphs: Paragraph[] = contentToArray(cell.content).map((child: any) =>
         paragraphFromNode(child, {})
@@ -1316,6 +1327,8 @@ function tableNodeToDocx(tableNode: any): Table {
         children: paragraphs,
         columnSpan: colspan,
         rowSpan: rowspan,
+        // The cell's share of the text column, in twips.
+        width: cellTwips > 0 ? { size: cellTwips, type: WidthType.DXA } : undefined,
         // One line per side: the cell's own border, the default, or "no line".
         // A boundary between two cells is drawn by Word out of both sides, the
         // same rule the editor's panel writes both sides for.
@@ -1353,13 +1366,14 @@ function tableNodeToDocx(tableNode: any): Table {
     rows.push(new TableRow(rowOpts));
   });
 
-  const totalWidth = colwidths.length > 0
-    ? colwidths.reduce((a, b) => a + b, 0)
-    : 9000;
-
   return new Table({
     rows,
-    width: { size: totalWidth, type: WidthType.DXA },
+    width: { size: totalTwips, type: WidthType.DXA },
+    // The grid as well as the cells: Word reads this one when it lays the table out.
+    columnWidths: twips,
+    // Word's own "fixed" layout, which is what percentages mean here: a long word
+    // wraps instead of widening the column the writer sized.
+    layout: TableLayoutType.FIXED,
     // Word's default cell margin: 0.19cm left and right (108 twips), nothing
     // above or below. Without this Word applies its own default silently and the
     // cells come out narrower than the editor draws them (05-document.css).

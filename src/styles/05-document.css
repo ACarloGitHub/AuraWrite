@@ -1271,6 +1271,11 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   margin: 1em 0;
   overflow: hidden;
   width: 100%;
+  /* The colgroup carries the widths as percentages (editor.ts, table-widths.ts):
+     under `fixed` those percentages ARE the columns, which is also what the page
+     count assumes. Under `auto` a long word would win over the ratio and the paper
+     would disagree with the screen. */
+  table-layout: fixed;
 }
 
 .ProseMirror td,
