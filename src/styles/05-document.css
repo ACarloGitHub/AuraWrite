@@ -1239,6 +1239,23 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   gap: 8px;
 }
 
+/* "Sort…": a column, an order and a type, in one row. */
+.table-sort-panel {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.table-picker-select {
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+}
+
 /* "Borders…": the presets in two columns, then the pen. A click paints; the
    panel stays open, so an outer line and an inner one are laid down in a row. */
 .table-borders-panel {

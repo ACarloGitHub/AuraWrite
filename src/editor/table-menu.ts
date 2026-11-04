@@ -26,6 +26,8 @@ import {
 } from "prosemirror-tables";
 import { splitCellInto } from "./table-split";
 import { hideBordersPanel, toggleBordersPanel } from "./table-borders-panel";
+import { sortTableRows, type SortDirection, type SortSpec, type SortType } from "./table-sort";
+import { columnName } from "./table-formula";
 import {
   insertColumnAfter,
   insertColumnBefore,
@@ -141,6 +143,112 @@ function openSplitPanel(view: EditorView, button: HTMLElement): void {
   const cols = el<HTMLInputElement>("table-split-cols");
   cols?.focus();
   cols?.select();
+}
+
+// ---------------------------------------------------------------------------
+// Ordinamento: una colonna, un verso, un tipo. Ripetendo il comando su un'altra
+// colonna si ottiene l'ordinamento a più chiavi, perché l'ordinamento è stabile
+// (table-sort.ts).
+// ---------------------------------------------------------------------------
+
+let sortPanel: HTMLElement | null = null;
+
+function ensureSortPanel(view: EditorView): HTMLElement {
+  if (sortPanel) return sortPanel;
+
+  sortPanel = document.createElement("div");
+  sortPanel.className = "table-dropdown table-sort-panel hidden";
+  sortPanel.innerHTML =
+    '<label class="table-picker-field">Column <select id="tbl-sort-column" class="table-picker-select"></select></label>' +
+    '<label class="table-picker-field">Order <select id="tbl-sort-direction" class="table-picker-select">' +
+    '<option value="asc">A → Z</option><option value="desc">Z → A</option></select></label>' +
+    '<label class="table-picker-field">As <select id="tbl-sort-type" class="table-picker-select">' +
+    '<option value="text">Text</option><option value="number">Number</option></select></label>' +
+    '<button id="tbl-sort-apply" type="button" class="table-picker-apply">Sort</button>';
+  document.body.appendChild(sortPanel);
+
+  const apply = () => {
+    const column = Number(el<HTMLSelectElement>("tbl-sort-column")?.value ?? "0");
+    const direction = (el<HTMLSelectElement>("tbl-sort-direction")?.value ?? "asc") as SortDirection;
+    const type = (el<HTMLSelectElement>("tbl-sort-type")?.value ?? "text") as SortType;
+    sortTable(view, { column, direction, type });
+    hideSortPanel();
+  };
+
+  sortPanel.addEventListener("click", (event) => {
+    if ((event.target as HTMLElement).closest("#tbl-sort-apply")) {
+      event.preventDefault();
+      apply();
+    }
+  });
+  sortPanel.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      apply();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      hideSortPanel();
+      view.focus();
+    }
+  });
+  document.addEventListener("mousedown", (event) => {
+    const target = event.target as HTMLElement;
+    if (!sortPanel || sortPanel.classList.contains("hidden")) return;
+    if (target.closest("#tbl-sort") || sortPanel.contains(target)) return;
+    hideSortPanel();
+  });
+
+  return sortPanel;
+}
+
+function hideSortPanel(): void {
+  sortPanel?.classList.add("hidden");
+}
+
+/** Riempie la colonna e il verso con quelli della cella sotto il cursore. */
+function openSortPanel(view: EditorView, button: HTMLElement): void {
+  const panel = ensureSortPanel(view);
+  const { state } = view;
+  const rect = selectedRect(state);
+  const columns = el<HTMLSelectElement>("tbl-sort-column");
+  if (columns) {
+    columns.innerHTML = "";
+    for (let col = 0; col < rect.map.width; col++) {
+      const option = document.createElement("option");
+      option.value = String(col);
+      option.textContent = columnName(col);
+      columns.appendChild(option);
+    }
+    // La colonna del cursore, se si riesce a leggerla: la scelta più probabile.
+    let caretCol = 0;
+    const $from = state.selection.$from;
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.type.name === "table_cell" || node.type.name === "table_header") {
+        caretCol = rect.map.colCount($from.before(depth) - rect.tableStart);
+        break;
+      }
+    }
+    columns.value = String(Math.max(0, Math.min(rect.map.width - 1, caretCol)));
+  }
+  const box = button.getBoundingClientRect();
+  panel.style.left = `${Math.round(box.left)}px`;
+  panel.style.top = `${Math.round(box.bottom + 4)}px`;
+  panel.classList.remove("hidden");
+}
+
+/** The body rows of the table under the caret, sorted by one column. */
+function sortTable(view: EditorView, spec: SortSpec): void {
+  const { state } = view;
+  if (!isInTable(state)) return;
+  const rect = selectedRect(state);
+  const tablePos = rect.tableStart - 1;
+  const table = state.doc.nodeAt(tablePos);
+  if (!table) return;
+  const sorted = sortTableRows(table, spec);
+  if (!sorted || sorted === table) return;
+  view.dispatch(state.tr.replaceWith(tablePos, tablePos + table.nodeSize, sorted));
+  view.focus();
 }
 
 /**
@@ -285,6 +393,13 @@ export function setupTableMenu(view: EditorView): void {
     const button = event.currentTarget as HTMLElement;
     if (splitPanel && !splitPanel.classList.contains("hidden")) hideSplitPanel();
     else openSplitPanel(view, button);
+  });
+
+  el("tbl-sort")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const button = event.currentTarget as HTMLElement;
+    if (sortPanel && !sortPanel.classList.contains("hidden")) hideSortPanel();
+    else openSortPanel(view, button);
   });
 
   el("tbl-title")?.addEventListener("click", () => ensureCaption(view, "title"));
