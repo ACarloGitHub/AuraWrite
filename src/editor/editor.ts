@@ -20,6 +20,7 @@ import "prosemirror-tables/style/tables.css";
 import { createTrailingBlockPlugin } from "./trailing-block";
 import { createRowHeightPlugin } from "./row-height";
 import { createTableColumnsPlugin } from "./table-columns";
+import { createTableNumberingPlugin } from "./table-numbering";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -855,6 +856,9 @@ export function createEditor(element: HTMLElement): EditorViewType {
       // columns trade width; the table is always as wide as the text, so it follows
       // the page format instead of keeping the width it was dragged to.
       tableEditing(),
+      // «Tabella 1, 2, …»: the number lives on the title paragraph and follows the
+      // document, so it is never typed and never gets out of step.
+      createTableNumberingPlugin(),
       // Drag the line under a row to give it a minimum height.
       createRowHeightPlugin(),
       // After the row drag: it owns the cursor, and a column border runs after it.
