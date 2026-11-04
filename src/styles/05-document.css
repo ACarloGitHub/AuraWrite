@@ -1409,6 +1409,26 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   font-style: italic;
 }
 
+/* Il segno sulla cella calcolata: una ƒ piccola in un angolo, che non si copia e
+   non si stampa. Serve a dire «questo numero è un risultato», così non lo si
+   riscrive aspettandosi che resti (editor.ts, attributo `formula`). */
+.ProseMirror td[data-formula]::after {
+  content: "ƒ";
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--color-text-muted, #999);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Sul foglio il segno non c'è: è un'aiuto per chi scrive, non parte del documento. */
+.ProseMirror.aw-print-body td[data-formula]::after {
+  content: none;
+}
+
 /* The selection alone: a neutral grey, deliberately NOT the accent colour, so a
    selected cell cannot be mistaken for a cell with a fill of its own. */
 .ProseMirror .selectedCell:after {
