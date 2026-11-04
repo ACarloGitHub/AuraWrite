@@ -1362,6 +1362,24 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   vertical-align: bottom !important;
 }
 
+/* ============================================================================
+   STILI DI TABELLA (editor.ts, attributo `tableStyle`)
+
+   Il nome dello stile viaggia con la tabella; il disegno sta qui. Le linee
+   spariscono di COLORE e non di spessore: la geometria della cella non cambia,
+   quindi misura e anteprima restano d'accordo con lo schermo.
+   ============================================================================ */
+
+.ProseMirror table[data-table-style="plain"] td,
+.ProseMirror table[data-table-style="plain"] th {
+  border-color: transparent !important;
+}
+
+/* Le bande contano le righe di corpo: la testa è la prima riga della tabella. */
+.ProseMirror table[data-table-style="banded"] tbody > tr:nth-child(even) > td {
+  background: rgba(74, 144, 217, 0.06);
+}
+
 /* A table's title and note: ordinary paragraphs marked as such (editor.ts,
    `tableCaption`), so they move with the text, export as text and are measured as
    text. The look is the figure caption's: small and muted, the note in italic. */

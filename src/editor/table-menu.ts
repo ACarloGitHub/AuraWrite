@@ -291,6 +291,31 @@ function ensureCaption(view: EditorView, kind: "title" | "note"): void {
   view.focus();
 }
 
+/** The table the caret sits in, if any. */
+function tableAt(view: EditorView): PMNode | null {
+  const { $from } = view.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === "table") return node;
+  }
+  return null;
+}
+
+/** Lo stile dell'intera tabella: vive sull'attributo del nodo, il disegno è nel CSS. */
+function setTableStyle(style: string | null): Command {
+  return (state, dispatch) => {
+    if (!isInTable(state)) return false;
+    const rect = selectedRect(state);
+    const tablePos = rect.tableStart - 1;
+    const table = state.doc.nodeAt(tablePos);
+    if (!table || table.attrs.tableStyle === style) return false;
+    if (dispatch) {
+      dispatch(state.tr.setNodeMarkup(tablePos, undefined, { ...table.attrs, tableStyle: style }));
+    }
+    return true;
+  };
+}
+
 /**
  * Toglie la formula e il formato dalla cella e svuota il testo che la formula
  * aveva scritto: il numero era il risultato di un calcolo, non una cosa digitata.
@@ -388,6 +413,12 @@ export function setupTableMenu(view: EditorView): void {
     run(view, setCellAttr("cellFormat", value === "general" ? null : value));
   });
 
+  // Lo stile dell'intera tabella: griglia com'è, senza linee, o a bande.
+  el("tbl-style")?.addEventListener("change", (event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    run(view, setTableStyle(value || null));
+  });
+
   el("tbl-split")?.addEventListener("click", (event) => {
     event.preventDefault();
     const button = event.currentTarget as HTMLElement;
@@ -413,6 +444,7 @@ export function syncTableMenu(view: EditorView): void {
   const align = el<HTMLSelectElement>("tbl-valign");
   const formula = el<HTMLInputElement>("tbl-formula");
   const format = el<HTMLSelectElement>("tbl-format");
+  const tableStyle = el<HTMLSelectElement>("tbl-style");
   // A panel left open over a table that is no longer selected would paint a
   // table the caret has left.
   if (!isInTable(view.state)) hideBordersPanel();
@@ -436,5 +468,9 @@ export function syncTableMenu(view: EditorView): void {
   }
   if (format) {
     format.value = typeof cell.attrs.cellFormat === "string" ? cell.attrs.cellFormat : "general";
+  }
+  if (tableStyle) {
+    const table = tableAt(view);
+    tableStyle.value = typeof table?.attrs.tableStyle === "string" ? table.attrs.tableStyle : "";
   }
 }

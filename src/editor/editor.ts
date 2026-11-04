@@ -674,13 +674,27 @@ const rowNodeSpec: NodeSpec = {
 // `TableWidthView`, because the node view must keep it in step while dragging.
 const tableNodeSpec: NodeSpec = {
   ...tableNodeSpecs.table,
+  // The look of the whole table, named (`plain`, `banded`, or nothing = the grid
+  // the stylesheet draws). The drawing is in 05-document.css: a fill chosen on a
+  // single cell wins over the table's bands, which is what a writer expects.
+  attrs: { tableStyle: { default: null } },
+  parseDOM: [
+    {
+      tag: "table",
+      getAttrs: (dom: Element) => ({
+        tableStyle: dom.getAttribute("data-table-style") || null,
+      }),
+    },
+  ],
   toDOM(node) {
+    const attrs: Record<string, string> = {};
+    if (node.attrs.tableStyle) attrs["data-table-style"] = node.attrs.tableStyle as string;
     const percents = columnPercents(columnWeights(node));
     const columns = percents.map((percent) => [
       "col",
       { style: `width: ${round2(percent)}%` },
     ]);
-    return ["table", ["colgroup", ...columns], ["tbody", 0]] as unknown as DOMOutputSpec;
+    return ["table", attrs, ["colgroup", ...columns], ["tbody", 0]] as unknown as DOMOutputSpec;
   },
 };
 

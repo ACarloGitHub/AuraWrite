@@ -90,12 +90,14 @@ export class TableWidthView {
     this.colgroup = this.table.appendChild(document.createElement("colgroup"));
     this.contentDOM = this.table.appendChild(document.createElement("tbody"));
     this.writeColumns();
+    this.writeStyle();
   }
 
   update(node: PMNode): boolean {
     if (node.type !== this.node.type) return false;
     this.node = node;
     this.writeColumns();
+    this.writeStyle();
     return true;
   }
 
@@ -105,6 +107,13 @@ export class TableWidthView {
       mutation.type === "attributes" &&
       (mutation.target === this.table || this.colgroup.contains(mutation.target))
     );
+  }
+
+  /** Lo stile della tabella è un attributo del nodo: la vista lo porta sul DOM. */
+  private writeStyle(): void {
+    const style = this.node.attrs.tableStyle;
+    if (typeof style === "string" && style) this.table.setAttribute("data-table-style", style);
+    else this.table.removeAttribute("data-table-style");
   }
 
   private writeColumns(): void {

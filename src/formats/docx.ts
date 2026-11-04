@@ -1281,9 +1281,12 @@ const DEFAULT_CELL_BORDER = { style: BorderStyle.SINGLE, size: 4, color: "999999
 const NO_CELL_BORDER = { style: BorderStyle.NIL, size: 0, color: "auto" };
 
 /** A cell's border on one side, in Word's units (w:tcBorders; size in eighth-points). */
-function cellBorderForDocx(value: unknown) {
+function cellBorderForDocx(
+  value: unknown,
+  fallback: typeof DEFAULT_CELL_BORDER | typeof NO_CELL_BORDER = DEFAULT_CELL_BORDER,
+) {
   const border = parseBorder(value);
-  if (border === null) return DEFAULT_CELL_BORDER;
+  if (border === null) return fallback;
   if (border === "none") return NO_CELL_BORDER;
   return {
     style: BorderStyle.SINGLE,
@@ -1303,6 +1306,11 @@ function tableNodeToDocx(tableNode: any): Table {
   const contentPx = Math.max(1, page.widthPx - margins.left - margins.right);
   const twips = columnTwips(columnPercents(columnWeights(tableNode)), contentPx);
   const totalTwips = twips.reduce((sum, value) => sum + value, 0) || Math.round(contentPx * 15);
+  // Lo stile "plain" toglie le linee anche nel file: una tabella senza linee a
+  // schermo e con le linee in Word sarebbe la stessa tabella in due modi diversi.
+  // Le bande non viaggiano: sono una scelta della vista, e il canale ha i
+  // riempimenti delle celle.
+  const defaultBorder = tableNode.attrs?.tableStyle === "plain" ? NO_CELL_BORDER : DEFAULT_CELL_BORDER;
 
   contentToArray(tableNode.content).forEach((row: any, rowIndex: number) => {
     if (row.type.name !== "table_row") return;
@@ -1333,10 +1341,10 @@ function tableNodeToDocx(tableNode: any): Table {
         // A boundary between two cells is drawn by Word out of both sides, the
         // same rule the editor's panel writes both sides for.
         borders: {
-          top: cellBorderForDocx(cell.attrs?.borderTop),
-          bottom: cellBorderForDocx(cell.attrs?.borderBottom),
-          left: cellBorderForDocx(cell.attrs?.borderLeft),
-          right: cellBorderForDocx(cell.attrs?.borderRight),
+          top: cellBorderForDocx(cell.attrs?.borderTop, defaultBorder),
+          bottom: cellBorderForDocx(cell.attrs?.borderBottom, defaultBorder),
+          left: cellBorderForDocx(cell.attrs?.borderLeft, defaultBorder),
+          right: cellBorderForDocx(cell.attrs?.borderRight, defaultBorder),
         },
       };
       // The cell's fill. Three states, as on screen: a colour, "no fill" (the empty
