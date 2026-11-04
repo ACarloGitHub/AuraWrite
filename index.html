@@ -505,6 +505,19 @@
         <button id="tbl-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No fill" hidden>×</button>
         <button id="tbl-borders" class="image-toolbar__btn" title="Borders of the selected cells">Borders…</button>
         <div class="image-toolbar__separator"></div>
+        <label class="image-toolbar__field" title="Formula of the cell, for example =SUM(ABOVE)">ƒ
+          <input id="tbl-formula" type="text" class="image-toolbar__text" placeholder="=SUM(ABOVE)" />
+        </label>
+        <select id="tbl-format" class="image-toolbar__select" title="How the number of the cell is written">
+          <option value="general">General</option>
+          <option value="integer">Integer</option>
+          <option value="decimal2">2 decimals</option>
+          <option value="thousands">Thousands</option>
+          <option value="percent">Percent</option>
+          <option value="currency">Currency</option>
+        </select>
+        <button id="tbl-formula-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No formula">×</button>
+        <div class="image-toolbar__separator"></div>
         <button id="tbl-delete" class="image-toolbar__btn" title="Delete the whole table">Delete table</button>
         </span>
       </div>

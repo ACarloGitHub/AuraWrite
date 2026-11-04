@@ -1656,6 +1656,17 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 12px;
+  height: 26px;}
+
+/* La formula della cella, nella barra: una riga di testo, non un campo numerico. */
+.image-toolbar__text {
+  width: 124px;
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
   height: 26px;
 }
 

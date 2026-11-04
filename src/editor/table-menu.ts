@@ -20,6 +20,7 @@ import {
   deleteRow,
   deleteTable,
   mergeCells,
+  selectedRect,
   setCellAttr,
   isInTable,
 } from "prosemirror-tables";
@@ -182,6 +183,38 @@ function ensureCaption(view: EditorView, kind: "title" | "note"): void {
   view.focus();
 }
 
+/**
+ * Toglie la formula e il formato dalla cella e svuota il testo che la formula
+ * aveva scritto: il numero era il risultato di un calcolo, non una cosa digitata.
+ */
+function clearFormula(): Command {
+  return (state, dispatch) => {
+    if (!isInTable(state)) return false;
+    const rect = selectedRect(state);
+    const seen = new Set<number>();
+    const cells: number[] = [];
+    for (const pos of rect.map.map) {
+      if (seen.has(pos)) continue;
+      seen.add(pos);
+      cells.push(pos);
+    }
+    // Dalla cella più avanti all'indietro: svuotarne una sposta quelle dopo.
+    cells.sort((a, b) => b - a);
+    const tr = state.tr;
+    for (const pos of cells) {
+      const cellPos = rect.tableStart + pos;
+      const cell = state.doc.nodeAt(cellPos);
+      if (!cell) continue;
+      if (!cell.attrs.formula && !cell.attrs.cellFormat) continue;
+      tr.replaceWith(cellPos + 1, cellPos + cell.nodeSize - 1, state.schema.nodes.paragraph.create());
+      tr.setNodeMarkup(cellPos, undefined, { ...cell.attrs, formula: null, cellFormat: null });
+    }
+    if (!tr.docChanged) return false;
+    dispatch?.(tr);
+    return true;
+  };
+}
+
 /** Bind the table's own controls once. */
 export function setupTableMenu(view: EditorView): void {
   el("tbl-row-before")?.addEventListener("click", () => run(view, insertRowBefore));
@@ -219,6 +252,34 @@ export function setupTableMenu(view: EditorView): void {
     run(view, setCellAttr("verticalAlign", value === "top" ? null : value));
   });
 
+  // La formula della cella: si applica con Invio o uscendo dal campo, e il
+  // risultato lo scrive il plugin (table-formulas-plugin.ts). Il formato sceglie
+  // come si scrive il numero, che ci sia una formula o no.
+  const formulaInput = el<HTMLInputElement>("tbl-formula");
+  const applyFormula = (): void => {
+    const value = formulaInput?.value.trim() ?? "";
+    run(view, setCellAttr("formula", value || null));
+  };
+  formulaInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      applyFormula();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      formulaInput.value = "";
+      view.focus();
+    }
+  });
+  formulaInput?.addEventListener("blur", applyFormula);
+  el("tbl-formula-clear")?.addEventListener("click", () => {
+    if (formulaInput) formulaInput.value = "";
+    run(view, clearFormula());
+  });
+  el("tbl-format")?.addEventListener("change", (event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    run(view, setCellAttr("cellFormat", value === "general" ? null : value));
+  });
+
   el("tbl-split")?.addEventListener("click", (event) => {
     event.preventDefault();
     const button = event.currentTarget as HTMLElement;
@@ -235,10 +296,12 @@ export function syncTableMenu(view: EditorView): void {
   const input = el<HTMLInputElement>("tbl-bg");
   const clear = el("tbl-bg-clear");
   const align = el<HTMLSelectElement>("tbl-valign");
+  const formula = el<HTMLInputElement>("tbl-formula");
+  const format = el<HTMLSelectElement>("tbl-format");
   // A panel left open over a table that is no longer selected would paint a
   // table the caret has left.
   if (!isInTable(view.state)) hideBordersPanel();
-  if (!input && !align) return;
+  if (!input && !align && !formula) return;
   const cell = cellAt(view);
   if (!cell) return;
 
@@ -250,5 +313,13 @@ export function syncTableMenu(view: EditorView): void {
   if (align) {
     const value = cell.attrs.verticalAlign;
     align.value = value === "middle" || value === "bottom" ? value : "top";
+  }
+  // Il campo della formula non si tocca mentre lo si scrive: la sinfonia a ogni
+  // transazione lo cancellerebbe a metà parola.
+  if (formula && document.activeElement !== formula) {
+    formula.value = typeof cell.attrs.formula === "string" ? cell.attrs.formula : "";
+  }
+  if (format) {
+    format.value = typeof cell.attrs.cellFormat === "string" ? cell.attrs.cellFormat : "general";
   }
 }

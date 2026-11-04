@@ -21,6 +21,7 @@ import { createTrailingBlockPlugin } from "./trailing-block";
 import { createRowHeightPlugin } from "./row-height";
 import { createTableColumnsPlugin } from "./table-columns";
 import { createTableNumberingPlugin } from "./table-numbering";
+import { createTableFormulasPlugin } from "./table-formulas-plugin";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -634,6 +635,11 @@ const tableNodeSpecs = tableNodes({
     borderRight: borderSideAttribute("borderRight"),
     borderBottom: borderSideAttribute("borderBottom"),
     borderLeft: borderSideAttribute("borderLeft"),
+    // Forms and numbers (table-formula.ts): the cell keeps the formula it was given
+    // (`=SUM(ABOVE)`) and the format its number is written with; the text of the
+    // cell is the RESULT, so measure, paper and Word all see a number.
+    formula: { default: null },
+    cellFormat: { default: null },
   },
 });
 
@@ -859,6 +865,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
       // «Tabella 1, 2, …»: the number lives on the title paragraph and follows the
       // document, so it is never typed and never gets out of step.
       createTableNumberingPlugin(),
+      // The cell that holds a formula shows its RESULT, kept up to date here.
+      createTableFormulasPlugin(),
       // Drag the line under a row to give it a minimum height.
       createRowHeightPlugin(),
       // After the row drag: it owns the cursor, and a column border runs after it.
