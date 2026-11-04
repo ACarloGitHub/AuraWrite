@@ -19,8 +19,12 @@
 // colonna senza doverla contare.
 // ============================================================================
 
-/** Le celle della tabella, come testo, riga per riga. */
-export type CellGrid = string[][];
+/**
+ * Il valore di una cella, chiesto per coordinate. È una funzione e non una
+ * tabella di testi perché una formula può leggere un'altra formula: il
+ * ricalcolo risolve la catena lì, e un ciclo risponde `null` invece di girare.
+ */
+export type CellValueAt = (row: number, col: number) => number | null;
 
 export interface CellAddress {
   /** 0-based row. */
@@ -34,19 +38,37 @@ export type FormulaResult = number | null;
 
 /**
  * Il valore numerico di una cella, o `null` se non è un numero. È la
- * "riconoscenza dei numeri": un numero scritto a mano vale per le formule come un
- * risultato, anche quando porta la valuta o il segno di percentuale che il formato
- * gli ha messo intorno — ma una parola non diventa un numero.
+ * «riconoscenza dei numeri»: un numero scritto a mano vale per le formule come un
+ * risultato, anche con la valuta o il segno di percentuale che il formato gli ha
+ * messo intorno — ma una parola non diventa un numero.
+ *
+ * La convenzione è quella inglese (punto decimale, virgola per le migliaia), la
+ * stessa dei formati; la lettura però non si offende per la forma italiana:
+ * «1.234,57» e «3,5» si leggono lo stesso, perché un numero scritto a mano non si
+ * riscrive per far piacere al programma.
  */
 export function numericValueOf(text: string): number | null {
   const trimmed = text.trim();
-  if (!/^[-+]?[\d.,\s]*(?:€|%)?$/.test(trimmed) || !/\d/.test(trimmed)) return null;
-  const clean = trimmed
-    .replace(/[\s€%]/g, "")
-    .replace(/\.(?=\d{3}\b)/g, "")
-    .replace(",", ".");
-  const value = Number(clean);
-  return Number.isFinite(value) ? value : null;
+  if (!/^[-+]?[$€£\d.,\s]*(?:%|[$€£])?$/.test(trimmed) || !/\d/.test(trimmed)) return null;
+  const percent = trimmed.includes("%");
+  let body = trimmed.replace(/[\s$€£%]/g, "");
+
+  const hasDot = body.includes(".");
+  const hasComma = body.includes(",");
+  if (hasDot && hasComma) {
+    const decimal = body.lastIndexOf(".") > body.lastIndexOf(",") ? "." : ",";
+    const group = decimal === "." ? "," : ".";
+    body = body.split(group).join("").replace(decimal, ".");
+  } else if (hasComma) {
+    // «1,234» è un raggruppamento; «3,5» è un decimale.
+    body = /^[-+]?\d{1,3}(?:,\d{3})+$/.test(body) ? body.split(",").join("") : body.replace(",", ".");
+  } else if (hasDot) {
+    body = /^[-+]?\d{1,3}(?:\.\d{3}){2,}$/.test(body) ? body.split(".").join("") : body;
+  }
+
+  const value = Number(body);
+  if (!Number.isFinite(value)) return null;
+  return percent ? value / 100 : value;
 }
 
 const COLUMNS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -163,7 +185,7 @@ function rangeCells(from: string, to: string): CellAddress[] | null {
  * La direzione da cui arrivano i valori (`SUM(ABOVE)`): le celle contigue in
  * quella direzione, fermandosi alla prima che non è un numero — la regola di Word.
  */
-function directionCells(grid: CellGrid, at: CellAddress, direction: string): number[] {
+function directionCells(valueAt: CellValueAt, at: CellAddress, direction: string): number[] {
   const values: number[] = [];
   const step = direction === "ABOVE" ? { row: -1, col: 0 }
     : direction === "BELOW" ? { row: 1, col: 0 }
@@ -171,8 +193,8 @@ function directionCells(grid: CellGrid, at: CellAddress, direction: string): num
         : { row: 0, col: 1 };
   let row = at.row + step.row;
   let col = at.col + step.col;
-  while (row >= 0 && row < grid.length && col >= 0 && col < (grid[row]?.length ?? 0)) {
-    const value = numericValueOf(grid[row][col] ?? "");
+  while (row >= 0 && col >= 0) {
+    const value = valueAt(row, col);
     if (value === null) break;
     values.push(value);
     row += step.row;
@@ -184,12 +206,12 @@ function directionCells(grid: CellGrid, at: CellAddress, direction: string): num
 class Parser {
   private index = 0;
   private readonly tokens: Token[];
-  private readonly grid: CellGrid;
+  private readonly valueAt: CellValueAt;
   private readonly at: CellAddress;
 
-  constructor(tokens: Token[], grid: CellGrid, at: CellAddress) {
+  constructor(tokens: Token[], valueAt: CellValueAt, at: CellAddress) {
     this.tokens = tokens;
-    this.grid = grid;
+    this.valueAt = valueAt;
     this.at = at;
   }
 
@@ -255,7 +277,7 @@ class Parser {
       this.index++;
       const address = addressOf(token.ref);
       if (!address) return null;
-      return numericValueOf(this.grid[address.row]?.[address.col] ?? "");
+      return this.valueAt(address.row, address.col);
     }
     if (token.kind === "name") {
       this.index++;
@@ -280,13 +302,13 @@ class Parser {
       const token = this.tokens[this.index];
       if (token?.kind === "name" && DIRECTIONS.has(token.name)) {
         this.index++;
-        values.push(...directionCells(this.grid, this.at, token.name));
+        values.push(...directionCells(this.valueAt, this.at, token.name));
       } else if (token?.kind === "range") {
         this.index++;
         const cells = rangeCells(token.from, token.to);
         if (!cells) return null;
         for (const cell of cells) {
-          const value = numericValueOf(this.grid[cell.row]?.[cell.col] ?? "");
+          const value = this.valueAt(cell.row, cell.col);
           if (value !== null) values.push(value);
         }
       } else {
@@ -346,12 +368,12 @@ class Parser {
  * Il numero che la formula produce, nella cella `at` della tabella. `null` quando
  * la formula non si capisce, divide per zero o non ha valori: la cella resta com'è.
  */
-export function evaluateFormula(formula: string, grid: CellGrid, at: CellAddress): FormulaResult {
+export function evaluateFormula(formula: string, at: CellAddress, valueAt: CellValueAt): FormulaResult {
   const clean = formula.trim().replace(/^=/, "");
   if (!clean) return null;
   const tokens = tokenize(clean);
   if (!tokens || tokens.length === 0) return null;
-  const value = new Parser(tokens, grid, at).parse();
+  const value = new Parser(tokens, valueAt, at).parse();
   if (value === null || !Number.isFinite(value)) return null;
   return value;
 }
@@ -372,12 +394,16 @@ export const CELL_FORMATS = [
 
 export type CellFormat = (typeof CELL_FORMATS)[number];
 
-/** Le migliaia col punto, i decimali con la virgola: come si scrive in italiano. */
+/**
+ * Il numero all'inglese: punto decimale, virgola per le migliaia. È la convenzione
+ * del programma; quando la lingua dei valori diventerà una scelta (todo, I18N-VALORI)
+ * questa è la funzione da parametrizzare.
+ */
 function fixed(value: number, digits: number, grouping: boolean): string {
   const negative = value < 0;
   const [intPart, decPart] = Math.abs(value).toFixed(digits).split(".");
-  const int = grouping ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : intPart;
-  const body = decPart === undefined ? int : `${int},${decPart}`;
+  const int = grouping ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : intPart;
+  const body = decPart === undefined ? int : `${int}.${decPart}`;
   return negative ? `-${body}` : body;
 }
 
@@ -394,10 +420,10 @@ export function formatCellValue(value: number, format: string | null | undefined
     case "percent":
       return `${fixed(value * 100, 2, true)}%`;
     case "currency":
-      return `${fixed(value, 2, true)} €`;
+      return "$" + fixed(value, 2, true);
     default: {
       const rounded = Math.round(value * 1e6) / 1e6;
-      return fixed(rounded, Number.isInteger(rounded) ? 0 : String(rounded).split(".")[1].length, true);
+      return fixed(rounded, Number.isInteger(rounded) ? 0 : String(rounded).split(".")[1].length, false);
     }
   }
 }

@@ -639,7 +639,18 @@ const tableNodeSpecs = tableNodes({
     // Forms and numbers (table-formula.ts): the cell keeps the formula it was given
     // (`=SUM(ABOVE)`) and the format its number is written with; the text of the
     // cell is the RESULT, so measure, paper and Word all see a number.
-    formula: { default: null },
+    formula: {
+      default: null,
+      // Il segno ƒ sulla cella calcolata lo disegna il foglio di stile da questo
+      // attributo: è un'avvertenza per chi scrive, non un contenuto — sul foglio
+      // non c'è (05-document.css).
+      getFromDOM(dom: Element) {
+        return dom.getAttribute("data-formula") || null;
+      },
+      setDOMAttr(value: unknown, attrs: Record<string, unknown>) {
+        if (typeof value === "string" && value) attrs["data-formula"] = value;
+      },
+    },
     cellFormat: { default: null },
   },
 });
