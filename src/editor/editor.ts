@@ -33,6 +33,12 @@ import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { SHAPE_NODE_SPEC } from "./shape-node";
 import { ShapeNodeView } from "./shape-node-view";
+import {
+  BORDER_SIDE_CSS,
+  BORDER_SIDE_DATA,
+  cssBorder,
+  type BorderSide,
+} from "./table-borders";
 import { BUBBLE_NODE_SPEC } from "./bubble-node";
 import { BubbleNodeView } from "./bubble-node-view";
 import { createAtomicElementGuardPlugin, transformStyleOf } from "./element-view";
@@ -553,6 +559,27 @@ function appendClass(attrs: Record<string, unknown>, name: string): void {
   attrs.class = current.join(" ");
 }
 
+/**
+ * One side of a cell's border, all four handled alike: the value is read off its
+ * data attribute — which is also what the DOCX import writes — and rendered as
+ * an inline border on that side only, over the stylesheet's `border` shorthand.
+ * `null` is the table's own line and writes nothing.
+ */
+function borderSideAttribute(side: BorderSide) {
+  return {
+    default: null,
+    getFromDOM(dom: Element) {
+      return dom.getAttribute(BORDER_SIDE_DATA[side]);
+    },
+    setDOMAttr(value: unknown, attrs: Record<string, unknown>) {
+      if (typeof value !== "string" || !value) return;
+      attrs[BORDER_SIDE_DATA[side]] = value;
+      const css = cssBorder(value);
+      if (css) appendStyle(attrs, `${BORDER_SIDE_CSS[side]}: ${css}`);
+    },
+  };
+}
+
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
   cellContent: "block+",
@@ -596,6 +623,13 @@ const tableNodeSpecs = tableNodes({
         }
       },
     },
+    // The four sides of the cell (table-borders.ts): a preset of the bar writes
+    // them, Word carries them as w:tcBorders, and the line between two cells is
+    // decided by both sides together.
+    borderTop: borderSideAttribute("borderTop"),
+    borderRight: borderSideAttribute("borderRight"),
+    borderBottom: borderSideAttribute("borderBottom"),
+    borderLeft: borderSideAttribute("borderLeft"),
   },
 });
 

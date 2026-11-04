@@ -25,8 +25,10 @@ import {
   deleteTable,
   mergeCells,
   setCellAttr,
+  isInTable,
 } from "prosemirror-tables";
 import { splitCellInto } from "./table-split";
+import { hideBordersPanel, toggleBordersPanel } from "./table-borders-panel";
 
 const MIN_SPLIT = 1;
 const MAX_SPLIT = 20;
@@ -201,6 +203,13 @@ export function setupTableMenu(view: EditorView): void {
     run(view, setCellAttr("backgroundColor", ""));
   });
 
+  // The borders of the selected cells: a panel with the pen and the presets
+  // (table-borders-panel.ts), because ten presets do not fit in the bar.
+  el("tbl-borders")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    toggleBordersPanel(view, event.currentTarget as HTMLElement);
+  });
+
   // Where the text sits in the cell: top (the default, stored as null), middle or
   // bottom — Word's w:vAlign.
   el("tbl-valign")?.addEventListener("change", (event) => {
@@ -224,6 +233,9 @@ export function syncTableMenu(view: EditorView): void {
   const input = el<HTMLInputElement>("tbl-bg");
   const clear = el("tbl-bg-clear");
   const align = el<HTMLSelectElement>("tbl-valign");
+  // A panel left open over a table that is no longer selected would paint a
+  // table the caret has left.
+  if (!isInTable(view.state)) hideBordersPanel();
   if (!input && !align) return;
   const cell = cellAt(view);
   if (!cell) return;

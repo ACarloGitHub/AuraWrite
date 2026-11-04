@@ -1213,6 +1213,55 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   gap: 8px;
 }
 
+/* "Borders…": the presets in two columns, then the pen. A click paints; the
+   panel stays open, so an outer line and an inner one are laid down in a row. */
+.table-borders-panel {
+  gap: 8px;
+  min-width: 220px;
+}
+
+.table-borders-presets {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.table-borders-preset {
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.table-borders-preset:hover {
+  border-color: var(--color-primary);
+}
+
+.table-borders-pen {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.table-borders-pen input[type="number"] {
+  width: 56px;
+}
+
+.table-borders-pen input[type="color"] {
+  width: 46px;
+  height: 27px;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+}
+
 /* ============================================================================
    TABLE NODE STYLES (ProseMirror)
    ============================================================================ */
