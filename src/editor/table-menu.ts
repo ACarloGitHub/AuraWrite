@@ -16,10 +16,6 @@ import type { Node as PMNode } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
 import {
-  addColumnAfter,
-  addColumnBefore,
-  addRowAfter,
-  addRowBefore,
   deleteColumn,
   deleteRow,
   deleteTable,
@@ -29,6 +25,12 @@ import {
 } from "prosemirror-tables";
 import { splitCellInto } from "./table-split";
 import { hideBordersPanel, toggleBordersPanel } from "./table-borders-panel";
+import {
+  insertColumnAfter,
+  insertColumnBefore,
+  insertRowAfter,
+  insertRowBefore,
+} from "./table-insert";
 
 const MIN_SPLIT = 1;
 const MAX_SPLIT = 20;
@@ -182,12 +184,12 @@ function ensureCaption(view: EditorView, kind: "title" | "note"): void {
 
 /** Bind the table's own controls once. */
 export function setupTableMenu(view: EditorView): void {
-  el("tbl-row-before")?.addEventListener("click", () => run(view, addRowBefore));
-  el("tbl-row-after")?.addEventListener("click", () => run(view, addRowAfter));
+  el("tbl-row-before")?.addEventListener("click", () => run(view, insertRowBefore));
+  el("tbl-row-after")?.addEventListener("click", () => run(view, insertRowAfter));
   el("tbl-row-delete")?.addEventListener("click", () => run(view, deleteRow));
 
-  el("tbl-col-before")?.addEventListener("click", () => run(view, addColumnBefore));
-  el("tbl-col-after")?.addEventListener("click", () => run(view, addColumnAfter));
+  el("tbl-col-before")?.addEventListener("click", () => run(view, insertColumnBefore));
+  el("tbl-col-after")?.addEventListener("click", () => run(view, insertColumnAfter));
   el("tbl-col-delete")?.addEventListener("click", () => run(view, deleteColumn));
 
   el("tbl-merge")?.addEventListener("click", () => run(view, mergeCells));
