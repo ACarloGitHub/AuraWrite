@@ -432,6 +432,16 @@ function measureCellContent(cell: PMNode, width: number): number {
   return height + pendingAfter;
 }
 
+/** What a table's rows cost, kept apart so a page can be filled row by row. */
+export interface TableRowLayout {
+  /** Content height of each row, without the horizontal lines. */
+  heights: number[];
+  /** Thickness of the horizontal lines: one per row, plus the table's own two. */
+  borders: number[];
+  /** Whole table, borders included. */
+  total: number;
+}
+
 /**
  * A table, row by row. A row is as tall as its tallest cell; a cell is its
  * blocks measured at the width of the columns it spans, plus the padding.
@@ -441,7 +451,7 @@ function measureCellContent(cell: PMNode, width: number): number {
  * last of them — which is what the browser does when it grows the row the cell
  * ends in.
  */
-function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
+export function tableRowLayout(node: PMNode, contentWidth: number): TableRowLayout {
   const rows: TableCellRef[][] = [];
   const rowNodes: PMNode[] = [];
   let columns = 1;
@@ -522,7 +532,26 @@ function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
     }
   });
   const borders = boundaryPx.reduce((sum, px) => sum + px, 0);
-  return { heightPx: body + borders, lineCount: rows.length };
+  return { heights, borders: boundaryPx, total: body + borders };
+}
+
+/** The measure a block needs: the whole height, in the block's own shape. */
+function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
+  const layout = tableRowLayout(node, contentWidth);
+  return { heightPx: layout.total, lineCount: layout.heights.length };
+}
+
+// The row-by-row layout, cached by node identity and width like every other
+// measure (`cachedMeasure`): the page walk asks for it on every pass, and a
+// table of forty rows must not be measured once per pass.
+const TABLE_LAYOUT_CACHE = new WeakMap<PMNode, { g: number; w: number; layout: TableRowLayout }>();
+
+export function cachedTableRowLayout(node: PMNode, contentWidth: number): TableRowLayout {
+  const hit = TABLE_LAYOUT_CACHE.get(node);
+  if (hit && hit.g === getMetricsGeneration() && hit.w === contentWidth) return hit.layout;
+  const layout = tableRowLayout(node, contentWidth);
+  TABLE_LAYOUT_CACHE.set(node, { g: getMetricsGeneration(), w: contentWidth, layout });
+  return layout;
 }
 
 /**
@@ -779,6 +808,8 @@ export interface PageBreakAt {
   pageNumber: number;
   /** True when the break falls INSIDE a paragraph (mid-paragraph split). */
   midParagraph?: boolean;
+  /** True when the break falls between two rows of a table. */
+  inTable?: boolean;
 }
 
 /**
@@ -1394,14 +1425,14 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   const widthAt = (yq: number): number => obstacleSet.widthAt(yq);
   const pageOf = (yq: number): number => Math.floor(yq / contentHeight) + 1;
   const pageRemainder = (yq: number): number => contentHeight - (yq % contentHeight);
-  const pushBreak = (atPos: number, yTop: number, mid: boolean): void => {
+  const pushBreak = (atPos: number, yTop: number, mid: boolean, inTable = false): void => {
     // UNIFIED LABEL SEMANTICS (F1.4 fix): pageNumber is ALWAYS the page that
     // STARTS after this divider. Mid-paragraph cuts used to carry the page
     // they left, which could equal the number already used by a block-level
     // divider earlier in the list (out-of-order labels, merged-page audits).
     const bp: PageBreakAt = mid
       ? { pos: atPos, pageNumber: pageOf(yTop) + 1, midParagraph: true }
-      : { pos: atPos, pageNumber: pageOf(yTop) };
+      : { pos: atPos, pageNumber: pageOf(yTop), ...(inTable ? { inTable: true } : {}) };
     // dedup: the same boundary must not be emitted twice (e.g. a gap
     // divider and a whole-block move computed for one and the same cut).
     // Two DIFFERENT boundaries may share a block-start position (an empty
@@ -1824,6 +1855,48 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
       }
       lastBlockTop = startY;
       y = lines[n - 1].y + lines[n - 1].h;
+      pos += node.nodeSize;
+      return;
+    }
+    // A table breaks BETWEEN rows: the rows that fit stay on this page and the
+    // rest go on the next, each row whole (Word's `cantSplit`). Until now the
+    // table was one unbreakable block: it moved whole, and one taller than a
+    // sheet overflowed and was cut away by the paper — the rest of it reached no
+    // sheet at all. The break carries `inTable`, so it is drawn as a row of the
+    // table instead of a block between two blocks
+    // (pagination-cassie-plugin.ts, `pageBreakRow`).
+    if (node.type.name === "table") {
+      const layout = cachedTableRowLayout(node, contentWidth);
+      const rowCount = layout.heights.length;
+      const rowHeight = (index: number): number => layout.borders[index] + layout.heights[index];
+      let tableTop = y + Math.max(pendingAfter, sp.beforePx);
+      gapBreaksUpTo(tableTop);
+      // The table starts on the page where its first row fits; a first row that
+      // does not fit moves the whole table down, as an unbreakable block does.
+      if (tableTop % contentHeight !== 0 && rowHeight(0) > pageRemainder(tableTop)) {
+        const moved = pageOf(tableTop) * contentHeight;
+        pushBreak(pos, moved, false);
+        tableTop = moved;
+        pendingAfter = 0;
+      }
+      lastBlockTop = tableTop;
+      let cursor = tableTop;
+      let rowPos = pos + 1;
+      for (let index = 0; index < rowCount; index++) {
+        const height = rowHeight(index);
+        const boundary = (Math.floor(cursor / contentHeight) + 1) * contentHeight;
+        // A row that does not fit starts the next page. A row taller than a whole
+        // page starts it too, and there it overflows: the one case the paper
+        // cannot save, documented.
+        if (cursor + height > boundary + 0.01 && cursor % contentHeight !== 0) {
+          pushBreak(rowPos, boundary, false, true);
+          cursor = boundary;
+        }
+        cursor += height;
+        rowPos += node.child(index).nodeSize;
+      }
+      y = cursor + layout.borders[rowCount];
+      pendingAfter = sp.afterPx;
       pos += node.nodeSize;
       return;
     }

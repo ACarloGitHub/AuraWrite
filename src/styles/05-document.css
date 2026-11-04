@@ -699,6 +699,17 @@
   height: auto;
 }
 
+/* A break that falls BETWEEN two rows of a table is drawn as a row of that table
+   (one cell spanning every column), so the white space of the page goes across
+   the table and not beside it. The cell carries no border and no padding: it is
+   the page's margin, not a cell of the table. */
+.aw-page-break--row > td {
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  vertical-align: top;
+}
+
 .aw-page-break-margin-top {
   height: 96px;
   background: transparent;

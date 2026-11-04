@@ -6,7 +6,7 @@ import { isOverlap, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
 import type { Node as PMNode } from "prosemirror-model";
-import { calculatePageBreaks, getPageFormat } from "./pagination-cassie";
+import { calculatePageBreaks, getPageFormat, type PageBreakAt, type PageMargins } from "./pagination-cassie";
 import { syncEditorMetricsFromDom, getMetricsGeneration } from "./text-metrics";
 import { appliedScale } from "./editor-zoom";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
@@ -841,71 +841,125 @@ function buildDecorations(
   const breakDecorations: Decoration[] = breaks.map((bp) =>
     Decoration.widget(
       bp.pos,
-      () => {
+      (view, getPos) => {
+        // A break BETWEEN two rows is drawn as a row of the table: a block put
+        // there would be hoisted out of the table by the browser and the gap
+        // would land beside it (pagination-cassie.ts, the table branch).
+        if (bp.inTable) return pageBreakRow(view, getPos() ?? 0, bp, margins, cassiePaged);
         const wrap = document.createElement("div");
         wrap.className = cassiePaged ? "aw-page-break aw-page-break--paged" : "aw-page-break";
         wrap.setAttribute("data-page", String(bp.pageNumber));
         if (bp.midParagraph) wrap.setAttribute("data-mid-paragraph", "1");
         wrap.contentEditable = "false";
-
-        if (cassiePaged) {
-          const topMargin = document.createElement("div");
-          topMargin.className = "aw-page-break-margin-top";
-          topMargin.style.height = `${margins.bottom}px`;
-
-          const separator = document.createElement("div");
-          separator.className = "aw-page-break-separator";
-
-          const footerArea = document.createElement("div");
-          footerArea.className = "aw-page-break-footer";
-          footerArea.textContent = String(bp.pageNumber - 1);
-
-          const headerArea = document.createElement("div");
-          headerArea.className = "aw-page-break-header";
-          headerArea.textContent = String(bp.pageNumber);
-
-          const bottomMargin = document.createElement("div");
-          bottomMargin.className = "aw-page-break-margin-bottom";
-          bottomMargin.style.height = `${margins.top}px`;
-
-          wrap.appendChild(topMargin);
-          wrap.appendChild(footerArea);
-          wrap.appendChild(separator);
-          wrap.appendChild(headerArea);
-          wrap.appendChild(bottomMargin);
-        } else {
-          const topSpacer = document.createElement("div");
-          topSpacer.className = "aw-page-break-spacer-top";
-          topSpacer.style.height = `${margins.bottom}px`;
-
-          const line = document.createElement("div");
-          line.className = "aw-page-break-line";
-
-          const label = document.createElement("span");
-          label.className = "aw-page-break-label";
-          label.textContent = `Pagina ${bp.pageNumber}`;
-
-          const bottomSpacer = document.createElement("div");
-          bottomSpacer.className = "aw-page-break-spacer-bottom";
-          bottomSpacer.style.height = `${margins.top}px`;
-
-          wrap.appendChild(topSpacer);
-          wrap.appendChild(line);
-          wrap.appendChild(label);
-          wrap.appendChild(bottomSpacer);
-        }
-
+        fillBreakBody(wrap, bp, margins, cassiePaged);
         return wrap;
       },
       {
         side: -1,
         ignoreSelection: true,
-        key: `cassie-pb-${modeTag}-${bp.pageNumber}-${bp.midParagraph ? 1 : 0}-${margins.top}-${margins.bottom}`,
+        key: `cassie-pb-${modeTag}-${bp.pageNumber}-${bp.midParagraph ? 1 : 0}-${bp.inTable ? "t" : "b"}-${margins.top}-${margins.bottom}`,
       },
     ),
   );
 
   return withWraps(breakDecorations);
+}
+
+/**
+ * The parts of a divider: the bottom margin of the page that ends, the page
+ * number, the header and the top margin of the page that starts. The top part
+ * carries the class the closing pass looks for, because it is the one that takes
+ * the space left over (`aw-page-break-margin-top`).
+ */
+function fillBreakBody(wrap: HTMLElement, bp: PageBreakAt, margins: PageMargins, paged: boolean): void {
+  if (paged) {
+    const topMargin = document.createElement("div");
+    topMargin.className = "aw-page-break-margin-top";
+    topMargin.style.height = `${margins.bottom}px`;
+
+    const footerArea = document.createElement("div");
+    footerArea.className = "aw-page-break-footer";
+    footerArea.textContent = String(bp.pageNumber - 1);
+
+    const separator = document.createElement("div");
+    separator.className = "aw-page-break-separator";
+
+    const headerArea = document.createElement("div");
+    headerArea.className = "aw-page-break-header";
+    headerArea.textContent = String(bp.pageNumber);
+
+    const bottomMargin = document.createElement("div");
+    bottomMargin.className = "aw-page-break-margin-bottom";
+    bottomMargin.style.height = `${margins.top}px`;
+
+    wrap.appendChild(topMargin);
+    wrap.appendChild(footerArea);
+    wrap.appendChild(separator);
+    wrap.appendChild(headerArea);
+    wrap.appendChild(bottomMargin);
+    return;
+  }
+
+  const topSpacer = document.createElement("div");
+  topSpacer.className = "aw-page-break-spacer-top";
+  topSpacer.style.height = `${margins.bottom}px`;
+
+  const line = document.createElement("div");
+  line.className = "aw-page-break-line";
+
+  const label = document.createElement("span");
+  label.className = "aw-page-break-label";
+  label.textContent = `Pagina ${bp.pageNumber}`;
+
+  const bottomSpacer = document.createElement("div");
+  bottomSpacer.className = "aw-page-break-spacer-bottom";
+  bottomSpacer.style.height = `${margins.top}px`;
+
+  wrap.appendChild(topSpacer);
+  wrap.appendChild(line);
+  wrap.appendChild(label);
+  wrap.appendChild(bottomSpacer);
+}
+
+/**
+ * A break that falls BETWEEN two rows of a table, drawn as a row of that table: a
+ * `<tr>` whose single cell spans every column, holding the same parts as any
+ * other divider. A block put at that position would be hoisted out of the table
+ * by the browser, and the gap would land beside the table instead of across it.
+ */
+function pageBreakRow(
+  view: EditorView,
+  pos: number,
+  bp: PageBreakAt,
+  margins: PageMargins,
+  paged: boolean,
+): HTMLElement {
+  const row = document.createElement("tr");
+  row.className = "aw-page-break aw-page-break--row";
+  row.setAttribute("data-page", String(bp.pageNumber));
+  row.contentEditable = "false";
+
+  let columns = 1;
+  try {
+    const table = view.state.doc.resolve(pos).parent;
+    if (table.type.name === "table") {
+      columns = 0;
+      table.firstChild?.forEach((cell) => {
+        columns += Math.max(1, Number(cell.attrs.colspan) || 1);
+      });
+    }
+  } catch {
+    columns = 1;
+  }
+
+  const cell = document.createElement("td");
+  cell.colSpan = Math.max(1, columns);
+  const body = document.createElement("div");
+  body.className = "aw-page-break-body";
+  fillBreakBody(body, bp, margins, paged);
+  cell.appendChild(body);
+  row.appendChild(cell);
+  return row;
 }
 
 export interface CassiePaginationOptions {
@@ -1051,13 +1105,10 @@ export function closePageHeights(view: EditorView): void {
     const page = Number(el.dataset.page || "0");
     if (!page || page < 2) continue;
     if (page < firstPage) continue; // above the edit: already closed, nothing moved
-    let spacer: HTMLElement | null = null;
-    for (const child of Array.from(el.children) as HTMLElement[]) {
-      if (child.classList.contains("aw-page-break-margin-top")) {
-        spacer = child;
-        break;
-      }
-    }
+    // The spacer is the part that takes the space left over; in a divider drawn
+    // as a table row it sits one level deeper (inside the cell), so the lookup is
+    // a query, not a scan of the direct children.
+    const spacer = el.querySelector<HTMLElement>(".aw-page-break-margin-top");
     if (!spacer) continue;
     const box = el.getBoundingClientRect();
     const known = fillByPage.get(page);

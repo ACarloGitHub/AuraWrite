@@ -1357,6 +1357,9 @@ function tableNodeToDocx(tableNode: any): Table {
     });
 
     const rowOpts: any = { children: cells };
+    // A row breaks whole: the table is cut BETWEEN rows, both on screen and in
+    // the file (`w:cantSplit`), never through the middle of one.
+    rowOpts.cantSplit = true;
     // A row's height is a minimum (w:trHeight with the "at least" rule): the row
     // grows when its cells need more, which is what the editor draws.
     const rowHeight = Number(row.attrs?.rowHeight);
