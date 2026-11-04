@@ -935,7 +935,10 @@ function pageBreakRow(
   paged: boolean,
 ): HTMLElement {
   const row = document.createElement("tr");
-  row.className = "aw-page-break aw-page-break--row";
+  // In the paged view the closing pass finds the dividers by `--paged` and takes
+  // the space left over with their top spacer; a row divider must be closed the
+  // same way, or the rows after it would start at the wrong height.
+  row.className = paged ? "aw-page-break aw-page-break--row aw-page-break--paged" : "aw-page-break aw-page-break--row";
   row.setAttribute("data-page", String(bp.pageNumber));
   row.contentEditable = "false";
 
