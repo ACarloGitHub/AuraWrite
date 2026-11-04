@@ -859,7 +859,13 @@ function buildDecorations(
       {
         side: -1,
         ignoreSelection: true,
-        key: `cassie-pb-${modeTag}-${bp.pageNumber}-${bp.midParagraph ? 1 : 0}-${bp.inTable ? "t" : "b"}-${margins.top}-${margins.bottom}`,
+        // The key decides whether ProseMirror reuses the widget's DOM or builds
+        // it again. A divider inside a table CARRIES A COPY OF THE HEAD, so the
+        // head's own content belongs in the key: without it, typing in the head
+        // updated the document and the copy stayed as it was (the old text, or
+        // nothing) until the break moved for some other reason.
+        key: `cassie-pb-${modeTag}-${bp.pageNumber}-${bp.midParagraph ? 1 : 0}-${bp.inTable ? "t" : "b"}-${margins.top}-${margins.bottom}` +
+          (bp.inTable ? `-${headSignature(doc, bp.pos)}` : ""),
       },
     ),
   );
@@ -1000,6 +1006,32 @@ function headCopy(schema: Schema, table: PMNode, head: PMNode): HTMLElement {
   copy.appendChild(colgroup);
   copy.appendChild(tbody);
   return copy;
+}
+
+/**
+ * What the copy of the head depends on: the text and the look of its cells. It
+ * goes into the divider's key, so any edit to the head — one typed character,
+ * with nothing pressed afterwards — makes the widget be built again instead of
+ * being reused with the old text.
+ */
+function headSignature(doc: PMNode, pos: number): string {
+  try {
+    const table = doc.resolve(pos).parent;
+    if (table.type.name !== "table" || !table.firstChild) return "";
+    let signature = "";
+    table.firstChild.forEach((cell) => {
+      const attrs = cell.attrs;
+      signature +=
+        `${cell.type.name}|${attrs.backgroundColor ?? ""}|${attrs.borderTop ?? ""}|` +
+        `${attrs.borderBottom ?? ""}|${attrs.colspan ?? 1}|${attrs.rowspan ?? 1}|`;
+      cell.forEach((block) => {
+        signature += `${block.textContent}:${block.attrs.align ?? ""}:${block.attrs.lineHeight ?? ""};`;
+      });
+    });
+    return signature;
+  } catch {
+    return "";
+  }
 }
 
 export interface CassiePaginationOptions {
