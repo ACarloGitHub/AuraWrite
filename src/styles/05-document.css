@@ -1239,6 +1239,21 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   gap: 8px;
 }
 
+/* "Padding…": four measures in cm, then the two buttons. */
+.table-padding-panel {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.table-picker-apply--quiet {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
 /* "Sort…": a column, an order and a type, in one row. */
 .table-sort-panel {
   flex-direction: row;
@@ -1324,11 +1339,12 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 .ProseMirror td,
 .ProseMirror th {
   border: 1px solid var(--color-border, #ccc);
-  /* Word's default cell margin: 0.19cm left and right (108 twips), nothing above
-     or below. The same numbers go out in the DOCX (docx.ts, tableNodeToDocx) and
-     into the pagination measure (pagination-cassie.ts, CELL_PADDING_*): one cell
-     box, in one place each. */
-  padding: 0 0.19cm;
+  /* Il margine di Word: 0,19 cm a destra e a sinistra (108 twip), niente sopra e
+     sotto. La tabella può portarne uno suo (table-padding.ts): le quattro
+     variabili le scrivono la vista e il toDOM del nodo, quindi schermo e foglio
+     leggono lo stesso numero, e la misura delle pagine legge l'attributo. */
+  padding: var(--aw-cell-pad-top, 0) var(--aw-cell-pad-right, 0.19cm)
+    var(--aw-cell-pad-bottom, 0) var(--aw-cell-pad-left, 0.19cm);
   vertical-align: top;
   position: relative;
 }

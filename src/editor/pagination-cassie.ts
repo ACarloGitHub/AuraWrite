@@ -49,6 +49,7 @@ import { assertNeverKind, elementTypeOf } from "./element-types";
 // The width a cell's border takes: the same number the browser paints, so the
 // page count and the screen agree (table-borders.ts).
 import { borderWidthPx } from "./table-borders";
+import { cellPaddingOf } from "./table-padding";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -368,9 +369,6 @@ export interface LineInfo {
 // ---------------------------------------------------------------------------
 
 const CM_TO_PX = 96 / 2.54;
-/** 0.19 cm, Word's default cell margin — the same number the stylesheet uses. */
-const CELL_PADDING_X_PX = 0.19 * CM_TO_PX;
-const CELL_PADDING_Y_PX = 0;
 
 interface TableCellRef {
   node: PMNode;
@@ -469,6 +467,13 @@ export function tableRowLayout(node: PMNode, contentWidth: number): TableRowLayo
     rowNodes.push(row);
   });
 
+  // Il margine interno della cella: quello che la tabella porta, o quello di Word
+  // (0,19 cm a destra e a sinistra), in pixel — la stessa misura del foglio di
+  // stile, così il testo va a capo dove va a capo davvero (table-padding.ts).
+  const padding = cellPaddingOf(node.attrs);
+  const padX = (padding.left + padding.right) * CM_TO_PX;
+  const padY = (padding.top + padding.bottom) * CM_TO_PX;
+
   const widths = tableColumnWidths(rows, columns, contentWidth);
   const heights = rows.map(() => 0);
   const spanning: { first: number; last: number; needed: number }[] = [];
@@ -482,11 +487,11 @@ export function tableRowLayout(node: PMNode, contentWidth: number): TableRowLayo
       const inner = Math.max(
         20,
         cellWidth
-          - 2 * CELL_PADDING_X_PX
+          - padX
           - borderWidthPx(cell.node.attrs.borderLeft)
           - borderWidthPx(cell.node.attrs.borderRight),
       );
-      const needed = measureCellContent(cell.node, inner) + 2 * CELL_PADDING_Y_PX;
+      const needed = measureCellContent(cell.node, inner) + padY;
       if (cell.rowspan === 1) {
         heights[index] = Math.max(heights[index], needed);
       } else {

@@ -32,6 +32,7 @@ import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 import { assertNeverKind, elementTypeOf } from "../editor/element-types";
 import { parseBorder } from "../editor/table-borders";
 import { columnPercents, columnTwips, columnWeights } from "../editor/table-widths";
+import { cellPaddingOf, cellPaddingTwips } from "../editor/table-padding";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1389,10 +1390,11 @@ function tableNodeToDocx(tableNode: any): Table {
     // Word's own "fixed" layout, which is what percentages mean here: a long word
     // wraps instead of widening the column the writer sized.
     layout: TableLayoutType.FIXED,
-    // Word's default cell margin: 0.19cm left and right (108 twips), nothing
-    // above or below. Without this Word applies its own default silently and the
-    // cells come out narrower than the editor draws them (05-document.css).
-    margins: { top: 0, bottom: 0, left: 108, right: 108 },
+    // Il margine interno della cella in twip (w:tblCellMar): quello della tabella,
+    // o il margine di Word — 0,19 cm a destra e a sinistra, niente sopra e sotto —
+    // senza il quale Word applica il suo in silenzio e le celle escono più strette
+    // di come l'editor le disegna (05-document.css, table-padding.ts).
+    margins: cellPaddingTwips(cellPaddingOf(tableNode.attrs ?? {})),
   });
 }
 

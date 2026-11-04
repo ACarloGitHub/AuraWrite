@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { Node as PMNode } from "prosemirror-model";
+import { cellPaddingOf, cellPaddingVars } from "./table-padding";
 
 export const round2 = (value: number): number => Math.round(value * 100) / 100;
 
@@ -91,6 +92,7 @@ export class TableWidthView {
     this.contentDOM = this.table.appendChild(document.createElement("tbody"));
     this.writeColumns();
     this.writeStyle();
+    this.writePadding();
   }
 
   update(node: PMNode): boolean {
@@ -98,6 +100,7 @@ export class TableWidthView {
     this.node = node;
     this.writeColumns();
     this.writeStyle();
+    this.writePadding();
     return true;
   }
 
@@ -107,6 +110,13 @@ export class TableWidthView {
       mutation.type === "attributes" &&
       (mutation.target === this.table || this.colgroup.contains(mutation.target))
     );
+  }
+
+  /** Il margine interno, come variabili CSS: lo stesso nome nel foglio di stile. */
+  private writePadding(): void {
+    for (const [name, value] of Object.entries(cellPaddingVars(cellPaddingOf(this.node.attrs)))) {
+      this.table.style.setProperty(name, value);
+    }
   }
 
   /** Lo stile della tabella è un attributo del nodo: la vista lo porta sul DOM. */

@@ -22,6 +22,7 @@ import { createRowHeightPlugin } from "./row-height";
 import { createTableColumnsPlugin } from "./table-columns";
 import { createTableNumberingPlugin } from "./table-numbering";
 import { createTableFormulasPlugin } from "./table-formulas-plugin";
+import { cellPaddingOf, cellPaddingVars } from "./table-padding";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -677,7 +678,12 @@ const tableNodeSpec: NodeSpec = {
   // The look of the whole table, named (`plain`, `banded`, or nothing = the grid
   // the stylesheet draws). The drawing is in 05-document.css: a fill chosen on a
   // single cell wins over the table's bands, which is what a writer expects.
-  attrs: { tableStyle: { default: null } },
+  attrs: {
+    tableStyle: { default: null },
+    // Il riempimento interno della cella, in cm, un valore per lato; null = il
+    // margine di Word (table-padding.ts).
+    cellPadding: { default: null },
+  },
   parseDOM: [
     {
       tag: "table",
@@ -689,6 +695,12 @@ const tableNodeSpec: NodeSpec = {
   toDOM(node) {
     const attrs: Record<string, string> = {};
     if (node.attrs.tableStyle) attrs["data-table-style"] = node.attrs.tableStyle as string;
+    // Le quattro misure del margine interno come variabili CSS: il foglio di
+    // stampa riceve questo stesso elemento, quindi le riceve anche lui, e la
+    // cella si disegna con lo stesso numero nei due posti (table-padding.ts).
+    attrs.style = Object.entries(cellPaddingVars(cellPaddingOf(node.attrs)))
+      .map(([name, value]) => `${name}: ${value}`)
+      .join("; ");
     const percents = columnPercents(columnWeights(node));
     const columns = percents.map((percent) => [
       "col",

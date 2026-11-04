@@ -28,6 +28,7 @@ import { splitCellInto } from "./table-split";
 import { hideBordersPanel, toggleBordersPanel } from "./table-borders-panel";
 import { sortTableRows, type SortDirection, type SortSpec, type SortType } from "./table-sort";
 import { columnName } from "./table-formula";
+import { cellPaddingOf, type CellPadding } from "./table-padding";
 import {
   insertColumnAfter,
   insertColumnBefore,
@@ -237,6 +238,92 @@ function openSortPanel(view: EditorView, button: HTMLElement): void {
   panel.classList.remove("hidden");
 }
 
+// ---------------------------------------------------------------------------
+// Riempimento interno: quattro campi in cm, il valore della tabella o quello di
+// Word. Un campo vuoto o sbagliato non passa: la cella non può diventare più
+// larga del foglio per un numero sbagliato (table-padding.ts).
+// ---------------------------------------------------------------------------
+
+let paddingPanel: HTMLElement | null = null;
+
+function readPaddingField(id: string, fallback: number): number {
+  const raw = el<HTMLInputElement>(id)?.value.trim().replace(",", ".") ?? "";
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(5, Math.round(value * 100) / 100));
+}
+
+function ensurePaddingPanel(view: EditorView): HTMLElement {
+  if (paddingPanel) return paddingPanel;
+
+  paddingPanel = document.createElement("div");
+  paddingPanel.className = "table-dropdown table-padding-panel hidden";
+  paddingPanel.innerHTML =
+    '<label class="table-picker-field">Top <input id="tbl-pad-top" type="text" inputmode="decimal" /></label>' +
+    '<label class="table-picker-field">Right <input id="tbl-pad-right" type="text" inputmode="decimal" /></label>' +
+    '<label class="table-picker-field">Bottom <input id="tbl-pad-bottom" type="text" inputmode="decimal" /></label>' +
+    '<label class="table-picker-field">Left <input id="tbl-pad-left" type="text" inputmode="decimal" /></label>' +
+    '<button id="tbl-pad-apply" type="button" class="table-picker-apply">Apply</button>' +
+    '<button id="tbl-pad-reset" type="button" class="table-picker-apply table-picker-apply--quiet" title="Il margine di Word">Default</button>';
+  document.body.appendChild(paddingPanel);
+
+  paddingPanel.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("#tbl-pad-apply")) {
+      event.preventDefault();
+      run(view, setTablePadding({
+        top: readPaddingField("tbl-pad-top", 0),
+        right: readPaddingField("tbl-pad-right", 0.19),
+        bottom: readPaddingField("tbl-pad-bottom", 0),
+        left: readPaddingField("tbl-pad-left", 0.19),
+      }));
+      hidePaddingPanel();
+    } else if (target.closest("#tbl-pad-reset")) {
+      event.preventDefault();
+      run(view, setTablePadding(null));
+      hidePaddingPanel();
+    }
+  });
+  paddingPanel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      hidePaddingPanel();
+      view.focus();
+    }
+  });
+  document.addEventListener("mousedown", (event) => {
+    const target = event.target as HTMLElement;
+    if (!paddingPanel || paddingPanel.classList.contains("hidden")) return;
+    if (target.closest("#tbl-padding") || paddingPanel.contains(target)) return;
+    hidePaddingPanel();
+  });
+
+  return paddingPanel;
+}
+
+function hidePaddingPanel(): void {
+  paddingPanel?.classList.add("hidden");
+}
+
+function openPaddingPanel(view: EditorView, button: HTMLElement): void {
+  const panel = ensurePaddingPanel(view);
+  const table = tableAt(view);
+  const padding = cellPaddingOf(table?.attrs ?? {});
+  const set = (id: string, value: number): void => {
+    const input = el<HTMLInputElement>(id);
+    if (input) input.value = String(value);
+  };
+  set("tbl-pad-top", padding.top);
+  set("tbl-pad-right", padding.right);
+  set("tbl-pad-bottom", padding.bottom);
+  set("tbl-pad-left", padding.left);
+  const box = button.getBoundingClientRect();
+  panel.style.left = `${Math.round(box.left)}px`;
+  panel.style.top = `${Math.round(box.bottom + 4)}px`;
+  panel.classList.remove("hidden");
+}
+
 /** The body rows of the table under the caret, sorted by one column. */
 function sortTable(view: EditorView, spec: SortSpec): void {
   const { state } = view;
@@ -299,6 +386,21 @@ function tableAt(view: EditorView): PMNode | null {
     if (node.type.name === "table") return node;
   }
   return null;
+}
+
+/** Il riempimento interno della tabella (o null = il margine di Word). */
+function setTablePadding(padding: CellPadding | null): Command {
+  return (state, dispatch) => {
+    if (!isInTable(state)) return false;
+    const rect = selectedRect(state);
+    const tablePos = rect.tableStart - 1;
+    const table = state.doc.nodeAt(tablePos);
+    if (!table) return false;
+    if (dispatch) {
+      dispatch(state.tr.setNodeMarkup(tablePos, undefined, { ...table.attrs, cellPadding: padding }));
+    }
+    return true;
+  };
 }
 
 /** Lo stile dell'intera tabella: vive sull'attributo del nodo, il disegno è nel CSS. */
@@ -431,6 +533,13 @@ export function setupTableMenu(view: EditorView): void {
     const button = event.currentTarget as HTMLElement;
     if (sortPanel && !sortPanel.classList.contains("hidden")) hideSortPanel();
     else openSortPanel(view, button);
+  });
+
+  el("tbl-padding")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const button = event.currentTarget as HTMLElement;
+    if (paddingPanel && !paddingPanel.classList.contains("hidden")) hidePaddingPanel();
+    else openPaddingPanel(view, button);
   });
 
   el("tbl-title")?.addEventListener("click", () => ensureCaption(view, "title"));

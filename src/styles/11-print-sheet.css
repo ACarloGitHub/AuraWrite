@@ -115,7 +115,10 @@
 .ProseMirror.aw-print-body td,
 .ProseMirror.aw-print-body th {
   border: 1px solid #ccc;
-  padding: 0 0.19cm;
+  /* Lo stesso riempimento dell'editor, dalle variabili che il toDOM mette sulla
+     tabella: se una tabella ha un margine suo, il foglio lo riceve. */
+  padding: var(--aw-cell-pad-top, 0) var(--aw-cell-pad-right, 0.19cm)
+    var(--aw-cell-pad-bottom, 0) var(--aw-cell-pad-left, 0.19cm);
   vertical-align: top;
 }
 .ProseMirror.aw-print-body th {
