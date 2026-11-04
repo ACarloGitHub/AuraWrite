@@ -5,8 +5,10 @@ import { freeWrapBand, freeLayoutMap, isAnchorBlock, isFreeNode, paintedBoxOf, p
 import { isOverlap, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { textColumn } from "./free-style";
-import type { Node as PMNode } from "prosemirror-model";
-import { calculatePageBreaks, getPageFormat, type PageBreakAt, type PageMargins } from "./pagination-cassie";
+import type { Node as PMNode, Schema } from "prosemirror-model";
+import { DOMSerializer } from "prosemirror-model";
+import { calculatePageBreaks, getPageFormat, isHeaderRow, type PageBreakAt, type PageMargins } from "./pagination-cassie";
+import { columnPercents, columnWeights, round2 } from "./table-widths";
 import { syncEditorMetricsFromDom, getMetricsGeneration } from "./text-metrics";
 import { appliedScale } from "./editor-zoom";
 import { getPagedMode, getCassiePagedMode, getMargins } from "./pagination-state";
@@ -943,9 +945,11 @@ function pageBreakRow(
   row.contentEditable = "false";
 
   let columns = 1;
+  let table: PMNode | null = null;
   try {
-    const table = view.state.doc.resolve(pos).parent;
-    if (table.type.name === "table") {
+    const parent = view.state.doc.resolve(pos).parent;
+    if (parent.type.name === "table") {
+      table = parent;
       columns = 0;
       table.firstChild?.forEach((cell) => {
         columns += Math.max(1, Number(cell.attrs.colspan) || 1);
@@ -961,8 +965,41 @@ function pageBreakRow(
   body.className = "aw-page-break-body";
   fillBreakBody(body, bp, margins, paged);
   cell.appendChild(body);
+  // The head of the table travels with the continuation: the same row, copied
+  // here, above the first row of the sheet. The page count reserves its height
+  // (pagination-cassie.ts, the table branch).
+  if (table && table.firstChild && isHeaderRow(table.firstChild)) {
+    cell.appendChild(headCopy(view.state.schema, table, table.firstChild));
+  }
   row.appendChild(cell);
   return row;
+}
+
+/**
+ * The head of a table, drawn at the top of a sheet that continues it: a one-row
+ * table with the same column percentages, so the cells line up with the columns
+ * below. Its cells keep the header look from the stylesheet; the line under it
+ * is suppressed, because the next row draws its own top line there.
+ */
+function headCopy(schema: Schema, table: PMNode, head: PMNode): HTMLElement {
+  const copy = document.createElement("table");
+  copy.className = "aw-page-break-header-table";
+  copy.style.width = "100%";
+  copy.style.tableLayout = "fixed";
+  copy.style.borderCollapse = "collapse";
+
+  const colgroup = document.createElement("colgroup");
+  for (const percent of columnPercents(columnWeights(table))) {
+    const col = document.createElement("col");
+    col.style.width = `${round2(percent)}%`;
+    colgroup.appendChild(col);
+  }
+  const tbody = document.createElement("tbody");
+  tbody.appendChild(DOMSerializer.fromSchema(schema).serializeNode(head));
+
+  copy.appendChild(colgroup);
+  copy.appendChild(tbody);
+  return copy;
 }
 
 export interface CassiePaginationOptions {

@@ -541,6 +541,20 @@ function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
   return { heightPx: layout.total, lineCount: layout.heights.length };
 }
 
+/**
+ * A row whose every cell is a header cell: the table's head. It is the row Word
+ * repeats at the top of every sheet the table continues on (`w:tblHeader`), and
+ * the one the page count reserves space for after a cut.
+ */
+export function isHeaderRow(row: PMNode): boolean {
+  if (row.childCount === 0) return false;
+  let header = true;
+  row.forEach((cell) => {
+    if (cell.type.name !== "table_header") header = false;
+  });
+  return header;
+}
+
 // The row-by-row layout, cached by node identity and width like every other
 // measure (`cachedMeasure`): the page walk asks for it on every pass, and a
 // table of forty rows must not be measured once per pass.
@@ -1869,6 +1883,12 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
       const layout = cachedTableRowLayout(node, contentWidth);
       const rowCount = layout.heights.length;
       const rowHeight = (index: number): number => layout.borders[index] + layout.heights[index];
+      // The head travels to every sheet the table continues on: the copy costs
+      // its own top line plus its content, and the row after it keeps its own
+      // top line — the copy is drawn above it, in the gap of the page break.
+      const headHeight = rowCount > 0 && node.firstChild && isHeaderRow(node.firstChild)
+        ? rowHeight(0)
+        : 0;
       let tableTop = y + Math.max(pendingAfter, sp.beforePx);
       gapBreaksUpTo(tableTop);
       // The table starts on the page where its first row fits; a first row that
@@ -1890,7 +1910,9 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         // cannot save, documented.
         if (cursor + height > boundary + 0.01 && cursor % contentHeight !== 0) {
           pushBreak(rowPos, boundary, false, true);
-          cursor = boundary;
+          // The sheet that continues the table starts with the head, redrawn
+          // there (pagination-cassie-plugin.ts, `pageBreakRow`).
+          cursor = boundary + headHeight;
         }
         cursor += height;
         rowPos += node.child(index).nodeSize;

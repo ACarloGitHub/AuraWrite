@@ -22,6 +22,7 @@ import {
   getContentHeight,
   getContentWidth,
   getPageFormat,
+  isHeaderRow,
   type FreeBandInput,
   type FreeGeometry,
   type PageMargins,
@@ -189,6 +190,26 @@ export function buildPrintPages(
       indiceBlocco++;
       if (!inFlow(node)) return;
       const el = serializer.serializeNode(node, {}) as HTMLElement;
+      // A table that a previous sheet cut starts again with its head, as on
+      // screen: the slice carries the rows after the cut, and the head is copied
+      // in front of them (the same row, drawn again, not a row of the document).
+      if (node.type.name === "table" && docStart > 0) {
+        // Un passo dentro la tabella: sulla sua posizione iniziale la risoluzione
+        // sta ancora FUORI da lei.
+        const tabella = tableAncestorAt(doc, docStart + 1);
+        // La fetta è una continuazione quando le manca la prima riga vera: la
+        // testa va rimessa in cima, come la disegna lo schermo.
+        if (
+          tabella &&
+          node.firstChild !== tabella.node.firstChild &&
+          tabella.node.firstChild &&
+          isHeaderRow(tabella.node.firstChild)
+        ) {
+          const testa = serializer.serializeNode(tabella.node.firstChild, {}) as HTMLElement;
+          const corpo = (el as HTMLTableElement).tBodies[0];
+          if (corpo) corpo.insertBefore(testa, corpo.firstChild);
+        }
+      }
       // Il blocco porta la sua posizione nel documento: all'anteprima serve per
       // ritrovare il paragrafo a cui un elemento libero e' appeso.
       el.dataset.awPos = String(docStart);
@@ -292,6 +313,16 @@ function blockStartOf(doc: PMNode, pos: number): { node: PMNode; start: number }
     return true;
   });
   return found;
+}
+
+/** The table a position falls inside, with the start of its content. */
+function tableAncestorAt(doc: PMNode, pos: number): { node: PMNode; start: number } | null {
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    const node = $pos.node(depth);
+    if (node.type.name === "table") return { node, start: $pos.start(depth) };
+  }
+  return null;
 }
 
 /**

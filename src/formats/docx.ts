@@ -25,7 +25,7 @@ import {
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
 } from "docx";
-import { getPageFormat } from "../editor/pagination-cassie";
+import { getPageFormat, isHeaderRow } from "../editor/pagination-cassie";
 import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
@@ -1304,7 +1304,7 @@ function tableNodeToDocx(tableNode: any): Table {
   const twips = columnTwips(columnPercents(columnWeights(tableNode)), contentPx);
   const totalTwips = twips.reduce((sum, value) => sum + value, 0) || Math.round(contentPx * 15);
 
-  contentToArray(tableNode.content).forEach((row: any) => {
+  contentToArray(tableNode.content).forEach((row: any, rowIndex: number) => {
     if (row.type.name !== "table_row") return;
     const cells: TableCell[] = [];
     let col = 0;
@@ -1360,6 +1360,10 @@ function tableNodeToDocx(tableNode: any): Table {
     // A row breaks whole: the table is cut BETWEEN rows, both on screen and in
     // the file (`w:cantSplit`), never through the middle of one.
     rowOpts.cantSplit = true;
+    // The head of the table is repeated at the top of every sheet it continues
+    // on: `w:tblHeader` is Word's way of saying the same thing the screen draws
+    // (pagination-cassie-plugin.ts, `headCopy`).
+    if (rowIndex === 0 && isHeaderRow(row)) rowOpts.tableHeader = true;
     // A row's height is a minimum (w:trHeight with the "at least" rule): the row
     // grows when its cells need more, which is what the editor draws.
     const rowHeight = Number(row.attrs?.rowHeight);

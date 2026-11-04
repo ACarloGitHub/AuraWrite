@@ -710,6 +710,21 @@
   vertical-align: top;
 }
 
+/* The head of the table, redrawn at the top of a sheet that continues it: the
+   same columns (the colgroup is copied), the same look from `th`. Its bottom
+   line is suppressed, because the next row already draws its own top line
+   there and two tables never collapse a border into one. */
+.aw-page-break-header-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.aw-page-break-header-table th,
+.aw-page-break-header-table td {
+  border-bottom: 0 !important;
+}
+
 .aw-page-break-margin-top {
   height: 96px;
   background: transparent;
