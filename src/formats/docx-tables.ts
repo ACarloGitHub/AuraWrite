@@ -6,6 +6,8 @@ export interface ImportedTableCell {
   paragraphs: ImportedCellParagraph[];
   colspan: number;
   rowspan: number;
+  /** `w:vMerge`: this cell opens a vertical merge, continues the one above, or nothing. */
+  vMerge?: "restart" | "continue" | null;
   colwidth?: number;
   /** The cell's fill, as `#RRGGBB` (`w:shd` in the file). */
   background?: string;
@@ -63,14 +65,17 @@ function readGridSpan(tc: any): number {
   return isNaN(n) || n < 1 ? 1 : n;
 }
 
-function readVMerge(tc: any): { start: boolean; restart: boolean } {
+/**
+ * `w:vMerge`: `restart` opens a vertical merge, no `w:val` (or `continue`)
+ * continues the one above, and no element at all is a cell of its own.
+ */
+function readVMerge(tc: any): "restart" | "continue" | null {
   const tcPr = getFirstChildByNS(tc, W_NS, "tcPr");
-  if (!tcPr) return { start: false, restart: false };
+  if (!tcPr) return null;
   const vMerge = getFirstChildByNS(tcPr, W_NS, "vMerge");
-  if (!vMerge) return { start: false, restart: false };
-  const val = vMerge.getAttribute("w:val");
-  if (val === "restart") return { start: true, restart: true };
-  return { start: true, restart: false };
+  if (!vMerge) return null;
+  const val = String(vMerge.getAttribute("w:val") || "").toLowerCase();
+  return val === "restart" ? "restart" : "continue";
 }
 
 function readTcW(tc: any): number | undefined {
@@ -193,7 +198,7 @@ function readCellBorders(tc: any): ImportedTableCell["borders"] {
 
 function readCell(tc: any): ImportedTableCell {
   const colspan = readGridSpan(tc);
-  const rowspanStart = readVMerge(tc);
+  const vMerge = readVMerge(tc);
   const colwidth = readTcW(tc);
   const background = readCellBackground(tc);
   const verticalAlign = readCellVerticalAlign(tc);
@@ -207,12 +212,50 @@ function readCell(tc: any): ImportedTableCell {
   return {
     paragraphs,
     colspan,
-    rowspan: rowspanStart.start ? 1 : 1,
+    rowspan: 1,
+    vMerge,
     colwidth,
     background,
     verticalAlign,
     borders,
   };
+}
+
+/**
+ * `w:vMerge` says a cell continues the one above it, and the covered cell is
+ * written out anyway: here those cells are dropped and the one above grows, so
+ * the table arrives with its vertical merges (`rowspan`) instead of a column of
+ * empty cells.
+ */
+export function resolveVerticalMerges(rows: ImportedTableCell[][]): ImportedTableCell[][] {
+  const grown = rows.map((row) =>
+    row.map((cell) => ({ ...cell, paragraphs: cell.paragraphs.slice() })),
+  );
+  const open: (ImportedTableCell | null)[] = [];
+  for (const row of grown) {
+    const kept: ImportedTableCell[] = [];
+    let col = 0;
+    for (const cell of row) {
+      const span = Math.max(1, cell.colspan);
+      if (cell.vMerge === "continue") {
+        // Una cella sola può trovarsi su più colonne: si allunga una volta sola.
+        const above = new Set<ImportedTableCell>();
+        for (let k = col; k < col + span; k++) {
+          const source = open[k];
+          if (source) above.add(source);
+        }
+        for (const source of above) source.rowspan = (source.rowspan || 1) + 1;
+        // Le colonne restano aperte: la fusione continua giù.
+      } else {
+        for (let k = col; k < col + span; k++) open[k] = cell;
+        kept.push(cell);
+      }
+      col += span;
+    }
+    // Una riga più corta chiude le fusioni delle colonne che non copre.
+    for (let k = col; k < open.length; k++) open[k] = null;
+  }
+  return grown.map((row) => row.filter((cell) => cell.vMerge !== "continue"));
 }
 
 function readRow(tr: any): ImportedTableCell[] {
@@ -260,7 +303,7 @@ function readTable(tbl: any): ImportedTable {
     }
     if (cols.length > 0) gridCols = cols;
   }
-  return { rows, gridCols, rowHeights };
+  return { rows: resolveVerticalMerges(rows), gridCols, rowHeights };
 }
 
 export async function extractTablesFromDocx(
