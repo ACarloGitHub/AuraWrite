@@ -46,6 +46,9 @@ import {
 import { isOverlap, isUnwrapped, isWrapping, textConditionOf } from "./element-condition";
 import { elementDecorationExtent } from "./element-decoration";
 import { assertNeverKind, elementTypeOf } from "./element-types";
+// The width a cell's border takes: the same number the browser paints, so the
+// page count and the screen agree (table-borders.ts).
+import { borderWidthPx } from "./table-borders";
 // The rule "how wide is a text line at this height" lives in its own module:
 // the three text conditions (Wrapped / Unwrapped / Overlap) are three answers
 // to that one question, and they must be written once for screen, paper and
@@ -368,7 +371,6 @@ const CM_TO_PX = 96 / 2.54;
 /** 0.19 cm, Word's default cell margin — the same number the stylesheet uses. */
 const CELL_PADDING_X_PX = 0.19 * CM_TO_PX;
 const CELL_PADDING_Y_PX = 0;
-const CELL_BORDER_PX = 1;
 
 interface TableCellRef {
   node: PMNode;
@@ -464,9 +466,14 @@ function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
     for (const cell of cells) {
       let cellWidth = 0;
       for (let i = 0; i < cell.colspan; i++) cellWidth += widths[cell.col + i] ?? 0;
+      // The cell's own borders take their width from the text, as on screen: the
+      // default line is 1px, "none" is nothing, a pen stroke is its own width.
       const inner = Math.max(
         20,
-        cellWidth - 2 * CELL_PADDING_X_PX - 2 * CELL_BORDER_PX,
+        cellWidth
+          - 2 * CELL_PADDING_X_PX
+          - borderWidthPx(cell.node.attrs.borderLeft)
+          - borderWidthPx(cell.node.attrs.borderRight),
       );
       const needed = measureCellContent(cell.node, inner) + 2 * CELL_PADDING_Y_PX;
       if (cell.rowspan === 1) {
@@ -495,8 +502,26 @@ function measureTable(node: PMNode, contentWidth: number): BlockMetrics {
   }
 
   const body = heights.reduce((sum, height) => sum + height, 0);
-  // Borders are shared between neighbours: one per row, plus one for the table.
-  return { heightPx: body + (rows.length + 1) * CELL_BORDER_PX, lineCount: rows.length };
+  // The horizontal lines: a boundary takes the wider of the two sides facing it,
+  // which is the rule a collapsed border follows on screen and in Word. A cell
+  // that spans rows pushes its bottom border to the line its span ends on, so a
+  // merged cell carries no line through itself.
+  const boundaryPx = new Array<number>(rows.length + 1).fill(0);
+  rows.forEach((cells, index) => {
+    for (const cell of cells) {
+      const last = Math.min(rows.length, index + cell.rowspan) - 1;
+      boundaryPx[index] = Math.max(
+        boundaryPx[index],
+        borderWidthPx(cell.node.attrs.borderTop),
+      );
+      boundaryPx[last + 1] = Math.max(
+        boundaryPx[last + 1],
+        borderWidthPx(cell.node.attrs.borderBottom),
+      );
+    }
+  });
+  const borders = boundaryPx.reduce((sum, px) => sum + px, 0);
+  return { heightPx: body + borders, lineCount: rows.length };
 }
 
 /**

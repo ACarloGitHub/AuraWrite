@@ -11,6 +11,12 @@ export interface ImportedTableCell {
   background?: string;
   /** Where the text sits in the cell (`w:vAlign`); `top` is the default and stays absent. */
   verticalAlign?: "middle" | "bottom";
+  /**
+   * The cell's own borders (`w:tcBorders`), per side, as the editor's attribute
+   * values: `"none"` or `"<W>pt solid #RRGGBB"`. A side the file does not
+   * declare is absent, and the cell keeps the table's default line.
+   */
+  borders?: Partial<Record<"top" | "right" | "bottom" | "left", string>>;
 }
 
 export interface ImportedCellParagraph {
@@ -150,12 +156,48 @@ function readCellVerticalAlign(tc: any): "middle" | "bottom" | undefined {
   return undefined;
 }
 
+const BORDER_SIDES = ["top", "right", "bottom", "left"] as const;
+
+/**
+ * One side of `w:tcBorders` → the editor's value: `"none"`, or
+ * `"<W>pt solid #RRGGBB"` (`w:sz` is in eighth-points). `undefined` when the
+ * file does not declare the side at all.
+ */
+function readBorderSide(side: any): string | null | undefined {
+  if (!side) return undefined;
+  const val = String(side.getAttribute("w:val") || "").toLowerCase();
+  if (!val || val === "none" || val === "nil") return "none";
+  const sz = Number(side.getAttribute("w:sz"));
+  const widthPt = Number.isFinite(sz) && sz > 0 ? Math.round((sz / 8) * 100) / 100 : 0.5;
+  const raw = String(side.getAttribute("w:color") || "").trim();
+  // "auto" is Word's default colour, which is black.
+  const color = /^[0-9A-Fa-f]{6}$/.test(raw) ? raw.toUpperCase() : "000000";
+  // The default line this program exports comes back as "no border of its own",
+  // so a table written and reopened keeps the attributes it had.
+  if (Math.abs(widthPt - 0.5) < 0.01 && color === "999999") return null;
+  return `${widthPt}pt solid #${color}`;
+}
+
+function readCellBorders(tc: any): ImportedTableCell["borders"] {
+  const tcPr = getFirstChildByNS(tc, W_NS, "tcPr");
+  if (!tcPr) return undefined;
+  const tcBorders = getFirstChildByNS(tcPr, W_NS, "tcBorders");
+  if (!tcBorders) return undefined;
+  const borders: NonNullable<ImportedTableCell["borders"]> = {};
+  for (const name of BORDER_SIDES) {
+    const value = readBorderSide(getFirstChildByNS(tcBorders, W_NS, name));
+    if (typeof value === "string") borders[name] = value;
+  }
+  return Object.keys(borders).length > 0 ? borders : undefined;
+}
+
 function readCell(tc: any): ImportedTableCell {
   const colspan = readGridSpan(tc);
   const rowspanStart = readVMerge(tc);
   const colwidth = readTcW(tc);
   const background = readCellBackground(tc);
   const verticalAlign = readCellVerticalAlign(tc);
+  const borders = readCellBorders(tc);
   const paragraphs: ImportedCellParagraph[] = [];
   for (let child = tc.firstChild; child; child = child.nextSibling) {
     if (child.namespaceURI === W_NS && child.localName === "p") {
@@ -169,6 +211,7 @@ function readCell(tc: any): ImportedTableCell {
     colwidth,
     background,
     verticalAlign,
+    borders,
   };
 }
 
@@ -286,6 +329,13 @@ export function tableToHtml(table: ImportedTable): string {
     if (cell.background) style.push(`background-color: ${cell.background}`);
     if (cell.verticalAlign) style.push(`vertical-align: ${cell.verticalAlign}`);
     if (style.length) attrs.push(`style="${style.join("; ")}"`);
+    // The borders travel as data attributes: the cell's parser reads them back
+    // (editor.ts, `borderSideAttribute`) and paints them from there, which also
+    // keeps a border this program wrote from being read as a default one.
+    for (const side of BORDER_SIDES) {
+      const value = cell.borders?.[side];
+      if (value) attrs.push(`data-border-${side}="${value}"`);
+    }
     const inner =
       cell.paragraphs.length === 0
         ? "<p></p>"

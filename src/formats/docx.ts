@@ -29,6 +29,7 @@ import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
 import { assertNeverKind, elementTypeOf } from "../editor/element-types";
+import { parseBorder } from "../editor/table-borders";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -1271,6 +1272,24 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
   return new ImageRun(opts);
 }
 
+// The default line a table has always exported with, and Word's explicit
+// absence. "nil" rather than "none": a cell's "none" can still lose against a
+// table-level border in Word, "nil" wins every conflict.
+const DEFAULT_CELL_BORDER = { style: BorderStyle.SINGLE, size: 4, color: "999999" };
+const NO_CELL_BORDER = { style: BorderStyle.NIL, size: 0, color: "auto" };
+
+/** A cell's border on one side, in Word's units (w:tcBorders; size in eighth-points). */
+function cellBorderForDocx(value: unknown) {
+  const border = parseBorder(value);
+  if (border === null) return DEFAULT_CELL_BORDER;
+  if (border === "none") return NO_CELL_BORDER;
+  return {
+    style: BorderStyle.SINGLE,
+    size: Math.max(2, Math.round(border.widthPt * 8)),
+    color: border.color.replace("#", ""),
+  };
+}
+
 function tableNodeToDocx(tableNode: any): Table {
   const rows: TableRow[] = [];
   const colwidths: number[] = [];
@@ -1297,11 +1316,14 @@ function tableNodeToDocx(tableNode: any): Table {
         children: paragraphs,
         columnSpan: colspan,
         rowSpan: rowspan,
+        // One line per side: the cell's own border, the default, or "no line".
+        // A boundary between two cells is drawn by Word out of both sides, the
+        // same rule the editor's panel writes both sides for.
         borders: {
-          top: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-          bottom: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-          left: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-          right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
+          top: cellBorderForDocx(cell.attrs?.borderTop),
+          bottom: cellBorderForDocx(cell.attrs?.borderBottom),
+          left: cellBorderForDocx(cell.attrs?.borderLeft),
+          right: cellBorderForDocx(cell.attrs?.borderRight),
         },
       };
       // The cell's fill. Three states, as on screen: a colour, "no fill" (the empty
