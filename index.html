@@ -923,14 +923,42 @@
             <!-- TAB: Language -->
             <div class="pref-tab-content" data-tab="language">
               <div class="preference-group">
-                <label for="pref-values-language">Language</label>
-                <span class="preference-hint">How numbers, currency and dates are written, and the language the AI uses. “Follow the system” reads the machine at every start; a document can say a language of its own.</span>
+                <label for="pref-values-language">Language of values</label>
+                <span class="preference-hint">How numbers, currency and dates are written. “Follow the system” reads the machine at every start; a document can say a language of its own.</span>
                 <select id="pref-values-language"></select>
               </div>
               <div class="preference-group">
-                <label for="pref-interface-language">Interface language</label>
+                <label for="pref-ai-interface-language">AI Interface Language</label>
+                <span class="preference-hint">Language the AI uses to talk to you. It is a choice of its own: it does not follow the language of values.</span>
+                <select id="pref-ai-interface-language">
+                  <option value="English">English</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Portuguese">Português</option>
+                  <option value="Japanese">日本語</option>
+                  <option value="Chinese">中文</option>
+                </select>
+              </div>
+              <div class="preference-group">
+                <label for="pref-ai-writing-language">AI Writing Language</label>
+                <span class="preference-hint">Language the AI uses when writing or suggesting. It is a choice of its own.</span>
+                <select id="pref-ai-writing-language">
+                  <option value="English">English</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Portuguese">Português</option>
+                  <option value="Japanese">日本語</option>
+                  <option value="Chinese">中文</option>
+                </select>
+              </div>
+              <div class="preference-group">
+                <label for="pref-program-language">Program interface</label>
                 <span class="preference-hint">The interface is English for now. Translating it is a later step of its own; this choice will apply when the translations exist.</span>
-                <select id="pref-interface-language" disabled>
+                <select id="pref-program-language" disabled>
                   <option value="en" selected>English</option>
                 </select>
               </div>
@@ -1026,33 +1054,8 @@
             <!-- TAB: AI Behavior -->
             <div class="pref-tab-content" data-tab="ai-behavior">
               <div class="preference-group">
-                <label for="pref-ai-interface-language">Interface Language</label>
-                <span class="preference-hint">Language the AI uses to talk to you</span>
-                <select id="pref-ai-interface-language">
-                  <option value="English">English</option>
-                  <option value="Italian">Italiano</option>
-                  <option value="French">Français</option>
-                  <option value="German">Deutsch</option>
-                  <option value="Spanish">Español</option>
-                  <option value="Portuguese">Português</option>
-                  <option value="Japanese">日本語</option>
-                  <option value="Chinese">中文</option>
-                </select>
-                <button type="button" class="pref-btn" data-open-tab="language">Language settings…</button>
-              </div>
-              <div class="preference-group">
-                <label for="pref-ai-writing-language">Writing Language</label>
-                <span class="preference-hint">Language the AI uses when writing/suggesting</span>
-                <select id="pref-ai-writing-language">
-                  <option value="English">English</option>
-                  <option value="Italian">Italiano</option>
-                  <option value="French">Français</option>
-                  <option value="German">Deutsch</option>
-                  <option value="Spanish">Español</option>
-                  <option value="Portuguese">Português</option>
-                  <option value="Japanese">日本語</option>
-                  <option value="Chinese">中文</option>
-                </select>
+                <label>Languages of the AI</label>
+                <span class="preference-hint">Interface Language and Writing Language live in Language settings, together with the language of values. They are three separate choices: none of them follows another.</span>
                 <button type="button" class="pref-btn" data-open-tab="language">Language settings…</button>
               </div>
               <div class="preference-group">

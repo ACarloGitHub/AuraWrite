@@ -31,7 +31,7 @@ import {
 } from "./store";
 import { updateApiKeyGroupVisibility, refreshModelList, renderManualProfiles, loadManualProfileIntoForm } from "./ai-provider-tab";
 import { loadPermissionsList } from "./agent-tab";
-import { aiLanguageFor, languageOptions, SYSTEM_LANGUAGE } from "../i18n/languages";
+import { languageOptions, SYSTEM_LANGUAGE } from "../i18n/languages";
 import { resolveLanguage, setValuesLanguage } from "../i18n/regional";
 
 /** DOM application of preferences (theme, highlight, fonts) stays in main.ts. */
@@ -543,22 +543,15 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
     updateCustomColorsVisibility();
   });
 
-  // The language of the values. Changing it is a real change: the AI's two
-  // choices move to that language (they stay independent afterwards), the
-  // document's numbers are rewritten in the new language, and the preferences
-  // are saved. This listener runs before the generic save below, so the save
-  // already sees the two AI fields updated.
+  // The language of the values. Changing it is a real change: the document's
+  // numbers are rewritten in the new language and the preferences are saved.
+  // It does NOT touch the AI's Interface and Writing Language: those are three
+  // separate choices, all in this tab, and none of them follows another. This
+  // listener runs before the generic save below.
   const valuesLanguageSelect = document.getElementById("pref-values-language") as HTMLSelectElement | null;
   valuesLanguageSelect?.addEventListener("change", () => {
     const resolved = resolveLanguage(valuesLanguageSelect.value);
     setValuesLanguage(resolved);
-    const aiName = aiLanguageFor(resolved);
-    const aiInterface = document.getElementById("pref-ai-interface-language") as HTMLSelectElement | null;
-    const aiWriting = document.getElementById("pref-ai-writing-language") as HTMLSelectElement | null;
-    if (aiName) {
-      if (aiInterface) aiInterface.value = aiName;
-      if (aiWriting) aiWriting.value = aiName;
-    }
     window.dispatchEvent(new CustomEvent("aurawrite:values-language-changed"));
   });
 
