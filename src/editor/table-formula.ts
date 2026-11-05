@@ -33,6 +33,16 @@ export interface CellAddress {
   col: number;
 }
 
+import {
+  formatCurrency,
+  formatDateSerial,
+  formatDecimal,
+  formatGeneral,
+  formatPercent,
+  parseNumber,
+  valuesLanguage,
+} from "../i18n/regional";
+
 /** Il risultato di una formula: un numero, o niente quando non si può calcolare. */
 export type FormulaResult = number | null;
 
@@ -42,33 +52,12 @@ export type FormulaResult = number | null;
  * risultato, anche con la valuta o il segno di percentuale che il formato gli ha
  * messo intorno — ma una parola non diventa un numero.
  *
- * La convenzione è quella inglese (punto decimale, virgola per le migliaia), la
- * stessa dei formati; la lettura però non si offende per la forma italiana:
- * «1.234,57» e «3,5» si leggono lo stesso, perché un numero scritto a mano non si
- * riscrive per far piacere al programma.
+ * The reading does not depend on the language in force: `1.234,57` and `3.5`
+ * both read, because a number typed by hand is not rewritten to please the
+ * program (see `parseNumber` in `i18n/regional.ts`).
  */
 export function numericValueOf(text: string): number | null {
-  const trimmed = text.trim();
-  if (!/^[-+]?[$€£\d.,\s]*(?:%|[$€£])?$/.test(trimmed) || !/\d/.test(trimmed)) return null;
-  const percent = trimmed.includes("%");
-  let body = trimmed.replace(/[\s$€£%]/g, "");
-
-  const hasDot = body.includes(".");
-  const hasComma = body.includes(",");
-  if (hasDot && hasComma) {
-    const decimal = body.lastIndexOf(".") > body.lastIndexOf(",") ? "." : ",";
-    const group = decimal === "." ? "," : ".";
-    body = body.split(group).join("").replace(decimal, ".");
-  } else if (hasComma) {
-    // «1,234» è un raggruppamento; «3,5» è un decimale.
-    body = /^[-+]?\d{1,3}(?:,\d{3})+$/.test(body) ? body.split(",").join("") : body.replace(",", ".");
-  } else if (hasDot) {
-    body = /^[-+]?\d{1,3}(?:\.\d{3}){2,}$/.test(body) ? body.split(".").join("") : body;
-  }
-
-  const value = Number(body);
-  if (!Number.isFinite(value)) return null;
-  return percent ? value / 100 : value;
+  return parseNumber(text);
 }
 
 const COLUMNS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -390,40 +379,38 @@ export const CELL_FORMATS = [
   "thousands",
   "percent",
   "currency",
+  "date",
 ] as const;
 
 export type CellFormat = (typeof CELL_FORMATS)[number];
 
 /**
- * Il numero all'inglese: punto decimale, virgola per le migliaia. È la convenzione
- * del programma; quando la lingua dei valori diventerà una scelta (todo, I18N-VALORI)
- * questa è la funzione da parametrizzare.
+ * The number as the cell writes it, in the language in force (or the one the
+ * caller passes: a cell or a document can say a language of its own). The
+ * language decides the separators, the currency and the date's shape; the format
+ * decides how many digits and which style, and the two never swap roles.
  */
-function fixed(value: number, digits: number, grouping: boolean): string {
-  const negative = value < 0;
-  const [intPart, decPart] = Math.abs(value).toFixed(digits).split(".");
-  const int = grouping ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : intPart;
-  const body = decPart === undefined ? int : `${int}.${decPart}`;
-  return negative ? `-${body}` : body;
-}
-
-/** Il numero come va scritto nella cella, secondo il suo formato. */
-export function formatCellValue(value: number, format: string | null | undefined): string {
+export function formatCellValue(
+  value: number,
+  format: string | null | undefined,
+  lang: string = valuesLanguage(),
+): string {
   const chosen = (format ?? "general") as CellFormat;
   switch (chosen) {
     case "integer":
-      return String(Math.round(value));
+      return formatDecimal(value, 0, false, lang);
     case "decimal2":
-      return fixed(value, 2, false);
+      return formatDecimal(value, 2, false, lang);
     case "thousands":
-      return fixed(value, 2, true);
+      return formatDecimal(value, 2, true, lang);
     case "percent":
-      return `${fixed(value * 100, 2, true)}%`;
+      return formatPercent(value, lang);
     case "currency":
-      return "$" + fixed(value, 2, true);
-    default: {
-      const rounded = Math.round(value * 1e6) / 1e6;
-      return fixed(rounded, Number.isInteger(rounded) ? 0 : String(rounded).split(".")[1].length, false);
-    }
+      return formatCurrency(value, lang);
+    case "date":
+      // A serial outside the calendar stays the number it is.
+      return formatDateSerial(value, lang) ?? formatGeneral(value, lang);
+    default:
+      return formatGeneral(value, lang);
   }
 }

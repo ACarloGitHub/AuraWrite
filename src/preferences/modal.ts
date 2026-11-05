@@ -31,6 +31,8 @@ import {
 } from "./store";
 import { updateApiKeyGroupVisibility, refreshModelList, renderManualProfiles, loadManualProfileIntoForm } from "./ai-provider-tab";
 import { loadPermissionsList } from "./agent-tab";
+import { aiLanguageFor, languageOptions, SYSTEM_LANGUAGE } from "../i18n/languages";
+import { resolveLanguage, setValuesLanguage } from "../i18n/regional";
 
 /** DOM application of preferences (theme, highlight, fonts) stays in main.ts. */
 export interface PreferencesModalDeps {
@@ -167,6 +169,15 @@ export function openPreferencesModal(): void {
   const uiFont = document.getElementById("pref-fonts-ui") as HTMLSelectElement;
   ensureFontOption(uiFont, prefs.fontUi || "Inter");
   uiFont.value = prefs.fontUi || "Inter";
+  // The language of the values: the picker is built once, the first time the
+  // window opens, and shows the stored intention (the word "system" included),
+  // never the language the system resolved to.
+  const valuesLanguage = document.getElementById("pref-values-language") as HTMLSelectElement | null;
+  if (valuesLanguage) {
+    fillValuesLanguages(valuesLanguage);
+    valuesLanguage.value = prefs.valuesLanguage || SYSTEM_LANGUAGE;
+    if (!valuesLanguage.value) valuesLanguage.value = SYSTEM_LANGUAGE;
+  }
   (
     document.getElementById("pref-agent-planner") as HTMLInputElement
   ).checked = prefs.plannerEnabled !== false;
@@ -214,6 +225,28 @@ function updateCustomColorsVisibility(): void {
       customGroup.classList.add("hidden");
     }
   }
+}
+
+/**
+ * Fill the language picker once: the intention first, then every language the
+ * platform names. The list is not a selection made here - it is ISO 639-1, and
+ * the names come from `Intl`, so Chinese, Russian and the rest are present.
+ */
+function fillValuesLanguages(select: HTMLSelectElement): void {
+  if (select.dataset.filled === "true") return;
+  const system = document.createElement("option");
+  system.value = SYSTEM_LANGUAGE;
+  system.textContent = "Follow the system";
+  select.appendChild(system);
+  const options = document.createDocumentFragment();
+  for (const { tag, name } of languageOptions()) {
+    const option = document.createElement("option");
+    option.value = tag;
+    option.textContent = name;
+    options.appendChild(option);
+  }
+  select.appendChild(options);
+  select.dataset.filled = "true";
 }
 
 function makeModalDraggable(): void {
@@ -384,6 +417,7 @@ export function savePreferencesFromModal(deps: PreferencesModalDeps): void {
     aiContextInterval: parseInt(inp("pref-ai-context-interval"), 10) || 30,
     aiInterfaceLanguage: sel("pref-ai-interface-language") || "English",
     aiWritingLanguage: sel("pref-ai-writing-language") || "English",
+    valuesLanguage: sel("pref-values-language") || SYSTEM_LANGUAGE,
     aiAssistantName: inp("pref-ai-assistant-name"),
     aiUserName: inp("pref-ai-user-name"),
     suggestionsDebug: chk("pref-suggestions-debug"),
@@ -500,6 +534,23 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
     updateCustomColorsVisibility();
   });
 
+  // The language of the values. Changing it is a real change: the AI's two
+  // choices move to that language (they stay independent afterwards), the
+  // document's numbers are rewritten in the new language, and the preferences
+  // are saved. This listener runs before the generic save below, so the save
+  // already sees the two AI fields updated.
+  const valuesLanguageSelect = document.getElementById("pref-values-language") as HTMLSelectElement | null;
+  valuesLanguageSelect?.addEventListener("change", () => {
+    const resolved = resolveLanguage(valuesLanguageSelect.value);
+    setValuesLanguage(resolved);
+    const aiName = aiLanguageFor(resolved);
+    const aiInterface = document.getElementById("pref-ai-interface-language") as HTMLSelectElement | null;
+    const aiWriting = document.getElementById("pref-ai-writing-language") as HTMLSelectElement | null;
+    if (aiInterface) aiInterface.value = aiName;
+    if (aiWriting) aiWriting.value = aiName;
+    window.dispatchEvent(new CustomEvent("aurawrite:values-language-changed"));
+  });
+
   document.getElementById("pref-reset-all-data")?.addEventListener("click", async () => {
     const confirmed = confirm(
       "This will permanently delete ALL user data:\n\n" +
@@ -543,7 +594,7 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
 
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-manual-type, #pref-ai-manual-ctx, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-manual-type, #pref-ai-manual-ctx, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-values-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
     )
     .forEach((el) => {
       el.addEventListener("change", () => savePreferencesFromModal(deps));

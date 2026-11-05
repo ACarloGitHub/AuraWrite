@@ -42,6 +42,8 @@ import { setupResizablePanels } from "./editor/resizable-panels";
 import { openFindBar, setupFindReplaceUI } from "./editor/find-replace-ui";
 import { setupAppShortcuts } from "./editor/app-shortcuts";
 import { applyEditorZoom, scheduleEditorZoomSync, setEditorZoomParts } from "./editor/editor-zoom";
+import { reformatTables } from "./editor/table-formulas-plugin";
+import { resolveLanguage, setValuesLanguage } from "./i18n/regional";
 import type { Node as PMNode } from "prosemirror-model";
 import "./styles/index.css";
 
@@ -211,6 +213,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   invoke("workspace_init").catch(() => {});
   const prefs = getPreferences();
   applyPreferences(prefs);
+  // The language the values are written in: resolved now, before the editor is
+  // built, so the first cell that is formatted already uses it.
+  setValuesLanguage(resolveLanguage(prefs.valuesLanguage));
 
   // User fonts: read the folder's names (it opens no file) and declare the
   // faces the stored preferences already use, before the editor is built. The
@@ -254,6 +259,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("aurawrite:page-format-changed", () => scheduleEditorZoomSync());
   window.addEventListener("aurawrite:cassie-paged-changed", () => scheduleEditorZoomSync());
   window.addEventListener("resize", () => scheduleEditorZoomSync());
+  // The language of the values changed: every formatted cell is rewritten in
+  // the new language (a real edit, so it can be undone and is saved).
+  window.addEventListener("aurawrite:values-language-changed", () => {
+    reformatTables(editorView);
+  });
 
   // Loading flag (typed module, still mirrored on window for DevTools)
   setLoading(false);

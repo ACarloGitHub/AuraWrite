@@ -19,6 +19,7 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey, type Transaction } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
 import { TableMap } from "prosemirror-tables";
 import { evaluateFormula, formatCellValue, numericValueOf } from "./table-formula";
 
@@ -29,6 +30,12 @@ interface CellEdit {
   /** Position of the cell node's content start. */
   pos: number;
   text: string;
+}
+
+interface AttrEdit {
+  /** Position of the cell node itself. */
+  pos: number;
+  attrs: Record<string, unknown>;
 }
 
 /** La formula di una cella, se ne ha una. */
@@ -50,6 +57,7 @@ function formatOf(cell: PMNode): string | null {
  */
 export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet<number>): boolean {
   const edits: CellEdit[] = [];
+  const attrEdits: AttrEdit[] = [];
   doc.descendants((node, pos) => {
     if (node.type.name !== "table") return true;
     const table = node;
@@ -59,13 +67,20 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
     // ciclo, e un ciclo vale niente.
     const cache = new Map<number, number | null>();
     const busy = new Set<number>();
+    // The number a formatted cell keeps behind its text, valid only while the
+    // text is still the one written for it. A date's text cannot be read back as
+    // a number, so without this a date could not take part in a formula.
+    const storedValueOf = (cell: PMNode): number | null => {
+      const stored = typeof cell.attrs.cellValue === "number" ? cell.attrs.cellValue : null;
+      return stored !== null && cell.attrs.cellText === cell.textContent ? stored : null;
+    };
     const valueOf = (cellPos: number): number | null => {
       if (cache.has(cellPos)) return cache.get(cellPos) ?? null;
       const cell = table.nodeAt(cellPos);
       if (!cell) return null;
       const formula = formulaOf(cell);
       if (!formula) {
-        const value = numericValueOf(cell.textContent);
+        const value = storedValueOf(cell) ?? numericValueOf(cell.textContent);
         cache.set(cellPos, value);
         return value;
       }
@@ -82,6 +97,7 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
     };
 
     const newTexts: { cellPos: number; text: string }[] = [];
+    const newAttrs: { cellPos: number; attrs: Record<string, unknown> }[] = [];
     const seen = new Set<number>();
     for (const cellPos of map.map) {
       if (seen.has(cellPos)) continue;
@@ -93,26 +109,45 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
       if (!cell) continue;
       const formula = formulaOf(cell);
       const format = formatOf(cell);
-      if (!formula) {
-        // Senza formula, il formato si applica al numero che c'è scritto.
-        if (!format) continue;
-        const value = numericValueOf(cell.textContent);
-        if (value === null) continue;
-        const text = formatCellValue(value, format);
-        if (text !== cell.textContent) newTexts.push({ cellPos, text });
+      if (!formula && !format) {
+        // Niente da scrivere: un numero rimasto da un formato tolto se ne va.
+        if (cell.attrs.cellValue !== null || cell.attrs.cellText !== null) {
+          newAttrs.push({ cellPos, attrs: { ...cell.attrs, cellValue: null, cellText: null } });
+        }
         continue;
       }
-      const value = valueOf(cellPos);
+      let value: number | null;
+      if (formula) {
+        value = valueOf(cellPos);
+      } else {
+        // Senza formula, il formato si applica al numero che c'è scritto. Il
+        // numero conservato vale solo finché il testo è ancora quello scritto
+        // per lui: se il writer l'ha toccato, il testo è la verità.
+        value = storedValueOf(cell) ?? numericValueOf(cell.textContent);
+        if (value === null) continue;
+      }
       const text = value === null ? FORMULA_ERROR : formatCellValue(value, format);
+      const attrs = { ...cell.attrs, cellValue: value, cellText: value === null ? null : text };
       if (text !== cell.textContent) newTexts.push({ cellPos, text });
+      if (cell.attrs.cellValue !== attrs.cellValue || cell.attrs.cellText !== attrs.cellText) {
+        newAttrs.push({ cellPos, attrs });
+      }
     }
     for (const { cellPos, text } of newTexts) {
       edits.push({ pos: pos + 1 + cellPos + 1, text });
+    }
+    for (const { cellPos, attrs } of newAttrs) {
+      attrEdits.push({ pos: pos + 1 + cellPos, attrs });
     }
     // Dentro le celle non ci sono altre tabelle da contare per il ricalcolo.
     return false;
   });
 
+  // First the attributes: they do not change the document's size, so every text
+  // position collected on the untouched document stays valid.
+  for (const edit of attrEdits) {
+    tr.setNodeMarkup(edit.pos, undefined, edit.attrs);
+  }
   edits.sort((a, b) => b.pos - a.pos);
   for (const edit of edits) {
     const $pos = doc.resolve(edit.pos);
@@ -138,7 +173,7 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
       tr.replaceWith(edit.pos, edit.pos + cell.content.size, paragraph.create({}, replacement));
     }
   }
-  return edits.length > 0;
+  return edits.length > 0 || attrEdits.length > 0;
 }
 
 /**
@@ -158,6 +193,9 @@ export function dropFormulasOfEditedCells(
   const done = new Set<number>();
   for (const source of transactions) {
     if (!source.docChanged) continue;
+    // A language rewrite is ours, not the writer's: the text it changes is still
+    // our own formatting, so the number behind it and the formula must stay.
+    if (source.getMeta("formats-rewrite")) continue;
     const inverse = source.mapping.invert();
     doc.descendants((node, pos) => {
       if (node.type.name !== "table") return true;
@@ -167,20 +205,45 @@ export function dropFormulasOfEditedCells(
         if (seen.has(cellPos)) continue;
         seen.add(cellPos);
         const cell = node.nodeAt(cellPos);
-        if (!cell || !formulaOf(cell)) continue;
+        if (!cell) continue;
         const abs = pos + 1 + cellPos;
         if (done.has(abs)) continue;
         const oldCell = source.before.nodeAt(inverse.map(abs));
         if (!oldCell) continue;
-        // Nessuna cancellazione: la formula resta e il risultato si riscrive.
-        if (cell.textContent.length >= oldCell.textContent.trim().length) continue;
-        done.add(abs);
-        tr.setNodeMarkup(abs, undefined, { ...cell.attrs, formula: null });
+        // Il testo non è cambiato: nessuno l'ha toccato.
+        if (cell.textContent === oldCell.textContent) continue;
+        // The writer touched the cell: the number a format kept behind the text
+        // no longer matches it, and a formula goes only when the text shrank
+        // (a deletion) — the same rule that has always dropped formulas.
+        const dropFormula = !!formulaOf(cell) &&
+          cell.textContent.length < oldCell.textContent.trim().length;
+        const clearValue = cell.attrs.cellValue !== null || cell.attrs.cellText !== null;
+        if (!dropFormula && !clearValue) continue;
+        const attrs: Record<string, unknown> = {
+          ...cell.attrs,
+          ...(clearValue ? { cellValue: null, cellText: null } : {}),
+          ...(dropFormula ? { formula: null } : {}),
+        };
+        tr.setNodeMarkup(abs, undefined, attrs);
+        if (dropFormula) done.add(abs);
       }
       return false;
     });
   }
   return done;
+}
+
+/**
+ * Rewrite every formatted cell in the language now in force: the preference
+ * changed, or (later) the document's own language did. Unlike the typing path
+ * this is a real edit - it goes into the undo history and marks the document
+ * modified, because the writer asked for it.
+ */
+export function reformatTables(view: EditorView): boolean {
+  const tr = view.state.tr.setMeta("formats-rewrite", true);
+  if (!recomputeTables(view.state.doc, tr)) return false;
+  view.dispatch(tr);
+  return true;
 }
 
 /**

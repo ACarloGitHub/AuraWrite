@@ -539,6 +539,7 @@
           <option value="thousands">Thousands</option>
           <option value="percent">Percent</option>
           <option value="currency">Currency</option>
+          <option value="date">Date</option>
         </select>
         <button id="tbl-formula-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No formula">×</button>
         <div class="image-toolbar__separator"></div>
@@ -915,6 +916,11 @@
             </div>
             <!-- TAB: Language -->
             <div class="pref-tab-content" data-tab="language">
+              <div class="preference-group">
+                <label for="pref-values-language">Language</label>
+                <span class="preference-hint">How numbers, currency and dates are written, and the language the AI uses. “Follow the system” reads the machine at every start; a document can say a language of its own.</span>
+                <select id="pref-values-language"></select>
+              </div>
               <div class="preference-group">
                 <label for="pref-interface-language">Interface language</label>
                 <span class="preference-hint">The interface is English for now. Translating it is a later step of its own; this choice will apply when the translations exist.</span>

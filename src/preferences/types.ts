@@ -29,6 +29,12 @@ export interface Preferences {
   aiContextInterval: number;
   aiInterfaceLanguage: string;
   aiWritingLanguage: string;
+  /**
+   * The language numbers, currency and dates are written in: `system` follows
+   * the machine, anything else is a BCP-47 tag. It is the default for every
+   * document that does not say a language of its own.
+   */
+  valuesLanguage: string;
   aiAssistantName: string;
   aiUserName: string;
   suggestionsDebug: boolean;
@@ -145,6 +151,7 @@ export const defaultPreferences: Preferences = {
   aiContextInterval: 30,
   aiInterfaceLanguage: "English",
   aiWritingLanguage: "English",
+  valuesLanguage: "system",
   aiAssistantName: "Aura",
   aiUserName: "",
   suggestionsDebug: false,

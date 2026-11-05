@@ -652,6 +652,13 @@ const tableNodeSpecs = tableNodes({
       },
     },
     cellFormat: { default: null },
+    // The number a formatted cell shows, and the exact text that was written
+    // for it. The cell's text IS the result, so without these two a formatted
+    // date could not be read back when the language changes: the serial is what
+    // the date really is, and the text says whether the writer has touched it
+    // since (if the text differs, the number is stale and is ignored).
+    cellValue: { default: null },
+    cellText: { default: null },
   },
 });
 
