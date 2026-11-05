@@ -117,14 +117,26 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
   for (const edit of edits) {
     const $pos = doc.resolve(edit.pos);
     const cell = $pos.parent;
+    const schema = doc.type.schema;
     const first = cell.firstChild;
-    const paragraph = first && first.type.name === "paragraph"
-      ? first.type
-      : doc.type.schema.nodes.paragraph;
-    if (!paragraph) continue;
-    const attrs = first && first.type.name === "paragraph" ? first.attrs : {};
-    const content = edit.text ? [doc.type.schema.text(edit.text)] : [];
-    tr.replaceWith(edit.pos, edit.pos + cell.content.size, paragraph.create(attrs, content));
+    const replacement = edit.text ? [schema.text(edit.text)] : [];
+    // Si riscrive il TESTO del primo paragrafo, non tutta la cella: sostituire il
+    // contenuto intero mandava il cursore sul confine della cella, e il confine è
+    // già la cella dopo — il «0 nella cella a fianco» nasceva da qui.
+    if (first && first.type.name === "paragraph") {
+      const textStart = edit.pos + 1;
+      tr.replaceWith(textStart, textStart + first.content.size, replacement);
+      // Una cella con più blocchi tiene il primo e perde gli altri: il risultato è
+      // un numero, non un testo lungo.
+      if (cell.childCount > 1) {
+        const firstSize = first.nodeSize - first.content.size + replacement.reduce((n, node) => n + node.nodeSize, 0);
+        tr.delete(edit.pos + firstSize, edit.pos + cell.content.size);
+      }
+    } else {
+      const paragraph = schema.nodes.paragraph;
+      if (!paragraph) continue;
+      tr.replaceWith(edit.pos, edit.pos + cell.content.size, paragraph.create({}, replacement));
+    }
   }
   return edits.length > 0;
 }

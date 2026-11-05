@@ -27,7 +27,7 @@ import {
 import { splitCellInto } from "./table-split";
 import { hideBordersPanel, toggleBordersPanel } from "./table-borders-panel";
 import { sortTableRows, type SortDirection, type SortSpec, type SortType } from "./table-sort";
-import { columnName } from "./table-formula";
+import { columnName, numericValueOf } from "./table-formula";
 import { cellPaddingOf, type CellPadding } from "./table-padding";
 import {
   insertColumnAfter,
@@ -450,8 +450,12 @@ function setFormulaAt(cellPos: number, formula: string | null): Command {
     if ((cell.attrs.formula ?? null) === formula) return false;
     if (dispatch) {
       const tr = state.tr.setNodeMarkup(cellPos, undefined, { ...cell.attrs, formula });
-      const end = Math.min(cellPos + 1 + cell.content.size, tr.doc.content.size);
-      tr.setSelection(TextSelection.near(tr.doc.resolve(end)));
+      // Il cursore resta nella cella. `TextSelection.near` guarda in AVANTI e
+      // trova il primo testo libero, che è quello della cella accanto: con il
+      // cursore nella cella sbagliata, il secondo scatto (l'uscita dal campo) e
+      // l'idea di «dove sono» finivano nella cella a fianco.
+      const end = Math.min(cellPos + 1 + cell.content.size - 1, tr.doc.content.size);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(end), -1));
       dispatch(tr);
     }
     return true;
@@ -476,6 +480,58 @@ function clearCellAt(cellPos: number): Command {
     }
     return true;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Il vocabolario delle formule, nella barra: una funzione, una direzione, e il
+// bottone Σ che fa la cosa più comune in un clic. La direzione si propone da sé
+// guardando dove sono i numeri — sopra, a sinistra, a destra, sotto — così `A1` e
+// `ABOVE` non vanno saputi a memoria.
+// ---------------------------------------------------------------------------
+
+export type AggregateDirection = "ABOVE" | "BELOW" | "LEFT" | "RIGHT";
+
+/** Quanti numeri di fila ci sono in una direzione, fermandosi al primo che non lo è. */
+function runOfNumbers(
+  table: PMNode,
+  map: { width: number; height: number; map: number[] },
+  row: number,
+  col: number,
+  stepRow: number,
+  stepCol: number,
+): number {
+  let count = 0;
+  for (let r = row, c = col; r >= 0 && r < map.height && c >= 0 && c < map.width; r += stepRow, c += stepCol) {
+    const cell = table.nodeAt(map.map[r * map.width + c]);
+    if (numericValueOf(cell?.textContent ?? "") === null) break;
+    count += 1;
+  }
+  return count;
+}
+
+/** La direzione in cui ci sono numeri, cominciando da sopra: è la proposta. */
+export function guessDirection(view: EditorView): AggregateDirection {
+  if (!isInTable(view.state)) return "ABOVE";
+  const rect = selectedRect(view.state);
+  const table = view.state.doc.nodeAt(rect.tableStart - 1);
+  if (!table) return "ABOVE";
+  if (runOfNumbers(table, rect.map, rect.top - 1, rect.left, -1, 0) > 0) return "ABOVE";
+  if (runOfNumbers(table, rect.map, rect.top, rect.left - 1, 0, -1) > 0) return "LEFT";
+  if (runOfNumbers(table, rect.map, rect.top, rect.left + 1, 0, 1) > 0) return "RIGHT";
+  if (runOfNumbers(table, rect.map, rect.top + 1, rect.left, 1, 0) > 0) return "BELOW";
+  return "ABOVE";
+}
+
+/** Applica una funzione aggregata alla direzione scelta, sulla cella del campo. */
+function applyAggregate(view: EditorView, fn: string, direction: AggregateDirection): void {
+  const cellPos = formulaTarget ?? cellPosAt(view);
+  if (cellPos === null) return;
+  run(view, setFormulaAt(cellPos, `${fn}(${direction})`));
+  const input = el<HTMLInputElement>("tbl-formula");
+  if (input) {
+    input.value = `=${fn}(${direction})`;
+    formulaTarget = cellPos;
+  }
 }
 
 /** Bind the table's own controls once. */
@@ -546,6 +602,19 @@ export function setupTableMenu(view: EditorView): void {
     }
   });
   formulaInput?.addEventListener("blur", applyFormula);
+  // Σ: somma quello che sta sopra (o dove sono i numeri), in un clic.
+  el("tbl-sum")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    applyAggregate(view, "SUM", guessDirection(view));
+  });
+  // Funzione e direzione: il vocabolario si sceglie, non si scrive.
+  const applyChosen = (): void => {
+    const fn = el<HTMLSelectElement>("tbl-fn")?.value ?? "SUM";
+    const direction = (el<HTMLSelectElement>("tbl-dir")?.value ?? "ABOVE") as AggregateDirection;
+    applyAggregate(view, fn, direction);
+  };
+  el("tbl-fn")?.addEventListener("change", applyChosen);
+  el("tbl-dir")?.addEventListener("change", applyChosen);
   el("tbl-formula-clear")?.addEventListener("click", () => {
     if (formulaInput) formulaInput.value = "";
     const cellPos = formulaTarget ?? cellPosAt(view);
@@ -618,6 +687,16 @@ export function syncTableMenu(view: EditorView): void {
     // Con il campo a riposo la cella di lavoro è quella del cursore: è quella che
     // il campo mostrerà.
     formulaTarget = cellPosAt(view);
+  }
+  // La direzione proposta si legge dalla tabella, e il campo la mostra come
+  // esempio: è così che `SUM(ABOVE)` si impara senza saperlo.
+  const direction = el<HTMLSelectElement>("tbl-dir");
+  if (direction && document.activeElement !== formula) {
+    direction.value = guessDirection(view);
+    if (formula) {
+      const fn = el<HTMLSelectElement>("tbl-fn")?.value ?? "SUM";
+      formula.placeholder = `=${fn}(${direction.value})`;
+    }
   }
   if (format) {
     format.value = typeof cell.attrs.cellFormat === "string" ? cell.attrs.cellFormat : "general";

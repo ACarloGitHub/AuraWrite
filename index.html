@@ -514,6 +514,21 @@
         <button id="tbl-bg-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No fill" hidden>×</button>
         <button id="tbl-borders" class="image-toolbar__btn" title="Borders of the selected cells">Borders…</button>
         <div class="image-toolbar__separator"></div>
+        <button id="tbl-sum" class="image-toolbar__btn image-toolbar__btn--small" title="Sum of what is above (or on the left)">Σ</button>
+        <select id="tbl-fn" class="image-toolbar__select" title="Function to apply to a direction">
+          <option value="SUM">SUM</option>
+          <option value="AVERAGE">AVERAGE</option>
+          <option value="MIN">MIN</option>
+          <option value="MAX">MAX</option>
+          <option value="COUNT">COUNT</option>
+          <option value="PRODUCT">PRODUCT</option>
+        </select>
+        <select id="tbl-dir" class="image-toolbar__select" title="Which cells the function reads">
+          <option value="ABOVE">Above</option>
+          <option value="BELOW">Below</option>
+          <option value="LEFT">Left</option>
+          <option value="RIGHT">Right</option>
+        </select>
         <label class="image-toolbar__field" title="Formula of the cell, for example =SUM(ABOVE)">ƒ
           <input id="tbl-formula" type="text" class="image-toolbar__text" placeholder="=SUM(ABOVE)" />
         </label>
