@@ -113,6 +113,16 @@ export function openPreferencesModal(): void {
   (
     document.getElementById("pref-ai-writing-language") as HTMLSelectElement
   ).value = prefs.aiWritingLanguage;
+  // The two selects are shown twice - here in Language settings and in AI
+  // Behavior - and both views show the same stored choice.
+  const interfaceMirror = document.getElementById(
+    "pref-ai-interface-language-mirror",
+  ) as HTMLSelectElement | null;
+  if (interfaceMirror) interfaceMirror.value = prefs.aiInterfaceLanguage;
+  const writingMirror = document.getElementById(
+    "pref-ai-writing-language-mirror",
+  ) as HTMLSelectElement | null;
+  if (writingMirror) writingMirror.value = prefs.aiWritingLanguage;
   (
     document.getElementById("pref-ai-assistant-name") as HTMLInputElement
   ).value = prefs.aiAssistantName;
@@ -596,9 +606,27 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
     }
   });
 
+  // The AI's two choices are shown twice: in Language settings and in AI
+  // Behavior. The two views are one datum, so whichever is changed, the other
+  // shows it; the save below reads the Language settings copy.
+  for (const [canonicalId, mirrorId] of [
+    ["pref-ai-interface-language", "pref-ai-interface-language-mirror"],
+    ["pref-ai-writing-language", "pref-ai-writing-language-mirror"],
+  ] as const) {
+    const canonical = document.getElementById(canonicalId) as HTMLSelectElement | null;
+    const mirror = document.getElementById(mirrorId) as HTMLSelectElement | null;
+    if (!canonical || !mirror) continue;
+    canonical.addEventListener("change", () => {
+      mirror.value = canonical.value;
+    });
+    mirror.addEventListener("change", () => {
+      canonical.value = mirror.value;
+    });
+  }
+
   document
     .querySelectorAll(
-      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-manual-type, #pref-ai-manual-ctx, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-writing-language, #pref-values-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
+      "#pref-theme, #pref-custom-bg, #pref-custom-toolbar, #pref-custom-paper, #pref-custom-text-editor, #pref-custom-text-buttons, #pref-incremental-enabled, #pref-incremental-max, #pref-ai-model, #pref-ai-api-key, #pref-ai-base-url, #pref-ai-manual-type, #pref-ai-manual-ctx, #pref-ai-suggestions-interval, #pref-ai-context-interval, #pref-ai-interface-language, #pref-ai-interface-language-mirror, #pref-ai-writing-language, #pref-ai-writing-language-mirror, #pref-values-language, #pref-ai-assistant-name, #pref-ai-user-name, #pref-suggestions-debug, #pref-suggestions-prompt, #pref-ai-assistant-prompt, #pref-entity-extraction-role, #pref-entity-extraction-prompt, #pref-tool-calling-prompt, #pref-deselect-on-click, #pref-semantic-search-enabled, #pref-selection-highlight, #pref-updates-check-enabled, #pref-fonts-use-bundled, #pref-fonts-editor, #pref-fonts-ui, #pref-agent-planner, #pref-agent-web-search, #pref-agent-file-system, #pref-agent-shell-exec, #pref-agent-rag",
     )
     .forEach((el) => {
       el.addEventListener("change", () => savePreferencesFromModal(deps));

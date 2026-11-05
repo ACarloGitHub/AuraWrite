@@ -1054,8 +1054,33 @@
             <!-- TAB: AI Behavior -->
             <div class="pref-tab-content" data-tab="ai-behavior">
               <div class="preference-group">
-                <label>Languages of the AI</label>
-                <span class="preference-hint">Interface Language and Writing Language live in Language settings, together with the language of values. They are three separate choices: none of them follows another.</span>
+                <label for="pref-ai-interface-language-mirror">Interface Language</label>
+                <span class="preference-hint">Language the AI uses to talk to you. The same choice as in Language settings, and its own: it does not follow the language of values.</span>
+                <select id="pref-ai-interface-language-mirror">
+                  <option value="English">English</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Portuguese">Português</option>
+                  <option value="Japanese">日本語</option>
+                  <option value="Chinese">中文</option>
+                </select>
+                <button type="button" class="pref-btn" data-open-tab="language">Language settings…</button>
+              </div>
+              <div class="preference-group">
+                <label for="pref-ai-writing-language-mirror">Writing Language</label>
+                <span class="preference-hint">Language the AI uses when writing or suggesting. The same choice as in Language settings, and its own.</span>
+                <select id="pref-ai-writing-language-mirror">
+                  <option value="English">English</option>
+                  <option value="Italian">Italiano</option>
+                  <option value="French">Français</option>
+                  <option value="German">Deutsch</option>
+                  <option value="Spanish">Español</option>
+                  <option value="Portuguese">Português</option>
+                  <option value="Japanese">日本語</option>
+                  <option value="Chinese">中文</option>
+                </select>
                 <button type="button" class="pref-btn" data-open-tab="language">Language settings…</button>
               </div>
               <div class="preference-group">
