@@ -41,6 +41,14 @@ const MAX_SPLIT = 20;
 
 let splitPanel: HTMLElement | null = null;
 
+/**
+ * La cella su cui il campo della formula sta lavorando: si prende quando il campo
+ * riceve il fuoco, e da lì in poi è quella. Senza, il secondo scatto (l'uscita dal
+ * campo, che segue l'Invio) applicava la formula alla cella dove il cursore era
+ * finito nel frattempo — cioè quella accanto.
+ */
+let formulaTarget: number | null = null;
+
 function el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
@@ -418,34 +426,54 @@ function setTableStyle(style: string | null): Command {
   };
 }
 
+/** La posizione della cella sotto il cursore, se c'è. */
+function cellPosAt(view: EditorView): number | null {
+  const { $from } = view.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === "table_cell" || node.type.name === "table_header") {
+      return $from.before(depth);
+    }
+  }
+  return null;
+}
+
 /**
- * Toglie la formula e il formato dalla cella e svuota il testo che la formula
+ * La formula di UNA cella, indicata per posizione. Il cursore resta dove sta:
+ * scrivendo il risultato il testo della cella cambia, e senza questo il cursore
+ * scivolava nella cella accanto.
+ */
+function setFormulaAt(cellPos: number, formula: string | null): Command {
+  return (state, dispatch) => {
+    const cell = state.doc.nodeAt(cellPos);
+    if (!cell) return false;
+    if ((cell.attrs.formula ?? null) === formula) return false;
+    if (dispatch) {
+      const tr = state.tr.setNodeMarkup(cellPos, undefined, { ...cell.attrs, formula });
+      const end = Math.min(cellPos + 1 + cell.content.size, tr.doc.content.size);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(end)));
+      dispatch(tr);
+    }
+    return true;
+  };
+}
+
+/**
+ * Toglie la formula e il formato da UNA cella e svuota il testo che la formula
  * aveva scritto: il numero era il risultato di un calcolo, non una cosa digitata.
  */
-function clearFormula(): Command {
+function clearCellAt(cellPos: number): Command {
   return (state, dispatch) => {
-    if (!isInTable(state)) return false;
-    const rect = selectedRect(state);
-    const seen = new Set<number>();
-    const cells: number[] = [];
-    for (const pos of rect.map.map) {
-      if (seen.has(pos)) continue;
-      seen.add(pos);
-      cells.push(pos);
-    }
-    // Dalla cella più avanti all'indietro: svuotarne una sposta quelle dopo.
-    cells.sort((a, b) => b - a);
-    const tr = state.tr;
-    for (const pos of cells) {
-      const cellPos = rect.tableStart + pos;
-      const cell = state.doc.nodeAt(cellPos);
-      if (!cell) continue;
-      if (!cell.attrs.formula && !cell.attrs.cellFormat) continue;
+    const cell = state.doc.nodeAt(cellPos);
+    if (!cell) return false;
+    if (!cell.attrs.formula && !cell.attrs.cellFormat) return false;
+    if (dispatch) {
+      const tr = state.tr;
       tr.replaceWith(cellPos + 1, cellPos + cell.nodeSize - 1, state.schema.nodes.paragraph.create());
       tr.setNodeMarkup(cellPos, undefined, { ...cell.attrs, formula: null, cellFormat: null });
+      tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(cellPos + 2, tr.doc.content.size))));
+      dispatch(tr);
     }
-    if (!tr.docChanged) return false;
-    dispatch?.(tr);
     return true;
   };
 }
@@ -490,11 +518,23 @@ export function setupTableMenu(view: EditorView): void {
   // La formula della cella: si applica con Invio o uscendo dal campo, e il
   // risultato lo scrive il plugin (table-formulas-plugin.ts). Il formato sceglie
   // come si scrive il numero, che ci sia una formula o no.
+  //
+  // La cella si prende PRIMA di applicare: applicare il risultato sposta il
+  // cursore (il testo della cella è riscritto), e con il cursore spostato il
+  // secondo scatto — l'uscita dal campo, che segue l'Invio — metteva la formula
+  // nella cella accanto.
   const formulaInput = el<HTMLInputElement>("tbl-formula");
   const applyFormula = (): void => {
     const value = formulaInput?.value.trim() ?? "";
-    run(view, setCellAttr("formula", value || null));
+    const cellPos = formulaTarget ?? cellPosAt(view);
+    if (cellPos === null) return;
+    run(view, setFormulaAt(cellPos, value || null));
   };
+  // Il fuoco fissa la cella: da qui in poi il campo scrive su quella, anche se il
+  // cursore nell'editor si muove perché il risultato è stato riscritto.
+  formulaInput?.addEventListener("focus", () => {
+    formulaTarget = cellPosAt(view);
+  });
   formulaInput?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -508,7 +548,8 @@ export function setupTableMenu(view: EditorView): void {
   formulaInput?.addEventListener("blur", applyFormula);
   el("tbl-formula-clear")?.addEventListener("click", () => {
     if (formulaInput) formulaInput.value = "";
-    run(view, clearFormula());
+    const cellPos = formulaTarget ?? cellPosAt(view);
+    if (cellPos !== null) run(view, clearCellAt(cellPos));
   });
   el("tbl-format")?.addEventListener("change", (event) => {
     const value = (event.target as HTMLSelectElement).value;
@@ -574,6 +615,9 @@ export function syncTableMenu(view: EditorView): void {
   // transazione lo cancellerebbe a metà parola.
   if (formula && document.activeElement !== formula) {
     formula.value = typeof cell.attrs.formula === "string" ? cell.attrs.formula : "";
+    // Con il campo a riposo la cella di lavoro è quella del cursore: è quella che
+    // il campo mostrerà.
+    formulaTarget = cellPosAt(view);
   }
   if (format) {
     format.value = typeof cell.attrs.cellFormat === "string" ? cell.attrs.cellFormat : "general";

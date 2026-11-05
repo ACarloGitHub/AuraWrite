@@ -48,7 +48,7 @@ function formatOf(cell: PMNode): string | null {
  * when something changed. Positions are collected on the untouched document and
  * applied from its END backwards, so one change never moves another.
  */
-export function recomputeTables(doc: PMNode, tr: Transaction): boolean {
+export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet<number>): boolean {
   const edits: CellEdit[] = [];
   doc.descendants((node, pos) => {
     if (node.type.name !== "table") return true;
@@ -86,6 +86,9 @@ export function recomputeTables(doc: PMNode, tr: Transaction): boolean {
     for (const cellPos of map.map) {
       if (seen.has(cellPos)) continue;
       seen.add(cellPos);
+      // Le celle la cui formula l'utente ha appena cancellato non si ricalcolano:
+      // il loro testo ora è roba sua.
+      if (skip?.has(pos + 1 + cellPos)) continue;
       const cell = table.nodeAt(cellPos);
       if (!cell) continue;
       const formula = formulaOf(cell);
@@ -127,6 +130,48 @@ export function recomputeTables(doc: PMNode, tr: Transaction): boolean {
 }
 
 /**
+ * La formula se ne va quando il testo si accorcia: se l'utente cancella dentro
+ * una cella calcolata, la cella torna sua e non si ricalcola più. È il
+ * comportamento di Word, dove il campo e il suo testo sono la stessa cosa.
+ *
+ * Il confronto è sulla lunghezza perché il ricalcolo riscrive il testo a ogni
+ * battuta: cancellando un carattere alla volta la cella non sarebbe mai vuota —
+ * il risultato tornerebbe prima — e la formula resterebbe lì per sempre.
+ */
+export function dropFormulasOfEditedCells(
+  doc: PMNode,
+  transactions: readonly Transaction[],
+  tr: Transaction,
+): Set<number> {
+  const done = new Set<number>();
+  for (const source of transactions) {
+    if (!source.docChanged) continue;
+    const inverse = source.mapping.invert();
+    doc.descendants((node, pos) => {
+      if (node.type.name !== "table") return true;
+      const map = TableMap.get(node);
+      const seen = new Set<number>();
+      for (const cellPos of map.map) {
+        if (seen.has(cellPos)) continue;
+        seen.add(cellPos);
+        const cell = node.nodeAt(cellPos);
+        if (!cell || !formulaOf(cell)) continue;
+        const abs = pos + 1 + cellPos;
+        if (done.has(abs)) continue;
+        const oldCell = source.before.nodeAt(inverse.map(abs));
+        if (!oldCell) continue;
+        // Nessuna cancellazione: la formula resta e il risultato si riscrive.
+        if (cell.textContent.length >= oldCell.textContent.trim().length) continue;
+        done.add(abs);
+        tr.setNodeMarkup(abs, undefined, { ...cell.attrs, formula: null });
+      }
+      return false;
+    });
+  }
+  return done;
+}
+
+/**
  * Keeps the results and the formats in step with the document: any change (a
  * number typed, a row added, a table edited) brings the totals up to date. The
  * recalculation stays out of the undo history, so one Ctrl+Z undoes what the
@@ -138,7 +183,8 @@ export function createTableFormulasPlugin(): Plugin {
     appendTransaction: (transactions, _oldState, state) => {
       if (!transactions.some((tr) => tr.docChanged)) return null;
       const tr = state.tr;
-      if (!recomputeTables(state.doc, tr)) return null;
+      const dropped = dropFormulasOfEditedCells(state.doc, transactions, tr);
+      if (!recomputeTables(state.doc, tr, dropped) && dropped.size === 0) return null;
       return tr.setMeta("addToHistory", false);
     },
   });
