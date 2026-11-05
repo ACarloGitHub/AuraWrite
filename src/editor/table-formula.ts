@@ -378,6 +378,7 @@ export const CELL_FORMATS = [
   "decimal2",
   "thousands",
   "percent",
+  "percent0",
   "currency",
   "date",
 ] as const;
@@ -405,6 +406,8 @@ export function formatCellValue(
       return formatDecimal(value, 2, true, lang);
     case "percent":
       return formatPercent(value, lang);
+    case "percent0":
+      return formatPercent(value, lang, 0);
     case "currency":
       return formatCurrency(value, lang);
     case "date":

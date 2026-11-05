@@ -22,6 +22,8 @@ import { Plugin, PluginKey, type Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { TableMap } from "prosemirror-tables";
 import { evaluateFormula, formatCellValue, numericValueOf } from "./table-formula";
+import { effectiveDocumentLanguage } from "./document-language";
+import { parseDateSerial } from "../i18n/regional";
 
 /** Quello che la cella scrive quando la sua formula non si può calcolare. */
 export const FORMULA_ERROR = "** Expression is faulty **";
@@ -58,6 +60,9 @@ function formatOf(cell: PMNode): string | null {
 export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet<number>): boolean {
   const edits: CellEdit[] = [];
   const attrEdits: AttrEdit[] = [];
+  // The document's language, asked once: the preference unless the document
+  // declares one of its own.
+  const documentLanguage = effectiveDocumentLanguage();
   doc.descendants((node, pos) => {
     if (node.type.name !== "table") return true;
     const table = node;
@@ -109,6 +114,10 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
       if (!cell) continue;
       const formula = formulaOf(cell);
       const format = formatOf(cell);
+      const cellLanguage =
+        typeof cell.attrs.cellLanguage === "string" && cell.attrs.cellLanguage
+          ? cell.attrs.cellLanguage
+          : documentLanguage;
       if (!formula && !format) {
         // Niente da scrivere: un numero rimasto da un formato tolto se ne va.
         if (cell.attrs.cellValue !== null || cell.attrs.cellText !== null) {
@@ -122,11 +131,16 @@ export function recomputeTables(doc: PMNode, tr: Transaction, skip?: ReadonlySet
       } else {
         // Senza formula, il formato si applica al numero che c'è scritto. Il
         // numero conservato vale solo finché il testo è ancora quello scritto
-        // per lui: se il writer l'ha toccato, il testo è la verità.
+        // per lui: se il writer l'ha toccato, il testo è la verità. Una data
+        // scritta a mano si legge nella lingua della cella, ma solo quando il
+        // formato della cella è proprio quello della data.
         value = storedValueOf(cell) ?? numericValueOf(cell.textContent);
+        if (value === null && format === "date") {
+          value = parseDateSerial(cell.textContent, cellLanguage);
+        }
         if (value === null) continue;
       }
-      const text = value === null ? FORMULA_ERROR : formatCellValue(value, format);
+      const text = value === null ? FORMULA_ERROR : formatCellValue(value, format, cellLanguage);
       const attrs = { ...cell.attrs, cellValue: value, cellText: value === null ? null : text };
       if (text !== cell.textContent) newTexts.push({ cellPos, text });
       if (cell.attrs.cellValue !== attrs.cellValue || cell.attrs.cellText !== attrs.cellText) {

@@ -68,13 +68,15 @@ export function languageOptions(): LanguageOption[] {
 
 /**
  * The AI's own choices are a shorter list - the languages its prompt names - and
- * they remain AI facts. This maps a value language onto that list, falling back
- * to English for the languages the AI prompt does not name yet.
+ * they remain AI facts. This maps a value language onto that list; languages the
+ * AI prompt does not name have no entry, and the AI's choices are left alone
+ * rather than silently forced to English.
  */
 const AI_LANGUAGE_BY_TAG: Record<string, string> = {
   en: "English", it: "Italian", fr: "French", de: "German", es: "Spanish", pt: "Portuguese",
+  ja: "Japanese", zh: "Chinese",
 };
 
-export function aiLanguageFor(tag: string): string {
-  return AI_LANGUAGE_BY_TAG[tag.split("-")[0].toLowerCase()] ?? "English";
+export function aiLanguageFor(tag: string): string | null {
+  return AI_LANGUAGE_BY_TAG[tag.split("-")[0].toLowerCase()] ?? null;
 }

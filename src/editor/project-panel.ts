@@ -21,6 +21,7 @@ import type { Project, Section, Document } from "../types/database";
 import { sendProgrammaticMessage } from "../ai-panel/chat";
 import { setLoading as setLoadingState } from "../loading-state";
 import { createProjectFromTemplate } from "../templates/apply";
+import { documentLanguageOverride, languageFromDocumentJson } from "./document-language";
 import {
   currentProject,
   currentSection,
@@ -174,6 +175,13 @@ function checkUnsavedChanges(): boolean {
   const lastSavedText = lastSavedContent
     ? extractTextFromContent(lastSavedContent).trim()
     : null;
+
+  // The document's language is part of the document even when not a character
+  // moved: choosing it must reach the database with the next save.
+  if (lastSavedContent) {
+    const savedLanguage = languageFromDocumentJson(lastSavedContent);
+    if ((savedLanguage ?? null) !== documentLanguageOverride()) return true;
+  }
 
   if (lastSavedText === null) {
     // No prior saved snapshot: editor has been loaded with a fresh doc that

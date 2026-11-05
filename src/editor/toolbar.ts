@@ -19,6 +19,14 @@ import { insertImageFromFile, getSelectedImage, setImageAspectLocked, setImageWi
 import { getSelectedElement } from "./element-commands";
 import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
 import { applyDocumentJson, installDocument, installEmptyDocument } from "./document-loader";
+import { effectiveDocumentLanguage, withDocumentLanguage } from "./document-language";
+
+/** The document as it is saved: its content plus the language it declares. */
+function currentDocumentJson(): string {
+  return JSON.stringify(
+    withDocumentLanguage(editorView.state.doc.toJSON() as Record<string, unknown>),
+  );
+}
 import { freeElementWidth, freeLeftPx, parseFreeSpec } from "./free-layout";
 import { textColumn } from "./free-style";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -109,7 +117,7 @@ function setupDirtyTracking(): void {
 
       if (transaction.docChanged) {
         const isLoading = isLoadingState();
-        const newContent = JSON.stringify(newState.doc.toJSON());
+        const newContent = currentDocumentJson();
         if (documentState.lastSavedContent !== newContent) {
           documentState.isDirty = true;
           updateWindowTitle();
@@ -127,6 +135,15 @@ function setupDirtyTracking(): void {
     },
   });
   updateAlignMenuSelection();
+
+  // The document's language is part of the document but not of its text: a
+  // change is still an unsaved change, even when no cell had a number to rewrite.
+  window.addEventListener("aurawrite:document-language-changed", () => {
+    documentState.isDirty = true;
+    updateWindowTitle();
+    updateDocumentDirtyMark();
+    window.dispatchEvent(new CustomEvent("aurawrite:content-changed"));
+  });
 }
 
 function updateWindowTitle(): void {
@@ -343,7 +360,7 @@ async function handleNew(): Promise<void> {
   documentState.path = null;
   documentState.format = null;
   documentState.isDirty = false;
-  documentState.lastSavedContent = JSON.stringify(editorView.state.doc.toJSON());
+  documentState.lastSavedContent = currentDocumentJson();
   updateWindowTitle();
   updateDocumentTitleBar();
 
@@ -416,18 +433,26 @@ async function saveToPath(path: string, format: string): Promise<void> {
 async function getContentByFormat(format: string): Promise<string> {
   switch (format) {
     case "json":
-      return JSON.stringify(editorView.state.doc.toJSON(), null, 2);
+      return JSON.stringify(
+        withDocumentLanguage(editorView.state.doc.toJSON() as Record<string, unknown>),
+        null,
+        2,
+      );
     case "md":
     case "markdown":
       return toMarkdown(editorView.state.doc);
     case "txt":
       return toPlainText(editorView.state.doc);
     case "html":
-      return await toHTML(editorView.state.doc);
+      return await toHTML(editorView.state.doc, { language: effectiveDocumentLanguage() });
     case "docx":
       return await docxToBase64(editorView.state.doc);
     default:
-      return JSON.stringify(editorView.state.doc.toJSON(), null, 2);
+      return JSON.stringify(
+        withDocumentLanguage(editorView.state.doc.toJSON() as Record<string, unknown>),
+        null,
+        2,
+      );
   }
 }
 
@@ -597,7 +622,7 @@ export async function closeCurrentFileIfInside(baseDir: string): Promise<boolean
   documentState.path = null;
   documentState.format = null;
   documentState.isDirty = false;
-  documentState.lastSavedContent = JSON.stringify(editorView.state.doc.toJSON());
+  documentState.lastSavedContent = currentDocumentJson();
   updateWindowTitle();
   updateDocumentTitleBar();
   return true;

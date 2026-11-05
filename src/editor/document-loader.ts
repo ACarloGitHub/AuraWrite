@@ -28,6 +28,7 @@ import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { syncDocumentPaginationState } from "./editor";
 import { refreshFreeWrapBands } from "./pagination-cassie-plugin";
 import { registerDocumentFontFaces } from "./fonts-ui";
+import { installDocumentLanguage, languageFromDocumentJson } from "./document-language";
 
 /** Stored text (ProseMirror JSON) → the node, with the legacy shape migrated. */
 export function documentNodeFromJson(view: EditorView, text: string): PMNode {
@@ -41,7 +42,11 @@ export function documentNodeFromJson(view: EditorView, text: string): PMNode {
  * the second only makes sense for the document that is now on the page, so no
  * caller should ever have to remember to say it.
  */
-export function installDocument(view: EditorView, doc: PMNode): void {
+export function installDocument(view: EditorView, doc: PMNode, language: string | null = null): void {
+  // The document's language comes with the document (the JSON carries it); a
+  // document that does not say one follows the preferences. Opening is not a
+  // change: no cell is rewritten here.
+  installDocumentLanguage(language);
   // The fonts this document formats with have to be declared before its text is
   // laid out, or the runs in a user font flash (and are measured, and are
   // paginated) in the fallback face. Declaring a face opens no file: the file
@@ -59,6 +64,7 @@ export function installDocument(view: EditorView, doc: PMNode): void {
 
 /** Show an empty document (File > New, and a file whose folder was deleted). */
 export function installEmptyDocument(view: EditorView): void {
+  installDocumentLanguage(null);
   view.updateState(
     EditorState.create({
       schema: view.state.schema,
@@ -70,7 +76,8 @@ export function installEmptyDocument(view: EditorView): void {
 
 /** Make the editor show exactly this stored text, through the one door. */
 export function applyDocumentJson(view: EditorView, text: string): void {
-  installDocument(view, documentNodeFromJson(view, text));
+  const language = languageFromDocumentJson(text);
+  installDocument(view, documentNodeFromJson(view, text), language);
 }
 
 /**

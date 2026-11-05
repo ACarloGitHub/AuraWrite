@@ -44,6 +44,12 @@ import { setupAppShortcuts } from "./editor/app-shortcuts";
 import { applyEditorZoom, scheduleEditorZoomSync, setEditorZoomParts } from "./editor/editor-zoom";
 import { reformatTables } from "./editor/table-formulas-plugin";
 import { resolveLanguage, setValuesLanguage } from "./i18n/regional";
+import {
+  documentLanguageOverride,
+  installDocumentLanguage,
+  setupDocumentLanguage,
+  withDocumentLanguage,
+} from "./editor/document-language";
 import type { Node as PMNode } from "prosemirror-model";
 import "./styles/index.css";
 
@@ -262,8 +268,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The language of the values changed: every formatted cell is rewritten in
   // the new language (a real edit, so it can be undone and is saved).
   window.addEventListener("aurawrite:values-language-changed", () => {
+    // A document that declares its own language is above the preference: the
+    // preference changes only the documents that follow it.
+    if (documentLanguageOverride()) return;
     reformatTables(editorView);
   });
+  // The language of the document changed from the footer: every formatted cell
+  // is written again; the save flag and the auto-save are the toolbar's business.
+  window.addEventListener("aurawrite:document-language-changed", () => {
+    reformatTables(editorView);
+  });
+  setupDocumentLanguage();
 
   // Loading flag (typed module, still mirrored on window for DevTools)
   setLoading(false);
@@ -271,6 +286,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Listen for clear editor events
   window.addEventListener("aurawrite:clear-editor", () => {
     setLoading(true);
+    installDocumentLanguage(null);
     clearEditorDocument(editorView);
     console.log("Editor cleared");
     setTimeout(() => setLoading(false), 50);
@@ -328,6 +344,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           console.log("Loaded document content");
         } else {
           // Document is empty — clear the editor
+          installDocumentLanguage(null);
           clearEditorDocument(editorView);
           console.log("Loaded empty document");
         }
@@ -343,7 +360,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.log("Project changed:", project?.name || "none");
     },
     getEditorContent: () => {
-      return JSON.stringify(editorView.state.doc.toJSON());
+      return JSON.stringify(
+        withDocumentLanguage(editorView.state.doc.toJSON() as Record<string, unknown>),
+      );
     },
   });
 

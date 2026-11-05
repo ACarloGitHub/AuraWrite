@@ -659,6 +659,8 @@ const tableNodeSpecs = tableNodes({
     // since (if the text differs, the number is stale and is ignored).
     cellValue: { default: null },
     cellText: { default: null },
+    // The language of this cell's value; empty means the document's own.
+    cellLanguage: { default: null },
   },
 });
 
@@ -730,7 +732,15 @@ const tableNodeSpec: NodeSpec = {
 
 let nodes = basicSchema.spec.nodes.update("paragraph", paragraphWithPageBreak);
 nodes = nodes
-  .update("doc", { content: "block+" })
+  .update("doc", {
+    content: "block+",
+    // The language the document is written in (values, dates, currency). It is
+    // written when saving and read when opening; absent means "follow the
+    // preferences". The editor keeps the runtime value in document-language.ts,
+    // because a transaction cannot change the doc node's attributes in this
+    // version of ProseMirror.
+    attrs: { language: { default: null } },
+  })
   .append({
     heading: headingSpec,
     list_item: listItemSpec,

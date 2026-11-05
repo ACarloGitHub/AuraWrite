@@ -6,6 +6,8 @@ interface ToHtmlOptions {
    *  Set false for channels that pack images themselves (EPUB), which then
    *  rewrite the relative srcs. */
   embedImages?: boolean;
+  /** The document's language, written on `<html lang>` so the file says it. */
+  language?: string;
 }
 
 /**
@@ -34,7 +36,7 @@ export async function toHTML(doc: any, opts: ToHtmlOptions = {}): Promise<string
   }
 
   const schema = doc?.type?.schema;
-  if (!schema) return wrapInHTMLDocument("");
+  if (!schema) return wrapInHTMLDocument("", opts.language);
   const serializer = DOMSerializer.fromSchema(schema);
   const fragment = serializer.serializeFragment(doc.content);
 
@@ -50,7 +52,7 @@ export async function toHTML(doc: any, opts: ToHtmlOptions = {}): Promise<string
     }
   }
 
-  return wrapInHTMLDocument(container.innerHTML);
+  return wrapInHTMLDocument(container.innerHTML, opts.language);
 }
 
 /** Recursively collect the src of every image (node OR figure attr) in the doc. */
@@ -141,9 +143,10 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-function wrapInHTMLDocument(bodyContent: string): string {
+function wrapInHTMLDocument(bodyContent: string, language?: string): string {
+  const lang = (language || "en").replace(/"/g, "");
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">

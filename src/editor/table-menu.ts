@@ -28,6 +28,7 @@ import { splitCellInto } from "./table-split";
 import { hideBordersPanel, toggleBordersPanel } from "./table-borders-panel";
 import { sortTableRows, type SortDirection, type SortSpec, type SortType } from "./table-sort";
 import { columnName, numericValueOf } from "./table-formula";
+import { languageOptions } from "../i18n/languages";
 import { cellPaddingOf, type CellPadding } from "./table-padding";
 import {
   insertColumnAfter,
@@ -625,6 +626,27 @@ export function setupTableMenu(view: EditorView): void {
     run(view, setCellAttr("cellFormat", value === "general" ? null : value));
   });
 
+  // The language of this cell's value: empty means "the document's own". It
+  // overrides the document and the preference, and it never changes the format.
+  const cellLanguage = el<HTMLSelectElement>("tbl-language");
+  if (cellLanguage) {
+    if (cellLanguage.dataset.filled !== "true") {
+      const fragment = document.createDocumentFragment();
+      for (const { tag, name } of languageOptions()) {
+        const option = document.createElement("option");
+        option.value = tag;
+        option.textContent = name;
+        fragment.appendChild(option);
+      }
+      cellLanguage.appendChild(fragment);
+      cellLanguage.dataset.filled = "true";
+    }
+    cellLanguage.addEventListener("change", (event) => {
+      const value = (event.target as HTMLSelectElement).value;
+      run(view, setCellAttr("cellLanguage", value || null));
+    });
+  }
+
   // Lo stile dell'intera tabella: griglia com'è, senza linee, o a bande.
   el("tbl-style")?.addEventListener("change", (event) => {
     const value = (event.target as HTMLSelectElement).value;
@@ -700,6 +722,10 @@ export function syncTableMenu(view: EditorView): void {
   }
   if (format) {
     format.value = typeof cell.attrs.cellFormat === "string" ? cell.attrs.cellFormat : "general";
+  }
+  const cellLanguage = el<HTMLSelectElement>("tbl-language");
+  if (cellLanguage) {
+    cellLanguage.value = typeof cell.attrs.cellLanguage === "string" ? cell.attrs.cellLanguage : "";
   }
   if (tableStyle) {
     const table = tableAt(view);

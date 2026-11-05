@@ -523,6 +523,15 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
     });
   });
 
+  // AI Behavior sends the writer here for the language, without taking its two
+  // choices away: they stay its own and keep working as they always did.
+  document.querySelectorAll("[data-open-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tab = (button as HTMLElement).dataset.openTab;
+      if (tab) switchPreferencesTab(tab);
+    });
+  });
+
   document.querySelectorAll(".btn-reset-prompt").forEach((btn) => {
     btn.addEventListener("click", () => {
       const promptType = (btn as HTMLElement).dataset.default;
@@ -546,8 +555,10 @@ export function setupPreferencesModal(deps: PreferencesModalDeps): void {
     const aiName = aiLanguageFor(resolved);
     const aiInterface = document.getElementById("pref-ai-interface-language") as HTMLSelectElement | null;
     const aiWriting = document.getElementById("pref-ai-writing-language") as HTMLSelectElement | null;
-    if (aiInterface) aiInterface.value = aiName;
-    if (aiWriting) aiWriting.value = aiName;
+    if (aiName) {
+      if (aiInterface) aiInterface.value = aiName;
+      if (aiWriting) aiWriting.value = aiName;
+    }
     window.dispatchEvent(new CustomEvent("aurawrite:values-language-changed"));
   });
 

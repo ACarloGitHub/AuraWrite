@@ -39,16 +39,6 @@ export function valuesLanguage(): string {
   return language;
 }
 
-export type NumberLocale = { decimal: string; group: string };
-
-/** The separators the language uses, read from the platform. */
-export function numberLocale(lang: string): NumberLocale {
-  const parts = new Intl.NumberFormat(lang || "en").formatToParts(1234.5);
-  const pick = (type: string, fallback: string): string =>
-    parts.find((part) => part.type === type)?.value ?? fallback;
-  return { decimal: pick("decimal", "."), group: pick("group", ",") };
-}
-
 /**
  * A cell's text as a number, or null when it is text. The reading does not
  * depend on the language in force: a number typed in another convention is still
@@ -77,12 +67,13 @@ export function parseNumber(text: string): number | null {
   return percent ? value / 100 : value;
 }
 
-/** The editor's own rendering: no grouping, the language's decimal separator. */
+/** The editor's own rendering: no grouping, the language's decimals and digits. */
 export function formatGeneral(value: number, lang: string): string {
-  const loc = numberLocale(lang);
   const rounded = Math.round(value * 1e10) / 1e10;
-  const text = String(rounded);
-  return loc.decimal === "." ? text : text.replace(".", loc.decimal);
+  return new Intl.NumberFormat(lang || "en", {
+    useGrouping: false,
+    maximumFractionDigits: 10,
+  }).format(rounded);
 }
 
 /** A number with a fixed number of decimals, and grouping if asked. */
@@ -132,12 +123,13 @@ export function formatCurrency(value: number, lang: string): string {
     currency: localeCurrency(lang),
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+    useGrouping: true,
   }).format(value);
 }
 
 /** A percentage: the number already multiplied by a hundred, plus the sign. */
-export function formatPercent(value: number, lang: string): string {
-  return `${formatDecimal(value * 100, 2, true, lang)}%`;
+export function formatPercent(value: number, lang: string, decimals = 2, grouping = true): string {
+  return `${formatDecimal(value * 100, decimals, grouping, lang)}%`;
 }
 
 // LibreOffice's day zero, the same epoch EdenText uses (probed: serial 45000 is
@@ -155,4 +147,34 @@ export function formatDateSerial(serial: number, lang: string): string | null {
   if (!date) return null;
   return new Intl.DateTimeFormat(lang || "en", { dateStyle: "short", timeZone: "UTC" })
     .format(date);
+}
+
+/**
+ * A date typed by hand, read in the language in force and returned as a serial,
+ * so the cell can keep the number and not the words. The order of the three
+ * numbers comes from `Intl` (day-first, month-first, year-first), not from a
+ * table; a text that is not a date in that language stays text (`null`).
+ */
+export function parseDateSerial(text: string, lang: string): number | null {
+  const numbers = text.trim().match(/\d+/g);
+  if (!numbers || numbers.length !== 3) return null;
+  const reference = new Date(Date.UTC(2003, 10, 22)); // 22 and 11 are distinct
+  const order = new Intl.DateTimeFormat(lang || "en", { dateStyle: "short", timeZone: "UTC" })
+    .formatToParts(reference)
+    .filter((part) => part.type === "day" || part.type === "month" || part.type === "year")
+    .map((part) => part.type);
+  if (order.length !== 3) return null;
+  const values: Record<string, number> = {};
+  order.forEach((kind, index) => {
+    values[kind] = Number(numbers[index]);
+  });
+  let year = values.year;
+  if (year < 100) year += year < 70 ? 2000 : 1900;
+  const { day, month } = values;
+  if (!(day >= 1 && day <= 31) || !(month >= 1 && month <= 12)) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null;
+  }
+  return (date.getTime() - DATE_EPOCH) / 86400000;
 }

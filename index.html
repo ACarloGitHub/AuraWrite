@@ -538,8 +538,12 @@
           <option value="decimal2">2 decimals</option>
           <option value="thousands">Thousands</option>
           <option value="percent">Percent</option>
+          <option value="percent0">Percent (0)</option>
           <option value="currency">Currency</option>
           <option value="date">Date</option>
+        </select>
+        <select id="tbl-language" class="image-toolbar__select" title="Language of this cell's number">
+          <option value="">Same as document</option>
         </select>
         <button id="tbl-formula-clear" class="image-toolbar__btn image-toolbar__btn--small" title="No formula">×</button>
         <div class="image-toolbar__separator"></div>
@@ -832,6 +836,8 @@
              sit with them (Carlo, 2026-09-07). It opens a window over the page, like
              the zoom controls it is placed next to, and is spaced from both groups. -->
         <button id="btn-layers" class="footer-btn footer-btn--layers" title="Layers of the page: what covers what">Layers</button>
+        <!-- The language of the document: above the preference, below the cell. -->
+        <select id="doc-language" class="footer-language" title="Language of this document"></select>
         <div class="zoom-controls">
           <button id="btn-zoom-out" title="Zoom Out">−</button>
           <span id="zoom-level">100%</span>
@@ -1032,6 +1038,7 @@
                   <option value="Japanese">日本語</option>
                   <option value="Chinese">中文</option>
                 </select>
+                <button type="button" class="pref-btn" data-open-tab="language">Language settings…</button>
               </div>
               <div class="preference-group">
                 <label for="pref-ai-writing-language">Writing Language</label>
@@ -1046,6 +1053,7 @@
                   <option value="Japanese">日本語</option>
                   <option value="Chinese">中文</option>
                 </select>
+                <button type="button" class="pref-btn" data-open-tab="language">Language settings…</button>
               </div>
               <div class="preference-group">
                 <label for="pref-ai-assistant-name">Assistant Name</label>

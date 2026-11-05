@@ -55,3 +55,17 @@
 .status-bar-spacer {
   flex: 1;
 }
+
+/* The language of the document: a compact control next to the zoom, showing
+   "Follow preferences" or the language's name. */
+.footer-language {
+  max-width: 132px;
+  height: 24px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
