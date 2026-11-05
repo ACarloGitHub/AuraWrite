@@ -847,6 +847,7 @@
           </div>
           <div class="pref-tabs">
             <button class="pref-tab active" data-tab="general">General</button>
+            <button class="pref-tab" data-tab="language">Language</button>
             <button class="pref-tab" data-tab="ai-provider">AI Provider</button>
             <button class="pref-tab" data-tab="ai-behavior">AI Behavior</button>
             <button class="pref-tab" data-tab="embeddings">Embeddings</button>
@@ -910,6 +911,16 @@
                   Check for new releases on startup
                 </label>
                 <span class="preference-hint">AuraWrite contacts api.github.com once per day to check for new versions. Disable to fully silence network activity. The check is silent if you are offline.</span>
+              </div>
+            </div>
+            <!-- TAB: Language -->
+            <div class="pref-tab-content" data-tab="language">
+              <div class="preference-group">
+                <label for="pref-interface-language">Interface language</label>
+                <span class="preference-hint">The interface is English for now. Translating it is a later step of its own; this choice will apply when the translations exist.</span>
+                <select id="pref-interface-language" disabled>
+                  <option value="en" selected>English</option>
+                </select>
               </div>
             </div>
             <!-- TAB: AI Provider -->
