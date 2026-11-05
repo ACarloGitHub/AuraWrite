@@ -247,6 +247,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   installTestHooks(editorView);
 
   new ResizeObserver(() => scheduleEditorZoomSync()).observe(zoomMount);
+  // A sheet has a width of its own: a page format or the switch between paged
+  // and continuous view changes it while the mount keeps its height, so the
+  // zoom has to be told to re-reserve the area (it reads the page's width).
+  new ResizeObserver(() => scheduleEditorZoomSync()).observe(editorView.dom);
+  window.addEventListener("aurawrite:page-format-changed", () => scheduleEditorZoomSync());
+  window.addEventListener("aurawrite:cassie-paged-changed", () => scheduleEditorZoomSync());
   window.addEventListener("resize", () => scheduleEditorZoomSync());
 
   // Loading flag (typed module, still mirrored on window for DevTools)
