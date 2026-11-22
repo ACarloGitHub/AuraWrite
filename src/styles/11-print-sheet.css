@@ -24,6 +24,14 @@
 /* a page that starts mid-paragraph continues from the page edge: the
    engine gives that fragment no leading gap, so strip the block's own */
 .ProseMirror.aw-print-body.aw-print-cont > :first-child { margin-top: 0; }
+/* E1: a chosen space-before on the FIRST block of a sheet must stay INSIDE
+   the body: the engine counts it (y0 = y + beforePx at a page top), and a
+   margin that collapses through the padding-less body would push the text
+   down while the free layer's origin stays put — every anchored element
+   drawn one spacing too low. A zero-height table box blocks the collapse
+   (table margins never collapse) without making the body a float container:
+   a wrapped image may still cross the page edge (D14). */
+.ProseMirror.aw-print-body::before { content: ""; display: table; }
 /* An empty paragraph/heading is ONE LINE TALL in the editor (ProseMirror
    writes a trailing <br> inside it), but the serialized sheet has nothing
    inside, so the block collapses to zero and its margins swallow one another:

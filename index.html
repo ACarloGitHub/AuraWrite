@@ -240,6 +240,27 @@
           </select>
         </div>
 
+        <!-- PARAGRAPH SPACING GROUP (E1: before/after in pt, dropdown with 2 fields) -->
+        <div class="toolbar-group margins-dropdown toolbar-group--code-disabled" id="spacing-group">
+          <button id="btn-spacing" class="toolbar__btn" title="Paragraph spacing: before / after">
+            <span class="toolbar__btn-icon">↕</span>
+            <span class="toolbar__btn-text">Spacing</span>
+            <span class="toolbar__btn-caret">▾</span>
+          </button>
+          <div id="spacing-panel" class="margins-dropdown__panel">
+            <div class="margins-dropdown__row">
+              <label for="inp-space-before">Before</label>
+              <input type="number" id="inp-space-before" class="toolbar__number-input" min="0" max="600" step="1" placeholder="Default" aria-label="Spacing before" />
+              <span>pt</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-space-after">After</label>
+              <input type="number" id="inp-space-after" class="toolbar__number-input" min="0" max="600" step="1" placeholder="Default" aria-label="Spacing after" />
+              <span>pt</span>
+            </div>
+          </div>
+        </div>
+
         <!-- PAGE GROUP -->
         <div class="toolbar-group toolbar-group--code-disabled">
           <button id="btn-page-break" class="toolbar__btn" title="Page Break">

@@ -177,6 +177,10 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
       line-height: calc(var(--aw-lh) * var(--aw-natural-h, 1.15));
     }
     h1, h2, h3 { margin-top: 1.5em; }
+    /* E1: a chosen before/after travels inline (--aw-sb/--aw-sa); the marked
+       block beats the export's own rhythm, an unmarked one keeps it. */
+    [data-space-before] { margin-top: var(--aw-sb); }
+    [data-space-after] { margin-bottom: var(--aw-sa); }
     p[data-align="center"], [data-align="center"] { text-align: center; }
     p[data-align="right"], [data-align="right"] { text-align: right; }
     blockquote {

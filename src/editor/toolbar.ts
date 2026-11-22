@@ -20,6 +20,7 @@ import { getSelectedElement } from "./element-commands";
 import { ELEMENT_KINDS, elementTypeOf } from "./element-types";
 import { applyDocumentJson, installDocument, installEmptyDocument } from "./document-loader";
 import { effectiveDocumentLanguage, withDocumentLanguage } from "./document-language";
+import { setupParagraphSpacing, syncParagraphSpacingInputs } from "./paragraph-spacing";
 
 /** The document as it is saved: its content plus the language it declares. */
 function currentDocumentJson(): string {
@@ -103,6 +104,7 @@ export function setupToolbar(view: EditorView): void {
   void setupStyleControls();
   setupTopLevelButtons();
   setupWidthControl();
+  setupParagraphSpacing(() => editorView);
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
@@ -1916,6 +1918,7 @@ function positionDropdown(trigger: HTMLElement, menu: HTMLElement | null): void 
 // width-group is first: it's least critical and already hides in paged mode.
 const OVERFLOW_ORDER: string[] = [
   "width-group",
+  "spacing-group",
   "misc-group",
   "line-height-group",
   "page-group",
@@ -1929,6 +1932,7 @@ const GROUP_LABELS: Record<string, string> = {
   "format-group": "Format",
   "alignment-group": "Alignment",
   "line-height-group": "Line Height",
+  "spacing-group": "Paragraph Spacing",
   "page-group": "Page",
   "width-group": "Margins",
   "misc-group": "Settings",
@@ -1941,6 +1945,7 @@ const GROUP_IDS_IN_ORDER: string[] = [
   "format-group",
   "alignment-group",
   "line-height-group",
+  "spacing-group",
   "page-group",
   "width-group",
   "overflow-dropdown",
@@ -2354,6 +2359,7 @@ function setupImageToolbar(view: EditorView): void {
 export function syncSecondaryToolbar(view: EditorView): void {
   // Cheap (one attr read, no geometry): the spacing select follows the caret.
   syncLineHeightSelect(view);
+  syncParagraphSpacingInputs(view);
   const bar = document.getElementById("image-toolbar");
   const tableControls = document.getElementById("table-controls");
   const info = getSelectedElement(view, ELEMENT_KINDS);

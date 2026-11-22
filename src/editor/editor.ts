@@ -23,6 +23,7 @@ import { createTableColumnsPlugin } from "./table-columns";
 import { createTableNumberingPlugin } from "./table-numbering";
 import { createTableFormulasPlugin } from "./table-formulas-plugin";
 import { cellPaddingOf, cellPaddingVars } from "./table-padding";
+import { parseSpacingPt } from "./paragraph-spacing";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -59,11 +60,38 @@ import { initPagedMode, getCassieMode, getCassiePagedMode, setCassiePagedMode } 
 // Custom Schema — Extended for full rich text editing
 // ============================================================================
 
+/** E1: the spacing pair as markup (data attributes + the CSS variables). */
+function spacingFromDom(el: HTMLElement): { spaceBefore: number | null; spaceAfter: number | null } {
+  return {
+    spaceBefore: parseSpacingPt(el.getAttribute("data-space-before")),
+    spaceAfter: parseSpacingPt(el.getAttribute("data-space-after")),
+  };
+}
+
+function spacingMarkup(
+  node: { attrs: Record<string, unknown> },
+  attrs: Record<string, string>,
+  styles: string[],
+): void {
+  if (node.attrs.spaceBefore != null) {
+    attrs["data-space-before"] = String(node.attrs.spaceBefore);
+    styles.push(`--aw-sb: ${node.attrs.spaceBefore}pt`);
+  }
+  if (node.attrs.spaceAfter != null) {
+    attrs["data-space-after"] = String(node.attrs.spaceAfter);
+    styles.push(`--aw-sa: ${node.attrs.spaceAfter}pt`);
+  }
+}
+
 const paragraphWithPageBreak: NodeSpec = {
   content: "inline*",
   group: "block",
   attrs: {
     align: { default: "left" },
+    // E1: the Word spacing pair, in pt. null = the stylesheet's own rhythm;
+    // a number is the block's margin (the engine's Math.max model, like CSS).
+    spaceBefore: { default: null },
+    spaceAfter: { default: null },
     // The Word spacing (a multiple of the font's NATURAL line). null = the
     // stylesheet's own rhythm; a value rides as --aw-lh and the CSS multiplies
     // it by --aw-natural, the natural line the metrics probe keeps current.
@@ -88,6 +116,8 @@ const paragraphWithPageBreak: NodeSpec = {
           dom.getAttribute("data-line-height") ||
           dom.style.lineHeight ||
           null,
+        spaceBefore: parseSpacingPt(dom.getAttribute("data-space-before")),
+        spaceAfter: parseSpacingPt(dom.getAttribute("data-space-after")),
         pageBreakBefore: dom.classList.contains("page-break-before"),
         tableCaption: dom.getAttribute("data-table-caption") || null,
       }),
@@ -101,10 +131,13 @@ const paragraphWithPageBreak: NodeSpec = {
     // sheet and the HTML export serialize this same toDOM, so the paper reads
     // the same number without a probe of its own. The natural line it is
     // multiplied by comes from the host (--aw-natural), serialized too.
+    const styles: string[] = [];
     if (node.attrs.lineHeight != null && node.attrs.lineHeight !== "") {
       attrs["data-line-height"] = String(node.attrs.lineHeight);
-      attrs.style = `--aw-lh: ${node.attrs.lineHeight}`;
+      styles.push(`--aw-lh: ${node.attrs.lineHeight}`);
     }
+    spacingMarkup(node, attrs, styles);
+    if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.pageBreakBefore) {
       attrs.class = "page-break-before";
     }
@@ -124,6 +157,8 @@ const headingSpec: NodeSpec = {
     align: { default: "left" },
     // Same contract as the paragraph: null keeps the heading's own CSS line.
     lineHeight: { default: null },
+    spaceBefore: { default: null },
+    spaceAfter: { default: null },
   },
   parseDOM: [
     {
@@ -131,7 +166,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
     {
@@ -139,7 +174,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
     {
@@ -147,7 +182,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
     {
@@ -155,7 +190,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
     {
@@ -163,7 +198,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
     {
@@ -171,7 +206,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
     {
@@ -179,7 +214,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
+        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
       },
     },
   ],
@@ -196,6 +231,7 @@ const headingSpec: NodeSpec = {
       attrs["data-line-height"] = String(node.attrs.lineHeight);
       styles.push(`--aw-lh: ${node.attrs.lineHeight}`);
     }
+    spacingMarkup(node, attrs, styles);
     if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.level === 1 && node.attrs.align === "center") {
       attrs.class = "title";

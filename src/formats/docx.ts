@@ -505,6 +505,33 @@ function applyParagraphMeta(wP: any, el: any): void {
     const val = attrValue(jc, W_NS, "val");
     if (val) setStyle(el, "text-align", val);
   }
+
+  // E1: direct w:spacing before/after (twips -> pt). Only what the paragraph
+  // itself declares: a style's spacing lives in styles.xml and stays with the
+  // named-styles work, so an ordinary Word file keeps the look it has today.
+  // The channel's OWN rhythms are not choices and come back as Default:
+  // after=200 is what the exporter writes on every unchosen paragraph, and
+  // before=after=80 is the table-cell rhythm. A choice equal to a rhythm
+  // flattens to Default (documented, like Word's # grid).
+  const wSpacing = pPr.getElementsByTagNameNS(W_NS, "spacing")?.[0];
+  if (wSpacing) {
+    const twipsToPt = (raw: string | null): number | null => {
+      if (raw == null || raw === "") return null;
+      const n = Number(raw) / 20;
+      return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+    };
+    let before = twipsToPt(attrValue(wSpacing, W_NS, "before"));
+    let after = twipsToPt(attrValue(wSpacing, W_NS, "after"));
+    const inCell = typeof el.closest === "function" && !!el.closest("td, th");
+    if (inCell && before === 4 && after === 4) {
+      before = null;
+      after = null;
+    } else if (after === 10) {
+      after = null;
+    }
+    if (before != null) el.setAttribute("data-space-before", String(before));
+    if (after != null) el.setAttribute("data-space-after", String(after));
+  }
 }
 
 function applyRunMeta(wP: any, el: any): void {
@@ -1458,6 +1485,16 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   }
   if (node.type?.name === "paragraph" && !extras.style) {
     spacing.after = 200;
+  }
+  // E1: a chosen before/after is direct formatting: it beats the style's
+  // defaults and the channel's own rhythm. Word counts twentieths of a pt.
+  const chosenBefore = node.attrs?.spaceBefore;
+  const chosenAfter = node.attrs?.spaceAfter;
+  if (typeof chosenBefore === "number" && Number.isFinite(chosenBefore)) {
+    spacing.before = Math.round(chosenBefore * 20);
+  }
+  if (typeof chosenAfter === "number" && Number.isFinite(chosenAfter)) {
+    spacing.after = Math.round(chosenAfter * 20);
   }
   if (Object.keys(spacing).length > 0) {
     opts.spacing = spacing;

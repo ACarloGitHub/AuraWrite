@@ -78,6 +78,7 @@ import {
   type EditorMetrics,
   type TextMetrics,
 } from "./text-metrics";
+import { spacingOverride } from "./paragraph-spacing";
 
 // The probed metrics, read through the module so every call sees the latest
 // probe without this file having to hold a second copy of the state.
@@ -1012,6 +1013,12 @@ function paragraphLineOffsets(node: PMNode, contentWidth: number, style: TextMet
 // ---------------------------------------------------------------------------
 
 function spacingFor(node: PMNode): BlockSpacing {
+  // E1: the node's own before/after (pt) beats the probed base; null keeps it.
+  // The walk's model (Math.max collapse, before at a page top) is unchanged.
+  return spacingOverride(node, baseSpacingFor(node));
+}
+
+function baseSpacingFor(node: PMNode): BlockSpacing {
   const sp = metrics().spacing;
   // Elements take their row from the table: one fact, one place (TT).
   const element = elementTypeOf(node);
