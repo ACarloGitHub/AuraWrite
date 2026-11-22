@@ -28,6 +28,7 @@ import {
   type PageMargins,
 } from "./pagination-cassie";
 import { freeElementWidth, freeLayoutMap, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
+import { getEditorMetrics } from "./text-metrics";
 import { isOverlap, textConditionOf } from "./element-condition";
 import type { BandPiece, DomBand } from "./pagination-cassie-plugin";
 
@@ -434,6 +435,12 @@ export function renderPrintBody(printDoc: PrintDoc): string {
   // (getContentHeight), not as an empty offset above the body: adding them here
   // pushed every text and free element 48px below the editor (Carlo, 2026-09-13).
   const bodyTop = m.top;
+  // The natural lines the EDITOR is rendering with right now: the spacing
+  // formula on the sheet (calc(--aw-lh * --aw-natural)) must multiply the same
+  // numbers the screen multiplies, and the preview window runs no probe of its
+  // own — so they travel with the sheet, like the cell paddings do.
+  const met = getEditorMetrics();
+  const naturals = `--aw-natural:${met.naturalBody};--aw-natural-h:${met.naturalHeading};`;
   return printDoc.sheets
     .map(
       (s) =>
@@ -442,7 +449,7 @@ export function renderPrintBody(printDoc: PrintDoc): string {
         // The free layer lives INSIDE the body: text and free elements then
         // share one origin, so a free element cannot end up lower than the
         // text on the sheet (T1.6, Carlo 2026-09-11).
-        `<div class="ProseMirror aw-print-body${s.continued ? " aw-print-cont" : ""}">${s.html}` +
+        `<div class="ProseMirror aw-print-body${s.continued ? " aw-print-cont" : ""}" style="${naturals}">${s.html}` +
         (s.freeHtml ? `<div class="aw-print-free-layer">${s.freeHtml}</div>` : "") +
         `</div>` +
         `<div class="aw-print-pagenum">${s.pageNumber}</div>` +

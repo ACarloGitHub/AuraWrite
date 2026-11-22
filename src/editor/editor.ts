@@ -64,7 +64,10 @@ const paragraphWithPageBreak: NodeSpec = {
   group: "block",
   attrs: {
     align: { default: "left" },
-    lineHeight: { default: "1.5" },
+    // The Word spacing (a multiple of the font's NATURAL line). null = the
+    // stylesheet's own rhythm; a value rides as --aw-lh and the CSS multiplies
+    // it by --aw-natural, the natural line the metrics probe keeps current.
+    lineHeight: { default: null },
     pageBreakBefore: { default: false },
     // The title above a table and the note below it: a paragraph like any other,
     // so it moves with the text, exports as text and is measured as text. The
@@ -84,7 +87,7 @@ const paragraphWithPageBreak: NodeSpec = {
         lineHeight:
           dom.getAttribute("data-line-height") ||
           dom.style.lineHeight ||
-          "1.5",
+          null,
         pageBreakBefore: dom.classList.contains("page-break-before"),
         tableCaption: dom.getAttribute("data-table-caption") || null,
       }),
@@ -93,8 +96,15 @@ const paragraphWithPageBreak: NodeSpec = {
   toDOM(node) {
     const attrs: Record<string, string> = {
       "data-align": node.attrs.align as string,
-      "data-line-height": node.attrs.lineHeight as string,
     };
+    // The spacing travels WITH the paragraph (inline variable): the print
+    // sheet and the HTML export serialize this same toDOM, so the paper reads
+    // the same number without a probe of its own. The natural line it is
+    // multiplied by comes from the host (--aw-natural), serialized too.
+    if (node.attrs.lineHeight != null && node.attrs.lineHeight !== "") {
+      attrs["data-line-height"] = String(node.attrs.lineHeight);
+      attrs.style = `--aw-lh: ${node.attrs.lineHeight}`;
+    }
     if (node.attrs.pageBreakBefore) {
       attrs.class = "page-break-before";
     }
@@ -112,7 +122,8 @@ const headingSpec: NodeSpec = {
   attrs: {
     level: { default: 1 },
     align: { default: "left" },
-    lineHeight: { default: "1.5" },
+    // Same contract as the paragraph: null keeps the heading's own CSS line.
+    lineHeight: { default: null },
   },
   parseDOM: [
     {
@@ -120,7 +131,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "center" };
+        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
     {
@@ -128,7 +139,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "left" };
+        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
     {
@@ -136,7 +147,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 2, align: styleAlign || "left" };
+        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
     {
@@ -144,7 +155,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 3, align: styleAlign || "left" };
+        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
     {
@@ -152,7 +163,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 4, align: styleAlign || "left" };
+        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
     {
@@ -160,7 +171,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 5, align: styleAlign || "left" };
+        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
     {
@@ -168,7 +179,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 6, align: styleAlign || "left" };
+        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null };
       },
     },
   ],
@@ -177,9 +188,15 @@ const headingSpec: NodeSpec = {
     const attrs: Record<string, string> = {
       "data-align": node.attrs.align as string,
     };
+    const styles: string[] = [];
     if (node.attrs.align === "center") {
-      attrs.style = "text-align: center";
+      styles.push("text-align: center");
     }
+    if (node.attrs.lineHeight != null && node.attrs.lineHeight !== "") {
+      attrs["data-line-height"] = String(node.attrs.lineHeight);
+      styles.push(`--aw-lh: ${node.attrs.lineHeight}`);
+    }
+    if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.level === 1 && node.attrs.align === "center") {
       attrs.class = "title";
     }
@@ -739,7 +756,15 @@ nodes = nodes
     // preferences". The editor keeps the runtime value in document-language.ts,
     // because a transaction cannot change the doc node's attributes in this
     // version of ProseMirror.
-    attrs: { language: { default: null } },
+    attrs: {
+      language: { default: null },
+      // Which line-spacing semantics the file was written with. "word" = the
+      // chosen multiples are multiples of the font's natural line (and a null
+      // attr is the document's own rhythm). Absent in legacy files: the loader
+      // migrates their fossil "1.5" defaults and stamps the marker, so a 1.5
+      // chosen AFTER the change is never mistaken for the fossil again.
+      spacing: { default: "word" },
+    },
   })
   .append({
     heading: headingSpec,

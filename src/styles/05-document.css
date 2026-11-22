@@ -56,6 +56,7 @@
   background: var(--color-background);
 }
 
+
 .ProseMirror .find-highlight {
   background: rgba(255, 200, 0, 0.4);
 }
@@ -119,6 +120,13 @@
 
 .ProseMirror p {
   margin-bottom: 1em;
+  /* The Word spacing: the chosen multiple (--aw-lh, inline from toDOM) times
+     the font's NATURAL line (--aw-natural, written by the metrics probe).
+     No choice yet ("Default") -> the document's own rhythm, exactly the
+     1.5 of CSS this program has always rendered: the fallback divides it back
+     out so the product stays 1.5 whatever the family's natural line is. Old
+     documents keep their look; a chosen number means what it means in Word. */
+  line-height: calc(var(--aw-lh, calc(1.5 / var(--aw-natural, 1.15))) * var(--aw-natural, 1.15));
 }
 
 .ProseMirror strong {
@@ -1078,21 +1086,22 @@
   text-align: justify;
 }
 
-/* Line height */
-.ProseMirror p[data-line-height="1.0"] {
-  line-height: 1;
+/* Line height — headings. A heading keeps its own CSS line (1.2/1.3/1.4 below)
+   until a spacing is chosen; then the same Word formula applies, with the
+   HEADING family's natural line (the probe writes --aw-natural-h). */
+.ProseMirror h1[data-line-height],
+.ProseMirror h2[data-line-height],
+.ProseMirror h3[data-line-height],
+.ProseMirror h4[data-line-height],
+.ProseMirror h5[data-line-height],
+.ProseMirror h6[data-line-height] {
+  line-height: calc(var(--aw-lh) * var(--aw-natural-h, 1.15));
 }
 
-.ProseMirror p[data-line-height="1.15"] {
-  line-height: 1.15;
-}
-
-.ProseMirror p[data-line-height="1.5"] {
-  line-height: 1.5;
-}
-
-.ProseMirror p[data-line-height="2.0"] {
-  line-height: 2;
+/* A caption keeps its 1.4 strip UNLESS a spacing was chosen on it: then the
+   choice wins (this rule outranks both the caption strip and the p base). */
+.ProseMirror p[data-table-caption][data-line-height] {
+  line-height: calc(var(--aw-lh) * var(--aw-natural, 1.15));
 }
 
 /* Page break */

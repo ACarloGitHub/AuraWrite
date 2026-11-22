@@ -548,12 +548,30 @@ export const FIGURE_NODE_SPEC: NodeSpec = {
  * Layers window and every attribute command after a reload (observed by Carlo
  * 2026-09-11: after reopening, images were "stuck" and missing from Layers).
  */
-export function migrateLegacyDocumentJson(node: unknown): unknown {
+export function migrateLegacyDocumentJson(node: unknown, legacySpacing = false): unknown {
   if (!node || typeof node !== "object") return node;
   if (Array.isArray(node)) {
-    return node.map((child) => migrateLegacyDocumentJson(child));
+    return node.map((child) => migrateLegacyDocumentJson(child, legacySpacing));
   }
-  const n = node as { type?: string; attrs?: Record<string, unknown>; content?: unknown[] };
+  let n = node as { type?: string; attrs?: Record<string, unknown>; content?: unknown[] };
+  // A document without the spacing marker was written before the Word
+  // semantics: its "1.5" attrs are the old schema's default (bare CSS 1.5),
+  // not a chosen Word spacing. The marker travels with every new save, so a
+  // deliberate 1.5 chosen TODAY survives every reopen.
+  if (n.type === "doc" && n.attrs?.spacing == null) {
+    legacySpacing = true;
+    n = { ...n, attrs: { ...(n.attrs ?? {}), spacing: "word" } };
+  }
+  // The old schema stamped lineHeight "1.5" on EVERY block as a default, and
+  // the old CSS rendered it as bare 1.5 x the font size. The spacing now means
+  // what it means in Word (a multiple of the font's NATURAL line), so that
+  // fossil would widen every old document by a third. On headings it was never
+  // rendered at all; on paragraphs an explicit "1.5" looked exactly like the
+  // default (same CSS). Either way the fossil carries no choice worth keeping:
+  // it goes back to "Default", which renders the old rhythm byte for byte.
+  if (legacySpacing && (n.type === "heading" || n.type === "paragraph") && n.attrs?.lineHeight === "1.5") {
+    n = { ...n, attrs: { ...n.attrs, lineHeight: null } };
+  }
   if (n.type === "figure") {
     const children = Array.isArray(n.content) ? n.content : [];
     const image = children.find((c) => (c as { type?: string })?.type === "image");
@@ -566,10 +584,10 @@ export function migrateLegacyDocumentJson(node: unknown): unknown {
     const boxContent = (box as { content?: unknown[] } | undefined)?.content;
     const content: unknown[] =
       Array.isArray(boxContent) && boxContent.length > 0 ? boxContent : [{ type: "paragraph" }];
-    return { ...n, attrs, content };
+    return { ...n, attrs, content: content.map((child) => migrateLegacyDocumentJson(child, legacySpacing)) };
   }
   if (Array.isArray(n.content)) {
-    return { ...n, content: n.content.map((child) => migrateLegacyDocumentJson(child)) };
+    return { ...n, content: n.content.map((child) => migrateLegacyDocumentJson(child, legacySpacing)) };
   }
-  return node;
+  return n;
 }

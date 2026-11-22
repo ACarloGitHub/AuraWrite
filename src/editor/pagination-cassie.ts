@@ -71,7 +71,7 @@ import {
   fontOfChild,
   getEditorMetrics,
   getMetricsGeneration,
-  lineHeightFactor,
+  resolvedLineFactor,
   paragraphStyle,
   textStyleFor,
   type BlockSpacing,
@@ -225,16 +225,15 @@ function measureWord(word: string, font: string): number {
  */
 function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, base: TextMetrics): LaidLine[] {
   const lines: LaidLine[] = [];
-  const factor = lineHeightFactor(
-    (node.attrs as Record<string, unknown> | undefined)?.lineHeight,
-    base.sizePx,
-    base.linePx / base.sizePx,
-  );
+  // The SAME effective factor the uniform measure and the CSS use: the Word
+  // spacing times the natural line, or the probed base when no spacing is set.
+  const factor = resolvedLineFactor(node, base);
+  // CSS line boxes include the block STRUT: the block's OWN line-height at its
+  // own size (not the container's — that one feeds stray text, not paragraphs).
+  const strut = base.sizePx * factor;
   let y = 0;
   let x = 0;
-  // CSS line boxes include the block STRUT (base font line-height): every
-  // line is at least base.linePx tall, whatever sits on it.
-  let curH = base.linePx;
+  let curH = strut;
   let pendingSpace = 0;
   let lineStart = 0;
   let lineOpen = false;
@@ -245,7 +244,7 @@ function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, ba
     lines.push({ off: lineStart, y, h: curH });
     y += curH;
     x = 0;
-    curH = base.linePx;
+    curH = strut;
     pendingSpace = 0;
     lineStart = nextStart;
   };
@@ -298,7 +297,7 @@ function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, ba
     else {
       lines.push({ off: runPmStart + charInRun, y, h: curH });
       y += curH;
-      curH = base.linePx;
+      curH = strut;
     }
     pm += child.nodeSize;
     runPmStart = pm;

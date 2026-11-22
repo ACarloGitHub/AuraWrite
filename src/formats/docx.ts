@@ -26,6 +26,7 @@ import {
   VerticalPositionAlign,
 } from "docx";
 import { getPageFormat, isHeaderRow } from "../editor/pagination-cassie";
+import { getEditorMetrics } from "../editor/text-metrics";
 import { isWrapping, textConditionOf } from "../editor/element-condition";
 import { getMargins } from "../editor/pagination-state";
 import { extractTablesFromDocx, tableToHtml } from "./docx-tables";
@@ -98,10 +99,22 @@ function fontSizeFromPx(px: string | number | undefined): number | undefined {
 }
 
 function lineHeightToTwips(lh: string | number | undefined): number | undefined {
-  if (lh == null) return undefined;
+  if (lh == null || lh === "") return undefined;
   const num = typeof lh === "string" ? parseFloat(lh) : lh;
   if (isNaN(num) || num <= 0) return undefined;
+  // A chosen spacing is a Word multiple: w:line counts 240ths of a SINGLE
+  // line (the font's natural one), which is exactly what the editor now means.
   return Math.round(num * 240);
+}
+
+/**
+ * "Default" (no attr) as Word reads it: the document's own rhythm is 1.5
+ * in CSS units, i.e. 1.5/natural single lines. Writing THIS makes Word open
+ * the paragraph with the line the editor shows, instead of Word's own single.
+ */
+function defaultRhythmTwips(): number {
+  const natural = getEditorMetrics().naturalBody || 1.15;
+  return Math.round((1.5 / natural) * 240);
 }
 
 function alignToDocx(a: string | undefined): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined {
@@ -1054,7 +1067,7 @@ function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
     }
   });
   if (firstPara) {
-    const lh = lineHeightToTwips(firstPara.attrs?.lineHeight);
+    const lh = lineHeightToTwips(firstPara.attrs?.lineHeight) ?? defaultRhythmTwips();
     const spacing: any = lh ? { line: lh, lineRule: "auto" } : undefined;
     paragraphs.push(
       new Paragraph({
@@ -1436,7 +1449,8 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   const align = alignToDocx(node.attrs?.align) ?? extras.align;
   if (align) opts.alignment = align;
 
-  const lh = lineHeightToTwips(node.attrs?.lineHeight);
+  const lh = lineHeightToTwips(node.attrs?.lineHeight)
+    ?? (node.type?.name === "paragraph" && !node.attrs?.tableCaption ? defaultRhythmTwips() : undefined);
   const spacing: any = { ...(opts.spacing || {}) };
   if (lh) {
     spacing.line = lh;

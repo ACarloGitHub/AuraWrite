@@ -1519,9 +1519,8 @@ async function setupStyleControls(): Promise<void> {
   });
 
   selLineHeight?.addEventListener("change", () => {
-    const lineHeight = selLineHeight.value;
-    if (!lineHeight) return;
-    setLineHeight(lineHeight);
+    // "" = Default: the block goes back to the document's own rhythm.
+    setLineHeight(selLineHeight.value);
     selLineHeight.blur();
     editorView.focus();
   });
@@ -1549,21 +1548,66 @@ function applyTextMarkOrStored(markName: string, attrs: Record<string, string>):
   }
 }
 
+/**
+ * The Word contract: line spacing is a PARAGRAPH attribute. It applies to
+ * every paragraph and heading the selection touches (Ctrl+A = the whole
+ * document); with a collapsed caret, to the block the caret sits in. Before,
+ * only the selection's FIRST block changed — selecting a page and choosing
+ * "2.0" moved one paragraph and looked like nothing had happened.
+ */
 function setLineHeight(lineHeight: string): void {
   const { state } = editorView;
-  const { $from } = state.selection;
-  const depth = $from.depth;
+  const { from, to, empty } = state.selection;
+  const tr = state.tr;
+  let changed = false;
+  const value: string | null = lineHeight === "" ? null : lineHeight;
+  const isTextBlock = (name: string): boolean => name === "paragraph" || name === "heading";
 
-  if (depth === 0) return;
+  if (empty) {
+    const { $from } = state.selection;
+    for (let d = $from.depth; d > 0; d--) {
+      const node = $from.node(d);
+      if (isTextBlock(node.type.name)) {
+        if (node.attrs.lineHeight !== value) {
+          tr.setNodeMarkup($from.before(d), undefined, { ...node.attrs, lineHeight: value });
+          changed = true;
+        }
+        break;
+      }
+    }
+  } else {
+    // setNodeMarkup never changes sizes: the positions stay valid for the
+    // whole walk, and one transaction means ONE recompute pass, not N.
+    state.doc.nodesBetween(from, to, (node, pos) => {
+      if (isTextBlock(node.type.name)) {
+        if (node.attrs.lineHeight !== value) {
+          tr.setNodeMarkup(pos, undefined, { ...node.attrs, lineHeight: value });
+          changed = true;
+        }
+        return false;
+      }
+      return true;
+    });
+  }
+  if (changed) editorView.dispatch(tr);
+}
 
-  const node = $from.node(depth);
-  const pos = $from.before(depth);
-
-  const tr = state.tr.setNodeMarkup(pos, undefined, {
-    ...(node.attrs || {}),
-    lineHeight,
-  });
-  editorView.dispatch(tr);
+/** The select says what the caret's block carries (Word does the same). */
+export function syncLineHeightSelect(view: EditorView): void {
+  const sel = document.getElementById("sel-line-height") as HTMLSelectElement | null;
+  if (!sel) return;
+  const { $from } = view.state.selection;
+  let value = ""; // Default: the document's own rhythm (a null attr)
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === "paragraph" || node.type.name === "heading") {
+      if (node.attrs.lineHeight != null && node.attrs.lineHeight !== "") {
+        value = String(node.attrs.lineHeight);
+      }
+      break;
+    }
+  }
+  if (sel.value !== value) sel.value = value;
 }
 
 // ============================================================================
@@ -2300,6 +2344,8 @@ function setupImageToolbar(view: EditorView): void {
  * selected element's type; each module syncs the controls it owns.
  */
 export function syncSecondaryToolbar(view: EditorView): void {
+  // Cheap (one attr read, no geometry): the spacing select follows the caret.
+  syncLineHeightSelect(view);
   const bar = document.getElementById("image-toolbar");
   const tableControls = document.getElementById("table-controls");
   const info = getSelectedElement(view, ELEMENT_KINDS);

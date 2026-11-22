@@ -1,5 +1,6 @@
 import { DOMSerializer } from "prosemirror-model";
 import { invoke } from "@tauri-apps/api/core";
+import { getEditorMetrics } from "../editor/text-metrics";
 
 interface ToHtmlOptions {
   /** Inline images as base64 data URIs (self-contained file). Default true.
@@ -145,6 +146,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 function wrapInHTMLDocument(bodyContent: string, language?: string): string {
   const lang = (language || "en").replace(/"/g, "");
+  // The same natural lines the editor renders with: the exported spacing
+  // (--aw-lh on each paragraph) multiplies these, so the file opens with the
+  // rhythm it was written with, not the browser's bare guess.
+  const met = getEditorMetrics();
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -158,8 +163,19 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
       margin: 40px auto;
       padding: 20px;
       line-height: 1.7;
+      --aw-natural: ${met.naturalBody};
+      --aw-natural-h: ${met.naturalHeading};
     }
-    p { margin-bottom: 1em; }
+    p {
+      margin-bottom: 1em;
+      /* Same formula as the editor: a chosen spacing is a Word multiple of the
+         natural line; no choice keeps the document's own 1.5 rhythm. */
+      line-height: calc(var(--aw-lh, calc(1.5 / var(--aw-natural, 1.15))) * var(--aw-natural, 1.15));
+    }
+    h1[data-line-height], h2[data-line-height], h3[data-line-height],
+    h4[data-line-height], h5[data-line-height], h6[data-line-height] {
+      line-height: calc(var(--aw-lh) * var(--aw-natural-h, 1.15));
+    }
     h1, h2, h3 { margin-top: 1.5em; }
     p[data-align="center"], [data-align="center"] { text-align: center; }
     p[data-align="right"], [data-align="right"] { text-align: right; }
