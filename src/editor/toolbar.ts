@@ -1596,7 +1596,15 @@ function setLineHeight(lineHeight: string): void {
 export function syncLineHeightSelect(view: EditorView): void {
   const sel = document.getElementById("sel-line-height") as HTMLSelectElement | null;
   if (!sel) return;
-  const { $from } = view.state.selection;
+  let { $from } = view.state.selection;
+  // Ctrl+A (AllSelection) anchors at the document's edge: depth 0 sees no
+  // block, and the select fell back to "Default" after every choice — the
+  // value looked unselectable because it was already shown (no change event).
+  // Step inside the selection's first block, as Word's ribbon reads it.
+  if ($from.depth === 0) {
+    const pos = Math.min(view.state.selection.from + 1, view.state.doc.content.size);
+    $from = view.state.doc.resolve(pos);
+  }
   let value = ""; // Default: the document's own rhythm (a null attr)
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d);
