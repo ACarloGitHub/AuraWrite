@@ -56,6 +56,22 @@
   background: var(--color-background);
 }
 
+/* The three rules of the search (case, whole word, regex): pressed = active. */
+.find-bar__toggle {
+  min-width: 26px;
+  font-family: var(--font-mono, monospace);
+}
+
+.find-bar__toggle[aria-pressed="true"] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.find-bar__input--invalid,
+.find-bar__input--invalid:focus {
+  border-color: #d9534f;
+}
 
 .ProseMirror .find-highlight {
   background: rgba(255, 200, 0, 0.4);
