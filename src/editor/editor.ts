@@ -24,6 +24,7 @@ import { createTableNumberingPlugin } from "./table-numbering";
 import { createTableFormulasPlugin } from "./table-formulas-plugin";
 import { cellPaddingOf, cellPaddingVars } from "./table-padding";
 import { parseSpacingPt } from "./paragraph-spacing";
+import { parseIndentCm } from "./paragraph-indent";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -83,6 +84,33 @@ function spacingMarkup(
   }
 }
 
+/** E2: the indent trio as markup (data attributes + the CSS variables). */
+function indentFromDom(el: HTMLElement): Record<string, number | null> {
+  return {
+    indentLeft: parseIndentCm(el.getAttribute("data-indent-left")),
+    indentRight: parseIndentCm(el.getAttribute("data-indent-right")),
+    indentFirst: parseIndentCm(el.getAttribute("data-indent-first")),
+  };
+}
+
+function indentMarkup(
+  node: { attrs: Record<string, unknown> },
+  attrs: Record<string, string>,
+  styles: string[],
+): void {
+  const pairs: Array<[string, string, string]> = [
+    ["indentLeft", "data-indent-left", "--aw-il"],
+    ["indentRight", "data-indent-right", "--aw-ir"],
+    ["indentFirst", "data-indent-first", "--aw-if"],
+  ];
+  for (const [attr, data, variable] of pairs) {
+    if (node.attrs[attr] != null) {
+      attrs[data] = String(node.attrs[attr]);
+      styles.push(`${variable}: ${node.attrs[attr]}cm`);
+    }
+  }
+}
+
 const paragraphWithPageBreak: NodeSpec = {
   content: "inline*",
   group: "block",
@@ -92,6 +120,11 @@ const paragraphWithPageBreak: NodeSpec = {
     // a number is the block's margin (the engine's Math.max model, like CSS).
     spaceBefore: { default: null },
     spaceAfter: { default: null },
+    // E2: the Word indent trio, in cm. null = none; the first line is signed
+    // (negative = hanging). The calculator shortens the lines by these numbers.
+    indentLeft: { default: null },
+    indentRight: { default: null },
+    indentFirst: { default: null },
     // The Word spacing (a multiple of the font's NATURAL line). null = the
     // stylesheet's own rhythm; a value rides as --aw-lh and the CSS multiplies
     // it by --aw-natural, the natural line the metrics probe keeps current.
@@ -118,6 +151,7 @@ const paragraphWithPageBreak: NodeSpec = {
           null,
         spaceBefore: parseSpacingPt(dom.getAttribute("data-space-before")),
         spaceAfter: parseSpacingPt(dom.getAttribute("data-space-after")),
+        ...indentFromDom(dom),
         pageBreakBefore: dom.classList.contains("page-break-before"),
         tableCaption: dom.getAttribute("data-table-caption") || null,
       }),
@@ -137,6 +171,7 @@ const paragraphWithPageBreak: NodeSpec = {
       styles.push(`--aw-lh: ${node.attrs.lineHeight}`);
     }
     spacingMarkup(node, attrs, styles);
+    indentMarkup(node, attrs, styles);
     if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.pageBreakBefore) {
       attrs.class = "page-break-before";
@@ -159,6 +194,9 @@ const headingSpec: NodeSpec = {
     lineHeight: { default: null },
     spaceBefore: { default: null },
     spaceAfter: { default: null },
+    indentLeft: { default: null },
+    indentRight: { default: null },
+    indentFirst: { default: null },
   },
   parseDOM: [
     {
@@ -166,7 +204,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
     {
@@ -174,7 +212,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
     {
@@ -182,7 +220,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
     {
@@ -190,7 +228,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
     {
@@ -198,7 +236,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
     {
@@ -206,7 +244,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
     {
@@ -214,7 +252,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el) };
+        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
       },
     },
   ],
@@ -232,6 +270,7 @@ const headingSpec: NodeSpec = {
       styles.push(`--aw-lh: ${node.attrs.lineHeight}`);
     }
     spacingMarkup(node, attrs, styles);
+    indentMarkup(node, attrs, styles);
     if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.level === 1 && node.attrs.align === "center") {
       attrs.class = "title";

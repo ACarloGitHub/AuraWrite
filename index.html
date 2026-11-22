@@ -240,11 +240,11 @@
           </select>
         </div>
 
-        <!-- PARAGRAPH SPACING GROUP (E1: before/after in pt, dropdown with 2 fields) -->
+        <!-- PARAGRAPH PANEL (E1 spacing + E2 indents, one place as Word's dialog) -->
         <div class="toolbar-group margins-dropdown toolbar-group--code-disabled" id="spacing-group">
-          <button id="btn-spacing" class="toolbar__btn" title="Paragraph spacing: before / after">
-            <span class="toolbar__btn-icon">↕</span>
-            <span class="toolbar__btn-text">Spacing</span>
+          <button id="btn-spacing" class="toolbar__btn" title="Paragraph: spacing and indents">
+            <span class="toolbar__btn-icon">¶</span>
+            <span class="toolbar__btn-text">Paragraph</span>
             <span class="toolbar__btn-caret">▾</span>
           </button>
           <div id="spacing-panel" class="margins-dropdown__panel">
@@ -257,6 +257,21 @@
               <label for="inp-space-after">After</label>
               <input type="number" id="inp-space-after" class="toolbar__number-input" min="0" max="600" step="1" placeholder="Default" aria-label="Spacing after" />
               <span>pt</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-indent-left">Left</label>
+              <input type="number" id="inp-indent-left" class="toolbar__number-input" min="0" max="12" step="0.1" placeholder="0" aria-label="Indent left" />
+              <span>cm</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-indent-right">Right</label>
+              <input type="number" id="inp-indent-right" class="toolbar__number-input" min="0" max="12" step="0.1" placeholder="0" aria-label="Indent right" />
+              <span>cm</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-indent-first">First line</label>
+              <input type="number" id="inp-indent-first" class="toolbar__number-input" min="-12" max="12" step="0.1" placeholder="0" aria-label="Indent first line" />
+              <span>cm</span>
             </div>
           </div>
         </div>

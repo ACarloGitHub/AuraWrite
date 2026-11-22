@@ -181,6 +181,10 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
        block beats the export's own rhythm, an unmarked one keeps it. */
     [data-space-before] { margin-top: var(--aw-sb); }
     [data-space-after] { margin-bottom: var(--aw-sa); }
+    /* E2: the chosen indents travel inline; marked blocks beat the rhythm. */
+    [data-indent-left] { margin-left: var(--aw-il); }
+    [data-indent-right] { margin-right: var(--aw-ir); }
+    [data-indent-first] { text-indent: var(--aw-if); }
     p[data-align="center"], [data-align="center"] { text-align: center; }
     p[data-align="right"], [data-align="right"] { text-align: right; }
     blockquote {

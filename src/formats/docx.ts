@@ -34,6 +34,7 @@ import { assertNeverKind, elementTypeOf } from "../editor/element-types";
 import { parseBorder } from "../editor/table-borders";
 import { columnPercents, columnTwips, columnWeights } from "../editor/table-widths";
 import { cellPaddingOf, cellPaddingTwips } from "../editor/table-padding";
+import { CM_TO_TWIP } from "../editor/paragraph-indent";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -531,6 +532,24 @@ function applyParagraphMeta(wP: any, el: any): void {
     }
     if (before != null) el.setAttribute("data-space-before", String(before));
     if (after != null) el.setAttribute("data-space-after", String(after));
+  }
+
+  // E2: direct w:ind (twips -> cm). A list paragraph keeps Word's numbering
+  // indent out: in AuraWrite lists indent by nesting, and importing the
+  // numbers would double the shift. firstLine minus hanging = the signed
+  // first-line indent (negative = sporgente).
+  const wInd = pPr.getElementsByTagNameNS(W_NS, "ind")?.[0];
+  if (wInd && !(typeof el.closest === "function" && el.closest("li"))) {
+    const twipsToCm = (raw: string | null): number => {
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.round((n / CM_TO_TWIP) * 100) / 100 : 0;
+    };
+    const left = twipsToCm(attrValue(wInd, W_NS, "left"));
+    const right = twipsToCm(attrValue(wInd, W_NS, "right"));
+    const first = Math.round((twipsToCm(attrValue(wInd, W_NS, "firstLine")) - twipsToCm(attrValue(wInd, W_NS, "hanging"))) * 100) / 100;
+    if (left > 0) el.setAttribute("data-indent-left", String(left));
+    if (right > 0) el.setAttribute("data-indent-right", String(right));
+    if (first !== 0) el.setAttribute("data-indent-first", String(first));
   }
 }
 
@@ -1441,7 +1460,7 @@ function tableNodeToDocx(tableNode: any): Table {
 interface ParagraphExtras {
   align?: (typeof AlignmentType)[keyof typeof AlignmentType];
   heading?: (typeof HeadingLevel)[keyof typeof HeadingLevel];
-  indent?: { left?: number; right?: number };
+  indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
   italic?: boolean;
   style?: string;
   pageBreakBefore?: boolean;
@@ -1454,6 +1473,21 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   if (extras.heading) opts.heading = extras.heading;
   if (extras.style) opts.style = extras.style;
   if (extras.indent) opts.indent = extras.indent;
+  // E2: the chosen indent trio is direct formatting (cm -> twips). A negative
+  // first line is Word's hanging; the two never travel together.
+  const indLeft = node.attrs?.indentLeft;
+  const indRight = node.attrs?.indentRight;
+  const indFirst = node.attrs?.indentFirst;
+  const chosenIndent: { left?: number; right?: number; firstLine?: number; hanging?: number } = {};
+  if (typeof indLeft === "number" && indLeft > 0) chosenIndent.left = Math.round(indLeft * CM_TO_TWIP);
+  if (typeof indRight === "number" && indRight > 0) chosenIndent.right = Math.round(indRight * CM_TO_TWIP);
+  if (typeof indFirst === "number" && indFirst !== 0) {
+    if (indFirst > 0) chosenIndent.firstLine = Math.round(indFirst * CM_TO_TWIP);
+    else chosenIndent.hanging = Math.round(-indFirst * CM_TO_TWIP);
+  }
+  if (Object.keys(chosenIndent).length > 0) {
+    opts.indent = { ...(opts.indent || {}), ...chosenIndent };
+  }
   if (extras.italic) {
     runs.forEach((r: RunOrLinkOrImage) => {
       const o: any = (r as any).options;

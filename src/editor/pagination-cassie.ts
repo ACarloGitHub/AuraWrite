@@ -79,6 +79,7 @@ import {
   type TextMetrics,
 } from "./text-metrics";
 import { spacingOverride } from "./paragraph-spacing";
+import { lineIndentOf } from "./paragraph-indent";
 
 // The probed metrics, read through the module so every call sees the latest
 // probe without this file having to hold a second copy of the state.
@@ -313,17 +314,23 @@ function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, ba
 /** Height of a paragraph/heading measured exactly (uniform batch or mixed). */
 function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics): BlockMetrics {
   const ps = paragraphStyle(node, base);
-  if (!ps.mixed) {
+  // E2: the indents shorten the lines; the first line alone carries the
+  // first-line indent, so a paragraph that has one is measured line by line.
+  const ind = lineIndentOf(node);
+  const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
+  const widthAt = (relY: number): number =>
+    Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
+  if (!ps.mixed && ind.first === 0) {
     if (!hasHardBreak(node)) {
       // cheap batch height (line count only); exact line positions are
       // computed later, and only for paragraphs that cross a boundary
-      return measureTextBlock(node, contentWidth, ps.style);
+      return measureTextBlock(node, width, ps.style);
     }
-    const offs = paragraphLineOffsets(node, contentWidth, ps.style);
+    const offs = paragraphLineOffsets(node, width, ps.style);
     const n = Math.max(1, offs.length);
     return { heightPx: n * ps.style.linePx, lineCount: n };
   }
-  const lines = mixedParagraphLines(node, () => contentWidth, base);
+  const lines = mixedParagraphLines(node, widthAt, base);
   const last = lines[lines.length - 1];
   return { heightPx: last.y + last.h, lineCount: lines.length };
 }
@@ -637,6 +644,18 @@ export function blockLineStartOffsets(
   contentWidth: number,
 ): number[] | null {
   if (node.type.name !== "paragraph" && node.type.name !== "heading") return null;
+  const ind = lineIndentOf(node);
+  if (ind.first !== 0) {
+    // the first line is not as wide as the others: walk it line by line
+    const base = baseMetricsFor(node);
+    const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
+    const lines = mixedParagraphLines(
+      node,
+      (relY) => Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width),
+      base,
+    );
+    return lines.map((l) => l.off);
+  }
   return paragraphLineOffsets(node, contentWidth, baseMetricsFor(node));
 }
 
@@ -969,6 +988,10 @@ export function lineStartOffsets(
  * edge; an empty run still renders one line.
  */
 function paragraphLineOffsets(node: PMNode, contentWidth: number, style: TextMetrics): number[] {
+  // E2: left/right indents shorten every line (the first-line indent never
+  // reaches this lane: such paragraphs are measured line by line).
+  const ind = lineIndentOf(node);
+  contentWidth = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
   const out: number[] = [];
   let runText = "";
   let runPmStart = 0;
@@ -1041,6 +1064,26 @@ function baseSpacingFor(node: PMNode): BlockSpacing {
     }
     default: return sp.other;
   }
+}
+
+/** E2: the width a line of this node may use at absolute height yAbs.
+ *  The indent moves the line's start; a float intrudes only for the part
+ *  that reaches past it (a left indent can clear a left float entirely).
+ *  `firstLine` carries the signed first-line indent. */
+function indentedWidthAt(
+  node: PMNode,
+  set: ObstacleSet,
+  columnWidth: number,
+  yAbs: number,
+  firstLine: boolean,
+): number {
+  const ind = lineIndentOf(node);
+  if (ind.left === 0 && ind.right === 0 && ind.first === 0) return set.widthAt(yAbs);
+  const start = ind.left + (firstLine ? ind.first : 0);
+  const sides = set.sidesAt(yAbs);
+  const avail = columnWidth - ind.right - start
+    - Math.max(0, sides.left - start) - Math.max(0, sides.right - ind.right);
+  return Math.max(MIN_LINE_WIDTH_PX, avail);
 }
 
 function floatSpecOf(node: PMNode): { side: "left" | "right"; widthPx: number } | null {
@@ -1277,16 +1320,23 @@ function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWi
   const ps = paragraphStyle(node, base);
   e.style = ps.style;
   e.mixed = ps.mixed;
-  if (ps.mixed) {
-    const lines = mixedParagraphLines(node, () => contentWidth, base);
+  // E2: a first-line indent makes the first line wider/narrower than the
+  // rest — the uniform lanes would miscount it, so it joins the mixed lane.
+  const ind = lineIndentOf(node);
+  const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
+  const widthAt = (relY: number): number =>
+    Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
+  if (ps.mixed || ind.first !== 0) {
+    e.mixed = true;
+    const lines = mixedParagraphLines(node, widthAt, base);
     e.relMixed = lines;
     const last = lines[lines.length - 1];
     e.heightPx = last.y + last.h;
   } else if (hasHardBreak(node)) {
-    e.relOffsets = paragraphLineOffsets(node, contentWidth, ps.style);
+    e.relOffsets = paragraphLineOffsets(node, width, ps.style);
     e.heightPx = Math.max(1, e.relOffsets.length) * ps.style.linePx;
   } else {
-    e.heightPx = measureTextBlock(node, contentWidth, ps.style).heightPx;
+    e.heightPx = measureTextBlock(node, width, ps.style).heightPx;
   }
   return e;
 }
@@ -1447,7 +1497,6 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
   let anchorTopY = 0;
   let hasAnchor = false;
 
-  const widthAt = (yq: number): number => obstacleSet.widthAt(yq);
   const pageOf = (yq: number): number => Math.floor(yq / contentHeight) + 1;
   const pageRemainder = (yq: number): number => contentHeight - (yq % contentHeight);
   const pushBreak = (atPos: number, yTop: number, mid: boolean, inTable = false): void => {
@@ -1536,7 +1585,11 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
     const fallback = { pos: atPos + 1, lineTop: topOfBlock };
     if (!e.splittable) return fallback;
     if (e.mixed) {
-      const rel = e.relMixed ?? mixedParagraphLines(node, () => widthAt(topOfBlock), baseMetricsFor(node));
+      const rel = e.relMixed ?? mixedParagraphLines(
+        node,
+        (relY) => indentedWidthAt(node, obstacleSet, contentWidth, topOfBlock + relY, relY === 0),
+        baseMetricsFor(node),
+      );
       let hit = rel[0];
       for (const l of rel) {
         if (topOfBlock + l.y + l.h <= bandTop) hit = l;
@@ -1813,7 +1866,11 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
           if (hit && hit.key === key) {
             return hit.lines.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
           }
-          const rel = mixedParagraphLines(node, (relY) => widthAt(sy + relY), baseMetricsFor(node));
+          const rel = mixedParagraphLines(
+            node,
+            (relY) => indentedWidthAt(node, obstacleSet, contentWidth, sy + relY, relY === 0),
+            baseMetricsFor(node),
+          );
           SHAPED_CACHE.set(node, { key, lines: rel.map((l) => ({ off: l.off, y: l.y, h: l.h })) });
           return rel.map((l) => ({ ...l, y: sy + l.y }));
         }
@@ -1823,7 +1880,10 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
         if (hit && hit.key === key) {
           return hit.lines.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
         }
-        const rel = walkParagraphLines(node, style, 0, (relY) => widthAt(sy + relY));
+        const rel = walkParagraphLines(
+          node, style, 0,
+          (relY) => indentedWidthAt(node, obstacleSet, contentWidth, sy + relY, relY === 0),
+        );
         SHAPED_CACHE.set(node, { key, lines: rel.map((l) => ({ off: l.off, y: l.y, h: l.h })) });
         return rel.map((l) => ({ off: l.off, y: sy + l.y, h: l.h }));
       };

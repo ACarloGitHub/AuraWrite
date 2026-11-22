@@ -153,6 +153,20 @@ export class ObstacleSet {
     return Math.max(MIN_LINE_WIDTH_PX, this.columnWidth - used);
   }
 
+  /** E2: the two intrusions separately — an indent clears the part of a
+   *  float it already sits past, so the sides must not be summed blind. */
+  sidesAt(y: number): { left: number; right: number } {
+    let left = 0;
+    let right = 0;
+    for (const o of this.items) {
+      if (y >= o.y0 && y < o.y1) {
+        if (o.side === "left") left += o.widthPx;
+        else right += o.widthPx;
+      }
+    }
+    return { left, right };
+  }
+
   /** True when any obstacle overlaps the height range [from, to). */
   overlaps(from: number, to: number): boolean {
     for (const o of this.items) {

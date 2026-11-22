@@ -24,6 +24,9 @@
 /* a page that starts mid-paragraph continues from the page edge: the
    engine gives that fragment no leading gap, so strip the block's own */
 .ProseMirror.aw-print-body.aw-print-cont > :first-child { margin-top: 0; }
+/* E2: a continuation fragment's first line is NOT the paragraph's first
+   line: the first-line indent belongs to the real first line only. */
+.ProseMirror.aw-print-body.aw-print-cont > :first-child { text-indent: 0; }
 /* E1: a chosen space-before on the FIRST block of a sheet must stay INSIDE
    the body: the engine counts it (y0 = y + beforePx at a page top), and a
    margin that collapses through the padding-less body would push the text

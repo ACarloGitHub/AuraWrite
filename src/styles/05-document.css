@@ -140,6 +140,10 @@
      the SAME Math.max model the page calculator walks. */
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 1em);
+  /* E2: the chosen indents (cm, inline from toDOM); none = flush. */
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   /* The Word spacing: the chosen multiple (--aw-lh, inline from toDOM) times
      the font's NATURAL line (--aw-natural, written by the metrics probe).
      No choice yet ("Default") -> the document's own rhythm, exactly the
@@ -915,6 +919,9 @@
   color: #2e74b5;
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 0.5em);
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   line-height: 1.2;
 }
 
@@ -924,6 +931,9 @@
   color: #2e74b5;
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 0.5em);
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   line-height: 1.3;
 }
 
@@ -933,6 +943,9 @@
   color: #2e74b5;
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 0.5em);
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   line-height: 1.4;
 }
 
@@ -941,6 +954,9 @@
   font-weight: 600;
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 0.5em);
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   line-height: 1.4;
 }
 
@@ -949,6 +965,9 @@
   font-weight: 600;
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 0.5em);
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   line-height: 1.4;
 }
 
@@ -957,6 +976,9 @@
   font-weight: 600;
   margin-top: var(--aw-sb, 0);
   margin-bottom: var(--aw-sa, 0.5em);
+  margin-left: var(--aw-il, 0);
+  margin-right: var(--aw-ir, 0);
+  text-indent: var(--aw-if, 0);
   line-height: 1.4;
 }
 
