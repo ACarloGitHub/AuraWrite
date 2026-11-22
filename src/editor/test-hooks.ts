@@ -20,7 +20,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "prosemirror-view";
 import { applyDocumentJson, installDocument } from "./document-loader";
 import { parseHTML } from "./editor";
-import { fromDocx } from "../formats/docx";
+import { fromDocx, toDocx, Packer } from "../formats/docx";
+import { toHTML } from "../formats/html";
+import { effectiveDocumentLanguage } from "./document-language";
 import { freeAnchorState } from "./free-layout-plugin";
 import { freeWrapDiagnosis, freeWrapState, pageGeometry } from "./pagination-cassie-plugin";
 import { calculatePageBreaks, getPageFormat, setPageFormat, PAGE_FORMATS } from "./pagination-cassie";
@@ -52,6 +54,10 @@ export interface TestHooks {
   pageFrame(): HookResult;
   /** Change the page format (a4 / a3 / letter) and measure again. */
   pageFormat(id?: string): HookResult;
+  /** Export the CURRENT document to DOCX at `path` — the export button's own chain. */
+  exportDocx(path: string): Promise<HookResult>;
+  /** Export the CURRENT document to HTML at `path` — the export button's own chain. */
+  exportHtml(path: string): Promise<HookResult>;
 }
 
 declare global {
@@ -174,6 +180,29 @@ export function installTestHooks(view: EditorView): void {
       try {
         if (id) setPageFormat(id);
         return { ok: true, current: getPageFormat().id, formats: Object.keys(PAGE_FORMATS) };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    async exportDocx(path: string): Promise<HookResult> {
+      try {
+        // The SAME chain as File > Export Word: toDocx -> Packer -> save_binary_file.
+        const docxDoc = await toDocx(view.state.doc);
+        const base64 = await Packer.toBase64String(docxDoc);
+        await invoke("save_binary_file", { path, base64Content: base64 });
+        return { ok: true, bytes: Math.floor((base64.length * 3) / 4) };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    async exportHtml(path: string): Promise<HookResult> {
+      try {
+        // The SAME chain as File > Export HTML: toHTML -> save_document.
+        const html = await toHTML(view.state.doc, { language: effectiveDocumentLanguage() });
+        await invoke("save_document", { path, content: html });
+        return { ok: true, chars: html.length };
       } catch (e) {
         return { ok: false, error: `${e}` };
       }
