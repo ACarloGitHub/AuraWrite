@@ -1,6 +1,9 @@
 import { DOMSerializer } from "prosemirror-model";
 import { invoke } from "@tauri-apps/api/core";
 import { getEditorMetrics } from "../editor/text-metrics";
+import { applyTabAdvances } from "../editor/paragraph-tabs";
+import { getContentWidth, tabAdvancesFor } from "../editor/pagination-cassie";
+import { getMargins } from "../editor/pagination-state";
 
 interface ToHtmlOptions {
   /** Inline images as base64 data URIs (self-contained file). Default true.
@@ -43,6 +46,20 @@ export async function toHTML(doc: any, opts: ToHtmlOptions = {}): Promise<string
 
   const container = document.createElement("div");
   container.appendChild(fragment);
+
+  // E3: a tabulation's advance does not exist in markup — the same numbers the
+  // editor draws are written on a span that KEEPS the character inside, so the
+  // file renders like the page and a reimport still reads a tabulation (D10).
+  {
+    const width = getContentWidth(getMargins());
+    let index = 0;
+    doc.forEach((node: any) => {
+      const el = container.children[index++] as HTMLElement | undefined;
+      if (el && (node.textContent ?? "").includes("\t")) {
+        applyTabAdvances(el, tabAdvancesFor(node, width));
+      }
+    });
+  }
 
   if (embedImages) {
     for (const img of container.querySelectorAll("img")) {
@@ -203,6 +220,36 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
       background: #f5f5f5;
     }
     img { max-width: 100%; height: auto; }
+    /* E3: a tabulation is laid out by the spans the export writes (the advance
+       the page calculator computed); the character inside holds no width. */
+    .aw-tab {
+      display: inline-block;
+      overflow: hidden;
+      white-space: pre;
+      tab-size: 0;
+      vertical-align: baseline;
+      background-repeat: repeat-x;
+      background-position: 0 0.78em;
+    }
+    .aw-tab--leader[data-leader='.'] {
+      background-image: radial-gradient(circle, currentColor 1px, transparent 1.1px);
+      background-size: 0.42em 100%;
+    }
+    .aw-tab--leader[data-leader='\u00b7'] {
+      background-image: radial-gradient(circle, currentColor 1.4px, transparent 1.5px);
+      background-size: 0.6em 100%;
+    }
+    .aw-tab--leader[data-leader='-'] {
+      background-image: repeating-linear-gradient(90deg, currentColor 0 0.2em, transparent 0.2em 0.38em);
+      background-size: 100% 1px;
+      background-repeat: repeat-x;
+    }
+    .aw-tab--leader[data-leader='_'] {
+      background-image: linear-gradient(currentColor, currentColor);
+      background-size: 100% 1px;
+      background-repeat: no-repeat;
+      background-position: 0 calc(100% - 0.12em);
+    }
     figure[data-aw-figure] {
       width: fit-content;
       max-width: 100%;

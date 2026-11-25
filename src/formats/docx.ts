@@ -18,6 +18,9 @@ import {
   VerticalAlign,
   HeightRule,
   ImageRun,
+  Tab,
+  TabStopType,
+  LeaderType,
   TextWrappingType,
   TextWrappingSide,
   HorizontalPositionRelativeFrom,
@@ -35,6 +38,7 @@ import { parseBorder } from "../editor/table-borders";
 import { columnPercents, columnTwips, columnWeights } from "../editor/table-widths";
 import { cellPaddingOf, cellPaddingTwips } from "../editor/table-padding";
 import { CM_TO_TWIP } from "../editor/paragraph-indent";
+import { formatTabStops, parseTabStops, type TabAlign } from "../editor/paragraph-tabs";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -210,7 +214,7 @@ async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<strin
     const el = findHtmlBlockByText(container, wText, htmlBlocksConsumed);
     if (el) {
       applyParagraphMeta(wP, el);
-      applyRunMeta(wP, el);
+        applyRunMeta(wP, el);
       applyDrawingMeta(wP, el);
     }
   }
@@ -551,10 +555,57 @@ function applyParagraphMeta(wP: any, el: any): void {
     if (right > 0) el.setAttribute("data-indent-right", String(right));
     if (first !== 0) el.setAttribute("data-indent-first", String(first));
   }
+
+  // E3: direct w:tabs (twips -> cm, the text margin's origin). Word's default
+  // tab pitch is not written on the file and is not a choice of ours: only the
+  // stops the paragraph really declares come back.
+  const wTabs = pPr.getElementsByTagNameNS(W_NS, "tabs")?.[0];
+  if (wTabs) {
+    const alignOf = (val: string | null): TabAlign | null => {
+      switch (val) {
+        case "left":
+        case "start":
+          return "left";
+        case "center":
+          return "center";
+        case "right":
+        case "end":
+          return "right";
+        case "decimal":
+          return "decimal";
+        default:
+          return null;
+      }
+    };
+    const leaderOf = (val: string | null): string | null => {
+      switch (val) {
+        case "dot":
+          return ".";
+        case "hyphen":
+          return "-";
+        case "underscore":
+          return "_";
+        case "middleDot":
+          return "·";
+        default:
+          return null;
+      }
+    };
+    const stops = Array.from(wTabs.getElementsByTagNameNS(W_NS, "tab") || []) as any[];
+    const list = stops
+      .map((t) => {
+        const align = alignOf(attrValue(t, W_NS, "val"));
+        const pos = Number(attrValue(t, W_NS, "pos"));
+        if (!align || !Number.isFinite(pos)) return null;
+        return { pos: Math.round((pos / CM_TO_TWIP) * 100) / 100, align, leader: leaderOf(attrValue(t, W_NS, "leader")) };
+      })
+      .filter((s): s is { pos: number; align: TabAlign; leader: string | null } => s !== null);
+    const value = formatTabStops(list);
+    if (value) el.setAttribute("data-tab-stops", value);
+  }
 }
 
-function applyRunMeta(wP: any, el: any): void {
-  const wRuns: any[] = Array.from(wP.getElementsByTagNameNS(W_NS, "r") || []);
+function applyRunMeta(wP: any, el: any): void {  const wRuns: any[] = Array.from(wP.getElementsByTagNameNS(W_NS, "r") || []);
   const ownerDoc = el.ownerDocument || el;
 
   for (const wR of wRuns) {
@@ -1488,10 +1539,35 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   if (Object.keys(chosenIndent).length > 0) {
     opts.indent = { ...(opts.indent || {}), ...chosenIndent };
   }
+  // E3: the tab stops as Word's own `w:pPr/w:tabs` (twips from the text margin,
+  // the origin both programs count from). A stop Word does not know (a fill
+  // character we keep) simply travels without its leader.
+  const stops = parseTabStops(node.attrs?.tabStops);
+  if (stops.length) {
+    const leaderOf = (ch: string | null): (typeof LeaderType)[keyof typeof LeaderType] | undefined => {
+      switch (ch) {
+        case ".":
+          return LeaderType.DOT;
+        case "-":
+          return LeaderType.HYPHEN;
+        case "_":
+          return LeaderType.UNDERSCORE;
+        case "·":
+          return LeaderType.MIDDLE_DOT;
+        default:
+          return undefined;
+      }
+    };
+    opts.tabStops = stops.map((s) => ({
+      type: TabStopType[(s.align === "left" ? "LEFT" : s.align === "center" ? "CENTER" : s.align === "right" ? "RIGHT" : "DECIMAL") as keyof typeof TabStopType],
+      position: Math.round(s.pos * CM_TO_TWIP),
+      leader: leaderOf(s.leader),
+    }));
+  }
   if (extras.italic) {
     runs.forEach((r: RunOrLinkOrImage) => {
       const o: any = (r as any).options;
-      if (o && o.text != null) o.italics = true;
+      if (o && (o.text != null || o.children)) o.italics = true;
     });
   }
 
@@ -1500,7 +1576,7 @@ function paragraphFromNode(node: any, extras: ParagraphExtras = {}, imageCache?:
   if (node.attrs?.tableCaption) {
     runs.forEach((r: RunOrLinkOrImage) => {
       const o: any = (r as any).options;
-      if (o && o.text != null) {
+      if (o && (o.text != null || o.children)) {
         o.italics = true;
         o.size = 18;
       }
@@ -1599,6 +1675,21 @@ function makeRun(text: string, marks: any[]): TextRun {
     }
   }
 
+  // E3: a tabulation is not a character in Word — it is a `<w:tab/>` element of
+  // its own. The text is split around every `\t` and a Tab goes between the
+  // pieces, so the run keeps its marks (the file says what the screen shows).
+  if (text.includes("\t")) {
+    const children: any[] = [];
+    const pieces = text.split("\t");
+    pieces.forEach((piece, i) => {
+      if (i > 0) children.push(new Tab());
+      if (piece) children.push(piece);
+    });
+    opts.children = children;
+  } else {
+    opts.text = text;
+  }
+
   return new TextRun(opts);
 }
 
@@ -1608,7 +1699,7 @@ type RunOrLinkOrImage = RunOrLink | ImageRun;
 function nodeContentToRuns(node: any, imageCache?: Map<string, Uint8Array>): RunOrLinkOrImage[] {
   if (!node.content) {
     const text = node.text || "";
-    return text ? [new TextRun({ text })] : [];
+    return text ? [makeRun(text, [])] : [];
   }
 
   return contentToArray(node.content).map((child: any) => {

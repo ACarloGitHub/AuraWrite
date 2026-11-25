@@ -29,6 +29,8 @@ import {
 } from "./pagination-cassie";
 import { freeElementWidth, freeLayoutMap, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
 import { getEditorMetrics } from "./text-metrics";
+import { applyTabAdvances } from "./paragraph-tabs";
+import { tabAdvancesFor, type TabPlacement } from "./pagination-cassie";
 import { isOverlap, textConditionOf } from "./element-condition";
 import type { BandPiece, DomBand } from "./pagination-cassie-plugin";
 
@@ -73,6 +75,9 @@ export function buildPrintPages(
   const contentWidth = getContentWidth(margins);
   const contentHeight = getContentHeight(margins);
   const sheets: PrintSheet[] = [];
+  // E3: the tab advances of a block, computed once for the whole block (the
+  // same numbers the editor draws) and handed to every fragment it is cut into.
+  const tabCache = new Map<PMNode, TabPlacement[]>();
 
   // Free elements must NOT print in the line they live in: they are placed on
   // the sheet they are DRAWN on, with the same rectangle the editor paints
@@ -214,6 +219,18 @@ export function buildPrintPages(
       // Il blocco porta la sua posizione nel documento: all'anteprima serve per
       // ritrovare il paragrafo a cui un elemento libero e' appeso.
       el.dataset.awPos = String(docStart);
+      // E3: le tabulazioni del foglio sono quelle che lo schermo disegna. Il
+      // frammento puo' cominciare a meta' paragrafo (openStart), e allora va
+      // detto quante battute del blocco mancano, o gli avanzamenti slitterebbero.
+      if (node.textContent.includes("\t")) {
+        let placements = tabCache.get(node);
+        if (!placements) {
+          placements = tabAdvancesFor(node, contentWidth);
+          tabCache.set(node, placements);
+        }
+        const skip = cuts[i] > docStart ? charOffsetAt(node, cuts[i] - docStart) : 0;
+        applyTabAdvances(el, placements, skip);
+      }
       if (isOverlap(textConditionOf(node))) {
         // Overlap in the flow: out of the page flow but keeping the place it
         // already had, exactly as on screen (free-style.applyOverlapLayout).
@@ -303,8 +320,36 @@ export function buildPrintPages(
 }
 
 /** The top-level block containing `pos`, with its start position. */
-function blockStartOf(doc: PMNode, pos: number): { node: PMNode; start: number } | null {
-  let found: { node: PMNode; start: number } | null = null;
+/**
+ * E3: how many CHARACTERS of a block sit before `posInBlock` (a document
+ * position relative to the block's own start, first character = 1). A sheet can
+ * cut a paragraph mid-way, and the tab advances are keyed by characters (what
+ * the serialized DOM carries), not by document positions (which skip a unit for
+ * every hard break).
+ */
+function charOffsetAt(node: PMNode, posInBlock: number): number {
+  let chars = 0;
+  let pm = 0;
+  let out = 0;
+  let done = false;
+  node.forEach((child) => {
+    if (done) return;
+    if (child.isText) {
+      const len = (child.text ?? "").length;
+      if (posInBlock <= pm + 1 + len) {
+        out = chars + Math.max(0, posInBlock - (pm + 1));
+        done = true;
+      }
+      pm += len;
+      chars += len;
+    } else {
+      pm += child.nodeSize;
+    }
+  });
+  return done ? out : chars;
+}
+
+function blockStartOf(doc: PMNode, pos: number): { node: PMNode; start: number } | null {  let found: { node: PMNode; start: number } | null = null;
   doc.forEach((node, offset) => {
     if (offset > pos) return false;
     if (offset + node.nodeSize > pos) {

@@ -22,6 +22,7 @@ import { applyDocumentJson, installDocument, installEmptyDocument } from "./docu
 import { effectiveDocumentLanguage, withDocumentLanguage } from "./document-language";
 import { setupParagraphSpacing, syncParagraphSpacingInputs } from "./paragraph-spacing";
 import { setupParagraphIndent, syncParagraphIndentInputs } from "./paragraph-indent";
+import { setupParagraphTabs, syncParagraphTabsInputs } from "./paragraph-tabs";
 
 /** The document as it is saved: its content plus the language it declares. */
 function currentDocumentJson(): string {
@@ -107,6 +108,7 @@ export function setupToolbar(view: EditorView): void {
   setupWidthControl();
   setupParagraphSpacing(() => editorView);
   setupParagraphIndent(() => editorView);
+  setupParagraphTabs(() => editorView);
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
@@ -2099,10 +2101,9 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
           proxyRow.style.paddingBottom = "4px";
 
           const label = row.querySelector("label");
-          const input = row.querySelector("input");
           const unit = row.querySelector("span");
 
-          if (label) {
+          if (label && label.textContent?.trim()) {
             const proxyLabel = document.createElement("span");
             proxyLabel.textContent = label.textContent;
             proxyLabel.style.fontSize = "11px";
@@ -2110,24 +2111,17 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
             proxyLabel.style.minWidth = "48px";
             proxyRow.appendChild(proxyLabel);
           }
-          if (input) {
-            const proxyInput = document.createElement("input");
-            proxyInput.type = "number";
-            proxyInput.min = input.min;
-            proxyInput.max = input.max;
-            proxyInput.step = input.step;
-            proxyInput.value = input.value;
-            proxyInput.className = "toolbar__number-input";
-            proxyInput.style.width = "56px";
-            proxyInput.setAttribute("aria-label", input.getAttribute("aria-label") || input.title || "");
 
-            proxyInput.addEventListener("change", () => {
-              input.value = proxyInput.value;
-              input.dispatchEvent(new Event("change", { bubbles: true }));
-            });
-
-            proxyRow.appendChild(proxyInput);
+          // Every control of the row is mirrored, whatever kind it is: the
+          // Paragraph panel holds numbers (spacing, indents), a text field and
+          // selects (tab stops, E3), and their buttons. A drawn strip has no
+          // proxy — the fields do the same job from here.
+          for (const control of Array.from(row.children)) {
+            if (control === label || control === unit) continue;
+            const proxy = createProxyControl(control as HTMLElement);
+            if (proxy) proxyRow.appendChild(proxy);
           }
+
           if (unit) {
             const proxyUnit = document.createElement("span");
             proxyUnit.textContent = unit.textContent;
@@ -2136,9 +2130,10 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
             proxyRow.appendChild(proxyUnit);
           }
 
-          overflowMenu.appendChild(proxyRow);
+          if (proxyRow.children.length > 0) overflowMenu.appendChild(proxyRow);
         }
       }
+
       const divider = document.createElement("div");
       divider.className = "dropdown-divider";
       overflowMenu.appendChild(divider);
@@ -2198,6 +2193,74 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
     overflowMenu.classList.remove("hidden");
     positionDropdown(overflowDropdown.querySelector("#btn-overflow-menu") as HTMLElement, overflowMenu);
   }
+}
+
+/**
+ * The mirror of ONE control of the Paragraph panel (or of any margins-dropdown
+ * row) inside the overflow menu. Numbers, text, choices and buttons all travel;
+ * anything else (the drawn strip of tab stops) is left to the fields.
+ */
+function createProxyControl(original: HTMLElement): HTMLElement | null {
+  // A drawn strip (the tab stops of E3) is mirrored as a copy of itself: the
+  // panel's own click handler is on the document, so the copy works as it is.
+  if (original.classList.contains("tab-strip")) {
+    return original.cloneNode(true) as HTMLElement;
+  }
+
+  if (original instanceof HTMLInputElement) {
+    const input = document.createElement("input");
+    input.type = original.type === "text" ? "text" : original.type;
+    input.value = original.value;
+    input.className = "toolbar__number-input";
+    input.style.width = original.type === "text" ? "96px" : "56px";
+    if (original.type === "number") {
+      input.min = original.min;
+      input.max = original.max;
+      input.step = original.step;
+    }
+    input.placeholder = original.placeholder;
+    input.setAttribute("aria-label", original.getAttribute("aria-label") || original.title || "");
+    input.addEventListener("change", () => {
+      original.value = input.value;
+      original.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return input;
+  }
+
+  if (original instanceof HTMLSelectElement) {
+    const select = document.createElement("select");
+    select.className = "toolbar__select";
+    for (const option of Array.from(original.options)) {
+      const copy = document.createElement("option");
+      copy.value = option.value;
+      copy.textContent = option.textContent;
+      select.appendChild(copy);
+    }
+    select.value = original.value;
+    select.setAttribute("aria-label", original.getAttribute("aria-label") || original.title || "");
+    select.addEventListener("change", () => {
+      original.value = select.value;
+      original.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return select;
+  }
+
+  if (original instanceof HTMLButtonElement) {
+    const btn = document.createElement("button");
+    btn.className = original.className;
+    btn.title = original.title || "";
+    btn.textContent = original.textContent?.trim() || "";
+    for (const attr of Array.from(original.attributes)) {
+      if (attr.name.startsWith("data-")) btn.setAttribute(attr.name, attr.value);
+    }
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      original.click();
+    });
+    return btn;
+  }
+
+  return null;
 }
 
 function createProxyButton(original: HTMLElement): HTMLElement | null {
@@ -2363,6 +2426,7 @@ export function syncSecondaryToolbar(view: EditorView): void {
   syncLineHeightSelect(view);
   syncParagraphSpacingInputs(view);
   syncParagraphIndentInputs(view);
+  syncParagraphTabsInputs(view);
   const bar = document.getElementById("image-toolbar");
   const tableControls = document.getElementById("table-controls");
   const info = getSelectedElement(view, ELEMENT_KINDS);

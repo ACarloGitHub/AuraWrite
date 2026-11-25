@@ -25,6 +25,8 @@ import { createTableFormulasPlugin } from "./table-formulas-plugin";
 import { cellPaddingOf, cellPaddingVars } from "./table-padding";
 import { parseSpacingPt } from "./paragraph-spacing";
 import { parseIndentCm } from "./paragraph-indent";
+import { formatTabStops, parseTabStops, protectTabs, restoreTabCharacters, tabCommand } from "./paragraph-tabs";
+import { createTabStopsPlugin } from "./paragraph-tabs-view";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -111,6 +113,20 @@ function indentMarkup(
   }
 }
 
+/** E3: the tab stops as markup (the canonical `<cm><l|c|r|d><leader?>;…` string). */
+function tabStopsFromDom(el: HTMLElement): { tabStops: string | null } {
+  const raw = el.getAttribute("data-tab-stops");
+  return { tabStops: formatTabStops(parseTabStops(raw)) };
+}
+
+function tabStopsMarkup(
+  node: { attrs: Record<string, unknown> },
+  attrs: Record<string, string>,
+): void {
+  const value = typeof node.attrs.tabStops === "string" ? node.attrs.tabStops : null;
+  if (value) attrs["data-tab-stops"] = value;
+}
+
 const paragraphWithPageBreak: NodeSpec = {
   content: "inline*",
   group: "block",
@@ -125,6 +141,10 @@ const paragraphWithPageBreak: NodeSpec = {
     indentLeft: { default: null },
     indentRight: { default: null },
     indentFirst: { default: null },
+    // E3: the Word tab stops, in canonical form (`6c;12r.;16d`). null = none of
+    // its own: past the last stop a tab follows the 1.25 cm grid. The tab
+    // CHARACTER travels as a `\t` in the text (Word's `<w:tab/>`).
+    tabStops: { default: null },
     // The Word spacing (a multiple of the font's NATURAL line). null = the
     // stylesheet's own rhythm; a value rides as --aw-lh and the CSS multiplies
     // it by --aw-natural, the natural line the metrics probe keeps current.
@@ -152,6 +172,7 @@ const paragraphWithPageBreak: NodeSpec = {
         spaceBefore: parseSpacingPt(dom.getAttribute("data-space-before")),
         spaceAfter: parseSpacingPt(dom.getAttribute("data-space-after")),
         ...indentFromDom(dom),
+        ...tabStopsFromDom(dom),
         pageBreakBefore: dom.classList.contains("page-break-before"),
         tableCaption: dom.getAttribute("data-table-caption") || null,
       }),
@@ -172,6 +193,7 @@ const paragraphWithPageBreak: NodeSpec = {
     }
     spacingMarkup(node, attrs, styles);
     indentMarkup(node, attrs, styles);
+    tabStopsMarkup(node, attrs);
     if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.pageBreakBefore) {
       attrs.class = "page-break-before";
@@ -197,6 +219,7 @@ const headingSpec: NodeSpec = {
     indentLeft: { default: null },
     indentRight: { default: null },
     indentFirst: { default: null },
+    tabStops: { default: null },
   },
   parseDOM: [
     {
@@ -204,7 +227,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
     {
@@ -212,7 +235,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
     {
@@ -220,7 +243,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
     {
@@ -228,7 +251,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
     {
@@ -236,7 +259,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
     {
@@ -244,7 +267,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
     {
@@ -252,7 +275,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el) };
+        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
       },
     },
   ],
@@ -271,6 +294,7 @@ const headingSpec: NodeSpec = {
     }
     spacingMarkup(node, attrs, styles);
     indentMarkup(node, attrs, styles);
+    tabStopsMarkup(node, attrs);
     if (styles.length) attrs.style = styles.join("; ");
     if (node.attrs.level === 1 && node.attrs.align === "center") {
       attrs.class = "title";
@@ -970,6 +994,10 @@ export function createEditor(element: HTMLElement): EditorViewType {
       keymap({ "Mod-z": undo, "Mod-y": redo, "Mod-Shift-z": redo }),
       keymap({
         Enter: splitListItem(editorSchema.nodes.list_item),
+        // E3: Tab writes a tabulation (sinks in a list, moves in a table).
+        Tab: tabCommand(false),
+        "Shift-Tab": tabCommand(true),
+        "Mod-Tab": tabCommand(false, true),
         "Mod-]": sinkListItem(editorSchema.nodes.list_item),
         "Mod-[": liftListItem(editorSchema.nodes.list_item),
         "Mod-k": (_state, _dispatch, view) => {
@@ -1007,6 +1035,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       pageBreakPlugin,
       suggestionsMarkerPlugin,
       findReplacePlugin,
+      createTabStopsPlugin(),
       createCassiePaginationPlugin({ enabled: getCassieMode }),
       linkPopoverPlugin,
       createImageDropPlugin(),
@@ -1111,8 +1140,11 @@ export function parseHTML(html: string): PMNode {
   const div = document.createElement("div");
   div.innerHTML = body.innerHTML;
 
+  // E3: a tabulation is whitespace, and ProseMirror's parser collapses it.
+  // The sentinel crosses the parse, then the character comes back.
+  protectTabs(div);
   const pmParser = ProseMirrorDOMParser.fromSchema(editorSchema);
-  return pmParser.parse(div);
+  return restoreTabCharacters(pmParser.parse(div));
 }
 
 export function toggleCassiePagedMode(view: EditorView): void {

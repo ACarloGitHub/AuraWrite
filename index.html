@@ -273,6 +273,45 @@
               <input type="number" id="inp-indent-first" class="toolbar__number-input" min="-12" max="12" step="0.1" placeholder="0" aria-label="Indent first line" />
               <span>cm</span>
             </div>
+            <!-- E3: tab stops. The strip is a schematic of the text column, not a
+                 ruler on the sheet: click to add a stop, click a marker to remove it. -->
+            <div class="margins-dropdown__row margins-dropdown__row--strip">
+              <label for="tab-strip">Tabs</label>
+              <div id="tab-strip" class="tab-strip" role="group" aria-label="Tab stops" title="Click to add a tab stop, click a marker to remove it"></div>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-tab-pos">Stop</label>
+              <input type="number" id="inp-tab-pos" class="toolbar__number-input" min="0" max="30" step="0.1" placeholder="cm" aria-label="Tab stop position" />
+              <span>cm</span>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="sel-tab-align">Align</label>
+              <select id="sel-tab-align" class="toolbar__select" aria-label="Tab stop alignment">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+                <option value="decimal">Decimal</option>
+              </select>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="sel-tab-leader">Leader</label>
+              <select id="sel-tab-leader" class="toolbar__select" aria-label="Tab leader">
+                <option value="">None</option>
+                <option value=".">Dots</option>
+                <option value="-">Dashes</option>
+                <option value="_">Underscore</option>
+                <option value="·">Middle dots</option>
+              </select>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="btn-tab-add"> </label>
+              <button type="button" id="btn-tab-add" data-tab-action="add" class="toolbar__btn" title="Add the tab stop">Add</button>
+              <button type="button" id="btn-tab-clear" data-tab-action="clear" class="toolbar__btn" title="Remove every tab stop of this paragraph">Clear</button>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-tab-stops">List</label>
+              <input type="text" id="inp-tab-stops" class="toolbar__number-input" placeholder="6c;12r" aria-label="Tab stops" />
+            </div>
           </div>
         </div>
 

@@ -153,10 +153,52 @@
   line-height: calc(var(--aw-lh, calc(1.5 / var(--aw-natural, 1.15))) * var(--aw-natural, 1.15));
 }
 
+/* E3: a tabulation has no glyph of its own. The advance arrives as an inline
+   width from the page calculator (paragraph-tabs-view.ts / print-pages.ts), so
+   the character inside holds no width of its own (tab-size: 0) and is clipped;
+   it stays in the DOM because it must keep being a tabulation to cut, paste,
+   export and reimport. The leader paints the gap. */
+.aw-tab {
+  display: inline-block;
+  overflow: hidden;
+  white-space: pre;
+  tab-size: 0;
+  vertical-align: baseline;
+  background-repeat: repeat-x;
+  background-position: 0 0.78em;
+}
+
+.aw-tab--leader[data-leader='.'] {
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1.1px);
+  background-size: 0.42em 100%;
+}
+
+.aw-tab--leader[data-leader='·'] {
+  background-image: radial-gradient(circle, currentColor 1.4px, transparent 1.5px);
+  background-size: 0.6em 100%;
+}
+
+.aw-tab--leader[data-leader='-'] {
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0 0.2em,
+    transparent 0.2em 0.38em
+  );
+  background-size: 100% 1px;
+  background-repeat: repeat-x;
+  background-position: 0 0.78em;
+}
+
+.aw-tab--leader[data-leader='_'] {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 calc(100% - 0.12em);
+}
+
 .ProseMirror strong {
   font-weight: bold;
 }
-
 .ProseMirror em {
   font-style: italic;
 }

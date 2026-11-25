@@ -358,6 +358,57 @@ body.reader-mode .toolbar {
   color: var(--color-text-muted);
 }
 
+/* E3: the strip of tab stops inside the Paragraph panel — a schematic of the
+   text column (no ruler on the sheet): the markers sit at their cm, a click on
+   the strip adds a stop there, a click on a marker removes it. */
+.margins-dropdown__row--strip {
+  align-items: flex-start;
+}
+
+.tab-strip {
+  position: relative;
+  flex: 1;
+  min-width: 130px;
+  height: 16px;
+  margin-top: 2px;
+  border-bottom: 1px solid var(--color-border);
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-border) 0 1px,
+    transparent 1px 10px
+  );
+  cursor: crosshair;
+}
+
+.tab-strip[hidden] {
+  display: none;
+}
+
+.tab-strip__stop {
+  position: absolute;
+  bottom: -1px;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 11px;
+  padding: 0;
+  border: none;
+  background: var(--color-primary);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  cursor: pointer;
+}
+
+.tab-strip__stop[data-align='center'] {
+  clip-path: polygon(50% 0, 100% 55%, 50% 100%, 0 55%);
+}
+
+.tab-strip__stop[data-align='right'] {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.tab-strip__stop[data-align='decimal'] {
+  clip-path: polygon(50% 0, 100% 100%, 50% 80%, 0 100%);
+}
+
 /* Overflow dropdown menu for toolbar */
 #overflow-dropdown {
   display: none;

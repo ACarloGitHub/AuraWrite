@@ -80,6 +80,16 @@ import {
 } from "./text-metrics";
 import { spacingOverride } from "./paragraph-spacing";
 import { lineIndentOf } from "./paragraph-indent";
+// E3: the tab advanced maths lives in the model module; the WALK below is the
+// one that decides lines, so the engine and the screen cannot disagree (D13).
+import {
+  DEFAULT_TAB_CM,
+  resolveTab,
+  stopsInPx,
+  tabAdvancePx,
+  tabStopsOf,
+  type TabStopPx,
+} from "./paragraph-tabs";
 
 // The probed metrics, read through the module so every call sees the latest
 // probe without this file having to hold a second copy of the state.
@@ -225,7 +235,12 @@ function measureWord(word: string, font: string): number {
  * `widthAt(relY)` gives the available width at a line's RELATIVE height
  * (floats). Returns lines with absolute-from-0 y and their own height.
  */
-function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, base: TextMetrics): LaidLine[] {
+function mixedParagraphLines(
+  node: PMNode,
+  widthAt: (relY: number) => number,
+  base: TextMetrics,
+  advances?: TabAdvanceIn,
+): LaidLine[] {
   const lines: LaidLine[] = [];
   // The SAME effective factor the uniform measure and the CSS use: the Word
   // spacing times the natural line, or the probed base when no spacing is set.
@@ -242,6 +257,13 @@ function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, ba
   let charInRun = 0;
   let runPmStart = 0;
   let pm = 0;
+  // E3: a tab holds no glyph of its own — it moves the pen to the next stop.
+  // `blockChar` counts the block's characters (the key the paper's DOM carries),
+  // `runPmStart + charInRun` is the same place as a document position.
+  const ind = lineIndentOf(node);
+  const stops: TabStopPx[] = tabStopsOf(node).length ? stopsInPx(node, widthAt(0), ind.left) : [];
+  const gridPx = DEFAULT_TAB_CM * CM_TO_PX;
+  let blockChar = 0;
   const flushLine = (nextStart: number) => {
     lines.push({ off: lineStart, y, h: curH });
     y += curH;
@@ -249,47 +271,90 @@ function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, ba
     curH = strut;
     pendingSpace = 0;
     lineStart = nextStart;
+    lineOpen = false;
+  };
+  /** Advance the pen over one tab; returns nothing, writes `x` and the line. */
+  const placeTab = (at: number): void => {
+    let pen = x + pendingSpace;
+    pendingSpace = 0;
+    const avail = widthAt(y);
+    let stop = resolveTab(pen, stops, gridPx);
+    if (stop.pos > avail - 0.5) {
+      // No room left: the run continues on the next line, as LibreOffice lays
+      // it out (Chromium would hang the leftover tab past the margin).
+      if (lineOpen || pen > 0) {
+        flushLine(at);
+        pen = 0;
+        stop = resolveTab(0, stops, gridPx);
+      }
+      if (stop.pos > avail - 0.5) stop = { ...stop, pos: Math.max(pen, avail) };
+    }
+    let segmentPx = 0;
+    let decimalPx = 0;
+    if (stop.align !== "left") {
+      const seg = tabSegment(node, blockChar, base);
+      segmentPx = seg.widthPx;
+      decimalPx = seg.decimalPx;
+    }
+    const advance = tabAdvancePx(stop.pos, pen, stop.align, segmentPx, decimalPx);
+    if (!lineOpen) {
+      lineStart = at;
+      lineOpen = true;
+    }
+    x = pen + advance;
+    advances?.push({ offset: blockChar, pos: at, widthPx: advance, leader: stop.leader });
+    blockChar++;
+    charInRun++;
   };
   node.forEach((child) => {
     if (child.isText) {
       const { font, sizePx } = fontOfChild(child, base);
       const h = sizePx * factor;
-      // Intl word granularity: break opportunities match the browser's
-      // (hyphenated words split after the hyphen). Apostrophes GLUE: the
-      // word splitter cuts "l'orlo" into "l'"+"orlo" but the browser never
-      // breaks there - merge glue tokens back together.
-      const parts: string[] = [];
-      for (const s of WORD_TOKENIZER.segment(child.text || "")) parts.push(s.segment);
-      const merged: string[] = [];
-      for (const tok of parts) {
-        const prev = merged[merged.length - 1];
-        if (prev && !/\s/.test(prev) && /['\u2019\u02BC]$/u.test(prev) && /^[\p{L}]/u.test(tok)) {
-          merged[merged.length - 1] = prev + tok;
-        } else {
-          merged.push(tok);
+      // E3: a tab is a token of its own: split the run on it, keep the order.
+      const pieces = (child.text || "").split("\t");
+      for (let pi = 0; pi < pieces.length; pi++) {
+        if (pi > 0) placeTab(runPmStart + charInRun);
+        const piece = pieces[pi];
+        if (!piece) continue;
+        // Intl word granularity: break opportunities match the browser's
+        // (hyphenated words split after the hyphen). Apostrophes GLUE: the
+        // word splitter cuts "l'orlo" into "l'"+"orlo" but the browser never
+        // breaks there - merge glue tokens back together.
+        const parts: string[] = [];
+        for (const s of WORD_TOKENIZER.segment(piece)) parts.push(s.segment);
+        const merged: string[] = [];
+        for (const tok of parts) {
+          const prev = merged[merged.length - 1];
+          if (prev && !/\s/.test(prev) && /['\u2019\u02BC]$/u.test(prev) && /^[\p{L}]/u.test(tok)) {
+            merged[merged.length - 1] = prev + tok;
+          } else {
+            merged.push(tok);
+          }
         }
-      }
-      for (const part of merged) {
-        const w = measureWord(part, font);
-        if (/^\s/.test(part)) {
-          pendingSpace += w;
+        for (const part of merged) {
+          const w = measureWord(part, font);
+          if (/^\s/.test(part)) {
+            pendingSpace += w;
+            charInRun += part.length;
+            blockChar += part.length;
+            continue;
+          }
+          const avail = widthAt(y);
+          if (lineOpen && x + pendingSpace + w > avail) {
+            flushLine(runPmStart + charInRun);
+          }
+          if (!lineOpen) {
+            lineStart = runPmStart + charInRun;
+            lineOpen = true;
+          } else {
+            x += pendingSpace;
+          }
+          pendingSpace = 0;
+          x += w;
+          curH = Math.max(curH, h);
           charInRun += part.length;
-          continue;
+          blockChar += part.length;
         }
-        const avail = widthAt(y);
-        if (lineOpen && x + pendingSpace + w > avail) {
-          flushLine(runPmStart + charInRun);
-        }
-        if (!lineOpen) {
-          lineStart = runPmStart + charInRun;
-          lineOpen = true;
-        } else {
-          x += pendingSpace;
-        }
-        pendingSpace = 0;
-        x += w;
-        curH = Math.max(curH, h);
-        charInRun += part.length;
       }
       pm += child.nodeSize;
       return;
@@ -311,6 +376,111 @@ function mixedParagraphLines(node: PMNode, widthAt: (relY: number) => number, ba
   return lines;
 }
 
+/** A tab's advance, as the walk records it (offset in chars, position in PM units). */
+type TabAdvanceIn = Array<{ offset: number; pos: number; widthPx: number; leader: string | null }>;
+
+/** A tab as the editor and the paper need it: where it is, how wide, what fills it. */
+export interface TabPlacement {
+  /** Document position of the tab character (for the editor's decorations). */
+  pos: number;
+  /** Characters before it inside the top-level node (for the serialized fragment). */
+  offset: number;
+  widthPx: number;
+  leader: string | null;
+}
+
+function hasTabs(node: PMNode): boolean {
+  let found = false;
+  node.forEach((child) => {
+    if (child.isText && (child.text ?? "").includes("\t")) found = true;
+  });
+  return found;
+}
+
+/**
+ * The width a tab's ALIGNED segment takes: the text after it, up to the next tab
+ * (or the end of the line), measured unwrapped — plus the part before the decimal
+ * separator, which is what a decimal stop lines up. Only the stops that are not
+ * left-aligned need it, so an ordinary tab pays nothing.
+ */
+function tabSegment(node: PMNode, tabChar: number, base: TextMetrics): { widthPx: number; decimalPx: number } {
+  let chars = 0;
+  let collecting = false;
+  const pieces: Array<{ text: string; font: string }> = [];
+  node.forEach((child) => {
+    if (!child.isText) {
+      if (child.type.name === "hard_break") collecting = false;
+      return;
+    }
+    const text = child.text ?? "";
+    const start = chars;
+    chars += text.length;
+    if (!collecting && tabChar + 1 < start + text.length) collecting = true;
+    if (!collecting) return;
+    const { font } = fontOfChild(child, base);
+    const piece = text.slice(Math.max(0, tabChar + 1 - start));
+    const cut = piece.indexOf("	");
+    pieces.push({ text: cut >= 0 ? piece.slice(0, cut) : piece, font });
+    if (cut >= 0) collecting = false;
+  });
+  const all = pieces.map((p) => p.text).join("");
+  let width = 0;
+  let decimal = 0;
+  // The LAST separator of the segment is the number's decimal one: in "1.234,56"
+  // (Italian) that is the comma, in "1,234.56" (English) the dot. Taking the
+  // first would align the thousands mark, which is never what the writer meant.
+  const sep = Math.max(all.lastIndexOf("."), all.lastIndexOf(","));
+  let at = 0;
+  for (const piece of pieces) {
+    const whole = measureWord(piece.text, piece.font);
+    width += whole;
+    if (sep >= 0 && sep >= at && sep <= at + piece.text.length) {
+      decimal = width - measureWord(piece.text.slice(sep - at), piece.font);
+    }
+    at += piece.text.length;
+  }
+  return { widthPx: width, decimalPx: sep >= 0 ? decimal : width };
+}
+
+/**
+ * Every tab of a node, with the advance the walk gives it: the ONE number the
+ * editor's span and the paper's span carry. `basePos` shifts the reported
+ * positions to the document (the caller passes the node's own start).
+ *
+ * Known limit: a tab inside a table cell is measured against the page's column,
+ * not the narrower cell, so the screen's advance is consistent with itself while
+ * the cell's own page measurement is the engine's (a stop can only be clamped
+ * once, at the narrower width).
+ */
+export function tabAdvancesFor(node: PMNode, contentWidth: number, basePos = 0): TabPlacement[] {
+  const out: TabPlacement[] = [];
+  let chars = 0;
+  const walk = (n: PMNode, absPos: number): void => {
+    if (n.isTextblock) {
+      if (hasTabs(n)) {
+        const ind = lineIndentOf(n);
+        const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
+        const widthAt = (relY: number): number =>
+          Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
+        const found: TabAdvanceIn = [];
+        mixedParagraphLines(n, widthAt, baseMetricsFor(n), found);
+        for (const a of found) {
+          out.push({ pos: basePos + absPos + 1 + a.pos, offset: chars + a.offset, widthPx: a.widthPx, leader: a.leader });
+        }
+      }
+      chars += n.textContent.length;
+      return;
+    }
+    let p = absPos + 1;
+    n.forEach((child) => {
+      walk(child, p);
+      p += child.nodeSize;
+    });
+  };
+  walk(node, 0);
+  return out;
+}
+
 /** Height of a paragraph/heading measured exactly (uniform batch or mixed). */
 function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics): BlockMetrics {
   const ps = paragraphStyle(node, base);
@@ -320,7 +490,9 @@ function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics)
   const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
   const widthAt = (relY: number): number =>
     Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
-  if (!ps.mixed && ind.first === 0) {
+  // E3: a block with tabulations is walked line by line too — its pen depends
+  // on the stops, which the uniform batch cannot see.
+  if (!ps.mixed && ind.first === 0 && !hasTabs(node)) {
     if (!hasHardBreak(node)) {
       // cheap batch height (line count only); exact line positions are
       // computed later, and only for paragraphs that cross a boundary
@@ -645,8 +817,9 @@ export function blockLineStartOffsets(
 ): number[] | null {
   if (node.type.name !== "paragraph" && node.type.name !== "heading") return null;
   const ind = lineIndentOf(node);
-  if (ind.first !== 0) {
-    // the first line is not as wide as the others: walk it line by line
+  if (ind.first !== 0 || hasTabs(node)) {
+    // the first line is not as wide as the others, or a tab moves the pen:
+    // walk the block line by line
     const base = baseMetricsFor(node);
     const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
     const lines = mixedParagraphLines(
@@ -1322,11 +1495,12 @@ function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWi
   e.mixed = ps.mixed;
   // E2: a first-line indent makes the first line wider/narrower than the
   // rest — the uniform lanes would miscount it, so it joins the mixed lane.
+  // E3: same for a tabulation, whose advance depends on the stop it lands on.
   const ind = lineIndentOf(node);
   const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
   const widthAt = (relY: number): number =>
     Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
-  if (ps.mixed || ind.first !== 0) {
+  if (ps.mixed || ind.first !== 0 || hasTabs(node)) {
     e.mixed = true;
     const lines = mixedParagraphLines(node, widthAt, base);
     e.relMixed = lines;
