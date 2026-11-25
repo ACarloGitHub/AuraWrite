@@ -27,6 +27,7 @@ import { parseSpacingPt } from "./paragraph-spacing";
 import { parseIndentCm } from "./paragraph-indent";
 import { formatTabStops, parseTabStops, protectTabs, restoreTabCharacters, tabCommand } from "./paragraph-tabs";
 import { createTabStopsPlugin } from "./paragraph-tabs-view";
+import { applyFormattingMarks, createFormattingMarksPlugin } from "./formatting-marks";
 import { TableWidthView, columnPercents, columnWeights, round2 } from "./table-widths";
 import { selectionHighlightPlugin } from "./selection-highlight";
 import { chunkDecorationsPlugin } from "./chunk-decorations";
@@ -1036,6 +1037,7 @@ export function createEditor(element: HTMLElement): EditorViewType {
       suggestionsMarkerPlugin,
       findReplacePlugin,
       createTabStopsPlugin(),
+      createFormattingMarksPlugin(),
       createCassiePaginationPlugin({ enabled: getCassieMode }),
       linkPopoverPlugin,
       createImageDropPlugin(),
@@ -1101,6 +1103,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
 
   // Set initial pagination classes based on getCassiePagedMode()
   syncCassiePagedClass(view, getCassiePagedMode());
+  // E4: the marks switch restored from the last session, before the first paint.
+  applyFormattingMarks(view);
 
   window.addEventListener("aurawrite:cassie-paged-changed", ((e: CustomEvent) => {
     syncCassiePagedClass(view, e.detail.enabled);

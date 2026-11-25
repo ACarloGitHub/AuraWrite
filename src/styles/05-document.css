@@ -196,6 +196,117 @@
   background-position: 0 calc(100% - 0.12em);
 }
 
+/* ============================================================================
+   E4 — FORMATTING MARKS (Word's «Show/Hide ¶», Ctrl+Shift+8).
+   Everything here is a WAY OF LOOKING: the marks are pseudo-elements and
+   inline decorations, never nodes and never attributes. Nothing is written to
+   the document and nothing reaches the page calculator, so the lines, the
+   dividers and the print sheets cannot move. The decorations only cover the
+   window the screen is showing (formatting-marks.ts): one span per space on a
+   300-page book would be ~160 000 spans.
+
+   The paragraph mark is OUT OF FLOW at its static position — after the last
+   character, but invisible to line breaking, so a line-end space still hangs
+   into the margin and the mark can never be pushed onto a line of its own.
+   The zero-size box is what keeps the block's height untouched. */
+.ProseMirror.aw-formatting-marks :is(p, h1, h2, h3, h4, h5, h6)::after {
+  content: ' ¶';
+  position: absolute;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  line-height: inherit;
+  overflow: visible;
+  white-space: pre;
+  color: var(--color-primary);
+  opacity: 0.55;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* A block that ends in a trailing BR (an EMPTY paragraph, or one that ends in a
+   manual line break) has no inline box after which the static position could
+   land; name its last line instead, measured from the block's own box. */
+.ProseMirror.aw-formatting-marks :is(p, h1, h2, h3, h4, h5, h6) {
+  position: relative;
+}
+
+.ProseMirror.aw-formatting-marks
+  :is(p, h1, h2, h3, h4, h5, h6):has(> br.ProseMirror-trailingBreak)::after {
+  top: calc(100% - 1lh);
+  left: 0;
+  margin-left: 0;
+}
+
+/* A space and a non-breaking space: a dot (·) or a degree (°) laid over the
+   character's own box. The inline decoration span is `position: relative`, so
+   the pseudo-element sits exactly on the space and changes no width. */
+.ProseMirror.aw-formatting-marks .aw-fmt-space {
+  position: relative;
+}
+
+.ProseMirror.aw-formatting-marks .aw-fmt-space::before {
+  content: '·';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  opacity: 0.6;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ProseMirror.aw-formatting-marks .aw-fmt-nbsp::before {
+  content: '°';
+  font-weight: 400;
+}
+
+/* A tabulation: E3 already gives the `\t` its advance as a `.aw-tab` width.
+   The arrow is laid on top of that span; the width is never touched, so the
+   advance the page calculator wrote stays the advance the screen shows. */
+.ProseMirror.aw-formatting-marks .aw-tab {
+  position: relative;
+  overflow: visible;
+}
+
+.ProseMirror.aw-formatting-marks .aw-tab::before {
+  content: '→';
+  position: absolute;
+  left: 0.05em;
+  top: 0;
+  color: var(--color-primary);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* A manual line break: a `<br>` has no box of its own and Chromium does not
+   paint a pseudo-element on it, so the arrow lives on a ZERO-WIDTH inline box
+   placed right before the break. Width 0 = the line breaking is the document's
+   own; overflow visible = the arrow hangs over the empty space after the last
+   character. The glyph is CSS content, so no text is added to the DOM. */
+.ProseMirror.aw-formatting-marks .aw-fmt-break {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  vertical-align: baseline;
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ProseMirror.aw-formatting-marks .aw-fmt-break::before {
+  content: '↵';
+  color: var(--color-primary);
+  opacity: 0.5;
+}
+
 .ProseMirror strong {
   font-weight: bold;
 }

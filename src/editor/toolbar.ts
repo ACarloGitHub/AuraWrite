@@ -23,6 +23,7 @@ import { effectiveDocumentLanguage, withDocumentLanguage } from "./document-lang
 import { setupParagraphSpacing, syncParagraphSpacingInputs } from "./paragraph-spacing";
 import { setupParagraphIndent, syncParagraphIndentInputs } from "./paragraph-indent";
 import { getTabsMode, setTabsMode, setupParagraphTabs, syncParagraphTabsInputs } from "./paragraph-tabs";
+import { setupFormattingMarks } from "./formatting-marks";
 
 /** The document as it is saved: its content plus the language it declares. */
 function currentDocumentJson(): string {
@@ -110,6 +111,7 @@ export function setupToolbar(view: EditorView): void {
   setupParagraphIndent(() => editorView);
   setupParagraphTabs(() => editorView);
   setupTabsButton();
+  setupFormattingMarks(editorView);
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
