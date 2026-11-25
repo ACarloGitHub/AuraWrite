@@ -22,7 +22,7 @@ import { applyDocumentJson, installDocument, installEmptyDocument } from "./docu
 import { effectiveDocumentLanguage, withDocumentLanguage } from "./document-language";
 import { setupParagraphSpacing, syncParagraphSpacingInputs } from "./paragraph-spacing";
 import { setupParagraphIndent, syncParagraphIndentInputs } from "./paragraph-indent";
-import { setupParagraphTabs, syncParagraphTabsInputs } from "./paragraph-tabs";
+import { getTabsMode, setTabsMode, setupParagraphTabs, syncParagraphTabsInputs } from "./paragraph-tabs";
 
 /** The document as it is saved: its content plus the language it declares. */
 function currentDocumentJson(): string {
@@ -109,10 +109,37 @@ export function setupToolbar(view: EditorView): void {
   setupParagraphSpacing(() => editorView);
   setupParagraphIndent(() => editorView);
   setupParagraphTabs(() => editorView);
+  setupTabsButton();
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
   setupOverflowMenu();
+}
+
+/**
+ * E3: the Tabs button of the first bar. It is not a dropdown — it lights the
+ * second bar's Tabs section (the strip, the exact fields, the × to close it),
+ * and asking the secondary bar to sync again decides whether the bar stays.
+ */
+function setupTabsButton(): void {
+  document.getElementById("btn-tabs")?.addEventListener("click", () => {
+    setTabsMode(!getTabsMode());
+    syncSecondaryToolbar(editorView);
+  });
+  document.getElementById("btn-tab-close")?.addEventListener("click", () => {
+    setTabsMode(false);
+    syncSecondaryToolbar(editorView);
+    editorView.focus();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !getTabsMode()) return;
+    const active = document.activeElement as HTMLElement | null;
+    const inside = document.getElementById("tab-controls")?.contains(active) || active?.id === "btn-tabs";
+    if (!inside) return;
+    setTabsMode(false);
+    syncSecondaryToolbar(editorView);
+    editorView.focus();
+  });
 }
 
 function setupDirtyTracking(): void {
@@ -2453,7 +2480,11 @@ export function syncSecondaryToolbar(view: EditorView): void {
   syncTableMenu(view);
   updateImageToolbar(view);
   if (!bar) return;
-  if (!info && !inTable) {
+  const tabsOpen = getTabsMode();
+  if (tabsOpen) syncParagraphTabsInputs(view);
+  const tabControls = document.getElementById("tab-controls");
+  if (tabControls) tabControls.hidden = !tabsOpen;
+  if (!info && !inTable && !tabsOpen) {
     bar.classList.remove("image-toolbar--visible");
     return;
   }

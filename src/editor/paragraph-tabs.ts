@@ -308,40 +308,40 @@ function columnWidthPx(view: EditorView): number {
   return inner > 40 ? inner : 600;
 }
 
-/** Every strip on screen: the panel's, and the copy the overflow menu makes. */
-function stripEls(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>(".tab-strip"));
-}
-
+/** The strip: one, in the second bar. */
 function stripEl(): HTMLElement | null {
   return document.getElementById("tab-strip");
 }
 
-/**
- * True when a strip is actually on screen: the panel's (its own `.visible`) or
- * the overflow menu's copy (the menu is open when it is not `.hidden`). Class
- * checks only — asking the DOM for a size costs a reflow, and the tab section
- * must not force one on every keystroke.
- */
-function stripsVisible(): boolean {
-  for (const strip of stripEls()) {
-    const panel = strip.closest<HTMLElement>(".margins-dropdown__panel");
-    if (panel?.classList.contains("visible")) return true;
-    const menu = strip.closest<HTMLElement>("#overflow-menu");
-    if (menu && !menu.classList.contains("hidden")) return true;
-  }
-  return false;
+/** The Tabs section is open: the second bar shows it and follows the caret. */
+let tabsMode = false;
+
+export function getTabsMode(): boolean {
+  return tabsMode;
 }
 
-/** Draw the caret block's stops on EVERY strip (percent of the text column). */
+/**
+ * Turn the section on or off. Who shows the bar is the toolbar's business
+ * (`syncSecondaryToolbar` asks `getTabsMode()`); here only the state and the
+ * button's lit face.
+ */
+export function setTabsMode(on: boolean): void {
+  tabsMode = on;
+  const section = document.getElementById("tab-controls");
+  if (section) section.hidden = !on;
+  document.getElementById("btn-tabs")?.classList.toggle("toolbar__btn--active", on);
+}
+
+/** Draw the caret block's stops on the strip (percent of the text column). */
 function renderTabStrip(view: EditorView): void {
   const block = shownTabBlock(view);
   const widthCm = columnWidthPx(view) / CM_TO_PX;
   const stops = tabStopsOf(block);
-  for (const strip of stripEls()) {
+  const strip = stripEl();
+  if (strip) {
     strip.replaceChildren();
     strip.hidden = !block;
-    if (!block) continue;
+    if (!block) return;
     for (const s of stops) {
       if (s.pos > widthCm) continue;
       const marker = document.createElement("button");
@@ -349,9 +349,8 @@ function renderTabStrip(view: EditorView): void {
       marker.className = "tab-strip__stop";
       marker.dataset.pos = String(s.pos);
       marker.style.left = `${(s.pos / widthCm) * 100}%`;
-      marker.title = `${s.pos} cm — ${s.align}${s.leader ? ` (${s.leader})` : ""}
-`
-        + "trascina per spostare · trascina fuori dalla striscia per togliere";
+      marker.title = `${s.pos} cm — ${s.align}${s.leader ? ` (${s.leader})` : ""} — `
+        + "trascina per spostare, trascina fuori dalla striscia per togliere";
       marker.setAttribute("aria-label", `Tab stop ${s.pos} cm`);
       if (s.align !== "left") marker.dataset.align = s.align;
       // Il numero accanto al triangolo: la tacca si legge, non si indovina.
@@ -422,10 +421,12 @@ function updateSelected(field: "pos" | "align" | "leader", raw: string): void {
 
 /** The fields say what the block the caret is in carries. */
 export function syncParagraphTabsInputs(view: EditorView): void {
+  const section = document.getElementById("tab-controls");
+  if (section) section.hidden = !tabsMode;
+  if (!tabsMode) return;
   const block = shownTabBlock(view);
   const stops = tabStopsOf(block);
-  // Nothing to draw when the section is closed: no geometry, no DOM writes.
-  if (stripsVisible()) renderTabStrip(view);
+  renderTabStrip(view);
   const strip = stripEl();
   if (strip) strip.classList.toggle("tab-strip--has-stops", stops.length > 0);
   // The canonical string is the attribute itself: shown for the exact values,
@@ -488,21 +489,6 @@ let getViewRef: () => EditorView | null = () => null;
 
 export function setupParagraphTabs(getView: () => EditorView | null): void {
   getViewRef = getView;
-  // Opening the section (from the bar or from the overflow menu) redraws the
-  // strip with the block under the caret, which is where it was left. The draw
-  // is unconditional here: the overflow menu builds its own copy of the strip
-  // from the panel's, and a copy of an empty strip is an empty strip.
-  for (const id of ["btn-spacing", "btn-overflow-menu"]) {
-    document.getElementById(id)?.addEventListener("click", () => {
-      const view = getView();
-      if (!view) return;
-      renderTabStrip(view);
-      setTimeout(() => {
-        const v = getView();
-        if (v) syncParagraphTabsInputs(v);
-      }, 0);
-    });
-  }
 
   // The marker is dragged along the strip: press, move, release. A press that
   // never moves is the click that removes it (as before).

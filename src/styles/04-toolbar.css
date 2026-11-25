@@ -367,8 +367,11 @@ body.reader-mode .toolbar {
 
 .tab-strip {
   position: relative;
-  flex: 1;
-  min-width: 130px;
+  /* La striscia prende lo spazio che resta nella riga della barra: lunga quanto
+     la finestra permette, e i campi accanto non si schiacciano (min-width). */
+  flex: 1 1 320px;
+  min-width: 220px;
+  align-self: center;
   /* Tall enough for the triangle AND its number: the tacca si legge. */
   height: 30px;
   margin-top: 2px;
@@ -385,10 +388,21 @@ body.reader-mode .toolbar {
   display: none;
 }
 
+/* La sezione Tabs è un involucro trasparente come le altre (U4): i suoi comandi
+   sono flex item della barra, e la barra li manda a capo quando la finestra si
+   stringe. La striscia è quella che cresce. */
+#tab-controls {
+  display: contents;
+}
+
+#tab-controls[hidden] {
+  display: none !important;
+}
+
 /* `.toolbar button` (class + element) paints every button transparent with a
    pointer cursor: the marker is a drawn shape and a handle, so it wins on
    specificity, not with `!important`. */
-.toolbar .tab-strip .tab-strip__stop {
+.image-toolbar .tab-strip .tab-strip__stop {
   position: absolute;
   bottom: 0;
   transform: translateX(-50%);
@@ -408,13 +422,25 @@ body.reader-mode .toolbar {
 
 /* Il numero sopra, il triangolo sotto: la tacca si legge e si afferra. */
 .tab-strip__label {
-  font-size: 9px;
-  line-height: 10px;
+  font-size: 10px;
+  line-height: 11px;
   color: var(--color-text-muted);
   pointer-events: none;
 }
 
-.toolbar .tab-strip .tab-strip__stop::after {
+/* Il campo della lista canonica è testo, non un numero. */
+.image-toolbar__field input[type="text"] {
+  width: 118px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  height: 26px;
+}
+
+.image-toolbar .tab-strip .tab-strip__stop::after {
   content: '';
   width: 15px;
   height: 13px;
@@ -422,34 +448,34 @@ body.reader-mode .toolbar {
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
-.toolbar .tab-strip .tab-strip__stop:hover::after,
-.toolbar .tab-strip .tab-strip__stop.is-selected::after {
+.image-toolbar .tab-strip .tab-strip__stop:hover::after,
+.image-toolbar .tab-strip .tab-strip__stop.is-selected::after {
   background-color: var(--color-primary-hover, #3a7bc8);
 }
 
-.toolbar .tab-strip .tab-strip__stop.is-selected .tab-strip__label {
+.image-toolbar .tab-strip .tab-strip__stop.is-selected .tab-strip__label {
   color: var(--color-primary, #4a90d9);
   font-weight: 700;
 }
 
-.toolbar .tab-strip .tab-strip__stop.is-dragging {
+.image-toolbar .tab-strip .tab-strip__stop.is-dragging {
   cursor: grabbing;
 }
 
-.toolbar .tab-strip .tab-strip__stop:focus-visible {
+.image-toolbar .tab-strip .tab-strip__stop:focus-visible {
   outline: 1px solid var(--color-text);
   outline-offset: 1px;
 }
 
-.toolbar .tab-strip .tab-strip__stop[data-align='center']::after {
+.image-toolbar .tab-strip .tab-strip__stop[data-align='center']::after {
   clip-path: polygon(50% 0, 100% 55%, 50% 100%, 0 55%);
 }
 
-.toolbar .tab-strip .tab-strip__stop[data-align='right']::after {
+.image-toolbar .tab-strip .tab-strip__stop[data-align='right']::after {
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 
-.toolbar .tab-strip .tab-strip__stop[data-align='decimal']::after {
+.image-toolbar .tab-strip .tab-strip__stop[data-align='decimal']::after {
   clip-path: polygon(50% 0, 100% 100%, 50% 80%, 0 100%);
 }
 
