@@ -384,28 +384,48 @@ body.reader-mode .toolbar {
   display: none;
 }
 
-.tab-strip__stop {
+/* `.toolbar button` (class + element) paints every button transparent with a
+   pointer cursor: the marker is a drawn shape and a handle, so it wins on
+   specificity, not with `!important`. */
+.toolbar .tab-strip .tab-strip__stop {
   position: absolute;
   bottom: -1px;
   transform: translateX(-50%);
-  width: 9px;
-  height: 11px;
+  width: 11px;
+  height: 13px;
   padding: 0;
   border: none;
-  background: var(--color-primary);
+  /* The marker is a drawn shape, not a button face: `background-color` beats a
+     theme rule that paints every button transparent. */
+  background-color: var(--color-primary, #4a90d9);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  cursor: pointer;
+  /* It can be dragged: the hand says so (grabbing while dragging). */
+  cursor: grab;
+  touch-action: none;
 }
 
-.tab-strip__stop[data-align='center'] {
+.toolbar .tab-strip .tab-strip__stop:hover {
+  background-color: var(--color-primary-hover, #3a7bc8);
+}
+
+.toolbar .tab-strip .tab-strip__stop.is-dragging {
+  cursor: grabbing;
+}
+
+.toolbar .tab-strip .tab-strip__stop:focus-visible {
+  outline: 1px solid var(--color-text);
+  outline-offset: 1px;
+}
+
+.toolbar .tab-strip .tab-strip__stop[data-align='center'] {
   clip-path: polygon(50% 0, 100% 55%, 50% 100%, 0 55%);
 }
 
-.tab-strip__stop[data-align='right'] {
+.toolbar .tab-strip .tab-strip__stop[data-align='right'] {
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 
-.tab-strip__stop[data-align='decimal'] {
+.toolbar .tab-strip .tab-strip__stop[data-align='decimal'] {
   clip-path: polygon(50% 0, 100% 100%, 50% 80%, 0 100%);
 }
 

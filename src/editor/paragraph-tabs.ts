@@ -387,18 +387,110 @@ export function syncParagraphTabsInputs(view: EditorView): void {
 }
 
 /** Wire the Tabs section of the Paragraph panel. */
+/** A marker being dragged: from the pointerdown to the pointerup. */
+interface StripDrag {
+  marker: HTMLElement;
+  strip: HTMLElement;
+  pos0: number;
+  x0: number;
+  moved: boolean;
+  pos: number;
+  align: TabAlign;
+  leader: string | null;
+}
+
+let drag: StripDrag | null = null;
+/** A drag just ended: the click that follows must not remove the marker. */
+let swallowClick = false;
+
+/** Move a stop of the caret's block from one position to another. */
+function moveTabStop(view: EditorView, from: number, to: number): void {
+  const block = shownTabBlock(view);
+  if (!block) return;
+  const hit = stopAt(tabStopsOf(block), from);
+  if (!hit) return;
+  const pos = Math.round(Math.max(0, to) * 10) / 10;
+  if (Math.abs(pos - hit.pos) < 0.01) return;
+  const stops = tabStopsOf(block).filter((s) => Math.abs(s.pos - hit.pos) > 0.01);
+  stops.push({ pos, align: hit.align, leader: hit.leader });
+  setParagraphTabStops(view, stops);
+}
+
 export function setupParagraphTabs(getView: () => EditorView | null): void {
   // Opening the section (from the bar or from the overflow menu) redraws the
-  // strip with the block under the caret, which is where it was left.
+  // strip with the block under the caret, which is where it was left. The draw
+  // is unconditional here: the overflow menu builds its own copy of the strip
+  // from the panel's, and a copy of an empty strip is an empty strip.
   for (const id of ["btn-spacing", "btn-overflow-menu"]) {
     document.getElementById(id)?.addEventListener("click", () => {
       const view = getView();
       if (!view) return;
+      renderTabStrip(view);
       setTimeout(() => {
-        if (stripsVisible()) syncParagraphTabsInputs(view);
+        const v = getView();
+        if (v) syncParagraphTabsInputs(v);
       }, 0);
     });
   }
+
+  // The marker is dragged along the strip: press, move, release. A press that
+  // never moves is the click that removes it (as before).
+  document.addEventListener("pointerdown", (e) => {
+    const marker = (e.target as HTMLElement).closest<HTMLElement>(".tab-strip__stop");
+    const strip = marker?.closest<HTMLElement>(".tab-strip");
+    const view = getView();
+    if (!marker || !strip || !view || !marker.dataset.pos) return;
+    const rect = strip.getBoundingClientRect();
+    if (!rect.width) return;
+    const block = shownTabBlock(view);
+    const hit = stopAt(tabStopsOf(block), Number(marker.dataset.pos));
+    if (!hit) return;
+    e.preventDefault();
+    drag = {
+      marker,
+      strip,
+      pos0: hit.pos,
+      x0: e.clientX,
+      moved: false,
+      pos: hit.pos,
+      align: hit.align,
+      leader: hit.leader,
+    };
+    marker.classList.add("is-dragging");
+    marker.setPointerCapture?.(e.pointerId);
+  });
+
+  document.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(e.clientX - drag.x0) < 3) return;
+    drag.moved = true;
+    const rect = drag.strip.getBoundingClientRect();
+    const widthCm = columnWidthPx(getView() as EditorView) / CM_TO_PX;
+    const cm = ((e.clientX - rect.left) / rect.width) * widthCm;
+    drag.pos = Math.round(Math.max(0, Math.min(widthCm, cm)) * 10) / 10;
+    drag.marker.style.left = `${(drag.pos / widthCm) * 100}%`;
+    drag.marker.dataset.pos = String(drag.pos);
+    drag.marker.title = `${drag.pos} cm — ${drag.align}${drag.leader ? ` (${drag.leader})` : ""}`;
+  });
+
+  const fine = (): void => {
+    if (!drag) return;
+    const { moved, marker, pos0, pos } = drag;
+    drag.marker.classList.remove("is-dragging");
+    drag = null;
+    const view = getView();
+    if (!view) return;
+    if (moved) {
+      swallowClick = true;
+      moveTabStop(view, pos0, pos);
+      syncParagraphTabsInputs(view);
+      view.focus();
+    } else {
+      marker.dataset.pos = String(pos0);
+    }
+  };
+  document.addEventListener("pointerup", fine);
+  document.addEventListener("pointercancel", fine);
 
   // Delegated on the document: the overflow menu builds its OWN copy of the
   // strip (toolbar.ts), and that copy has to work exactly like the original.
@@ -410,6 +502,10 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
     if (!view) return;
     const marker = target.closest<HTMLElement>(".tab-strip__stop");
     if (marker?.dataset.pos) {
+      if (swallowClick) {
+        swallowClick = false;
+        return;
+      }
       removeTabStop(view, Number(marker.dataset.pos));
       syncParagraphTabsInputs(view);
       view.focus();
