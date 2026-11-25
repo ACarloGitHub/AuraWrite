@@ -2100,8 +2100,11 @@ function recalcOverflow(toolbar: HTMLElement, overflowDropdown: HTMLElement, ove
           proxyRow.style.alignItems = "center";
           proxyRow.style.paddingBottom = "4px";
 
-          const label = row.querySelector("label");
-          const unit = row.querySelector("span");
+          // Direct children only: a row's own label and unit are its own, not
+          // the ones living inside a control (the tab strip's cm labels are
+          // spans too, and stealing one left the marker without its number).
+          const label = row.querySelector(":scope > label");
+          const unit = row.querySelector(":scope > span");
 
           if (label && label.textContent?.trim()) {
             const proxyLabel = document.createElement("span");
@@ -2204,7 +2207,11 @@ function createProxyControl(original: HTMLElement): HTMLElement | null {
   // A drawn strip (the tab stops of E3) is mirrored as a copy of itself: the
   // panel's own click handler is on the document, so the copy works as it is.
   if (original.classList.contains("tab-strip")) {
-    return original.cloneNode(true) as HTMLElement;
+    const copy = original.cloneNode(true) as HTMLElement;
+    // The copy lives beside the original: two elements with one id would make
+    // `getElementById` pick the wrong strip.
+    copy.removeAttribute("id");
+    return copy;
   }
 
   if (original instanceof HTMLInputElement) {

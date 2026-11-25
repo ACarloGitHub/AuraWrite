@@ -369,7 +369,8 @@ body.reader-mode .toolbar {
   position: relative;
   flex: 1;
   min-width: 130px;
-  height: 16px;
+  /* Tall enough for the triangle AND its number: the tacca si legge. */
+  height: 30px;
   margin-top: 2px;
   border-bottom: 1px solid var(--color-border);
   background-image: repeating-linear-gradient(
@@ -389,23 +390,46 @@ body.reader-mode .toolbar {
    specificity, not with `!important`. */
 .toolbar .tab-strip .tab-strip__stop {
   position: absolute;
-  bottom: -1px;
+  bottom: 0;
   transform: translateX(-50%);
-  width: 11px;
-  height: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 22px;
+  height: 28px;
   padding: 0;
   border: none;
-  /* The marker is a drawn shape, not a button face: `background-color` beats a
-     theme rule that paints every button transparent. */
-  background-color: var(--color-primary, #4a90d9);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: transparent;
   /* It can be dragged: the hand says so (grabbing while dragging). */
   cursor: grab;
   touch-action: none;
 }
 
-.toolbar .tab-strip .tab-strip__stop:hover {
+/* Il numero sopra, il triangolo sotto: la tacca si legge e si afferra. */
+.tab-strip__label {
+  font-size: 9px;
+  line-height: 10px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.toolbar .tab-strip .tab-strip__stop::after {
+  content: '';
+  width: 15px;
+  height: 13px;
+  background-color: var(--color-primary, #4a90d9);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.toolbar .tab-strip .tab-strip__stop:hover::after,
+.toolbar .tab-strip .tab-strip__stop.is-selected::after {
   background-color: var(--color-primary-hover, #3a7bc8);
+}
+
+.toolbar .tab-strip .tab-strip__stop.is-selected .tab-strip__label {
+  color: var(--color-primary, #4a90d9);
+  font-weight: 700;
 }
 
 .toolbar .tab-strip .tab-strip__stop.is-dragging {
@@ -417,15 +441,15 @@ body.reader-mode .toolbar {
   outline-offset: 1px;
 }
 
-.toolbar .tab-strip .tab-strip__stop[data-align='center'] {
+.toolbar .tab-strip .tab-strip__stop[data-align='center']::after {
   clip-path: polygon(50% 0, 100% 55%, 50% 100%, 0 55%);
 }
 
-.toolbar .tab-strip .tab-strip__stop[data-align='right'] {
+.toolbar .tab-strip .tab-strip__stop[data-align='right']::after {
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 
-.toolbar .tab-strip .tab-strip__stop[data-align='decimal'] {
+.toolbar .tab-strip .tab-strip__stop[data-align='decimal']::after {
   clip-path: polygon(50% 0, 100% 100%, 50% 80%, 0 100%);
 }
 

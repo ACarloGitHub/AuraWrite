@@ -349,9 +349,17 @@ function renderTabStrip(view: EditorView): void {
       marker.className = "tab-strip__stop";
       marker.dataset.pos = String(s.pos);
       marker.style.left = `${(s.pos / widthCm) * 100}%`;
-      marker.title = `${s.pos} cm — ${s.align}${s.leader ? ` (${s.leader})` : ""} — click to remove`;
+      marker.title = `${s.pos} cm — ${s.align}${s.leader ? ` (${s.leader})` : ""}
+`
+        + "trascina per spostare · trascina fuori dalla striscia per togliere";
       marker.setAttribute("aria-label", `Tab stop ${s.pos} cm`);
       if (s.align !== "left") marker.dataset.align = s.align;
+      // Il numero accanto al triangolo: la tacca si legge, non si indovina.
+      const label = document.createElement("span");
+      label.className = "tab-strip__label";
+      label.textContent = String(s.pos).replace(".", ",");
+      marker.appendChild(label);
+      if (selectedStop != null && Math.abs(selectedStop - s.pos) < 0.01) marker.classList.add("is-selected");
       strip.appendChild(marker);
     }
   }
@@ -369,6 +377,49 @@ function posInput(): HTMLInputElement | null {
   return document.getElementById("inp-tab-pos") as HTMLInputElement | null;
 }
 
+/** Choose the stop the fields edit (null = the fields start a new one). */
+function selectStop(cm: number | null): void {
+  selectedStop = cm;
+  const pos = posInput();
+  const align = alignSelect();
+  const leader = leaderSelect();
+  if (cm == null) {
+    if (pos) pos.value = "";
+    return;
+  }
+  const view = getViewRef();
+  const hit = stopAt(tabStopsOf(shownTabBlock(view)), cm);
+  if (!hit) return;
+  if (pos) pos.value = String(hit.pos);
+  if (align) align.value = hit.align;
+  if (leader) leader.value = hit.leader ?? "";
+}
+
+/** Change ONE field of the chosen stop (no stop chosen: nothing to change). */
+function updateSelected(field: "pos" | "align" | "leader", raw: string): void {
+  const view = getViewRef();
+  const block = shownTabBlock(view);
+  if (!view || !block || selectedStop == null) return;
+  const hit = stopAt(tabStopsOf(block), selectedStop);
+  if (!hit) return;
+  const widthCm = columnWidthPx(view) / CM_TO_PX;
+  const stops = tabStopsOf(block).filter((s) => Math.abs(s.pos - hit.pos) > 0.01);
+  const next = { ...hit };
+  if (field === "pos") {
+    const n = Number(raw.replace(",", "."));
+    if (!Number.isFinite(n)) return;
+    next.pos = Math.round(Math.max(0, Math.min(widthCm, n)) * 100) / 100;
+  } else if (field === "align") {
+    next.align = raw as TabAlign;
+  } else {
+    next.leader = normalizeLeader(raw);
+  }
+  stops.push(next);
+  selectedStop = next.pos;
+  setParagraphTabStops(view, stops);
+  syncParagraphTabsInputs(view);
+}
+
 /** The fields say what the block the caret is in carries. */
 export function syncParagraphTabsInputs(view: EditorView): void {
   const block = shownTabBlock(view);
@@ -382,8 +433,21 @@ export function syncParagraphTabsInputs(view: EditorView): void {
   const inp = document.getElementById("inp-tab-stops") as HTMLInputElement | null;
   const value = (block?.attrs?.tabStops as string | null) ?? "";
   if (inp && document.activeElement !== inp && inp.value !== value) inp.value = value;
+  // Il punto scelto comanda i campi: se non c'è (o è sparito) tornano vuoti.
+  if (selectedStop != null && !stopAt(stops, selectedStop)) selectedStop = null;
   const input = posInput();
-  if (input && document.activeElement !== input) input.value = "";
+  if (selectedStop == null) {
+    if (input && document.activeElement !== input) input.value = "";
+    if (alignSelect() && document.activeElement !== alignSelect()) alignSelect()!.value = "left";
+    if (leaderSelect() && document.activeElement !== leaderSelect()) leaderSelect()!.value = "";
+  } else {
+    const hit = stopAt(stops, selectedStop)!;
+    if (input && document.activeElement !== input) input.value = String(hit.pos);
+    if (alignSelect() && document.activeElement !== alignSelect()) alignSelect()!.value = hit.align;
+    if (leaderSelect() && document.activeElement !== leaderSelect()) leaderSelect()!.value = hit.leader ?? "";
+  }
+  const remove = document.getElementById("btn-tab-remove") as HTMLButtonElement | null;
+  if (remove) remove.disabled = selectedStop == null;
 }
 
 /** Wire the Tabs section of the Paragraph panel. */
@@ -394,12 +458,16 @@ interface StripDrag {
   pos0: number;
   x0: number;
   moved: boolean;
+  /** The pointer left the strip: releasing here removes the stop. */
+  outside: boolean;
   pos: number;
   align: TabAlign;
   leader: string | null;
 }
 
 let drag: StripDrag | null = null;
+/** The stop the fields below the strip are editing (null = none). */
+let selectedStop: number | null = null;
 /** A drag just ended: the click that follows must not remove the marker. */
 let swallowClick = false;
 
@@ -416,7 +484,10 @@ function moveTabStop(view: EditorView, from: number, to: number): void {
   setParagraphTabStops(view, stops);
 }
 
+let getViewRef: () => EditorView | null = () => null;
+
 export function setupParagraphTabs(getView: () => EditorView | null): void {
+  getViewRef = getView;
   // Opening the section (from the bar or from the overflow menu) redraws the
   // strip with the block under the caret, which is where it was left. The draw
   // is unconditional here: the overflow menu builds its own copy of the strip
@@ -452,6 +523,7 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
       pos0: hit.pos,
       x0: e.clientX,
       moved: false,
+      outside: false,
       pos: hit.pos,
       align: hit.align,
       leader: hit.leader,
@@ -464,6 +536,9 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
     if (!drag) return;
     if (!drag.moved && Math.abs(e.clientX - drag.x0) < 3) return;
     drag.moved = true;
+    const box = drag.strip.getBoundingClientRect();
+    // Trascinato via dalla striscia (sopra o sotto): si sta togliendo.
+    drag.outside = e.clientY < box.top - 6 || e.clientY > box.bottom + 10;
     const rect = drag.strip.getBoundingClientRect();
     const widthCm = columnWidthPx(getView() as EditorView) / CM_TO_PX;
     const cm = ((e.clientX - rect.left) / rect.width) * widthCm;
@@ -475,16 +550,21 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
 
   const fine = (): void => {
     if (!drag) return;
-    const { moved, marker, pos0, pos } = drag;
+    const { moved, outside, marker, pos0, pos } = drag;
     drag.marker.classList.remove("is-dragging");
     drag = null;
     const view = getView();
     if (!view) return;
     if (moved) {
       swallowClick = true;
-      moveTabStop(view, pos0, pos);
+      if (outside) {
+        removeTabStop(view, pos0);
+        selectedStop = null;
+      } else {
+        moveTabStop(view, pos0, pos);
+        selectedStop = pos;
+      }
       syncParagraphTabsInputs(view);
-      view.focus();
     } else {
       marker.dataset.pos = String(pos0);
     }
@@ -506,9 +586,11 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
         swallowClick = false;
         return;
       }
-      removeTabStop(view, Number(marker.dataset.pos));
+      // Il click SCEGLIE il punto: i campi sotto si riempiono con i suoi valori e
+      // il punto si sposta o si toglie da lì. Cancellare al primo click era una
+      // trappola (un doppio click faceva sparire la tacca).
+      selectStop(Number(marker.dataset.pos));
       syncParagraphTabsInputs(view);
-      view.focus();
       return;
     }
     const rect = strip.getBoundingClientRect();
@@ -541,6 +623,7 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
     const view = getView();
     if (!view) return;
     setParagraphTabStops(view, []);
+    selectedStop = null;
     syncParagraphTabsInputs(view);
     view.focus();
   });
@@ -550,6 +633,25 @@ export function setupParagraphTabs(getView: () => EditorView | null): void {
     const view = getView();
     if (!view) return;
     setParagraphTabStops(view, parseTabStops(canonical.value));
+    syncParagraphTabsInputs(view);
+    view.focus();
+  });
+
+  for (const [id, field] of [
+    ["inp-tab-pos", "pos"],
+    ["sel-tab-align", "align"],
+    ["sel-tab-leader", "leader"],
+  ] as const) {
+    document.getElementById(id)?.addEventListener("change", (e) => {
+      updateSelected(field, (e.target as HTMLInputElement).value);
+    });
+  }
+
+  document.getElementById("btn-tab-remove")?.addEventListener("click", () => {
+    const view = getView();
+    if (!view || selectedStop == null) return;
+    removeTabStop(view, selectedStop);
+    selectedStop = null;
     syncParagraphTabsInputs(view);
     view.focus();
   });
