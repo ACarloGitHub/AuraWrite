@@ -2557,3 +2557,18 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   border-radius: 2px;
   box-shadow: 0 0 0 1px var(--color-primary);
 }
+
+/* E7 — il capolettera: la lettera esce dal flusso e le prime N righe le girano
+   intorno. I tre numeri li scrive la decorazione, presi dall'aritmetica della
+   pagina (pagination-cassie.ts): dimensione = N righe, altezza = le stesse N
+   righe, distanza come scelta. Così la scatola che il foglio misura è la stessa
+   che lo schermo disegna. */
+.ProseMirror .aw-dropcap {
+  float: left;
+  font-size: var(--aw-dc-size);
+  line-height: 1;
+  height: var(--aw-dc-height);
+  margin-right: var(--aw-dc-gap);
+  margin-top: 0;
+  margin-left: 0;
+}

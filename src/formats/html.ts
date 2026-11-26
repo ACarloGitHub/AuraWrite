@@ -61,6 +61,12 @@ export async function toHTML(doc: any, opts: ToHtmlOptions = {}): Promise<string
     });
   }
 
+  // E7: a drop cap is a property of the paragraph in the document (a
+  // decoration, not a node), and markup has no decorations: the letter is
+  // written as a span here, so the file shows the same big letter. The size is
+  // N line boxes of the default rhythm (the exact one lives in the app).
+  wrapDropCaps(container);
+
   if (embedImages) {
     for (const img of container.querySelectorAll("img")) {
       const src = img.getAttribute("src");
@@ -71,6 +77,34 @@ export async function toHTML(doc: any, opts: ToHtmlOptions = {}): Promise<string
   }
 
   return wrapInHTMLDocument(container.innerHTML, opts.language);
+}
+
+/** E7: `<span class="aw-dropcap">` around the first visible letter of a paragraph. */
+function wrapDropCaps(container: HTMLElement): void {
+  for (const block of Array.from(container.querySelectorAll<HTMLElement>("[data-drop-cap-lines]"))) {
+    const lines = Number(block.getAttribute("data-drop-cap-lines"));
+    if (!Number.isFinite(lines) || lines < 2) continue;
+    const gapCm = Number(block.getAttribute("data-drop-cap-gap"));
+    const gap = Number.isFinite(gapCm) && gapCm >= 0 ? gapCm : 0.2;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.nodeValue ?? "";
+      const index = text.search(/\S/);
+      if (index < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+      const span = document.createElement("span");
+      span.className = "aw-dropcap";
+      span.setAttribute(
+        "style",
+        // 1.5 = the default rhythm of the sheet: N line boxes become the size.
+        `float: left; font-size: ${(lines * 1.5).toFixed(2)}em; line-height: 1; margin-right: ${gap.toFixed(2)}cm;`,
+      );
+      range.surroundContents(span);
+      break;
+    }
+  }
 }
 
 /** Recursively collect the src of every image (node OR figure attr) in the doc. */
@@ -264,6 +298,10 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
     /* E5: a field shows its cached text and nothing else; the page there is a
        string, so the markup keeps the spacing it was measured with. */
     span[data-aw-field] { white-space: pre; }
+    /* E7: the drop cap of the file: the letter leaves the flow and the first
+       lines wrap around it. The size is written inline on the letter. */
+    .aw-dropcap { float: left; line-height: 1; }
+    [data-drop-cap-lines] { display: block; }
     /* E6: the table's own look travels as its name (data-table-style), and these
        two rules are what the name means on the screen (05-document.css). */
     table { border-collapse: collapse; }

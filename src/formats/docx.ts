@@ -29,6 +29,9 @@ import {
   VerticalPositionAlign,
   SimpleField,
   LevelFormat,
+  DropCapType,
+  FrameWrap,
+  FrameAnchorType,
 } from "docx";
 import type { ILevelsOptions } from "docx";
 import { getPageFormat, isHeaderRow } from "../editor/pagination-cassie";
@@ -1203,6 +1206,13 @@ export async function toDocx(doc: any): Promise<Document> {
   resetListInstances();
   const children: any[] = [];
   for (const node of contentToArray(doc.content)) {
+    // E7: Word's own drop cap is a FRAME on a paragraph that holds the letter
+    // alone, with the rest of the text in the next paragraph. So the paragraph
+    // is split here, exactly as Word writes it.
+    if ((node.type?.name === "paragraph" || node.type?.name === "heading") && dropCapLines(node) > 0) {
+      children.push(...dropCapParagraphs(node, imageCache));
+      continue;
+    }
     const nodeChildren = nodeToChildren(node, imageCache, false);
     children.push(...nodeChildren);
   }
@@ -2005,6 +2015,83 @@ function fieldRun(node: any): TextRun {
   // A quote inside the picture would end Word's switch early.
   const safe = picture.replace(/"/g, "");
   return new SimpleField(`${field} \\@ "${safe}"`, text) as unknown as TextRun;
+}
+
+/** E7: how many lines a block drops, or 0. */
+function dropCapLines(node: any): number {
+  const raw = Number(node.attrs?.dropCapLines);
+  if (!Number.isFinite(raw) || raw < 2) return 0;
+  return Math.min(6, Math.round(raw));
+}
+
+/**
+ * E7 — the drop cap as Word stores it: a paragraph carrying `w:framePr` with
+ * `w:dropCap="drop"` and the letter alone, then the paragraph with the rest of
+ * the text. Word computes the letter's size from the lines it is given; the
+ * width and height below only keep the frame well-formed.
+ */
+function dropCapParagraphs(node: any, imageCache?: Map<string, Uint8Array>): Paragraph[] {
+  const lines = dropCapLines(node);
+  const text = getTextContent(node);
+  const index = text.search(/\S/);
+  if (index < 0) return nodeToChildren(node, imageCache ?? new Map(), false) as Paragraph[];
+  const letter = text[index];
+  const rest = text.slice(0, index) + text.slice(index + 1);
+  const gapCm = Number(node.attrs?.dropCapGap);
+  const gapTwips = Math.round((Number.isFinite(gapCm) && gapCm >= 0 ? gapCm : 0.2) * CM_TO_TWIP);
+  // The letter keeps the marks it had, and the rest of the text keeps its own:
+  // the first visible character is taken out of the runs, not re-typed.
+  let letterMarks: any[] = [];
+  node.forEach((child: any) => {
+    if (letterMarks.length || !child.isText) return;
+    if (/\S/.test(child.text ?? "")) letterMarks = child.marks ?? [];
+  });
+  const letterRun = makeRun(letter, letterMarks);
+  const frame = {
+    dropCap: DropCapType.DROP,
+    lines,
+    wrap: FrameWrap.AROUND,
+    width: Math.round(gapTwips + 360),
+    height: lines * 240,
+    space: { horizontal: gapTwips, vertical: 0 },
+    anchor: { horizontal: FrameAnchorType.MARGIN, vertical: FrameAnchorType.TEXT },
+  } as any;
+  const letterParagraph = new Paragraph({
+    children: [letterRun],
+    frame,
+    // No rhythm of its own: the letter is a float, not a line of the text.
+    spacing: { before: 0, after: 0, line: 240 },
+  });
+  const restParagraph = new Paragraph({
+    children: runsWithoutFirstLetter(node).length
+      ? runsWithoutFirstLetter(node)
+      : [new TextRun({ text: rest })],
+    spacing: { before: 0, after: 0, line: 240 },
+    indent: { left: 0 },
+  });
+  return [letterParagraph, restParagraph];
+}
+
+/** E7: the runs of a paragraph, minus the first visible character. */
+function runsWithoutFirstLetter(node: any): TextRun[] {
+  const out: TextRun[] = [];
+  let taken = false;
+  node.forEach((child: any) => {
+    if (!child.isText) {
+      out.push(new TextRun({ text: getTextContent(child) }));
+      return;
+    }
+    let text = child.text ?? "";
+    if (!taken) {
+      const index = text.search(/\S/);
+      if (index >= 0) {
+        text = text.slice(0, index) + text.slice(index + 1);
+        taken = true;
+      }
+    }
+    if (text) out.push(makeRun(text, child.marks ?? []));
+  });
+  return out;
 }
 
 function getTextContent(node: any): string {

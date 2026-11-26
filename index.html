@@ -300,6 +300,23 @@
               <input type="number" id="inp-indent-first" class="toolbar__number-input" min="-12" max="12" step="0.1" placeholder="0" aria-label="Indent first line" />
               <span>cm</span>
             </div>
+            <!-- E7: il capolettera è una proprietà del paragrafo, come in Word:
+                 quante righe e a che distanza dal testo. -->
+            <div class="margins-dropdown__row">
+              <label for="sel-drop-cap">Drop cap</label>
+              <select id="sel-drop-cap" class="toolbar__select" aria-label="Drop cap">
+                <option value="">None</option>
+                <option value="2">2 lines</option>
+                <option value="3">3 lines</option>
+                <option value="4">4 lines</option>
+                <option value="5">5 lines</option>
+              </select>
+            </div>
+            <div class="margins-dropdown__row">
+              <label for="inp-drop-cap-gap">Distance</label>
+              <input type="number" id="inp-drop-cap-gap" class="toolbar__number-input" min="0" max="2" step="0.1" placeholder="0.2" aria-label="Drop cap distance" />
+              <span>cm</span>
+            </div>
           </div>
         </div>
 

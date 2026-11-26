@@ -24,6 +24,7 @@ import { setupParagraphSpacing, syncParagraphSpacingInputs } from "./paragraph-s
 import { setupParagraphIndent, syncParagraphIndentInputs } from "./paragraph-indent";
 import { getTabsMode, setTabsMode, setupParagraphTabs, syncParagraphTabsInputs } from "./paragraph-tabs";
 import { setupFormattingMarks } from "./formatting-marks";
+import { setupDropCapPanel, syncDropCapInputs } from "./drop-cap";
 import { setupFieldPanel } from "./field-panel";
 
 /** The document as it is saved: its content plus the language it declares. */
@@ -114,6 +115,7 @@ export function setupToolbar(view: EditorView): void {
   setupTabsButton();
   setupFormattingMarks(editorView);
   setupFieldPanel(editorView);
+  setupDropCapPanel(editorView);
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();
@@ -2465,6 +2467,7 @@ export function syncSecondaryToolbar(view: EditorView): void {
   syncParagraphSpacingInputs(view);
   syncParagraphIndentInputs(view);
   syncParagraphTabsInputs(view);
+  syncDropCapInputs(view);
   const bar = document.getElementById("image-toolbar");
   const tableControls = document.getElementById("table-controls");
   const info = getSelectedElement(view, ELEMENT_KINDS);

@@ -80,6 +80,9 @@ import {
 } from "./text-metrics";
 import { spacingOverride } from "./paragraph-spacing";
 import { fieldText } from "./field-value";
+import { dropCapBandOf, dropCapOf, dropCapRanges } from "./drop-cap";
+import { Plugin, PluginKey } from "prosemirror-state";
+import { Decoration, DecorationSet } from "prosemirror-view";
 import { lineIndentOf } from "./paragraph-indent";
 // E3: the tab advanced maths lives in the model module; the WALK below is the
 // one that decides lines, so the engine and the screen cannot disagree (D13).
@@ -268,6 +271,17 @@ function mixedParagraphLines(
   const stops: TabStopPx[] = tabStopsOf(node).length ? stopsInPx(node, widthAt(0), ind.left) : [];
   const gridPx = DEFAULT_TAB_CM * CM_TO_PX;
   let blockChar = 0;
+  // E7: the drop cap reserves a band on the left of the first N lines, and its
+  // letter leaves the flow (the screen floats it). Both are decided HERE, before
+  // any width is asked for: a float applied after the measure is a pagination
+  // that disagrees with the paper (law D13).
+  const band = dropCapBandOf(node, base, factor, measureWord);
+  let skipChar = band ? band.index : -1;
+  const availAt = (relY: number): number => {
+    const plain = widthAt(relY);
+    const inside = band && relY + 0.5 < band.heightPx;
+    return Math.max(MIN_LINE_WIDTH_PX, inside ? plain - band.widthPx : plain);
+  };
   const flushLine = (nextStart: number) => {
     lines.push({ off: lineStart, y, h: curH });
     y += curH;
@@ -281,7 +295,7 @@ function mixedParagraphLines(
   const placeTab = (at: number): void => {
     let pen = x + pendingSpace;
     pendingSpace = 0;
-    const avail = widthAt(y);
+    const avail = availAt(y);
     let stop = resolveTab(pen, stops, gridPx);
     if (stop.pos > avail - 0.5) {
       // No room left: the run continues on the next line, as LibreOffice lays
@@ -320,8 +334,16 @@ function mixedParagraphLines(
     const pieces = text.split("\t");
     for (let pi = 0; pi < pieces.length; pi++) {
       if (pi > 0) placeTab(runPmStart + pmInRun);
-      const piece = pieces[pi];
+      let piece = pieces[pi];
       if (!piece) continue;
+      // E7: the drop cap's letter is drawn as a float, so it takes no room in
+      // the flow. Remove it exactly once, where the walk meets it.
+      if (skipChar >= 0 && skipChar >= blockChar && skipChar < blockChar + piece.length) {
+        const local = skipChar - blockChar;
+        piece = piece.slice(0, local) + piece.slice(local + 1);
+        skipChar = -1;
+        blockChar += 1;
+      }
       // Intl word granularity: break opportunities match the browser's
       // (hyphenated words split after the hyphen). Apostrophes GLUE: the
       // word splitter cuts "l'orlo" into "l'"+"orlo" but the browser never
@@ -344,7 +366,7 @@ function mixedParagraphLines(
           blockChar += part.length;
           continue;
         }
-        const avail = widthAt(y);
+        const avail = availAt(y);
         if (lineOpen && x + pendingSpace + w > avail) {
           flushLine(runPmStart + pmInRun);
         }
@@ -422,6 +444,11 @@ function hasTabs(node: PMNode): boolean {
  * unit and many characters), and the line start of a wrapped line would land
  * on the wrong place. The mixed walk keeps both counters.
  */
+/** E7: does the block drop a cap? Then its first lines are not as wide. */
+function hasDropCap(node: PMNode): boolean {
+  return dropCapOf(node) !== null;
+}
+
 function hasField(node: PMNode): boolean {
   let found = false;
   node.forEach((child) => {
@@ -538,7 +565,7 @@ function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics)
     Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
   // E3: a block with tabulations is walked line by line too — its pen depends
   // on the stops, which the uniform batch cannot see.
-  if (!ps.mixed && ind.first === 0 && !hasTabs(node) && !hasField(node)) {
+  if (!ps.mixed && ind.first === 0 && !hasTabs(node) && !hasField(node) && !hasDropCap(node)) {
     if (!hasHardBreak(node)) {
       // cheap batch height (line count only); exact line positions are
       // computed later, and only for paragraphs that cross a boundary
@@ -863,7 +890,7 @@ export function blockLineStartOffsets(
 ): number[] | null {
   if (node.type.name !== "paragraph" && node.type.name !== "heading") return null;
   const ind = lineIndentOf(node);
-  if (ind.first !== 0 || hasTabs(node) || hasField(node)) {
+  if (ind.first !== 0 || hasTabs(node) || hasField(node) || hasDropCap(node)) {
     // the first line is not as wide as the others, or a tab moves the pen,
     // or a field's text must be placed character by character:
     // walk the block line by line
@@ -1547,7 +1574,7 @@ function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWi
   const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
   const widthAt = (relY: number): number =>
     Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
-  if (ps.mixed || ind.first !== 0 || hasTabs(node) || hasField(node)) {
+  if (ps.mixed || ind.first !== 0 || hasTabs(node) || hasField(node) || hasDropCap(node)) {
     e.mixed = true;
     const lines = mixedParagraphLines(node, widthAt, base);
     e.relMixed = lines;
@@ -2233,4 +2260,38 @@ function computePageBreaks(doc: PMNode, margins: PageMargins | undefined, bands:
 
   const totalPages = y <= 0 ? 1 : Math.max(1, Math.ceil((y - 0.0001) / contentHeight));
   return { breaks, totalPages, freeGeometry, bands: outBands };
+}
+
+/**
+ * E7 — the drop caps of the document as decorations: the letter keeps being a
+ * character (nothing is inserted, nothing is a node), and the numbers it wears
+ * are the ones the walk reserved, so screen and paper agree by construction.
+ */
+export function createDropCapPlugin(): Plugin {
+  return new Plugin({
+    key: new PluginKey("aw-drop-cap"),
+    props: {
+      decorations: (state) => {
+        const ranges = dropCapRanges(state.doc, (node) => {
+          const base = baseMetricsFor(node);
+          const band = dropCapBandOf(node, base, resolvedLineFactor(node, base), measureWord);
+          return band
+            ? { widthPx: band.widthPx, heightPx: band.heightPx, gapPx: band.gapPx, sizePx: band.sizePx }
+            : null;
+        });
+        return DecorationSet.create(
+          state.doc,
+          ranges.map((r) =>
+            Decoration.inline(r.from, r.to, {
+              class: "aw-dropcap",
+              style:
+                `--aw-dc-size: ${r.band.sizePx.toFixed(2)}px; ` +
+                `--aw-dc-height: ${r.band.heightPx.toFixed(2)}px; ` +
+                `--aw-dc-gap: ${r.band.gapPx.toFixed(2)}px`,
+            }),
+          ),
+        );
+      },
+    },
+  });
 }

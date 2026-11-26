@@ -35,12 +35,14 @@ import { pageBreakPlugin } from "./page-break-widget";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
 import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
+import { createDropCapPlugin } from "./pagination-cassie";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
 import { ImageNodeView } from "./image-node-view";
 import { FigureNodeView } from "./figure-node-view";
 import { IMAGE_STYLE_ATTRS, OPACITY_ATTR, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
 import { FIELD_NODE_SPEC } from "./field-node";
+import { DROP_CAP_MAX_LINES, DROP_CAP_MIN_LINES } from "./drop-cap";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { SHAPE_NODE_SPEC } from "./shape-node";
@@ -121,6 +123,27 @@ function tabStopsFromDom(el: HTMLElement): { tabStops: string | null } {
   return { tabStops: formatTabStops(parseTabStops(raw)) };
 }
 
+/** E7: the drop cap, read from the markup (HTML export, paste). */
+export function dropCapFromDom(dom: HTMLElement): { dropCapLines: number | null; dropCapGap: number | null } {
+  const lines = Number(dom.getAttribute("data-drop-cap-lines"));
+  const gap = Number(dom.getAttribute("data-drop-cap-gap"));
+  return {
+    dropCapLines: Number.isFinite(lines) && lines >= DROP_CAP_MIN_LINES
+      ? Math.min(DROP_CAP_MAX_LINES, Math.round(lines))
+      : null,
+    dropCapGap: Number.isFinite(gap) && gap >= 0 ? gap : null,
+  };
+}
+
+/** E7: the drop cap, written into the markup (HTML export, D10). */
+export function dropCapMarkup(node: { attrs: Record<string, unknown> }, attrs: Record<string, string>): void {
+  const lines = Number(node.attrs.dropCapLines);
+  if (!Number.isFinite(lines) || lines < DROP_CAP_MIN_LINES) return;
+  attrs["data-drop-cap-lines"] = String(Math.min(DROP_CAP_MAX_LINES, Math.round(lines)));
+  const gap = Number(node.attrs.dropCapGap);
+  if (Number.isFinite(gap) && gap >= 0) attrs["data-drop-cap-gap"] = String(gap);
+}
+
 function tabStopsMarkup(
   node: { attrs: Record<string, unknown> },
   attrs: Record<string, string>,
@@ -157,6 +180,11 @@ const paragraphWithPageBreak: NodeSpec = {
     // value says which of the two it is ("title" | "note"); everything else about
     // it (font, colour) comes from the stylesheet, as the figure's caption does.
     tableCaption: { default: null },
+    // E7: the drop cap, as Word has it — how many lines the first letter is
+    // tall (null = none) and how far it sits from the text (cm, null = 0.2).
+    // The letter is a decoration, not a node: nothing is inserted into the text.
+    dropCapLines: { default: null },
+    dropCapGap: { default: null },
     // No depth attribute here: the text sits on ONE fixed level for the whole
     // document (contract §3.1, revised 2026-09-07). A per-paragraph number was
     // the design that failed the review - it put a new attribute on the most
@@ -177,6 +205,7 @@ const paragraphWithPageBreak: NodeSpec = {
         ...tabStopsFromDom(dom),
         pageBreakBefore: dom.classList.contains("page-break-before"),
         tableCaption: dom.getAttribute("data-table-caption") || null,
+        ...dropCapFromDom(dom),
       }),
     },
   ],
@@ -203,6 +232,7 @@ const paragraphWithPageBreak: NodeSpec = {
     if (node.attrs.tableCaption) {
       attrs["data-table-caption"] = node.attrs.tableCaption as string;
     }
+    dropCapMarkup(node, attrs);
     return ["p", attrs, 0];
   },
 };
@@ -222,6 +252,9 @@ const headingSpec: NodeSpec = {
     indentRight: { default: null },
     indentFirst: { default: null },
     tabStops: { default: null },
+    // E7: same contract as the paragraph (a chapter opening can drop a cap).
+    dropCapLines: { default: null },
+    dropCapGap: { default: null },
   },
   parseDOM: [
     {
@@ -229,7 +262,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 1, align: styleAlign || "center", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
     {
@@ -237,7 +270,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 1, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
     {
@@ -245,7 +278,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 2, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
     {
@@ -253,7 +286,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 3, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
     {
@@ -261,7 +294,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 4, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
     {
@@ -269,7 +302,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 5, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
     {
@@ -277,7 +310,7 @@ const headingSpec: NodeSpec = {
       getAttrs: (node) => {
         const el = node as HTMLElement;
         const styleAlign = (el.style?.textAlign || "").trim();
-        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el) };
+        return { level: 6, align: styleAlign || "left", lineHeight: el.getAttribute("data-line-height") || null, ...spacingFromDom(el), ...indentFromDom(el), ...tabStopsFromDom(el), ...dropCapFromDom(el) };
       },
     },
   ],
@@ -1039,6 +1072,8 @@ export function createEditor(element: HTMLElement): EditorViewType {
       suggestionsMarkerPlugin,
       findReplacePlugin,
       createTabStopsPlugin(),
+      // E7: the drop caps, as decorations on the letter they style.
+      createDropCapPlugin(),
       createFormattingMarksPlugin(),
       createCassiePaginationPlugin({ enabled: getCassieMode }),
       linkPopoverPlugin,
