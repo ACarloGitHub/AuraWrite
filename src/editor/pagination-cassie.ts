@@ -79,6 +79,7 @@ import {
   type TextMetrics,
 } from "./text-metrics";
 import { spacingOverride } from "./paragraph-spacing";
+import { fieldText } from "./field-value";
 import { lineIndentOf } from "./paragraph-indent";
 // E3: the tab advanced maths lives in the model module; the WALK below is the
 // one that decides lines, so the engine and the screen cannot disagree (D13).
@@ -254,12 +255,15 @@ function mixedParagraphLines(
   let pendingSpace = 0;
   let lineStart = 0;
   let lineOpen = false;
-  let charInRun = 0;
+  // E5: DOCUMENT units inside the run. Text costs one per character, a `field`
+  // atom one for its whole string, so every line start (a document position,
+  // `off`) is counted here and never taken from the character count.
+  let pmInRun = 0;
   let runPmStart = 0;
   let pm = 0;
   // E3: a tab holds no glyph of its own — it moves the pen to the next stop.
   // `blockChar` counts the block's characters (the key the paper's DOM carries),
-  // `runPmStart + charInRun` is the same place as a document position.
+  // `runPmStart + pmInRun` is the same place as a document position.
   const ind = lineIndentOf(node);
   const stops: TabStopPx[] = tabStopsOf(node).length ? stopsInPx(node, widthAt(0), ind.left) : [];
   const gridPx = DEFAULT_TAB_CM * CM_TO_PX;
@@ -304,74 +308,89 @@ function mixedParagraphLines(
     x = pen + advance;
     advances?.push({ offset: blockChar, pos: at, widthPx: advance, leader: stop.leader });
     blockChar++;
-    charInRun++;
+  };
+  /**
+   * Lay one piece of text — a run's own, or a field's cached string (E5) —
+   * into lines: tabs move the pen, words are measured, the pen wraps when the
+   * line is full. The atom's text is text for the pen and ONE unit for the
+   * document, and the two counters keep that difference.
+   */
+  const placeRun = (text: string, font: string, h: number): void => {
+    // E3: a tab is a token of its own: split the run on it, keep the order.
+    const pieces = text.split("\t");
+    for (let pi = 0; pi < pieces.length; pi++) {
+      if (pi > 0) placeTab(runPmStart + pmInRun);
+      const piece = pieces[pi];
+      if (!piece) continue;
+      // Intl word granularity: break opportunities match the browser's
+      // (hyphenated words split after the hyphen). Apostrophes GLUE: the
+      // word splitter cuts "l'orlo" into "l'"+"orlo" but the browser never
+      // breaks there - merge glue tokens back together.
+      const parts: string[] = [];
+      for (const s of WORD_TOKENIZER.segment(piece)) parts.push(s.segment);
+      const merged: string[] = [];
+      for (const tok of parts) {
+        const prev = merged[merged.length - 1];
+        if (prev && !/\s/.test(prev) && /['\u2019\u02BC]$/u.test(prev) && /^[\p{L}]/u.test(tok)) {
+          merged[merged.length - 1] = prev + tok;
+        } else {
+          merged.push(tok);
+        }
+      }
+      for (const part of merged) {
+        const w = measureWord(part, font);
+        if (/^\s/.test(part)) {
+          pendingSpace += w;
+          blockChar += part.length;
+          continue;
+        }
+        const avail = widthAt(y);
+        if (lineOpen && x + pendingSpace + w > avail) {
+          flushLine(runPmStart + pmInRun);
+        }
+        if (!lineOpen) {
+          lineStart = runPmStart + pmInRun;
+          lineOpen = true;
+        } else {
+          x += pendingSpace;
+        }
+        pendingSpace = 0;
+        x += w;
+        curH = Math.max(curH, h);
+        blockChar += part.length;
+      }
+    }
   };
   node.forEach((child) => {
     if (child.isText) {
       const { font, sizePx } = fontOfChild(child, base);
-      const h = sizePx * factor;
-      // E3: a tab is a token of its own: split the run on it, keep the order.
-      const pieces = (child.text || "").split("\t");
-      for (let pi = 0; pi < pieces.length; pi++) {
-        if (pi > 0) placeTab(runPmStart + charInRun);
-        const piece = pieces[pi];
-        if (!piece) continue;
-        // Intl word granularity: break opportunities match the browser's
-        // (hyphenated words split after the hyphen). Apostrophes GLUE: the
-        // word splitter cuts "l'orlo" into "l'"+"orlo" but the browser never
-        // breaks there - merge glue tokens back together.
-        const parts: string[] = [];
-        for (const s of WORD_TOKENIZER.segment(piece)) parts.push(s.segment);
-        const merged: string[] = [];
-        for (const tok of parts) {
-          const prev = merged[merged.length - 1];
-          if (prev && !/\s/.test(prev) && /['\u2019\u02BC]$/u.test(prev) && /^[\p{L}]/u.test(tok)) {
-            merged[merged.length - 1] = prev + tok;
-          } else {
-            merged.push(tok);
-          }
-        }
-        for (const part of merged) {
-          const w = measureWord(part, font);
-          if (/^\s/.test(part)) {
-            pendingSpace += w;
-            charInRun += part.length;
-            blockChar += part.length;
-            continue;
-          }
-          const avail = widthAt(y);
-          if (lineOpen && x + pendingSpace + w > avail) {
-            flushLine(runPmStart + charInRun);
-          }
-          if (!lineOpen) {
-            lineStart = runPmStart + charInRun;
-            lineOpen = true;
-          } else {
-            x += pendingSpace;
-          }
-          pendingSpace = 0;
-          x += w;
-          curH = Math.max(curH, h);
-          charInRun += part.length;
-          blockChar += part.length;
-        }
-      }
+      placeRun(child.text || "", font, sizePx * factor);
       pm += child.nodeSize;
+      pmInRun += child.nodeSize;
+      return;
+    }
+    // E5: a field is an atom that shows a string. The string IS its width (the
+    // cache, never a clock read here), and the document counts the atom once.
+    if (child.type.name === "field") {
+      const { font, sizePx } = fontOfChild(child, base);
+      placeRun(fieldText(child.attrs as Record<string, unknown>), font, sizePx * factor);
+      pm += child.nodeSize;
+      pmInRun += child.nodeSize;
       return;
     }
     // hard break: ends the line; the next run starts fresh after it
     if (lineOpen) flushLine(pm + 1);
     else {
-      lines.push({ off: runPmStart + charInRun, y, h: curH });
+      lines.push({ off: runPmStart + pmInRun, y, h: curH });
       y += curH;
       curH = strut;
     }
     pm += child.nodeSize;
     runPmStart = pm;
-    charInRun = 0;
+    pmInRun = 0;
     lineOpen = false;
   });
-  if (lineOpen) flushLine(runPmStart + charInRun);
+  if (lineOpen) flushLine(runPmStart + pmInRun);
   else lines.push({ off: lineStart, y, h: curH });
   return lines;
 }
@@ -398,6 +417,20 @@ function hasTabs(node: PMNode): boolean {
 }
 
 /**
+ * E5: does the block hold a `field` atom? Then the uniform batch lane cannot
+ * be used: its character count is not the document's count (an atom is one
+ * unit and many characters), and the line start of a wrapped line would land
+ * on the wrong place. The mixed walk keeps both counters.
+ */
+function hasField(node: PMNode): boolean {
+  let found = false;
+  node.forEach((child) => {
+    if (!child.isText && child.type.name === "field") found = true;
+  });
+  return found;
+}
+
+/**
  * The width a tab's ALIGNED segment takes: the text after it, up to the next tab
  * (or the end of the line), measured unwrapped — plus the part before the decimal
  * separator, which is what a decimal stop lines up. Only the stops that are not
@@ -410,6 +443,19 @@ function tabSegment(node: PMNode, tabChar: number, base: TextMetrics): { widthPx
   node.forEach((child) => {
     if (!child.isText) {
       if (child.type.name === "hard_break") collecting = false;
+      // E5: a field's cached string is text for the pen, so an aligned tab
+      // whose segment runs through a field lines up on what the reader sees.
+      if (child.type.name === "field") {
+        const text = fieldText(child.attrs as Record<string, unknown>);
+        const start = chars;
+        chars += text.length;
+        if (!collecting && tabChar + 1 < start + text.length) collecting = true;
+        if (collecting) {
+          const { font } = fontOfChild(child, base);
+          const piece = text.slice(Math.max(0, tabChar + 1 - start));
+          pieces.push({ text: piece, font });
+        }
+      }
       return;
     }
     const text = child.text ?? "";
@@ -492,7 +538,7 @@ function measureParagraph(node: PMNode, contentWidth: number, base: TextMetrics)
     Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
   // E3: a block with tabulations is walked line by line too — its pen depends
   // on the stops, which the uniform batch cannot see.
-  if (!ps.mixed && ind.first === 0 && !hasTabs(node)) {
+  if (!ps.mixed && ind.first === 0 && !hasTabs(node) && !hasField(node)) {
     if (!hasHardBreak(node)) {
       // cheap batch height (line count only); exact line positions are
       // computed later, and only for paragraphs that cross a boundary
@@ -817,8 +863,9 @@ export function blockLineStartOffsets(
 ): number[] | null {
   if (node.type.name !== "paragraph" && node.type.name !== "heading") return null;
   const ind = lineIndentOf(node);
-  if (ind.first !== 0 || hasTabs(node)) {
-    // the first line is not as wide as the others, or a tab moves the pen:
+  if (ind.first !== 0 || hasTabs(node) || hasField(node)) {
+    // the first line is not as wide as the others, or a tab moves the pen,
+    // or a field's text must be placed character by character:
     // walk the block line by line
     const base = baseMetricsFor(node);
     const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
@@ -1500,7 +1547,7 @@ function computeLayout(node: PMNode, margins: PageMargins | undefined, contentWi
   const width = Math.max(MIN_LINE_WIDTH_PX, contentWidth - ind.left - ind.right);
   const widthAt = (relY: number): number =>
     Math.max(MIN_LINE_WIDTH_PX, relY === 0 ? width - ind.first : width);
-  if (ps.mixed || ind.first !== 0 || hasTabs(node)) {
+  if (ps.mixed || ind.first !== 0 || hasTabs(node) || hasField(node)) {
     e.mixed = true;
     const lines = mixedParagraphLines(node, widthAt, base);
     e.relMixed = lines;

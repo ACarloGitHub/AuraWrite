@@ -28,7 +28,8 @@ import { migrateLegacyDocumentJson } from "./enriched-schema";
 import { syncDocumentPaginationState } from "./editor";
 import { refreshFreeWrapBands } from "./pagination-cassie-plugin";
 import { registerDocumentFontFaces } from "./fonts-ui";
-import { installDocumentLanguage, languageFromDocumentJson } from "./document-language";
+import { installDocumentLanguage, languageFromDocumentJson, effectiveDocumentLanguage } from "./document-language";
+import { refreshAutoFields } from "./field-node";
 
 /** Stored text (ProseMirror JSON) → the node, with the legacy shape migrated. */
 export function documentNodeFromJson(view: EditorView, text: string): PMNode {
@@ -47,15 +48,20 @@ export function installDocument(view: EditorView, doc: PMNode, language: string 
   // document that does not say one follows the preferences. Opening is not a
   // change: no cell is rewritten here.
   installDocumentLanguage(language);
+  // E5: opening re-renders the automatic fields (a date is a field, and the file
+  // carries the one it was saved with). The refreshed document is built HERE,
+  // before it reaches the editor: opening is not an edit, so nothing enters the
+  // undo history and the document is not marked as modified.
+  const opened = refreshAutoFields(doc, new Date(), effectiveDocumentLanguage());
   // The fonts this document formats with have to be declared before its text is
   // laid out, or the runs in a user font flash (and are measured, and are
   // paginated) in the fallback face. Declaring a face opens no file: the file
   // is fetched when the browser needs it.
-  registerDocumentFontFaces(doc);
+  registerDocumentFontFaces(opened);
   view.updateState(
     EditorState.create({
       schema: view.state.schema,
-      doc,
+      doc: opened,
       plugins: view.state.plugins,
     }),
   );

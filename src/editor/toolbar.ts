@@ -24,6 +24,7 @@ import { setupParagraphSpacing, syncParagraphSpacingInputs } from "./paragraph-s
 import { setupParagraphIndent, syncParagraphIndentInputs } from "./paragraph-indent";
 import { getTabsMode, setTabsMode, setupParagraphTabs, syncParagraphTabsInputs } from "./paragraph-tabs";
 import { setupFormattingMarks } from "./formatting-marks";
+import { setupFieldPanel } from "./field-panel";
 
 /** The document as it is saved: its content plus the language it declares. */
 function currentDocumentJson(): string {
@@ -112,6 +113,7 @@ export function setupToolbar(view: EditorView): void {
   setupParagraphTabs(() => editorView);
   setupTabsButton();
   setupFormattingMarks(editorView);
+  setupFieldPanel(editorView);
   setupDirtyTracking();
   loadPreferences();
   updateDocumentTitleBar();

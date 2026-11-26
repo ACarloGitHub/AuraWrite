@@ -40,6 +40,7 @@ import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plug
 import { ImageNodeView } from "./image-node-view";
 import { FigureNodeView } from "./figure-node-view";
 import { IMAGE_STYLE_ATTRS, OPACITY_ATTR, STYLED_BOX_NODE_SPEC, FIGURE_NODE_SPEC, imageStyleGetDOM, imageStyleToDOM, FREE_LAYOUT_ATTRS } from "./enriched-schema";
+import { FIELD_NODE_SPEC } from "./field-node";
 import { freeLayoutGetDOM, freeLayoutToDOM } from "./free-layout";
 import { StyledBoxNodeView } from "./box-node-view";
 import { SHAPE_NODE_SPEC } from "./shape-node";
@@ -876,6 +877,7 @@ nodes = nodes
     image: imageSpec,
     styled_box: STYLED_BOX_NODE_SPEC,
     figure: FIGURE_NODE_SPEC,
+    field: FIELD_NODE_SPEC,
     shape: SHAPE_NODE_SPEC,
     bubble: BUBBLE_NODE_SPEC,
     ...tableNodeSpecs,

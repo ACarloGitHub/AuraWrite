@@ -27,6 +27,7 @@ import {
   HorizontalPositionAlign,
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
+  SimpleField,
 } from "docx";
 import { getPageFormat, isHeaderRow } from "../editor/pagination-cassie";
 import { getEditorMetrics } from "../editor/text-metrics";
@@ -38,6 +39,7 @@ import { parseBorder } from "../editor/table-borders";
 import { columnPercents, columnTwips, columnWeights } from "../editor/table-widths";
 import { cellPaddingOf, cellPaddingTwips } from "../editor/table-padding";
 import { CM_TO_TWIP } from "../editor/paragraph-indent";
+import { docxPicture, findFormat } from "../editor/field-value";
 import { formatTabStops, parseTabStops, type TabAlign } from "../editor/paragraph-tabs";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
 
@@ -153,13 +155,166 @@ const MAMMOTH_STYLE_MAP = [
 ];
 
 export async function fromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
+  // E5: a `w:fldSimple` is DROPPED by mammoth (probed 2026-11-25: only a
+  // warning, and the value with it) while a complex field keeps its visible
+  // text but loses its instruction. Both are marked here with private-use
+  // sentinels, so the field arrives as an atom instead of vanishing or
+  // freezing into the string it happened to show.
+  const instrumented = await instrumentFields(arrayBuffer);
+  const source = instrumented ?? arrayBuffer;
   // mammoth in Node requires `buffer` (Node Buffer); in browser it accepts `arrayBuffer`
   const mammothInput: any = (globalThis as any).Buffer
-    ? { buffer: (globalThis as any).Buffer.from(arrayBuffer) }
-    : { arrayBuffer };
+    ? { buffer: (globalThis as any).Buffer.from(source) }
+    : { arrayBuffer: source };
   const result = await mammoth.convertToHtml(mammothInput, { styleMap: MAMMOTH_STYLE_MAP });
-  const enriched = await enrichHtml(arrayBuffer, result.value);
+  const enriched = await enrichHtml(arrayBuffer, restoreFields(result.value));
   return enriched;
+}
+
+/** The sentinels that carry a field through mammoth (private use area). */
+const FIELD_START = "\uE000";
+const FIELD_MARK = "\uE001";
+const FIELD_END = "\uE002";
+
+function fieldPayload(kind: string, picture: string, auto: boolean): string {
+  const json = JSON.stringify({ k: kind, f: picture, a: auto });
+  return btoa(unescape(encodeURIComponent(json)));
+}
+
+/** Word's instruction (`DATE \@ "dd.MM.yyyy"`) → our kind and picture. */
+function readFieldInstruction(instr: string): { kind: string; picture: string } | null {
+  const m = /^\s*(DATE|TIME|AUTHOR)\b/i.exec(instr);
+  if (!m) return null;
+  const kind = m[1].toUpperCase() === "AUTHOR" ? "name"
+    : m[1].toUpperCase() === "TIME" ? "time" : "date";
+  const pic = /@\s*"([^"]*)"/.exec(instr);
+  return { kind, picture: pic ? pic[1] : "" };
+}
+
+function makeSentinelRun(doc: any, text: string): any {
+  const run = doc.createElementNS(doc.documentElement.namespaceURI, "w:r");
+  const t = doc.createElementNS(doc.documentElement.namespaceURI, "w:t");
+  t.setAttribute("xml:space", "preserve");
+  t.textContent = text;
+  run.appendChild(t);
+  return run;
+}
+
+/**
+ * Rewrite the document's fields into sentinel-marked runs, so mammoth carries
+ * the instruction and the value through. Returns null when the file cannot be
+ * read (the caller then keeps the plain mammoth answer).
+ */
+async function instrumentFields(arrayBuffer: ArrayBuffer): Promise<ArrayBuffer | null> {
+  const parser = getDOMParser();
+  if (!parser) return null;
+  let zip: any;
+  let xml: string;
+  try {
+    zip = await JSZip.loadAsync(arrayBuffer);
+    const file = zip.file("word/document.xml");
+    if (!file) return null;
+    xml = await file.async("text");
+  } catch {
+    return null;
+  }
+  let xmlDoc: any;
+  try {
+    xmlDoc = parser.parseFromString(xml, "application/xml");
+  } catch {
+    return null;
+  }
+  if (!xmlDoc?.documentElement) return null;
+  const paragraphs: any[] = Array.from(xmlDoc.getElementsByTagName("w:p") as any);
+  let changed = false;
+
+  for (const paragraph of paragraphs) {
+    const children: any[] = Array.from(paragraph.childNodes as any) as any[];
+    // Simple fields: dropped by mammoth, so they are replaced outright.
+    for (const child of children) {
+      if (child.nodeType !== 1 || child.localName !== "fldSimple") continue;
+      const field = readFieldInstruction(child.getAttribute("w:instr") ?? "");
+      if (!field) continue;
+      const cached = Array.from(child.getElementsByTagName("w:t") as any)
+        .map((t: any) => t.textContent ?? "").join("");
+      const marker = makeSentinelRun(xmlDoc,
+        FIELD_START + fieldPayload(field.kind, field.picture, true) + FIELD_MARK + cached + FIELD_END);
+      paragraph.replaceChild(marker, child);
+      changed = true;
+    }
+    // Complex fields: the instruction is in the runs, the value between the
+    // `separate` and the `end`. The sentinels go around that value.
+    const runs: any[] = Array.from(paragraph.childNodes as any)
+      .filter((n: any) => n.nodeType === 1 && n.localName === "r");
+    let instr = "";
+    let collecting: string | null = null;
+    let open: { payload: string; first: any; last: any } | null = null;
+    for (const run of runs) {
+      const chars: any[] = Array.from(run.childNodes as any)
+        .filter((n: any) => n.nodeType === 1 && n.localName === "fldChar");
+      const charType = chars[0]?.getAttribute("w:fldCharType") ?? null;
+      if (charType === "begin") {
+        instr = "";
+        collecting = "";
+        open = null;
+        continue;
+      }
+      if (collecting !== null) {
+        const texts = Array.from(run.getElementsByTagName("w:instrText") as any)
+          .map((t: any) => t.textContent ?? "").join("");
+        collecting += texts;
+      }
+      if (charType === "separate") {
+        const field = readFieldInstruction(collecting ?? instr);
+        collecting = null;
+        if (field) {
+          const payload = FIELD_START + fieldPayload(field.kind, field.picture, true) + FIELD_MARK;
+          const marker = makeSentinelRun(xmlDoc, payload);
+          run.parentNode.insertBefore(marker, run.nextSibling);
+          open = { payload, first: marker, last: marker };
+          changed = true;
+        }
+        continue;
+      }
+      if (charType === "end") {
+        if (open) {
+          const marker = makeSentinelRun(xmlDoc, FIELD_END);
+          run.parentNode.insertBefore(marker, run);
+          changed = true;
+          open = null;
+        }
+        continue;
+      }
+    }
+  }
+
+  if (!changed) return null;
+  try {
+    const Serializer = (globalThis as any).XMLSerializer;
+    if (!Serializer) return null;
+    zip.file("word/document.xml", new Serializer().serializeToString(xmlDoc));
+    const out = await zip.generateAsync({ type: "arraybuffer" });
+    return out as ArrayBuffer;
+  } catch {
+    return null;
+  }
+}
+
+/** Sentinel-marked text → the `span[data-aw-field]` the schema reads back. */
+function restoreFields(html: string): string {
+  const re = new RegExp(FIELD_START + "([A-Za-z0-9+/=]+)" + FIELD_MARK + "([^]*?)" + FIELD_END, "g");
+  return html.replace(re, (_all: string, payload: string, shown: string) => {
+    let field: { k?: string; f?: string; a?: boolean } = {};
+    try {
+      field = JSON.parse(decodeURIComponent(escape(atob(payload))));
+    } catch {
+      return shown;
+    }
+    const kind = field.k === "time" ? "time" : field.k === "name" ? "name" : "date";
+    const format = (field.f ?? "").replace(/"/g, "&quot;");
+    const auto = field.a === false ? "false" : "true";
+    return `<span data-aw-field="${kind}" data-format="${format}" data-value="" data-auto="${auto}" class="aw-field">${shown}</span>`;
+  });
 }
 
 async function enrichHtml(arrayBuffer: ArrayBuffer, html: string): Promise<string> {
@@ -1713,6 +1868,11 @@ function nodeContentToRuns(node: any, imageCache?: Map<string, Uint8Array>): Run
       // Shift+Enter break -> Word line break (w:br) at this point of the run sequence
       return new TextRun({ text: "", break: 1 });
     }
+    // E5: a field is a REAL field in Word — DATE, TIME or AUTHOR with the cached
+    // text this document shows — not the string frozen into a run.
+    if (child.type.name === "field") {
+      return fieldRun(child);
+    }
     if (child.type.name !== "text") {
       return new TextRun({ text: getTextContent(child) });
     }
@@ -1740,6 +1900,26 @@ function nodeContentToRuns(node: any, imageCache?: Map<string, Uint8Array>): Run
     }
     return makeRun(child.text || "", marks);
   });
+}
+
+/**
+ * The Word field for a `field` atom: the instruction Word re-computes, and the
+ * text this document shows as the cached value. The picture is the one the atom
+ * carries, so the format the writer chose survives the round trip.
+ */
+function fieldRun(node: any): TextRun {
+  const attrs = node.attrs || {};
+  const kind = attrs.kind === "time" ? "time" : attrs.kind === "name" ? "name" : "date";
+  const text = typeof attrs.text === "string" ? attrs.text : getTextContent(node);
+  if (kind === "name") {
+    return new SimpleField("AUTHOR", text) as unknown as TextRun;
+  }
+  const field = kind === "time" ? "TIME" : "DATE";
+  // The picture defaults to the catalog's own, never to an empty switch.
+  const picture = docxPicture(findFormat(attrs.format, kind) ?? findFormat(null, kind)!);
+  // A quote inside the picture would end Word's switch early.
+  const safe = picture.replace(/"/g, "");
+  return new SimpleField(`${field} \\@ "${safe}"`, text) as unknown as TextRun;
 }
 
 function getTextContent(node: any): string {

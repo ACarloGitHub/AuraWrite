@@ -261,6 +261,9 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
     figure[data-aw-figure][data-align="right"] { margin-left: auto; margin-right: 0; }
     figure[data-aw-figure] img { display: block; }
     figcaption { font-size: 12px; font-style: italic; color: #666; }
+    /* E5: a field shows its cached text and nothing else; the page there is a
+       string, so the markup keeps the spacing it was measured with. */
+    span[data-aw-field] { white-space: pre; }
     /* Drawn shapes: the size, the alignment and the air travel inline in the
        markup (the file stands on its own); these two rules only make the box
        behave like the block it is in the editor. */

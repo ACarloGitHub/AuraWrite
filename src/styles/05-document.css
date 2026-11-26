@@ -2538,3 +2538,11 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
   z-index: 1190;
   display: none;
 }
+
+/* E5 — a field shows a string and nothing else: it wears the text around it
+   (the insert adopts the cursor's marks) and never re-renders itself while the
+   page is being measured. */
+.aw-field {
+  white-space: pre;
+  cursor: default;
+}

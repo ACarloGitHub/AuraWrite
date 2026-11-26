@@ -691,3 +691,54 @@ body.reader-mode .toolbar {
 #table-controls[hidden] {
   display: none;
 }
+/* E5 — the field panel. Anchored to its group, not to the viewport: it is a
+   temporary home (chapter B re-places the bar), so it stays simple. */
+.field-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 230px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.field-menu__kinds {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--spacing-sm) var(--spacing-xs);
+}
+
+.field-menu__kind {
+  flex: 1 1 auto;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.field-menu__kind.is-active {
+  border-color: var(--w-accent, #4a7cff);
+  font-weight: 600;
+}
+
+.field-menu__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-panel__option {
+  justify-content: flex-start;
+}
+
+.field-menu__auto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}

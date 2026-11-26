@@ -768,6 +768,27 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// E5: the name the `name` field shows.
+///
+/// Word's AUTHOR field answers with the program's user name; AuraWrite has no
+/// document properties yet (the headers chapter will add them), so the field
+/// asks the operating system for the account it is running as. Cross-platform
+/// on purpose: USERNAME on Windows, USER (then LOGNAME) on macOS and Linux.
+/// An empty answer is a legitimate answer - the field then shows nothing, and
+/// the writer types the name by hand.
+#[tauri::command]
+fn system_user_name() -> String {
+    for key in ["USERNAME", "USER", "LOGNAME"] {
+        if let Ok(value) = std::env::var(key) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    String::new()
+}
+
 fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut result = Vec::new();
@@ -1373,6 +1394,7 @@ pub fn run() {
             read_image_asset_path,
             get_image_asset_url,
             get_app_version,
+            system_user_name,
             // Project commands
             db_create_project,
             db_get_projects,

@@ -149,6 +149,31 @@
           <button id="btn-image" class="toolbar__btn" title="Insert Image">
             <span class="toolbar__btn-icon">🖼</span>
           </button>
+          <!-- E5: a field is an inline atom that shows a value and updates itself.
+               Temporary home: the B chapter (right after E5) re-places the bar. -->
+          <div class="toolbar-group toolbar-dropdown" id="field-group">
+            <button id="btn-field" class="toolbar__btn" title="Insert a field: date, time or name">
+              <span class="toolbar__btn-icon">⏱</span>
+              <span class="toolbar__btn-text">Field</span>
+              <span class="toolbar__btn-caret">▾</span>
+            </button>
+            <div id="field-menu" class="dropdown-menu field-menu hidden">
+              <div id="field-kinds" class="field-menu__kinds">
+                <button type="button" class="field-menu__kind is-active" data-field-kind="date">Date</button>
+                <button type="button" class="field-menu__kind" data-field-kind="time">Time</button>
+                <button type="button" class="field-menu__kind" data-field-kind="name">Name</button>
+              </div>
+              <div id="field-format-list" class="field-menu__list"></div>
+              <div class="dropdown-divider"></div>
+              <label class="field-menu__auto">
+                <input type="checkbox" id="field-auto" checked />
+                <span>Update automatically</span>
+              </label>
+              <button type="button" id="field-update-all" class="dropdown-menu__item">
+                <span class="dropdown-menu__label">Update all fields</span>
+              </button>
+            </div>
+          </div>
           <select id="sel-heading" class="toolbar__select" title="Heading" aria-label="Heading level">
             <option value="0">Normal</option>
             <option value="1">Heading 1</option>
