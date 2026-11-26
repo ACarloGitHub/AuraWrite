@@ -27,6 +27,7 @@ import { freeAnchorState } from "./free-layout-plugin";
 import { freeWrapDiagnosis, freeWrapState, pageGeometry } from "./pagination-cassie-plugin";
 import { calculatePageBreaks, getPageFormat, setPageFormat, PAGE_FORMATS } from "./pagination-cassie";
 import { getMargins } from "./pagination-state";
+import { getPageDecor, setPageDecor, type PageDecor } from "./page-decor";
 
 /** What a hook answers: the tool never has to guess whether it worked. */
 export interface HookResult {
@@ -54,6 +55,11 @@ export interface TestHooks {
   pageFrame(): HookResult;
   /** Change the page format (a4 / a3 / letter) and measure again. */
   pageFormat(id?: string): HookResult;
+  /**
+   * The sheet's decoration, through the door the Margins panel uses: no patch
+   * reads it, a patch changes it (null on a field removes that decoration).
+   */
+  pageDecor(patch?: Partial<PageDecor>): HookResult;
   /** Export the CURRENT document to DOCX at `path` — the export button's own chain. */
   exportDocx(path: string): Promise<HookResult>;
   /** Export the CURRENT document to HTML at `path` — the export button's own chain. */
@@ -180,6 +186,15 @@ export function installTestHooks(view: EditorView): void {
       try {
         if (id) setPageFormat(id);
         return { ok: true, current: getPageFormat().id, formats: Object.keys(PAGE_FORMATS) };
+      } catch (e) {
+        return { ok: false, error: `${e}` };
+      }
+    },
+
+    pageDecor(patch?: Partial<PageDecor>): HookResult {
+      try {
+        if (patch) setPageDecor(patch);
+        return { ok: true, decor: getPageDecor() };
       } catch (e) {
         return { ok: false, error: `${e}` };
       }

@@ -358,6 +358,44 @@ body.reader-mode .toolbar {
   color: var(--color-text-muted);
 }
 
+/* E8: the page decoration lives in the same panel as the margins; the rows are
+   kept narrow enough for the panel to fit beside the button. */
+.margins-dropdown__row--decor input[type="number"] {
+  width: 44px;
+}
+.margins-dropdown__row--decor input.toolbar__number-input--wide {
+  width: 104px;
+  text-align: left;
+}
+.margins-dropdown__row--decor input[type="color"] {
+  width: 26px;
+  height: 22px;
+  padding: 1px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+.margins-dropdown__spacer {
+  width: 52px;
+  flex-shrink: 0;
+}
+.margins-dropdown__remove {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.margins-dropdown__remove:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+
 /* E3: the strip of tab stops inside the Paragraph panel — a schematic of the
    text column (no ruler on the sheet): the markers sit at their cm, a click on
    the strip adds a stop there, a click on a marker removes it. */

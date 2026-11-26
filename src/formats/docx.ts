@@ -14,6 +14,8 @@ import {
   TableCell,
   WidthType,
   BorderStyle,
+  PageBorderDisplay,
+  PageBorderOffsetFrom,
   TableLayoutType,
   VerticalAlign,
   HeightRule,
@@ -44,6 +46,7 @@ import { parseBorder } from "../editor/table-borders";
 import { columnPercents, columnTwips, columnWeights } from "../editor/table-widths";
 import { cellPaddingOf, cellPaddingTwips } from "../editor/table-padding";
 import { CM_TO_TWIP } from "../editor/paragraph-indent";
+import { borderSizeEighths, borderSpacePt, getPageDecor } from "../editor/page-decor";
 import { docxPicture, findFormat } from "../editor/field-value";
 import { formatTabStops, parseTabStops, type TabAlign } from "../editor/paragraph-tabs";
 import { shapeBitmap, type ShapeBitmap } from "./shape-word";
@@ -1175,6 +1178,29 @@ async function loadImageBytes(src: string): Promise<Uint8Array | null> {
 /** The pictures of the drawn shapes, for the duration of one export. */
 let shapeBitmaps: Map<unknown, ShapeBitmap> | null = null;
 
+/**
+ * E8: the page border as Word's own section property. `w:sz` counts eighths of
+ * a point, `w:space` points, `offsetFrom="text"` is the model's own rule (the
+ * distance is from the text area, outwards) and all four sides share the line.
+ */
+function pageBordersOption(): any {
+  const border = getPageDecor().border;
+  if (!border) return undefined;
+  const edge = {
+    style: BorderStyle.SINGLE,
+    size: borderSizeEighths(border),
+    color: border.color.slice(1).toUpperCase(),
+    space: borderSpacePt(border),
+  };
+  return {
+    pageBorders: { display: PageBorderDisplay.ALL_PAGES, offsetFrom: PageBorderOffsetFrom.TEXT },
+    pageBorderTop: edge,
+    pageBorderRight: edge,
+    pageBorderBottom: edge,
+    pageBorderLeft: edge,
+  };
+}
+
 export async function toDocx(doc: any): Promise<Document> {
   const sources = new Set<string>();
   await collectImageSources(doc, sources);
@@ -1218,6 +1244,11 @@ export async function toDocx(doc: any): Promise<Document> {
   }
 
   const pxToTwip = (px: number) => px * 15;
+  // E8: the border is a property of the section in Word, not of the text: it
+  // is `w:pgBorders` with all four sides and the distance from the text. The
+  // watermark has no faithful Word channel in this round and is deliberately
+  // flattened (declared in the tool's project page).
+  const borders = pageBordersOption();
 
   return new Document({
     sections: [
@@ -1236,6 +1267,7 @@ export async function toDocx(doc: any): Promise<Document> {
               header: pxToTwip(page.headerPx),
               footer: pxToTwip(page.footerPx),
             },
+            ...(borders ? { borders } : {}),
           },
         },
         children,

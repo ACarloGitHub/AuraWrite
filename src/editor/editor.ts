@@ -35,6 +35,7 @@ import { pageBreakPlugin } from "./page-break-widget";
 import { suggestionsMarkerPlugin } from "./suggestions-marker-plugin";
 import { findReplacePlugin } from "./find-replace";
 import { createCassiePaginationPlugin } from "./pagination-cassie-plugin";
+import { createPageDecorLayerPlugin } from "./page-decor-layer";
 import { createDropCapPlugin } from "./pagination-cassie";
 import { linkPopoverPlugin, openLinkPopover } from "./link-plugin";
 import { createImageDropPlugin, createImagePastePlugin } from "./image-drop-plugin";
@@ -1076,6 +1077,10 @@ export function createEditor(element: HTMLElement): EditorViewType {
       createDropCapPlugin(),
       createFormattingMarksPlugin(),
       createCassiePaginationPlugin({ enabled: getCassieMode }),
+      // E8: the sheet's own border and watermark, drawn behind the text once
+      // the pagination plugin has closed the pages (plugin views update in
+      // order, so this one reads a geometry that is already in place).
+      createPageDecorLayerPlugin(),
       linkPopoverPlugin,
       createImageDropPlugin(),
       createImagePastePlugin(),

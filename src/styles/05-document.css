@@ -828,12 +828,58 @@
   max-width: var(--aw-page-w, 794px);
   margin: 0 auto;
   padding: 96px 96px;
-  background: var(--color-paper, #fff);
+  /* E8: the paper is painted by the page-decoration layer, one sheet per page
+     (it must be ABOVE the paper and BELOW the text, and the host's own
+     background would cover it). Without a decoration the layer still paints
+     the sheets, so the page looks exactly as before. */
+  background: transparent;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border-radius: 2px;
   min-height: var(--aw-page-h, 1123px);
   font-size: 11pt;
   line-height: 1.6;
+}
+
+/* ============================================================================
+   E8 — PAGE DECORATION (screen)
+
+   One absolute box per page, behind the text, drawn by page-decor-layer.ts.
+   Not a container: the flow stays flat (concepts/abandoned-approaches), and the
+   layer only paints the paper, the border and the watermark where the sheet is.
+   ============================================================================ */
+.aw-page-decor {
+  position: absolute;
+  pointer-events: none;
+  /* Behind the text but above the sheet's paper: the mount is the stacking
+     context (z-index 0), the sheet's own background is transparent. */
+  z-index: -1;
+}
+
+.aw-page-decor__sheet {
+  position: absolute;
+  left: 0;
+  box-sizing: border-box;
+  background: var(--color-paper, #fff);
+}
+
+.aw-page-decor__border {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.aw-page-decor__watermark {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.aw-page-decor__watermark > span {
+  display: block;
+  white-space: nowrap;
+  transform-origin: center;
+  line-height: 1;
 }
 
 /* ============================================================================
@@ -1331,6 +1377,11 @@
 
 .editor-zoom-mount {
   transform-origin: top left;
+  /* E8: the mount is the sheet's frame and the page decoration's own stacking
+     context, so the layer can sit behind the text (negative z-index) without
+     falling behind the editor's background. */
+  position: relative;
+  z-index: 0;
 }
 
 /* Paged view: the sheet gets a strip of background above its top edge, so it

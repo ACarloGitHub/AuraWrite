@@ -15,6 +15,44 @@
 
 #aw-print-doc { display: none; color: #111; background: #fff; }
 .aw-print-sheet { position: relative; box-sizing: border-box; z-index: 0; }
+
+/* E8 — the page's own decoration. Behind the text on the sheet as on screen;
+   the geometry comes from page-decor.ts, written as custom properties on the
+   container by renderPrintBody(). */
+.aw-print-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.aw-print-decor__watermark {
+  position: absolute;
+  left: var(--decor-wm-left);
+  top: var(--decor-wm-top);
+  width: var(--decor-wm-w);
+  height: var(--decor-wm-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.aw-print-decor__watermark > span {
+  display: block;
+  white-space: nowrap;
+  line-height: 1;
+  transform-origin: center;
+}
+.aw-print-decor__border {
+  position: absolute;
+  left: var(--decor-bx);
+  top: var(--decor-by);
+  width: var(--decor-bw);
+  height: var(--decor-bh);
+  box-sizing: border-box;
+  border: var(--decor-stroke) solid var(--decor-color);
+}
+/* The text sits above the decoration, never beside it. */
+.ProseMirror.aw-print-body { z-index: 1; }
 .ProseMirror.aw-print-body {
   /* relative, so the free layer nested inside shares the text's origin */
   position: relative;

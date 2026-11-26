@@ -1760,6 +1760,12 @@ export function getEditorView(): EditorView {
 // ============================================================================
 
 import { getMargins, setMargins as setStateMargins } from "./pagination-state";
+import {
+  DEFAULT_PAGE_BORDER,
+  DEFAULT_WATERMARK,
+  getPageDecor,
+  setPageDecor,
+} from "./page-decor";
 import type { PageMargins } from "./pagination-cassie";
 
 let _editorStyleEl: HTMLStyleElement | null = null;
@@ -1848,6 +1854,7 @@ function toggleMarginsPanel(): void {
     return;
   }
   syncInputFields();
+  syncDecorFields();
   const rect = _marginsBtn.getBoundingClientRect();
   _marginsPanel.style.top = `${rect.bottom + 4}px`;
   _marginsPanel.style.left = `${rect.left}px`;
@@ -1875,9 +1882,97 @@ function forceCassieRecompute(): void {
   }
 }
 
+// E8 — the page's own decoration (border and watermark). The panel is the page's
+// panel: no new toolbar button, and the values live in page-decor.ts next to
+// margins and format.
+
+function decorField(id: string): HTMLInputElement | null {
+  return document.getElementById(id) as HTMLInputElement | null;
+}
+
+function decorValue(id: string): string {
+  return decorField(id)?.value ?? "";
+}
+
+function decorNumber(id: string, fallback: number): number {
+  const value = parseFloat(decorValue(id));
+  return Number.isFinite(value) ? value : fallback;
+}
+
+/** The panel shows what is stored (defaults when that decoration is off). */
+function syncDecorFields(): void {
+  const decor = getPageDecor();
+  const border = decor.border ?? DEFAULT_PAGE_BORDER;
+  const watermark = decor.watermark;
+  const values: Array<[string, string]> = [
+    ["inp-border-width", String(border.widthPt)],
+    ["inp-border-color", border.color],
+    ["inp-border-padding", String(border.paddingCm)],
+    ["inp-watermark-text", watermark?.text ?? ""],
+    ["inp-watermark-color", watermark?.color ?? DEFAULT_WATERMARK.color],
+    ["inp-watermark-angle", String(watermark?.angle ?? DEFAULT_WATERMARK.angle)],
+    ["inp-watermark-transparency", String(watermark?.transparency ?? DEFAULT_WATERMARK.transparency)],
+  ];
+  for (const [id, value] of values) {
+    const input = decorField(id);
+    if (input && input.value !== value) input.value = value;
+  }
+}
+
+/** The border exists as soon as the writer touches one of its three fields. */
+function applyBorderFromFields(): void {
+  setPageDecor({
+    border: {
+      widthPt: decorNumber("inp-border-width", DEFAULT_PAGE_BORDER.widthPt),
+      color: decorValue("inp-border-color") || DEFAULT_PAGE_BORDER.color,
+      paddingCm: decorNumber("inp-border-padding", DEFAULT_PAGE_BORDER.paddingCm),
+    },
+  });
+}
+
+/** The watermark exists while its text is not empty; its font is kept. */
+function applyWatermarkFromFields(): void {
+  const text = decorValue("inp-watermark-text");
+  setPageDecor({
+    watermark: text.trim()
+      ? {
+          text,
+          font: getPageDecor().watermark?.font ?? DEFAULT_WATERMARK.font,
+          color: decorValue("inp-watermark-color") || DEFAULT_WATERMARK.color,
+          angle: decorNumber("inp-watermark-angle", DEFAULT_WATERMARK.angle),
+          transparency: decorNumber("inp-watermark-transparency", DEFAULT_WATERMARK.transparency),
+        }
+      : null,
+  });
+}
+
+function setupPageDecorControl(): void {
+  for (const id of ["inp-border-width", "inp-border-color", "inp-border-padding"]) {
+    decorField(id)?.addEventListener("change", applyBorderFromFields);
+  }
+  for (const id of ["inp-watermark-text", "inp-watermark-color", "inp-watermark-angle", "inp-watermark-transparency"]) {
+    decorField(id)?.addEventListener("change", applyWatermarkFromFields);
+  }
+  const watermarkText = decorField("inp-watermark-text");
+  watermarkText?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") watermarkText.blur();
+  });
+  document.getElementById("btn-border-remove")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setPageDecor({ border: null });
+    syncDecorFields();
+  });
+  document.getElementById("btn-watermark-remove")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setPageDecor({ watermark: null });
+    syncDecorFields();
+  });
+}
+
 function setupWidthControl(): void {
   applyEditorMargins(getMargins());
   syncWidthGroupVisibility();
+  setupPageDecorControl();
 
   _marginsBtn = document.getElementById("btn-margins");
   _marginsPanel = document.getElementById("margins-panel");

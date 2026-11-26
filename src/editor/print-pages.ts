@@ -33,6 +33,13 @@ import { wrapDropCaps } from "./drop-cap";
 import { applyTabAdvances } from "./paragraph-tabs";
 import { tabAdvancesFor, type TabPlacement } from "./pagination-cassie";
 import { isOverlap, textConditionOf } from "./element-condition";
+import {
+  WATERMARK_FONT_PX,
+  borderBox,
+  borderStrokePx,
+  getPageDecor,
+  watermarkOpacity,
+} from "./page-decor";
 import type { BandPiece, DomBand } from "./pagination-cassie-plugin";
 
 export interface PrintSheet {
@@ -492,11 +499,16 @@ export function renderPrintBody(printDoc: PrintDoc): string {
   // own — so they travel with the sheet, like the cell paddings do.
   const met = getEditorMetrics();
   const naturals = `--aw-natural:${met.naturalBody};--aw-natural-h:${met.naturalHeading};`;
+  // E8: border and watermark are properties of the page, not of the document:
+  // the sheets carry them as markup, because the preview window receives only
+  // this HTML and never asks the model.
+  const decor = pageDecorHtml(m.left, bodyTop, printDoc.contentWidth, printDoc.contentHeight);
   return printDoc.sheets
     .map(
       (s) =>
         `<section class="aw-print-sheet" data-page="${s.pageNumber}"` +
         ` style="--sheet-w:${page.widthPx}px;--sheet-h:${page.heightPx}px;--bl:${m.left}px;--bt:${bodyTop}px;--cw:${printDoc.contentWidth}px;--ch:${printDoc.contentHeight}px;--foot:${Math.round(m.bottom / 2)}px;">` +
+        decor +
         // The free layer lives INSIDE the body: text and free elements then
         // share one origin, so a free element cannot end up lower than the
         // text on the sheet (T1.6, Carlo 2026-09-11).
@@ -507,6 +519,75 @@ export function renderPrintBody(printDoc: PrintDoc): string {
         `</section>`,
     )
     .join("\n");
+}
+
+/** The browser's own paper margin from the `@page` rule above, in pixels. */
+const PRINT_MARGIN_PX = (12 / 25.4) * 96;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * E8: the decoration of every sheet, in the same geometry the editor draws
+ * (page-decor.ts). The coordinates are the screen's, in the sheet's own
+ * pixels; `@media print` moves the rule to the text column's own edges, since
+ * on paper the chunk starts at the top of the printable area and the browser
+ * supplies the margin.
+ */
+function pageDecorHtml(marginLeft: number, marginTop: number, contentWidth: number, contentHeight: number): string {
+  const decor = getPageDecor();
+  if (!decor.border && !decor.watermark) return "";
+  const page = getPageFormat();
+  const area = {
+    left: marginLeft,
+    top: marginTop,
+    width: contentWidth,
+    height: contentHeight,
+    sheetWidth: page.widthPx,
+    sheetHeight: page.heightPx,
+  };
+  const vars: string[] = [
+    `--decor-wm-left:${area.left}px`,
+    `--decor-wm-top:${area.top}px`,
+    `--decor-wm-w:${area.width}px`,
+    `--decor-wm-h:${area.height}px`,
+  ];
+  let border = "";
+  if (decor.border) {
+    const box = borderBox(area, decor.border);
+    const stroke = borderStrokePx(decor.border);
+    // On paper the rule may not leave the printable area the @page rule asks
+    // for: the distance is kept, but shrunk to that margin.
+    const paperInset = Math.max(0, Math.min(box.paddingPx, PRINT_MARGIN_PX - stroke));
+    vars.push(
+      `--decor-bx:${box.left}px`,
+      `--decor-by:${box.top}px`,
+      `--decor-bw:${box.width}px`,
+      `--decor-bh:${box.height}px`,
+      `--decor-stroke:${stroke}px`,
+      `--decor-color:${decor.border.color}`,
+      `--decor-paper-left:${-(paperInset + stroke)}px`,
+      `--decor-paper-top:${-(paperInset + stroke)}px`,
+      `--decor-paper-w:${area.width + 2 * (paperInset + stroke)}px`,
+      `--decor-paper-h:${area.height + 2 * (paperInset + stroke)}px`,
+    );
+    border = '<div class="aw-print-decor__border"></div>';
+  }
+  const watermark = decor.watermark
+    ? '<div class="aw-print-decor__watermark"><span style="' +
+      `font-family:${escapeHtml(decor.watermark.font)};` +
+      `font-size:${WATERMARK_FONT_PX}px;` +
+      `color:${decor.watermark.color};` +
+      `opacity:${watermarkOpacity(decor.watermark)};` +
+      `transform:rotate(${-decor.watermark.angle}deg)">` +
+      `${escapeHtml(decor.watermark.text)}</span></div>`
+    : "";
+  return `<div class="aw-print-decor" style="${vars.join(";")}">${watermark}${border}</div>`;
 }
 
 /**
@@ -543,6 +624,20 @@ export const PRINT_PRINT_CSS = `
   }
   .aw-print-pagenum {
     position: static !important; margin-top: 10px !important; bottom: auto !important;
+  }
+  /* E8: on paper the chunk starts at the top of the printable area (the
+     browser supplies the page margin), so the rule and the watermark measure
+     themselves from the text column's own corner. The rule keeps the distance
+     but never leaves the @page margin. */
+  .aw-print-decor__watermark {
+    left: 0 !important;
+    top: 0 !important;
+  }
+  .aw-print-decor__border {
+    left: var(--decor-paper-left) !important;
+    top: var(--decor-paper-top) !important;
+    width: var(--decor-paper-w) !important;
+    height: var(--decor-paper-h) !important;
   }
 }
 `;
