@@ -264,6 +264,16 @@ function wrapInHTMLDocument(bodyContent: string, language?: string): string {
     /* E5: a field shows its cached text and nothing else; the page there is a
        string, so the markup keeps the spacing it was measured with. */
     span[data-aw-field] { white-space: pre; }
+    /* E6: the table's own look travels as its name (data-table-style), and these
+       two rules are what the name means on the screen (05-document.css). */
+    table { border-collapse: collapse; }
+    table td, table th { border: 1px solid #999; padding: 0.2em 0.4em; }
+    table[data-table-style='plain'] td, table[data-table-style='plain'] th {
+      border-color: transparent;
+    }
+    table[data-table-style='banded'] tbody > tr:nth-child(even) > td {
+      background: rgba(74, 144, 217, 0.06);
+    }
     /* Drawn shapes: the size, the alignment and the air travel inline in the
        markup (the file stands on its own); these two rules only make the box
        behave like the block it is in the editor. */

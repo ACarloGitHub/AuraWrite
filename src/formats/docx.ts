@@ -28,7 +28,9 @@ import {
   VerticalPositionRelativeFrom,
   VerticalPositionAlign,
   SimpleField,
+  LevelFormat,
 } from "docx";
+import type { ILevelsOptions } from "docx";
 import { getPageFormat, isHeaderRow } from "../editor/pagination-cassie";
 import { getEditorMetrics } from "../editor/text-metrics";
 import { isWrapping, textConditionOf } from "../editor/element-condition";
@@ -1198,6 +1200,7 @@ export async function toDocx(doc: any): Promise<Document> {
   const margins = getMargins();
   const page = getPageFormat();
 
+  resetListInstances();
   const children: any[] = [];
   for (const node of contentToArray(doc.content)) {
     const nodeChildren = nodeToChildren(node, imageCache, false);
@@ -1272,64 +1275,128 @@ export async function toDocx(doc: any): Promise<Document> {
         },
       ],
     },
-    numbering: {
-      config: [
-        {
-          reference: "aw-bullet",
-          levels: [
-            {
-              level: 0,
-              format: "bullet",
-              text: "\u2022",
-              alignment: AlignmentType.LEFT,
-              style: {
-                paragraph: { indent: { left: 720, hanging: 360 } },
-              },
-            },
-          ],
-        },
-        {
-          reference: "aw-ordered",
-          levels: [
-            {
-              level: 0,
-              format: "decimal",
-              text: "%1.",
-              alignment: AlignmentType.LEFT,
-              style: {
-                paragraph: { indent: { left: 720, hanging: 360 } },
-              },
-            },
-          ],
-        },
-      ],
-    },
+    numbering: { config: numberingConfigFor(doc) },
   });
 }
 
-function listItemToParagraphs(item: any, numberingRef: string): Paragraph[] {
-  // ProseMirror: list_item content: "paragraph block*"
-  // The first child is always a paragraph. Subsequent blocks (nested lists) are
-  // not supported by the schema yet, so we take only the first paragraph.
-  const paragraphs: Paragraph[] = [];
-  let firstPara: any = null;
-  item.content?.forEach((child: any) => {
-    if (!firstPara && child.type?.name === "paragraph") {
-      firstPara = child;
+/**
+ * E6 — the levels of a list, as Word writes them: nine, with the indent growing
+ * by one step each, because Word's own dialog offers exactly nine and a deeper
+ * nest has no definition to point at.
+ */
+const LIST_LEVELS = 9;
+const LIST_INDENT = 720;
+const LIST_HANGING = 360;
+const BULLETS = ["\u2022", "\u25E6", "\u25AA"]; // • ◦ ▪, cycling by depth as Word does
+const ORDERED_STEM = "aw-ol";
+
+/** The nine levels of a bullet list (the glyph cycles every three depths). */
+function bulletLevels(): ILevelsOptions[] {
+  return Array.from({ length: LIST_LEVELS }, (_, level) => ({
+    level,
+    format: LevelFormat.BULLET,
+    text: BULLETS[level % BULLETS.length],
+    alignment: AlignmentType.LEFT,
+    style: { paragraph: { indent: { left: LIST_INDENT * (level + 1), hanging: LIST_HANGING } } },
+  }));
+}
+
+/** The nine levels of a numbered list: %1. %2. … — each depth its own counter. */
+function orderedLevels(start = 1): ILevelsOptions[] {
+  return Array.from({ length: LIST_LEVELS }, (_, level) => ({
+    level,
+    format: LevelFormat.DECIMAL,
+    text: "%" + (level + 1) + ".",
+    alignment: AlignmentType.LEFT,
+    // The start belongs to the FIRST level: that is where a list says "begin at 5".
+    ...(level === 0 && start !== 1 ? { start } : {}),
+    style: { paragraph: { indent: { left: LIST_INDENT * (level + 1), hanging: LIST_HANGING } } },
+  }));
+}
+
+/**
+ * The numbering definitions a document needs: one for bullets, one for ordered
+ * lists starting at 1, and one per other start value the document actually uses
+ * (ol start="5"). Nothing is invented for a start of 1, which is the default.
+ */
+function numberingConfigFor(doc: any): Array<{ reference: string; levels: ILevelsOptions[] }> {
+  const starts = new Set<number>();
+  // The DOCUMENT is walked, not the exported paragraphs: a paragraph carries no
+  // node type, and a list's start lives on the list.
+  const walk = (node: any) => {
+    if (!node) return;
+    if (node.type?.name === "ordered_list") {
+      const start = Number(node.attrs?.order);
+      if (Number.isFinite(start) && start > 1) starts.add(Math.min(999, Math.round(start)));
     }
-  });
-  if (firstPara) {
-    const lh = lineHeightToTwips(firstPara.attrs?.lineHeight) ?? defaultRhythmTwips();
-    const spacing: any = lh ? { line: lh, lineRule: "auto" } : undefined;
-    paragraphs.push(
-      new Paragraph({
-        children: nodeContentToRuns(firstPara),
-        numbering: { reference: numberingRef, level: 0 },
-        ...(spacing ? { spacing } : {}),
-      }),
-    );
+    if (node.content) for (const child of contentToArray(node.content)) walk(child);
+  };
+  walk(doc);
+  return [
+    { reference: "aw-bullet", levels: bulletLevels() },
+    { reference: ORDERED_STEM, levels: orderedLevels() },
+    ...[...starts].sort((a, b) => a - b).map((start) => ({
+      reference: ORDERED_STEM + "-from-" + start,
+      levels: orderedLevels(start),
+    })),
+  ];
+}
+
+/** The reference an ordered list uses, given the number it starts from. */
+function orderedReferenceFor(listNode: any): string {
+  const start = Number(listNode.attrs?.order);
+  return Number.isFinite(start) && start > 1 ? ORDERED_STEM + "-from-" + Math.min(999, Math.round(start)) : ORDERED_STEM;
+}
+
+/**
+ * E6 — a list, ALL of it: the numbered paragraph of every item, the paragraphs
+ * that follow it inside the item, and the nested lists one level deeper, which
+ * keep their parent's numbering so the levels stay one list. Before this, only
+ * the first paragraph of every item was exported and nesting was flattened.
+ */
+function listToParagraphs(
+  listNode: any,
+  level: number,
+  reference: string,
+  instance: number,
+): Paragraph[] {
+  const out: Paragraph[] = [];
+  for (const item of contentToArray(listNode.content)) {
+    if (item.type?.name !== "list_item") continue;
+    let numbered = false;
+    for (const child of contentToArray(item.content)) {
+      const name = child.type?.name;
+      if (name === "bullet_list" || name === "ordered_list") {
+        out.push(...listToParagraphs(child, Math.min(LIST_LEVELS - 1, level + 1), reference, instance));
+        continue;
+      }
+      const lh = lineHeightToTwips(child.attrs?.lineHeight) ?? defaultRhythmTwips();
+      const spacing: any = lh ? { line: lh, lineRule: "auto" } : undefined;
+      out.push(
+        new Paragraph({
+          children: nodeContentToRuns(child),
+          ...(numbered
+            ? {}
+            : { numbering: { reference, level: Math.min(LIST_LEVELS - 1, level), instance } }),
+          ...(spacing ? { spacing } : {}),
+        }),
+      );
+      numbered = true;
+    }
+    // An item with no block at all still occupies its bullet in Word.
+    if (!numbered && out.length === 0) {
+      out.push(new Paragraph({ numbering: { reference, level: Math.min(LIST_LEVELS - 1, level), instance } }));
+    }
   }
-  return paragraphs;
+  return out;
+}
+
+/** The next numbering instance: one per top-level list, so each list restarts. */
+let listInstanceCounter = 0;
+
+/** Reset before a document is exported (the counter belongs to one document). */
+function resetListInstances(): void {
+  listInstanceCounter = 0;
 }
 
 function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBreakBefore: boolean = false): any[] {
@@ -1414,9 +1481,11 @@ function nodeToChildren(node: any, imageCache: Map<string, Uint8Array>, pageBrea
         });
       });
     case "bullet_list":
-      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-bullet"));
+      listInstanceCounter += 1;
+      return listToParagraphs(node, 0, "aw-bullet", listInstanceCounter);
     case "ordered_list":
-      return contentToArray(node.content).flatMap((item: any) => listItemToParagraphs(item, "aw-ordered"));
+      listInstanceCounter += 1;
+      return listToParagraphs(node, 0, orderedReferenceFor(node), listInstanceCounter);
     case "horizontal_rule":
       return [
         new Paragraph({
@@ -1544,6 +1613,12 @@ function buildImageRun(node: any, bytes: Uint8Array): ImageRun {
 // absence. "nil" rather than "none": a cell's "none" can still lose against a
 // table-level border in Word, "nil" wins every conflict.
 const DEFAULT_CELL_BORDER = { style: BorderStyle.SINGLE, size: 4, color: "999999" };
+/**
+ * E6 — the tint of a banded body row, composed on white: the screen's
+ * rgba(74,144,217,0.06) (05-document.css). The two sides quote the same colour:
+ * a view that changes alone would give two different tables.
+ */
+const TABLE_BAND_FILL = "F4F8FD";
 const NO_CELL_BORDER = { style: BorderStyle.NIL, size: 0, color: "auto" };
 
 /** A cell's border on one side, in Word's units (w:tcBorders; size in eighth-points). */
@@ -1577,9 +1652,17 @@ function tableNodeToDocx(tableNode: any): Table {
   // Le bande non viaggiano: sono una scelta della vista, e il canale ha i
   // riempimenti delle celle.
   const defaultBorder = tableNode.attrs?.tableStyle === "plain" ? NO_CELL_BORDER : DEFAULT_CELL_BORDER;
+  // E6: the bands of the view become a real fill. Body rows are counted as the
+  // screen counts them (the head is not a body row), and a cell with a fill of
+  // its own wins, exactly as in 05-document.css.
+  const banded = tableNode.attrs?.tableStyle === "banded";
+  let bodyRow = 0;
 
   contentToArray(tableNode.content).forEach((row: any, rowIndex: number) => {
     if (row.type.name !== "table_row") return;
+    // E6: the body rows are counted BEFORE the cells are filled, so this row
+    // knows its own number (the head is not a body row): 1, 2, 3…
+    if (!isHeaderRow(row)) bodyRow += 1;
     const cells: TableCell[] = [];
     let col = 0;
 
@@ -1622,6 +1705,8 @@ function tableNodeToDocx(tableNode: any): Table {
         cellOpts.shading = { fill: cellFill };
       } else if (rawFill !== "" && cell.type.name === "table_header") {
         cellOpts.shading = { fill: "F1F6FC" };
+      } else if (rawFill !== "" && banded && bodyRow > 0 && bodyRow % 2 === 0) {
+        cellOpts.shading = { fill: TABLE_BAND_FILL };
       }
       // Where the text sits in the cell (Word's w:vAlign). `top` is the default of
       // both formats and is left out.
