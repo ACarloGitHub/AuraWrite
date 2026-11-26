@@ -571,7 +571,6 @@ function pageDecorHtml(marginLeft: number, marginTop: number, contentWidth: numb
       `--decor-bh:${box.height}px`,
       `--decor-stroke:${stroke}px`,
       `--decor-color:${decor.border.color}`,
-      `--decor-paper-left:${-(paperInset + stroke)}px`,
       `--decor-paper-top:${-(paperInset + stroke)}px`,
       `--decor-paper-w:${area.width + 2 * (paperInset + stroke)}px`,
       `--decor-paper-h:${area.height + 2 * (paperInset + stroke)}px`,
@@ -630,11 +629,13 @@ export const PRINT_PRINT_CSS = `
      themselves from the text column's own corner. The rule keeps the distance
      but never leaves the @page margin. */
   .aw-print-decor__watermark {
-    left: 0 !important;
+    /* Il corpo del foglio è centrato nella larghezza stampabile: anche la
+       decorazione si centra sullo stesso asse. */
+    left: calc(50% - var(--decor-wm-w) / 2) !important;
     top: 0 !important;
   }
   .aw-print-decor__border {
-    left: var(--decor-paper-left) !important;
+    left: calc(50% - var(--decor-paper-w) / 2) !important;
     top: var(--decor-paper-top) !important;
     width: var(--decor-paper-w) !important;
     height: var(--decor-paper-h) !important;
