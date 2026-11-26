@@ -2566,7 +2566,9 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 .ProseMirror .aw-dropcap {
   float: left;
   font-size: var(--aw-dc-size);
-  line-height: 1;
+  /* The glyph is centred in the band it reserves: with line-height 1 it hung
+     from the baseline and looked shifted DOWN into the lines below. */
+  line-height: var(--aw-dc-height);
   height: var(--aw-dc-height);
   margin-right: var(--aw-dc-gap);
   margin-top: 0;

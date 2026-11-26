@@ -1,4 +1,5 @@
 import { DOMSerializer } from "prosemirror-model";
+import { wrapDropCaps } from "../editor/drop-cap";
 import { invoke } from "@tauri-apps/api/core";
 import { getEditorMetrics } from "../editor/text-metrics";
 import { applyTabAdvances } from "../editor/paragraph-tabs";
@@ -77,34 +78,6 @@ export async function toHTML(doc: any, opts: ToHtmlOptions = {}): Promise<string
   }
 
   return wrapInHTMLDocument(container.innerHTML, opts.language);
-}
-
-/** E7: `<span class="aw-dropcap">` around the first visible letter of a paragraph. */
-function wrapDropCaps(container: HTMLElement): void {
-  for (const block of Array.from(container.querySelectorAll<HTMLElement>("[data-drop-cap-lines]"))) {
-    const lines = Number(block.getAttribute("data-drop-cap-lines"));
-    if (!Number.isFinite(lines) || lines < 2) continue;
-    const gapCm = Number(block.getAttribute("data-drop-cap-gap"));
-    const gap = Number.isFinite(gapCm) && gapCm >= 0 ? gapCm : 0.2;
-    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node.nodeValue ?? "";
-      const index = text.search(/\S/);
-      if (index < 0) continue;
-      const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + 1);
-      const span = document.createElement("span");
-      span.className = "aw-dropcap";
-      span.setAttribute(
-        "style",
-        // 1.5 = the default rhythm of the sheet: N line boxes become the size.
-        `float: left; font-size: ${(lines * 1.5).toFixed(2)}em; line-height: 1; margin-right: ${gap.toFixed(2)}cm;`,
-      );
-      range.surroundContents(span);
-      break;
-    }
-  }
 }
 
 /** Recursively collect the src of every image (node OR figure attr) in the doc. */

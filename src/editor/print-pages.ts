@@ -29,6 +29,7 @@ import {
 } from "./pagination-cassie";
 import { freeElementWidth, freeLayoutMap, freeLeftPx, isFreeNode, parseFreeSpec, stackDepthOf, zLevelOf, type FreeSpec, type FreeWrapBand } from "./free-layout";
 import { getEditorMetrics } from "./text-metrics";
+import { wrapDropCaps } from "./drop-cap";
 import { applyTabAdvances } from "./paragraph-tabs";
 import { tabAdvancesFor, type TabPlacement } from "./pagination-cassie";
 import { isOverlap, textConditionOf } from "./element-condition";
@@ -290,6 +291,11 @@ export function buildPrintPages(
       }
       host.appendChild(el);
     });
+    // E7: the drop cap is a decoration on the screen and markup has no
+    // decorations, so the letter is written here, with the same numbers — the
+    // paper must show the letter the editor showed. A sheet that CONTINUES a
+    // paragraph starts in the middle of it: no letter there.
+    wrapDropCaps(host, { skipFirst: slice.openStart > 0 });
     // Bands that came over from a previous sheet: they begin at the top of this
     // one, clipped, in document order.
     //

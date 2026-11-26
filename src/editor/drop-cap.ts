@@ -215,3 +215,45 @@ export function syncDropCapInputs(view: EditorView): void {
     if (document.activeElement !== gap && gap.value !== text) gap.value = text;
   }
 }
+
+// ---------------------------------------------------------------------------
+// E7 — the letter as markup. The screen draws it with a decoration, which no
+// serialization carries: the HTML export and the print sheet are rebuilt from
+// the DOM, so the letter is written there by hand, with the same numbers.
+// ---------------------------------------------------------------------------
+
+/** E7: `<span class="aw-dropcap">` around the first visible letter of a paragraph. */
+export function wrapDropCaps(container: HTMLElement, opts: { skipFirst?: boolean } = {}): void {
+  let skipped = !opts.skipFirst;
+  for (const block of Array.from(container.querySelectorAll<HTMLElement>("[data-drop-cap-lines]"))) {
+    // A sheet that CONTINUES a paragraph starts in the middle of it: its first
+    // block is not the paragraph's beginning, so the letter is not there.
+    if (!skipped) {
+      skipped = true;
+      continue;
+    }
+    const lines = Number(block.getAttribute("data-drop-cap-lines"));
+    if (!Number.isFinite(lines) || lines < 2) continue;
+    const gapCm = Number(block.getAttribute("data-drop-cap-gap"));
+    const gap = Number.isFinite(gapCm) && gapCm >= 0 ? gapCm : 0.2;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.nodeValue ?? "";
+      const index = text.search(/\S/);
+      if (index < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+      const span = document.createElement("span");
+      span.className = "aw-dropcap";
+      span.setAttribute(
+        "style",
+        // 1.5 = the default rhythm of the sheet: N line boxes become the size.
+        `float: left; font-size: ${(lines * 1.5).toFixed(2)}em; line-height: 1; margin-right: ${gap.toFixed(2)}cm;`,
+      );
+      range.surroundContents(span);
+      break;
+    }
+  }
+}
+
