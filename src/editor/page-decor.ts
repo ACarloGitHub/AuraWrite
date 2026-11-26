@@ -142,11 +142,18 @@ export function borderBox(area: TextArea, border: PageBorder): BorderBox {
     area.sheetHeight - area.top - area.height,
   );
   const paddingPx = Math.max(0, Math.min(border.paddingCm * CM_TO_PX, room - stroke));
+  // The clamp keeps every side inside the sheet even when the margin is
+  // smaller than the rule itself (a full-bleed page): the rule then sits on
+  // the sheet's edge instead of being cut by it.
+  const left = Math.max(0, area.left - paddingPx - stroke);
+  const top = Math.max(0, area.top - paddingPx - stroke);
+  const right = Math.min(area.sheetWidth, area.left + area.width + paddingPx + stroke);
+  const bottom = Math.min(area.sheetHeight, area.top + area.height + paddingPx + stroke);
   return {
-    left: area.left - paddingPx - stroke,
-    top: area.top - paddingPx - stroke,
-    width: area.width + 2 * (paddingPx + stroke),
-    height: area.height + 2 * (paddingPx + stroke),
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
     paddingPx,
   };
 }
