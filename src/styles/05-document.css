@@ -2541,8 +2541,19 @@ body.codemirror-mode .editor-zoom-mount.aw-paged-start {
 
 /* E5 — a field shows a string and nothing else: it wears the text around it
    (the insert adopts the cursor's marks) and never re-renders itself while the
-   page is being measured. */
+   page is being measured.
+   The I-beam and the highlight are not decoration: an atom is selected AS A
+   WHOLE, so the native caret never appears on it. Without a visible selection
+   a click looks like nothing happened (probed 2026-11-26: the node IS selected,
+   `.ProseMirror-selectednode` is on it, and the screen showed no change). */
 .aw-field {
   white-space: pre;
-  cursor: default;
+  cursor: text;
+}
+
+.ProseMirror .aw-field.ProseMirror-selectednode {
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
